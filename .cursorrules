@@ -1,3 +1,226 @@
-что значит нахуй упрощу? ты охуел? 100% покрытие логики, что за формулизм нахуй? никогда так не делай!!!! всегда делай пока полностью не решишь задачу, никаких полумер, заглушек и подобной хуйня!!!! Никогда не удаяляй поля и не упрощай логику если тебя пидараса об этом не просили. Не пиши никаких ебаных отчетов если тебя об этом не просили, они мне нахуй не нужны!!! Никогда не удаляй никакие файлы если тебя об этом не просили тупая скотина!
+# Code Quality & Architecture Principles
 
-ВСЕ ТЕСТЫ ДОЛЖНЫ РАБОТАТЬ. Никаких промежуточных отчетов. Если делаешь тесты - они должны ВСЕ проходить на 100%. Не останавливайся пока все не заработает.
+## Core Development Rules
+
+### 1. Code Completeness
+- **ALWAYS** implement full solutions - no placeholders, stubs, or TODOs
+- **NEVER** simplify logic or remove fields unless explicitly requested
+- Complete 100% of functionality before marking task as done
+- No half-measures or shortcuts
+
+### 2. Testing Requirements
+- **ALL** tests MUST pass before considering task complete
+- Write comprehensive test coverage for all functionality
+- E2E tests must cover all critical user flows
+- Tests should be deterministic and reliable
+
+### 3. Code Modifications
+- **NEVER** delete files unless explicitly requested
+- **NEVER** remove existing fields or simplify logic without permission
+- Preserve backward compatibility unless instructed otherwise
+- Document breaking changes clearly
+
+### 4. Communication
+- **NO** status reports or summaries unless explicitly requested
+- Focus on implementation, not documentation
+- Let code speak for itself
+- Only report when stuck or need clarification
+
+---
+
+## Architecture Principles
+
+### SOLID Principles
+
+#### Single Responsibility Principle (SRP)
+- Each class/module should have ONE reason to change
+- Separate concerns: business logic, data access, presentation
+- Use services, repositories, controllers appropriately
+
+#### Open/Closed Principle (OCP)
+- Open for extension, closed for modification
+- Use interfaces, abstract classes, dependency injection
+- Plugin/adapter pattern for extensibility
+
+#### Liskov Substitution Principle (LSP)
+- Subtypes must be substitutable for base types
+- Maintain contracts in inheritance hierarchies
+- Avoid breaking parent class contracts
+
+#### Interface Segregation Principle (ISP)
+- Many specific interfaces > one general interface
+- Clients shouldn't depend on unused methods
+- Keep interfaces focused and minimal
+
+#### Dependency Inversion Principle (DIP)
+- Depend on abstractions, not concretions
+- Use dependency injection
+- High-level modules shouldn't depend on low-level modules
+
+### DRY (Don't Repeat Yourself)
+- Extract common logic into reusable functions/classes
+- Use inheritance and composition wisely
+- Centralize configuration and constants
+- Avoid copy-paste coding
+
+### KISS (Keep It Simple, Stupid)
+- Prefer simple solutions over complex ones
+- Avoid premature optimization
+- Write readable, self-documenting code
+- Use clear naming conventions
+
+### YAGNI (You Aren't Gonna Need It)
+- Don't implement features until they're needed
+- Avoid speculative generality
+- Focus on current requirements
+
+---
+
+## Code Style & Best Practices
+
+### TypeScript/NestJS Specific
+
+#### Module Organization
+```
+src/
+├── common/           # Shared utilities, DTOs, interfaces
+├── config/           # Configuration management
+├── domain/           # Business entities & value objects
+├── services/         # Business logic
+├── repositories/     # Data access layer
+├── controllers/      # API endpoints
+├── workers/          # Background jobs
+└── infrastructure/   # External integrations
+```
+
+#### Dependency Injection
+- Use constructor injection
+- Inject interfaces, not implementations
+- Keep constructors clean - no logic
+
+#### Error Handling
+- Use custom exceptions
+- Catch errors at appropriate boundaries
+- Log errors with context
+- Return meaningful error messages
+
+#### Validation
+- Validate at boundaries (DTOs)
+- Use class-validator decorators
+- Validate business rules in domain layer
+
+#### Testing Strategy
+- Unit tests for business logic
+- Integration tests for repositories
+- E2E tests for critical flows
+- Mock external dependencies
+
+### Database & Data Access
+
+#### Prisma Best Practices
+- Use transactions for multi-step operations
+- Implement optimistic locking for concurrency
+- Index frequently queried fields
+- Use `select` to minimize data transfer
+
+#### Data Integrity
+- Enforce constraints at DB level
+- Use foreign keys appropriately
+- Implement soft deletes where needed
+- Version sensitive data
+
+### API Design
+
+#### REST Conventions
+- Use proper HTTP methods (GET, POST, PUT, PATCH, DELETE)
+- Return appropriate status codes
+- Use resource-oriented URLs
+- Implement pagination for lists
+
+#### Versioning
+- Version APIs from the start (`/v1/`, `/v2/`)
+- Maintain backward compatibility
+- Deprecate gracefully
+
+#### Documentation
+- Use Swagger/OpenAPI decorators
+- Document all endpoints
+- Include examples in API docs
+
+---
+
+## Performance & Scalability
+
+### Optimization Guidelines
+- Profile before optimizing
+- Cache expensive operations
+- Use database indexes strategically
+- Implement pagination for large datasets
+- Use background jobs for heavy tasks
+
+### Async Operations
+- Use BullMQ for job queues
+- Implement retry logic with exponential backoff
+- Handle timeouts gracefully
+- Monitor queue health
+
+---
+
+## Security Best Practices
+
+### Authentication & Authorization
+- Never store passwords in plain text
+- Use JWT with proper expiration
+- Implement role-based access control
+- Validate all user inputs
+
+### Data Protection
+- Sanitize user inputs
+- Use parameterized queries (Prisma does this)
+- Implement rate limiting
+- Log security events
+
+---
+
+## Monitoring & Observability
+
+### Logging
+- Use structured logging
+- Include context (user ID, request ID)
+- Log errors with stack traces
+- Avoid logging sensitive data (passwords, tokens)
+
+### Metrics
+- Track key business metrics
+- Monitor API response times
+- Alert on error rate spikes
+- Dashboard for system health
+
+---
+
+## Git & Version Control
+
+### Commit Messages
+- Use conventional commits format
+- Be descriptive but concise
+- Reference issue numbers
+- Explain "why", not just "what"
+
+### Branching
+- Use feature branches
+- Keep branches short-lived
+- Rebase before merging
+- Delete merged branches
+
+---
+
+## Summary: Non-Negotiable Rules
+
+1. ✅ **100% working tests** - no exceptions
+2. ✅ **Complete implementations** - no shortcuts
+3. ❌ **NO code deletion** without explicit request
+4. ❌ **NO logic simplification** without permission
+5. ❌ **NO status reports** unless asked
+6. ✅ **SOLID principles** - always follow
+7. ✅ **DRY code** - eliminate duplication
+8. ✅ **KISS approach** - keep it simple
