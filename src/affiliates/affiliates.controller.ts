@@ -1,0 +1,104 @@
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { User, RequestUser } from '../auth/decorators/user.decorator';
+import { AffiliatesService } from './affiliates.service';
+import {
+  AffiliateResponseDto,
+  ReferralResponseDto,
+  CommissionResponseDto,
+  PayoutResponseDto,
+  AffiliateStatsDto,
+  CreateAffiliateDto,
+} from '../common/dto/affiliate.dto';
+
+@ApiTags('Affiliates')
+@Controller('v1/affiliates')
+export class AffiliatesController {
+  constructor(private readonly affiliatesService: AffiliatesService) {}
+
+  @Post()
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create or get affiliate account' })
+  @ApiResponse({ status: 201, type: AffiliateResponseDto })
+  async createAffiliate(
+    @User() user: RequestUser,
+    @Body() dto: CreateAffiliateDto,
+  ): Promise<AffiliateResponseDto> {
+    return this.affiliatesService.createOrGetAffiliate(
+      user.userId,
+      dto.referralCode,
+    );
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get current user affiliate account' })
+  @ApiResponse({ status: 200, type: AffiliateResponseDto })
+  async getMyAffiliate(
+    @User() user: RequestUser,
+  ): Promise<AffiliateResponseDto> {
+    return this.affiliatesService.getAffiliateByUserId(user.userId);
+  }
+
+  @Get('me/stats')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get affiliate statistics' })
+  @ApiResponse({ status: 200, type: AffiliateStatsDto })
+  async getMyStats(
+    @User() user: RequestUser,
+  ): Promise<AffiliateStatsDto> {
+    const affiliate = await this.affiliatesService.getAffiliateByUserId(user.userId);
+    return this.affiliatesService.getAffiliateStats(affiliate.id);
+  }
+
+  @Get('me/referrals')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get my referrals' })
+  @ApiResponse({ status: 200, type: [ReferralResponseDto] })
+  async getMyReferrals(
+    @User() user: RequestUser,
+  ): Promise<ReferralResponseDto[]> {
+    const affiliate = await this.affiliatesService.getAffiliateByUserId(user.userId);
+    return this.affiliatesService.getReferrals(affiliate.id);
+  }
+
+  @Get('me/commissions')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get my commissions' })
+  @ApiResponse({ status: 200, type: [CommissionResponseDto] })
+  async getMyCommissions(
+    @User() user: RequestUser,
+    @Query('status') status?: string,
+  ): Promise<CommissionResponseDto[]> {
+    const affiliate = await this.affiliatesService.getAffiliateByUserId(user.userId);
+    return this.affiliatesService.getCommissions(affiliate.id, status);
+  }
+
+  @Get('me/payouts')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get my payouts' })
+  @ApiResponse({ status: 200, type: [PayoutResponseDto] })
+  async getMyPayouts(
+    @User() user: RequestUser,
+  ): Promise<PayoutResponseDto[]> {
+    const affiliate = await this.affiliatesService.getAffiliateByUserId(user.userId);
+    return this.affiliatesService.getPayouts(affiliate.id);
+  }
+}

@@ -1,0 +1,19 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Install dependencies
+COPY package*.json ./
+RUN npm install
+
+# Copy source code
+COPY . .
+
+# Generate Prisma client (skip validation errors for now, will fix in container)
+RUN npx prisma generate || echo "Prisma generate failed, will retry after migrations"
+
+# Expose port
+EXPOSE 3000
+
+# Start in dev mode with watch
+CMD ["npm", "run", "start:dev"]

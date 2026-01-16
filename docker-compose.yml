@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: inite-billing-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: inite_billing
+    ports:
+      - "5433:5432"
+    volumes:
+      - billing_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: inite-billing-redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - billing_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  billing:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: inite-billing-service
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/inite_billing?schema=billing
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: dev-jwt-secret-key-change-in-production
+      SERVICE_API_KEY: dev-service-api-key
+      ONE_API_BASE_URL: https://api.one.lat
+      ONE_API_KEY: ${ONE_API_KEY:-test-key}
+      ONE_API_SECRET: ${ONE_API_SECRET:-test-secret}
+      PORT: 3000
+      NODE_ENV: development
+      FRONTEND_URL: http://localhost:3000
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: sh -c "npx prisma migrate deploy && npm run start:dev"
+
+volumes:
+  billing_postgres_data:
+  billing_redis_data:
+

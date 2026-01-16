@@ -1,0 +1,55 @@
+import {
+  Controller,
+  Post,
+  Body,
+  Get,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { User, RequestUser } from '../auth/decorators/user.decorator';
+import { SubscriptionsService } from './subscriptions.service';
+import { SubscriptionResponseDto } from '../common/dto/subscription.dto';
+
+@ApiTags('Subscriptions')
+@Controller('v1/subscriptions')
+export class SubscriptionsController {
+  constructor(private readonly subscriptionsService: SubscriptionsService) {}
+
+  @Post('cancel')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Cancel subscription at period end' })
+  @ApiResponse({ status: 200 })
+  async cancelSubscription(
+    @User() user: RequestUser,
+    @Body('subscriptionId') subscriptionId: string,
+  ): Promise<void> {
+    return this.subscriptionsService.cancelSubscription(user.userId, subscriptionId);
+  }
+
+  @Post('resume')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Resume subscription' })
+  @ApiResponse({ status: 200 })
+  async resumeSubscription(
+    @User() user: RequestUser,
+    @Body('subscriptionId') subscriptionId: string,
+  ): Promise<void> {
+    return this.subscriptionsService.resumeSubscription(user.userId, subscriptionId);
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get current user subscriptions' })
+  @ApiResponse({ status: 200, type: [SubscriptionResponseDto] })
+  async getMySubscriptions(
+    @User() user: RequestUser,
+  ): Promise<SubscriptionResponseDto[]> {
+    return this.subscriptionsService.getUserSubscriptions(user.userId);
+  }
+}
