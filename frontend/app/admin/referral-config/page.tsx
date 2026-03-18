@@ -9,16 +9,26 @@ import { Modal } from '@/components/ui/Modal'
 import { Select } from '@/components/ui/Select'
 import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
 import { ReferralLevelConfig } from '@/components/referrals/ReferralLevelConfig'
-import { Plus, Trash2, Pencil, Check, X, GitBranch, Loader2 } from 'lucide-react'
+import { Plus, Trash2, Pencil, Check, X, GitBranch, Loader2, Zap } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import type { ReferralLevel, Service } from '@/lib/types'
+
+interface Template {
+  key: string
+  name: string
+  description: string
+  totalRate: number
+  levels: { level: number; rate: number; name: string; criteria?: Record<string, any> }[]
+}
 
 export default function AdminReferralConfigPage() {
   const [levels, setLevels] = useState<ReferralLevel[]>([])
   const [services, setServices] = useState<Service[]>([])
   const [filterService, setFilterService] = useState('')
   const [showModal, setShowModal] = useState(false)
+  const [showTemplates, setShowTemplates] = useState(false)
+  const [templates, setTemplates] = useState<Template[]>([])
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editRate, setEditRate] = useState('')
@@ -37,6 +47,35 @@ export default function AdminReferralConfigPage() {
   }
 
   useEffect(() => { load() }, [filterService])
+
+  const loadTemplates = async () => {
+    try {
+      const res = await api.get('/v1/admin/referral-templates')
+      setTemplates(res.data)
+      setShowTemplates(true)
+    } catch {
+      toast.error('Failed to load templates')
+    }
+  }
+
+  const handleApplyTemplate = async (templateKey: string) => {
+    if (!filterService) {
+      toast.error('Select a service first')
+      return
+    }
+    if (!confirm('Apply this template? This will create all levels for the selected service.')) return
+    try {
+      await api.post('/v1/admin/referral-templates/apply', {
+        serviceId: filterService,
+        templateKey,
+      })
+      toast.success('Template applied!')
+      setShowTemplates(false)
+      load()
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || 'Failed to apply template')
+    }
+  }
 
   const handleCreate = async (data: { serviceId: string; level: number; commissionRate: number; name: string }) => {
     await api.post('/v1/admin/referral-levels', data)
@@ -103,6 +142,7 @@ export default function AdminReferralConfigPage() {
               ]} />
             </div>
           )}
+          <Button size="sm" variant="secondary" icon={<Zap className="w-4 h-4" />} onClick={loadTemplates}>Templates</Button>
           <Button size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setShowModal(true)}>Add Level</Button>
         </div>
       </div>
@@ -202,6 +242,47 @@ export default function AdminReferralConfigPage() {
 
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Create Referral Level">
         <ReferralLevelConfig services={services} nextLevel={nextLevel} onSubmit={handleCreate} onCancel={() => setShowModal(false)} />
+      </Modal>
+
+      {/* Templates Modal */}
+      <Modal isOpen={showTemplates} onClose={() => setShowTemplates(false)} title="Apply Referral Template">
+        <div className="space-y-4">
+          {!filterService && (
+            <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl text-sm text-yellow-700 dark:text-yellow-400">
+              Select a service in the filter first to apply a template.
+            </div>
+          )}
+          {templates.map((tmpl) => (
+            <div key={tmpl.key} className="border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+              <div className="flex items-start justify-between mb-2">
+                <div>
+                  <h4 className="font-semibold text-gray-900 dark:text-white">{tmpl.name}</h4>
+                  <p className="text-xs text-gray-500 mt-0.5">{tmpl.description}</p>
+                </div>
+                <span className="text-lg font-bold text-violet-600 dark:text-violet-400">
+                  {(tmpl.totalRate * 100).toFixed(0)}%
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {tmpl.levels.map((lvl) => (
+                  <span key={lvl.level} className="text-xs bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 px-2 py-0.5 rounded-full">
+                    L{lvl.level}: {(lvl.rate * 100).toFixed(1)}%
+                    {lvl.criteria && Object.keys(lvl.criteria).length > 0 && ' *'}
+                  </span>
+                ))}
+              </div>
+              <Button
+                size="sm"
+                onClick={() => handleApplyTemplate(tmpl.key)}
+                disabled={!filterService}
+                icon={<Zap className="w-4 h-4" />}
+                className="w-full"
+              >
+                Apply to {filterService ? services.find((s) => s.id === filterService)?.name || 'Service' : 'Select service...'}
+              </Button>
+            </div>
+          ))}
+        </div>
       </Modal>
     </div>
   )

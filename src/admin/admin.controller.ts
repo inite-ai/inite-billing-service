@@ -320,6 +320,21 @@ export class AdminController {
     return this.referralLevelsService.deleteLevel(id);
   }
 
+  @Get('referral-templates')
+  @ApiOperation({ summary: 'List available referral level templates' })
+  async getReferralTemplates() {
+    return this.referralLevelsService.getTemplates();
+  }
+
+  @Post('referral-templates/apply')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Apply a referral template to a service' })
+  async applyReferralTemplate(
+    @Body() body: { serviceId: string; templateKey: string },
+  ) {
+    return this.referralLevelsService.applyTemplate(body.serviceId, body.templateKey);
+  }
+
   // ─── Payouts ───────────────────────────────────────────────
 
   @Get('payouts')
