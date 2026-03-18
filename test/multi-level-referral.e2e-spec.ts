@@ -471,9 +471,12 @@ describe('Multi-Level Referral System (7 levels, 30% total)', () => {
     });
   });
 
-  describe('Inactive affiliate in chain', () => {
-    it('should skip inactive affiliate and continue up the chain', async () => {
-      // Create chain: ActiveRoot -> InactiveMiddle -> ActiveDirect
+  describe('Inactive affiliate — shift upward (level compression)', () => {
+    it('should shift levels up when middle affiliate is inactive', async () => {
+      // Chain: ActiveRoot -> InactiveMiddle -> ActiveDirect
+      // When InactiveMiddle is skipped, levels COMPRESS:
+      //   ActiveDirect gets L1 (15%), ActiveRoot gets L2 (1%)
+      //   NOT L3! Levels shift up because middle was ejected.
       const activeRoot = await prisma.affiliate.create({
         data: {
           userId: `20000000-0000-0000-0000-000000000001`,
@@ -490,7 +493,7 @@ describe('Multi-Level Referral System (7 levels, 30% total)', () => {
           serviceId,
           parentAffiliateId: activeRoot.id,
           referralCode: `SKIP-INACTIVE-${Date.now()}`,
-          status: 'inactive', // <-- inactive
+          status: 'inactive',
           commissionRate: 0.15,
         },
       });
@@ -559,21 +562,245 @@ describe('Multi-Level Referral System (7 levels, 30% total)', () => {
         orderBy: { level: 'asc' },
       });
 
-      // L1 (activeDirect) = $150, L2 skipped (inactive), L3 (activeRoot) = $15
-      // The inactive affiliate is skipped but the level counter still increments
-      expect(commissions.length).toBeGreaterThanOrEqual(2);
+      expect(commissions).toHaveLength(2);
 
-      // Direct referrer should get L1 commission
-      const l1 = commissions.find((c) => c.affiliateId === activeDirect.id);
+      // ActiveDirect gets L1 = 15% = $150
+      expect(commissions[0].affiliateId).toBe(activeDirect.id);
+      expect(commissions[0].level).toBe(1);
+      expect(Number(commissions[0].amount)).toBeCloseTo(150, 2);
+
+      // ActiveRoot gets L2 = 1% = $10 (shifted up from L3 because middle was ejected)
+      expect(commissions[1].affiliateId).toBe(activeRoot.id);
+      expect(commissions[1].level).toBe(2);
+      expect(Number(commissions[1].amount)).toBeCloseTo(10, 2);
+    });
+  });
+
+  describe('Qualification criteria — shift upward on disqualification', () => {
+    it('should skip unqualified affiliate (minDirectReferrals) and shift levels', async () => {
+      // Set L2 to require minDirectReferrals: 5
+      const l2Config = await prisma.referralLevel.findFirst({
+        where: { serviceId, level: 2 },
+      });
+      await prisma.referralLevel.update({
+        where: { id: l2Config!.id },
+        data: {
+          qualificationCriteria: { minDirectReferrals: 5 },
+        },
+      });
+
+      // Chain: QRoot (has 0 referrals) -> QMiddle (has 0 referrals) -> QDirect
+      const qRoot = await prisma.affiliate.create({
+        data: {
+          userId: `30000000-0000-0000-0000-000000000001`,
+          serviceId,
+          referralCode: `QUAL-ROOT-${Date.now()}`,
+          status: 'active',
+          commissionRate: 0.15,
+        },
+      });
+
+      const qMiddle = await prisma.affiliate.create({
+        data: {
+          userId: `30000000-0000-0000-0000-000000000002`,
+          serviceId,
+          parentAffiliateId: qRoot.id,
+          referralCode: `QUAL-MID-${Date.now()}`,
+          status: 'active',
+          commissionRate: 0.15,
+        },
+      });
+
+      const qDirect = await prisma.affiliate.create({
+        data: {
+          userId: `30000000-0000-0000-0000-000000000003`,
+          serviceId,
+          parentAffiliateId: qMiddle.id,
+          referralCode: `QUAL-DIR-${Date.now()}`,
+          status: 'active',
+          commissionRate: 0.15,
+        },
+      });
+
+      const qBuyerId = `30000000-0000-0000-0000-000000000004`;
+
+      await prisma.referral.create({
+        data: {
+          affiliateId: qDirect.id,
+          referredUserId: qBuyerId,
+          serviceId,
+          referralCode: qDirect.referralCode,
+          firstOrderPaid: false,
+        },
+      });
+
+      const order = await prisma.order.create({
+        data: {
+          userId: qBuyerId,
+          priceId,
+          mode: 'PAYMENT',
+          status: 'created',
+          amount: 1000,
+          currency: 'USD',
+          externalId: `qual-order-${Date.now()}`,
+        },
+      });
+
+      const intentResult = await mockOneAdapter.createPaymentIntent({
+        orderId: order.externalId!,
+        amount: 1000,
+        currency: 'USD',
+        mode: 'PAYMENT',
+      });
+
+      const intent = await prisma.paymentIntent.create({
+        data: {
+          orderId: order.id,
+          rail: 'ONE',
+          status: 'created',
+          providerIntentId: intentResult.providerIntentId,
+          amount: 1000,
+          currency: 'USD',
+        },
+      });
+
+      mockOneAdapter.setIntentStatus(intentResult.providerIntentId, 'OPENED');
+      await orchestrator.applyStateTransition(intent.id, 'opened');
+
+      mockOneAdapter.setIntentStatus(intentResult.providerIntentId, 'CLOSED');
+      await orchestrator.applyStateTransition(intent.id, 'paid');
+
+      const commissions = await prisma.affiliateCommission.findMany({
+        where: { orderId: order.id },
+        orderBy: { level: 'asc' },
+      });
+
+      // qDirect gets L1 = 15% = $150
+      const l1 = commissions.find((c) => c.affiliateId === qDirect.id);
       expect(l1).toBeDefined();
       expect(l1?.level).toBe(1);
       expect(Number(l1?.amount)).toBeCloseTo(150, 2);
 
-      // Root should get L3 commission (L2 was inactive, skipped)
-      const rootComm = commissions.find((c) => c.affiliateId === activeRoot.id);
+      // qMiddle has 0 referrals but needs 5 for L2 → SKIPPED, shifts up
+      // qRoot gets L2 = 1% = $10 (shifted from L3)
+      const rootComm = commissions.find((c) => c.affiliateId === qRoot.id);
       expect(rootComm).toBeDefined();
-      expect(rootComm?.level).toBe(3);
-      expect(Number(rootComm?.amount)).toBeCloseTo(15, 2); // 1.5%
+      expect(rootComm?.level).toBe(2);
+      expect(Number(rootComm?.amount)).toBeCloseTo(10, 2);
+
+      // qMiddle should NOT have any commission
+      const midComm = commissions.find((c) => c.affiliateId === qMiddle.id);
+      expect(midComm).toBeUndefined();
+
+      // Restore L2 criteria
+      await prisma.referralLevel.update({
+        where: { id: l2Config!.id },
+        data: { qualificationCriteria: {} },
+      });
+    });
+
+    it('should skip affiliate failing personalPurchaseRequired', async () => {
+      // Set L2 to require personal purchase
+      const l2Config = await prisma.referralLevel.findFirst({
+        where: { serviceId, level: 2 },
+      });
+      await prisma.referralLevel.update({
+        where: { id: l2Config!.id },
+        data: {
+          qualificationCriteria: { personalPurchaseRequired: true },
+        },
+      });
+
+      // Chain: PRoot (no purchases) -> PDirect
+      const pRoot = await prisma.affiliate.create({
+        data: {
+          userId: `40000000-0000-0000-0000-000000000001`,
+          serviceId,
+          referralCode: `PERS-ROOT-${Date.now()}`,
+          status: 'active',
+          commissionRate: 0.15,
+        },
+      });
+
+      const pDirect = await prisma.affiliate.create({
+        data: {
+          userId: `40000000-0000-0000-0000-000000000002`,
+          serviceId,
+          parentAffiliateId: pRoot.id,
+          referralCode: `PERS-DIR-${Date.now()}`,
+          status: 'active',
+          commissionRate: 0.15,
+        },
+      });
+
+      const pBuyerId = `40000000-0000-0000-0000-000000000003`;
+
+      await prisma.referral.create({
+        data: {
+          affiliateId: pDirect.id,
+          referredUserId: pBuyerId,
+          serviceId,
+          referralCode: pDirect.referralCode,
+          firstOrderPaid: false,
+        },
+      });
+
+      const order = await prisma.order.create({
+        data: {
+          userId: pBuyerId,
+          priceId,
+          mode: 'PAYMENT',
+          status: 'created',
+          amount: 1000,
+          currency: 'USD',
+          externalId: `pers-order-${Date.now()}`,
+        },
+      });
+
+      const intentResult = await mockOneAdapter.createPaymentIntent({
+        orderId: order.externalId!,
+        amount: 1000,
+        currency: 'USD',
+        mode: 'PAYMENT',
+      });
+
+      const intent = await prisma.paymentIntent.create({
+        data: {
+          orderId: order.id,
+          rail: 'ONE',
+          status: 'created',
+          providerIntentId: intentResult.providerIntentId,
+          amount: 1000,
+          currency: 'USD',
+        },
+      });
+
+      mockOneAdapter.setIntentStatus(intentResult.providerIntentId, 'OPENED');
+      await orchestrator.applyStateTransition(intent.id, 'opened');
+
+      mockOneAdapter.setIntentStatus(intentResult.providerIntentId, 'CLOSED');
+      await orchestrator.applyStateTransition(intent.id, 'paid');
+
+      const commissions = await prisma.affiliateCommission.findMany({
+        where: { orderId: order.id },
+        orderBy: { level: 'asc' },
+      });
+
+      // pDirect gets L1 = 15%
+      expect(commissions).toHaveLength(1);
+      expect(commissions[0].affiliateId).toBe(pDirect.id);
+      expect(commissions[0].level).toBe(1);
+
+      // pRoot has no personal purchase → fails personalPurchaseRequired for L2
+      // No parent above → chain ends, only 1 commission
+      const rootComm = commissions.find((c) => c.affiliateId === pRoot.id);
+      expect(rootComm).toBeUndefined();
+
+      // Restore
+      await prisma.referralLevel.update({
+        where: { id: l2Config!.id },
+        data: { qualificationCriteria: {} },
+      });
     });
   });
 

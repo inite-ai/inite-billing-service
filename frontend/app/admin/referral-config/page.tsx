@@ -136,7 +136,7 @@ export default function AdminReferralConfigPage() {
         ) : (
           <Table>
             <Thead>
-              <tr><Th>Level</Th><Th>Service</Th><Th>Name</Th><Th>Commission Rate</Th><Th>Status</Th><Th>Actions</Th></tr>
+              <tr><Th>Level</Th><Th>Service</Th><Th>Name</Th><Th>Rate</Th><Th>Qualification</Th><Th>Status</Th><Th>Actions</Th></tr>
             </Thead>
             <Tbody>
               {filteredLevels.map((l) => (
@@ -163,6 +163,19 @@ export default function AdminReferralConfigPage() {
                     ) : (
                       <span className="font-semibold text-lg">{(Number(l.commissionRate) * 100).toFixed(1)}%</span>
                     )}
+                  </Td>
+                  <Td>
+                    {(() => {
+                      const c = l.qualificationCriteria
+                      if (!c || Object.keys(c).length === 0) return <span className="text-gray-400 text-xs">None</span>
+                      const parts: string[] = []
+                      if (c.minDirectReferrals) parts.push(`${c.minDirectReferrals} refs`)
+                      if (c.minActiveReferrals) parts.push(`${c.minActiveReferrals} active`)
+                      if (c.minPersonalOrders) parts.push(`${c.minPersonalOrders} orders`)
+                      if (c.minMonthlyVolume) parts.push(`$${c.minMonthlyVolume}/mo`)
+                      if (c.personalPurchaseRequired) parts.push('own purchase')
+                      return <span className="text-xs text-orange-600 dark:text-orange-400">{parts.join(', ')}</span>
+                    })()}
                   </Td>
                   <Td><Badge>{l.isActive ? 'active' : 'inactive'}</Badge></Td>
                   <Td>

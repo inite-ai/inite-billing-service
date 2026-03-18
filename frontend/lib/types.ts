@@ -139,6 +139,14 @@ export interface AffiliateStats {
   upcomingPayout?: Payout
 }
 
+export interface QualificationCriteria {
+  minDirectReferrals?: number
+  minActiveReferrals?: number
+  minPersonalOrders?: number
+  minMonthlyVolume?: number
+  personalPurchaseRequired?: boolean
+}
+
 export interface ReferralLevel {
   id: string
   serviceId: string
@@ -146,6 +154,7 @@ export interface ReferralLevel {
   commissionRate: string
   name: string
   isActive: boolean
+  qualificationCriteria?: QualificationCriteria
   service?: Service
 }
 

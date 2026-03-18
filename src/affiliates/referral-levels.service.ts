@@ -35,6 +35,7 @@ export class ReferralLevelsService {
     level: number;
     commissionRate: number;
     name: string;
+    qualificationCriteria?: Record<string, any>;
   }) {
     // Validate service exists
     const service = await this.prisma.service.findUnique({
@@ -66,6 +67,7 @@ export class ReferralLevelsService {
         level: data.level,
         commissionRate: data.commissionRate,
         name: data.name,
+        qualificationCriteria: data.qualificationCriteria || {},
       },
     });
 
@@ -78,7 +80,7 @@ export class ReferralLevelsService {
 
   async updateLevel(
     id: string,
-    data: { commissionRate?: number; name?: string; isActive?: boolean },
+    data: { commissionRate?: number; name?: string; isActive?: boolean; qualificationCriteria?: Record<string, any> },
   ) {
     const level = await this.prisma.referralLevel.findUnique({
       where: { id },

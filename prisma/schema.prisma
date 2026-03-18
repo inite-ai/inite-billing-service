@@ -123,14 +123,23 @@ model Service {
 }
 
 model ReferralLevel {
-  id             String   @id @default(uuid()) @db.Uuid
-  serviceId      String   @map("service_id") @db.Uuid
-  level          Int
-  commissionRate Decimal  @map("commission_rate") @db.Decimal(5, 4)
-  name           String   @db.VarChar(100)
-  isActive       Boolean  @default(true) @map("is_active")
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                    String   @id @default(uuid()) @db.Uuid
+  serviceId             String   @map("service_id") @db.Uuid
+  level                 Int
+  commissionRate        Decimal  @map("commission_rate") @db.Decimal(5, 4)
+  name                  String   @db.VarChar(100)
+  isActive              Boolean  @default(true) @map("is_active")
+  qualificationCriteria Json?    @default("{}") @map("qualification_criteria")
+  // qualificationCriteria JSON shape:
+  // {
+  //   minDirectReferrals?: number,     // min direct referrals to qualify
+  //   minActiveReferrals?: number,     // min referrals with firstOrderPaid
+  //   minPersonalOrders?: number,      // min personal orders (affiliate bought something)
+  //   minMonthlyVolume?: number,       // min monthly sales volume from downline ($)
+  //   personalPurchaseRequired?: bool, // affiliate must have own active subscription
+  // }
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   service Service @relation(fields: [serviceId], references: [id])
 

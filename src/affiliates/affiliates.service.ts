@@ -262,7 +262,117 @@ export class AffiliatesService {
   }
 
   /**
-   * Process multi-level commissions when an order is paid
+   * Check if affiliate qualifies for a commission level
+   * based on qualificationCriteria from ReferralLevel
+   */
+  private async checkQualification(
+    affiliate: any,
+    criteria: any,
+    serviceId: string | undefined,
+    db: any,
+  ): Promise<boolean> {
+    if (!criteria || Object.keys(criteria).length === 0) {
+      return true; // No criteria = always qualified
+    }
+
+    // minDirectReferrals — minimum total direct referrals
+    if (criteria.minDirectReferrals) {
+      const count = await db.referral.count({
+        where: { affiliateId: affiliate.id },
+      });
+      if (count < criteria.minDirectReferrals) {
+        this.logger.debug(
+          `Affiliate ${affiliate.id} failed minDirectReferrals: ${count} < ${criteria.minDirectReferrals}`,
+        );
+        return false;
+      }
+    }
+
+    // minActiveReferrals — minimum referrals who have paid first order
+    if (criteria.minActiveReferrals) {
+      const count = await db.referral.count({
+        where: { affiliateId: affiliate.id, firstOrderPaid: true },
+      });
+      if (count < criteria.minActiveReferrals) {
+        this.logger.debug(
+          `Affiliate ${affiliate.id} failed minActiveReferrals: ${count} < ${criteria.minActiveReferrals}`,
+        );
+        return false;
+      }
+    }
+
+    // minPersonalOrders — affiliate must have placed N orders themselves
+    if (criteria.minPersonalOrders) {
+      const count = await db.order.count({
+        where: { userId: affiliate.userId, status: 'paid' },
+      });
+      if (count < criteria.minPersonalOrders) {
+        this.logger.debug(
+          `Affiliate ${affiliate.id} failed minPersonalOrders: ${count} < ${criteria.minPersonalOrders}`,
+        );
+        return false;
+      }
+    }
+
+    // personalPurchaseRequired — affiliate must have at least one active subscription or paid order
+    if (criteria.personalPurchaseRequired) {
+      const hasOrder = await db.order.findFirst({
+        where: { userId: affiliate.userId, status: 'paid' },
+      });
+      const hasSub = await db.subscription.findFirst({
+        where: {
+          userId: affiliate.userId,
+          status: { in: ['active', 'trialing'] },
+        },
+      });
+      if (!hasOrder && !hasSub) {
+        this.logger.debug(
+          `Affiliate ${affiliate.id} failed personalPurchaseRequired`,
+        );
+        return false;
+      }
+    }
+
+    // minMonthlyVolume — minimum monthly sales volume from downline
+    if (criteria.minMonthlyVolume) {
+      const monthAgo = new Date();
+      monthAgo.setMonth(monthAgo.getMonth() - 1);
+      const volume = await db.affiliateCommission.aggregate({
+        where: {
+          affiliateId: affiliate.id,
+          status: { in: ['earned', 'paid'] },
+          earnedAt: { gte: monthAgo },
+        },
+        _sum: { amount: true },
+      });
+      const total = Number(volume._sum.amount || 0);
+      if (total < criteria.minMonthlyVolume) {
+        this.logger.debug(
+          `Affiliate ${affiliate.id} failed minMonthlyVolume: ${total} < ${criteria.minMonthlyVolume}`,
+        );
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * Process multi-level commissions when an order is paid.
+   *
+   * Chain: buyer → L1 (direct referrer) → L2 (parent) → ... → L7 (root)
+   *
+   * Key behavior on disqualification/inactivity:
+   * - If an affiliate is inactive or doesn't meet qualificationCriteria,
+   *   they are SKIPPED and the level does NOT increment.
+   * - This means the next qualified affiliate UP the chain gets the
+   *   commission at the current level rate ("shift upward").
+   *
+   * Example with $20 product:
+   *   Chain: You → Me → Wife → Friend
+   *   If Me is disqualified:
+   *     Friend buys → Wife gets L1 (15% = $3), You gets L2 (1% = $0.20)
+   *     Me gets nothing, levels compress.
    */
   async processMultiLevelCommissions(
     orderId: string,
@@ -274,7 +384,6 @@ export class AffiliatesService {
   ): Promise<void> {
     const db = tx || this.prisma;
 
-    // Find referral for this user + service
     const referral = await db.referral.findFirst({
       where: {
         referredUserId: userId,
@@ -284,10 +393,9 @@ export class AffiliatesService {
     });
 
     if (!referral) {
-      return; // No referral, no commission
+      return;
     }
 
-    // Only pay commission on first order
     if (referral.firstOrderPaid) {
       this.logger.debug(
         `Referral ${referral.id} already has first order paid, skipping commission`,
@@ -295,40 +403,69 @@ export class AffiliatesService {
       return;
     }
 
+    // Pre-load all referral levels for this service (sorted by level)
+    let serviceLevels: any[] = [];
+    if (serviceId) {
+      serviceLevels = await db.referralLevel.findMany({
+        where: { serviceId, isActive: true },
+        orderBy: { level: 'asc' },
+      });
+    }
+
+    const maxConfiguredLevel = serviceLevels.length > 0
+      ? Math.max(...serviceLevels.map((l: any) => l.level))
+      : 1;
+
     // Walk up the affiliate chain
     let currentAffiliate = referral.affiliate;
-    let currentLevel = 1;
+    let currentLevel = 1; // commission level (only increments for qualified affiliates)
 
-    while (currentAffiliate) {
+    while (currentAffiliate && currentLevel <= maxConfiguredLevel) {
+      // Get the referral level config for currentLevel
+      const levelConfig = serviceLevels.find((l: any) => l.level === currentLevel);
+
+      // Check if affiliate is active
       if (currentAffiliate.status !== 'active') {
         this.logger.debug(
-          `Affiliate ${currentAffiliate.id} is not active, skipping level ${currentLevel}`,
+          `Affiliate ${currentAffiliate.id} is inactive, shift upward (level stays ${currentLevel})`,
         );
+        // Shift upward: walk to parent WITHOUT incrementing level
         currentAffiliate = currentAffiliate.parentAffiliateId
           ? await db.affiliate.findUnique({ where: { id: currentAffiliate.parentAffiliateId } })
           : null;
-        currentLevel++;
-        continue;
+        continue; // level stays the same
       }
 
-      // Get commission rate for this level
+      // Check qualification criteria
+      const criteria = levelConfig?.qualificationCriteria || {};
+      const isQualified = await this.checkQualification(
+        currentAffiliate,
+        criteria,
+        serviceId,
+        db,
+      );
+
+      if (!isQualified) {
+        this.logger.debug(
+          `Affiliate ${currentAffiliate.id} not qualified for level ${currentLevel}, shift upward`,
+        );
+        // Shift upward: walk to parent WITHOUT incrementing level
+        currentAffiliate = currentAffiliate.parentAffiliateId
+          ? await db.affiliate.findUnique({ where: { id: currentAffiliate.parentAffiliateId } })
+          : null;
+        continue; // level stays the same
+      }
+
+      // Get commission rate
       let commissionRate: number | null = null;
 
-      if (serviceId) {
-        commissionRate = await this.referralLevelsService.getCommissionRateForLevel(
-          serviceId,
-          currentLevel,
-        );
-      }
-
-      // Fall back to affiliate's own commission rate for level 1 if no service levels configured
-      if (commissionRate === null) {
-        if (currentLevel === 1) {
-          commissionRate = Number(currentAffiliate.commissionRate);
-        } else {
-          // No rate configured for this level, stop walking up
-          break;
-        }
+      if (levelConfig) {
+        commissionRate = Number(levelConfig.commissionRate);
+      } else if (currentLevel === 1) {
+        // Fallback for level 1 if no service levels configured
+        commissionRate = Number(currentAffiliate.commissionRate);
+      } else {
+        break; // No rate for this level
       }
 
       const commissionAmount = amount * commissionRate;
@@ -360,7 +497,7 @@ export class AffiliatesService {
         );
       }
 
-      // Walk up to parent
+      // Move to parent AND increment level (affiliate was qualified)
       if (currentAffiliate.parentAffiliateId) {
         currentAffiliate = await db.affiliate.findUnique({
           where: { id: currentAffiliate.parentAffiliateId },
