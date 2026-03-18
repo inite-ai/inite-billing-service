@@ -7,16 +7,22 @@ import {
   IntentStatus,
 } from '../common/types/payment-state.types';
 import { OutboxService } from '../outbox/outbox.service';
+import { AffiliatesService } from '../affiliates/affiliates.service';
 
 @Injectable()
 export class PaymentOrchestratorService {
   private readonly logger = new Logger(PaymentOrchestratorService.name);
   private adapters: Map<string, PaymentRailAdapter> = new Map();
+  private affiliatesService: AffiliatesService;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly outboxService: OutboxService,
   ) {}
+
+  setAffiliatesService(affiliatesService: AffiliatesService) {
+    this.affiliatesService = affiliatesService;
+  }
 
   registerAdapter(adapter: PaymentRailAdapter) {
     this.adapters.set(adapter.rail(), adapter);
@@ -358,85 +364,32 @@ export class PaymentOrchestratorService {
   }
 
   /**
-   * Handle affiliate commission for first payment only
+   * Handle affiliate commission using multi-level referral system
    */
   private async handleAffiliateCommission(order: any, tx: any): Promise<void> {
-    // Check if user has a referral
-    const referral = await tx.referral.findUnique({
-      where: { referredUserId: order.userId },
-      include: { affiliate: true },
-    });
-
-    if (!referral) {
-      return; // No referral, no commission
-    }
-
-    // Only pay commission on first order
-    if (referral.firstOrderPaid) {
-      this.logger.debug(
-        `Referral ${referral.id} already has first order paid, skipping commission`,
-      );
+    if (!this.affiliatesService) {
+      this.logger.warn('AffiliatesService not set, skipping commission processing');
       return;
     }
 
-    // Check if affiliate is active
-    if (referral.affiliate.status !== 'active') {
-      this.logger.debug(
-        `Affiliate ${referral.affiliateId} is not active, skipping commission`,
+    // Determine serviceId from product
+    const serviceId = order.price?.product?.serviceId || undefined;
+
+    try {
+      await this.affiliatesService.processMultiLevelCommissions(
+        order.id,
+        order.userId,
+        Number(order.amount),
+        order.currency,
+        serviceId,
+        tx,
       );
-      return;
+    } catch (error: any) {
+      this.logger.error(
+        `Error processing multi-level commissions for order ${order.id}: ${error.message}`,
+        error.stack,
+      );
     }
-
-    // Calculate commission (50% of first payment by default)
-    const commissionRate = Number(referral.affiliate.commissionRate);
-    const commissionAmount = Number(order.amount) * commissionRate;
-
-    // Create commission
-    const commission = await tx.affiliateCommission.create({
-      data: {
-        affiliateId: referral.affiliateId,
-        referralId: referral.id,
-        orderId: order.id,
-        amount: commissionAmount,
-        commissionRate,
-        currency: order.currency,
-        status: 'earned',
-        earnedAt: new Date(),
-      },
-    });
-
-    // Update referral
-    await tx.referral.update({
-      where: { id: referral.id },
-      data: {
-        firstOrderPaid: true,
-        firstOrderId: order.id,
-      },
-    });
-
-    // Update affiliate totals
-    await tx.affiliate.update({
-      where: { id: referral.affiliateId },
-      data: {
-        totalEarned: {
-          increment: commissionAmount,
-        },
-      },
-    });
-
-    this.logger.log(
-      `Created affiliate commission: ${commission.id} for order ${order.id}, amount: ${commissionAmount} ${order.currency}`,
-    );
-
-    // Emit event
-    await this.outboxService.emit('billing.affiliate.commission.earned', {
-      commission_id: commission.id,
-      affiliate_id: referral.affiliateId,
-      referral_id: referral.id,
-      order_id: order.id,
-      amount: commissionAmount.toString(),
-      currency: order.currency,
-    });
   }
 }
 

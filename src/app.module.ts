@@ -14,6 +14,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
 import { OutboxModule } from './outbox/outbox.module';
 import { WorkersModule } from './workers/workers.module';
 import { AffiliatesModule } from './affiliates/affiliates.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { AffiliatesModule } from './affiliates/affiliates.module';
     OutboxModule,
     WorkersModule,
     AffiliatesModule,
+    AdminModule,
   ],
 })
 export class AppModule implements OnModuleInit {

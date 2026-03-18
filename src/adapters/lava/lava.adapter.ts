@@ -1,0 +1,239 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import {
+  PaymentRailAdapter,
+  CreateIntentInput,
+  CreateIntentResult,
+  IntentStatusResult,
+  WebhookParseResult,
+} from '../../common/interfaces/payment-rail-adapter.interface';
+
+/**
+ * Lava.top (gate.lava.top) payment adapter
+ *
+ * API: https://gate.lava.top/docs
+ * Auth: X-Api-Key header
+ * Endpoint: POST /api/v3/invoice
+ * Currencies: RUB, USD, EUR
+ * Providers: SMART_GLOCAL, UNLIMINT, PAYPAL, STRIPE, PAY2ME
+ * Methods: CARD, SBP, PIX
+ * Periodicity: ONE_TIME, MONTHLY, PERIOD_90_DAYS, PERIOD_180_DAYS, PERIOD_YEAR
+ *
+ * Webhook events: payment.success, payment.failed,
+ *   subscription.recurring.payment.success, subscription.recurring.payment.failed,
+ *   subscription.cancelled
+ *
+ * Contract statuses: new, in-progress, completed, failed, cancelled,
+ *   subscription-active, subscription-expired, subscription-cancelled, subscription-failed
+ */
+@Injectable()
+export class LavaAdapter implements PaymentRailAdapter {
+  private readonly logger = new Logger(LavaAdapter.name);
+  private readonly apiBaseUrl: string;
+  private readonly apiKey: string;
+
+  constructor(private readonly configService: ConfigService) {
+    this.apiBaseUrl =
+      this.configService.get<string>('LAVA_API_BASE_URL') || 'https://gate.lava.top';
+    this.apiKey = this.configService.get<string>('LAVA_API_KEY') || '';
+
+    if (!this.apiKey) {
+      this.logger.warn('Lava.top API key not configured — adapter in stub mode');
+    }
+  }
+
+  rail(): string {
+    return 'LAVA';
+  }
+
+  /**
+   * Maps our subscription interval to Lava periodicity
+   */
+  private mapPeriodicity(mode: string, metadata?: Record<string, any>): string {
+    if (mode !== 'SUBSCRIPTION') return 'ONE_TIME';
+    const interval = metadata?.interval || 'month';
+    const map: Record<string, string> = {
+      month: 'MONTHLY',
+      '3months': 'PERIOD_90_DAYS',
+      '6months': 'PERIOD_180_DAYS',
+      year: 'PERIOD_YEAR',
+    };
+    return map[interval] || 'MONTHLY';
+  }
+
+  async createPaymentIntent(input: CreateIntentInput): Promise<CreateIntentResult> {
+    if (!this.apiKey) {
+      // Stub mode
+      const fakeId = `lava_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+      this.logger.warn(`LavaAdapter STUB: created fake intent ${fakeId}`);
+      return {
+        providerIntentId: fakeId,
+        checkoutUrl: `https://pay.lava.top/checkout/${fakeId}`,
+        expiresAt: new Date(Date.now() + 3600000),
+        metadata: { stub: true, order_id: input.orderId },
+      };
+    }
+
+    try {
+      // Lava.top requires an offerId (product must be pre-created on their side)
+      // If offerId is in metadata, use it; otherwise fall back to amount-based approach
+      const offerId = input.metadata?.lavaOfferId;
+      const buyerEmail = input.metadata?.email || input.metadata?.buyerEmail;
+
+      if (!offerId) {
+        throw new Error(
+          'Lava.top requires offerId in metadata. Create product/offer on lava.top dashboard first.',
+        );
+      }
+
+      if (!buyerEmail) {
+        throw new Error('Lava.top requires buyer email');
+      }
+
+      const body: Record<string, any> = {
+        email: buyerEmail,
+        offerId,
+        currency: input.currency,
+        periodicity: this.mapPeriodicity(input.mode, input.metadata),
+      };
+
+      // Optional fields
+      if (input.metadata?.paymentMethod) {
+        body.paymentMethod = input.metadata.paymentMethod; // CARD, SBP, PIX
+      }
+      if (input.metadata?.buyerLanguage) {
+        body.buyerLanguage = input.metadata.buyerLanguage;
+      }
+      if (input.metadata?.clientUtm) {
+        body.clientUtm = input.metadata.clientUtm;
+      }
+
+      const response = await fetch(`${this.apiBaseUrl}/api/v3/invoice`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Api-Key': this.apiKey,
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        this.logger.error(`Lava.top API error: ${response.status} ${errorText}`);
+        throw new Error(`Lava.top API error: ${response.status} — ${errorText}`);
+      }
+
+      const invoice = await response.json();
+
+      // Response: { id, status, amountTotal: {amount, currency}, paymentUrl }
+      return {
+        providerIntentId: invoice.id,
+        checkoutUrl: invoice.paymentUrl,
+        metadata: {
+          lava_contract_id: invoice.id,
+          lava_status: invoice.status,
+          order_id: input.orderId,
+        },
+      };
+    } catch (error: any) {
+      this.logger.error(
+        `Error creating Lava.top invoice: ${error.message}`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
+
+  async getIntentStatus(providerIntentId: string): Promise<IntentStatusResult> {
+    if (!this.apiKey) {
+      return {
+        status: 'created',
+        metadata: { stub: true, provider_intent_id: providerIntentId },
+      };
+    }
+
+    try {
+      const response = await fetch(
+        `${this.apiBaseUrl}/api/v2/invoices/${providerIntentId}`,
+        {
+          headers: { 'X-Api-Key': this.apiKey },
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error(`Lava.top API error: ${response.status}`);
+      }
+
+      const invoice = await response.json();
+
+      // Map Lava contract statuses to unified
+      const statusMap: Record<string, IntentStatusResult['status']> = {
+        'new': 'created',
+        'in-progress': 'opened',
+        'completed': 'paid',
+        'failed': 'failed',
+        'cancelled': 'failed',
+        'subscription-active': 'paid',
+        'subscription-expired': 'expired',
+        'subscription-cancelled': 'failed',
+        'subscription-failed': 'failed',
+      };
+
+      return {
+        status: statusMap[invoice.status] || 'created',
+        metadata: {
+          lava_status: invoice.status,
+          lava_type: invoice.type,
+        },
+        providerData: invoice,
+      };
+    } catch (error: any) {
+      this.logger.error(`Error fetching Lava.top status: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Handle Lava.top webhook
+   *
+   * Event types:
+   *   payment.success — successful purchase
+   *   payment.failed — failed payment
+   *   subscription.recurring.payment.success — renewal success
+   *   subscription.recurring.payment.failed — renewal failure
+   *   subscription.cancelled — subscription cancelled
+   *
+   * Payload: { eventType, contractId, parentContractId, product: {id, title},
+   *   buyer: {email}, amount, currency, status, timestamp, errorMessage }
+   *
+   * Retry: 19 retries (1s, 5s, 15s, 9×1m, 4×1h)
+   * Auth: X-Api-Key header or Basic auth
+   */
+  async handleWebhook(rawPayload: any): Promise<WebhookParseResult> {
+    const eventType = rawPayload.eventType;
+    const contractId = rawPayload.contractId;
+
+    if (!eventType || !contractId) {
+      throw new Error(
+        'Invalid Lava.top webhook: missing eventType or contractId',
+      );
+    }
+
+    // Map Lava event types to billing event types
+    const eventMap: Record<string, string> = {
+      'payment.success': 'payment.paid',
+      'payment.failed': 'payment.failed',
+      'subscription.recurring.payment.success': 'subscription.renewed',
+      'subscription.recurring.payment.failed': 'subscription.renewal_failed',
+      'subscription.cancelled': 'subscription.cancelled',
+    };
+
+    return {
+      webhookId: `lava_${contractId}_${Date.now()}`,
+      eventType: eventMap[eventType] || eventType,
+      entityId: contractId,
+      rail: 'LAVA',
+      payload: rawPayload,
+    };
+  }
+}

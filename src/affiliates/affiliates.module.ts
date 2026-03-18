@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { AffiliatesController } from './affiliates.controller';
 import { AffiliatesService } from './affiliates.service';
+import { ReferralLevelsService } from './referral-levels.service';
 import { AffiliatePayoutScheduler } from './affiliate-payout.scheduler';
 import { AffiliatePayoutProcessor } from './affiliate-payout.processor';
 import { PrismaService } from '../common/services/prisma.service';
@@ -24,10 +25,11 @@ import { OutboxModule } from '../outbox/outbox.module';
   controllers: [AffiliatesController],
   providers: [
     AffiliatesService,
+    ReferralLevelsService,
     AffiliatePayoutScheduler,
     AffiliatePayoutProcessor,
     PrismaService,
   ],
-  exports: [AffiliatesService],
+  exports: [AffiliatesService, ReferralLevelsService],
 })
 export class AffiliatesModule {}

@@ -11,6 +11,7 @@ export async function cleanupTestData(prisma: PrismaService): Promise<void> {
     await prisma.webhookEvent.deleteMany({});
     await prisma.outboxEvent.deleteMany({});
     await prisma.affiliateCommission.deleteMany({});
+    await prisma.affiliatePayout.deleteMany({});
     await prisma.referral.deleteMany({});
     await prisma.affiliate.deleteMany({});
     await prisma.entitlement.deleteMany({});
@@ -20,6 +21,9 @@ export async function cleanupTestData(prisma: PrismaService): Promise<void> {
     await prisma.order.deleteMany({});
     await prisma.price.deleteMany({});
     await prisma.product.deleteMany({});
+    await prisma.referralLevel.deleteMany({});
+    await prisma.service.deleteMany({});
+    await prisma.paymentProvider.deleteMany({});
   } catch (error) {
     console.error('Cleanup error:', error);
   }

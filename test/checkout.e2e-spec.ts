@@ -177,7 +177,7 @@ describe('Checkout E2E Tests', () => {
       expect(response.body).toHaveProperty('orderId');
 
       // Verify referral tracked
-      const referral = await prisma.referral.findUnique({
+      const referral = await prisma.referral.findFirst({
         where: { referredUserId: userId },
       });
       expect(referral).toBeDefined();

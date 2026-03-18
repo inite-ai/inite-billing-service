@@ -10,3 +10,6 @@ coverage
 .DS_Store
 .vscode
 .idea
+frontend
+test
+README.md

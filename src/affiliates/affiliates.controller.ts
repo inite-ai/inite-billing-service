@@ -3,7 +3,6 @@ import {
   Get,
   Post,
   Body,
-  Param,
   Query,
   UseGuards,
   HttpCode,
@@ -35,10 +34,12 @@ export class AffiliatesController {
   async createAffiliate(
     @User() user: RequestUser,
     @Body() dto: CreateAffiliateDto,
+    @Query('serviceId') serviceId?: string,
   ): Promise<AffiliateResponseDto> {
     return this.affiliatesService.createOrGetAffiliate(
       user.userId,
       dto.referralCode,
+      serviceId,
     );
   }
 
@@ -49,8 +50,9 @@ export class AffiliatesController {
   @ApiResponse({ status: 200, type: AffiliateResponseDto })
   async getMyAffiliate(
     @User() user: RequestUser,
+    @Query('serviceId') serviceId?: string,
   ): Promise<AffiliateResponseDto> {
-    return this.affiliatesService.getAffiliateByUserId(user.userId);
+    return this.affiliatesService.getAffiliateByUserId(user.userId, serviceId);
   }
 
   @Get('me/stats')
@@ -60,8 +62,9 @@ export class AffiliatesController {
   @ApiResponse({ status: 200, type: AffiliateStatsDto })
   async getMyStats(
     @User() user: RequestUser,
+    @Query('serviceId') serviceId?: string,
   ): Promise<AffiliateStatsDto> {
-    const affiliate = await this.affiliatesService.getAffiliateByUserId(user.userId);
+    const affiliate = await this.affiliatesService.getAffiliateByUserId(user.userId, serviceId);
     return this.affiliatesService.getAffiliateStats(affiliate.id);
   }
 
@@ -72,8 +75,9 @@ export class AffiliatesController {
   @ApiResponse({ status: 200, type: [ReferralResponseDto] })
   async getMyReferrals(
     @User() user: RequestUser,
+    @Query('serviceId') serviceId?: string,
   ): Promise<ReferralResponseDto[]> {
-    const affiliate = await this.affiliatesService.getAffiliateByUserId(user.userId);
+    const affiliate = await this.affiliatesService.getAffiliateByUserId(user.userId, serviceId);
     return this.affiliatesService.getReferrals(affiliate.id);
   }
 
@@ -85,8 +89,9 @@ export class AffiliatesController {
   async getMyCommissions(
     @User() user: RequestUser,
     @Query('status') status?: string,
+    @Query('serviceId') serviceId?: string,
   ): Promise<CommissionResponseDto[]> {
-    const affiliate = await this.affiliatesService.getAffiliateByUserId(user.userId);
+    const affiliate = await this.affiliatesService.getAffiliateByUserId(user.userId, serviceId);
     return this.affiliatesService.getCommissions(affiliate.id, status);
   }
 
@@ -97,8 +102,21 @@ export class AffiliatesController {
   @ApiResponse({ status: 200, type: [PayoutResponseDto] })
   async getMyPayouts(
     @User() user: RequestUser,
+    @Query('serviceId') serviceId?: string,
   ): Promise<PayoutResponseDto[]> {
-    const affiliate = await this.affiliatesService.getAffiliateByUserId(user.userId);
+    const affiliate = await this.affiliatesService.getAffiliateByUserId(user.userId, serviceId);
     return this.affiliatesService.getPayouts(affiliate.id);
+  }
+
+  @Get('me/tree')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get my referral tree' })
+  async getMyTree(
+    @User() user: RequestUser,
+    @Query('serviceId') serviceId?: string,
+  ) {
+    const affiliate = await this.affiliatesService.getAffiliateByUserId(user.userId, serviceId);
+    return this.affiliatesService.getAffiliateTree(affiliate.id);
   }
 }

@@ -3,8 +3,10 @@ import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { PaymentOrchestratorService } from './payment-orchestrator/payment-orchestrator.service';
+import { AffiliatesService } from './affiliates/affiliates.service';
 import { OneAdapter } from './adapters/one/one.adapter';
 import { CryptoAdapter } from './adapters/crypto/crypto.adapter';
+import { LavaAdapter } from './adapters/lava/lava.adapter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -37,8 +39,15 @@ async function bootstrap() {
   const oneAdapter = app.get(OneAdapter);
   const cryptoAdapter = app.get(CryptoAdapter);
 
+  const lavaAdapter = app.get(LavaAdapter);
+
   orchestrator.registerAdapter(oneAdapter);
   orchestrator.registerAdapter(cryptoAdapter);
+  orchestrator.registerAdapter(lavaAdapter);
+
+  // Wire up affiliates service for multi-level commissions
+  const affiliatesService = app.get(AffiliatesService);
+  orchestrator.setAffiliatesService(affiliatesService);
 
   const port = process.env.PORT || 3000;
   await app.listen(port);

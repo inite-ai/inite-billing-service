@@ -6,6 +6,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { ServiceAuthGuard } from './guards/service-auth.guard';
 import { JwtOrServiceGuard } from './guards/jwt-or-service.guard';
+import { RolesGuard } from './guards/roles.guard';
 
 @Module({
   imports: [
@@ -13,8 +14,7 @@ import { JwtOrServiceGuard } from './guards/jwt-or-service.guard';
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({}),
   ],
-  providers: [JwtStrategy, JwtAuthGuard, ServiceAuthGuard, JwtOrServiceGuard],
-  exports: [JwtAuthGuard, ServiceAuthGuard, JwtOrServiceGuard],
+  providers: [JwtStrategy, JwtAuthGuard, ServiceAuthGuard, JwtOrServiceGuard, RolesGuard],
+  exports: [JwtAuthGuard, ServiceAuthGuard, JwtOrServiceGuard, RolesGuard],
 })
 export class AuthModule {}
-

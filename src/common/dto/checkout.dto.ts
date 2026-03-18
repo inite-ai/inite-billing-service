@@ -8,6 +8,7 @@ export enum CheckoutMode {
 
 export enum PaymentRail {
   ONE = 'ONE',
+  LAVA = 'LAVA',
   CRYPTO = 'CRYPTO',
 }
 

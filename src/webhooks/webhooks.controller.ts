@@ -9,6 +9,7 @@ import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { WebhooksService } from './webhooks.service';
 import { OneAdapter } from '../adapters/one/one.adapter';
 import { CryptoAdapter } from '../adapters/crypto/crypto.adapter';
+import { LavaAdapter } from '../adapters/lava/lava.adapter';
 
 @ApiTags('Webhooks')
 @Controller('webhooks')
@@ -17,6 +18,7 @@ export class WebhooksController {
     private readonly webhooksService: WebhooksService,
     private readonly oneAdapter: OneAdapter,
     private readonly cryptoAdapter: CryptoAdapter,
+    private readonly lavaAdapter: LavaAdapter,
   ) {}
 
   @Post('one')
@@ -40,6 +42,25 @@ export class WebhooksController {
     await this.webhooksService.storeWebhookEvent(
       'ONE',
       payload.id || parsed.entityId,
+      parsed.eventType,
+      parsed.entityId,
+      payload,
+    );
+
+    return { received: true };
+  }
+
+
+  @Post('lava')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Lava.top payment webhook endpoint' })
+  @ApiResponse({ status: 200 })
+  async handleLavaWebhook(@Body() payload: any): Promise<{ received: boolean }> {
+    const parsed = await this.lavaAdapter.handleWebhook(payload);
+
+    await this.webhooksService.storeWebhookEvent(
+      'LAVA',
+      parsed.webhookId || parsed.entityId,
       parsed.eventType,
       parsed.entityId,
       payload,

@@ -104,10 +104,46 @@ enum OutboxEventStatus {
   @@schema("billing")
 }
 
+model Service {
+  id        String   @id @default(uuid()) @db.Uuid
+  code      String   @unique @db.VarChar(100)
+  name      String   @db.VarChar(255)
+  isActive  Boolean  @default(true) @map("is_active")
+  metadata  Json?    @default("{}")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  products       Product[]
+  referralLevels ReferralLevel[]
+  affiliates     Affiliate[]
+  referrals      Referral[]
+
+  @@map("services")
+  @@schema("billing")
+}
+
+model ReferralLevel {
+  id             String   @id @default(uuid()) @db.Uuid
+  serviceId      String   @map("service_id") @db.Uuid
+  level          Int
+  commissionRate Decimal  @map("commission_rate") @db.Decimal(5, 4)
+  name           String   @db.VarChar(100)
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  service Service @relation(fields: [serviceId], references: [id])
+
+  @@unique([serviceId, level])
+  @@map("referral_levels")
+  @@schema("billing")
+}
+
 model Product {
   id          String      @id @default(uuid()) @db.Uuid
   code        String      @unique @db.VarChar(100)
   name        String      @db.VarChar(255)
+  serviceId   String?     @map("service_id") @db.Uuid
   moduleScope String      @map("module_scope") @db.VarChar(100)
   type        ProductType
   isActive    Boolean     @default(true) @map("is_active")
@@ -115,10 +151,12 @@ model Product {
   createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  prices Price[]
+  service Service? @relation(fields: [serviceId], references: [id])
+  prices  Price[]
 
   @@index([code])
   @@index([moduleScope, isActive])
+  @@index([serviceId])
   @@map("products")
   @@schema("billing")
 }
@@ -327,23 +365,31 @@ enum PayoutStatus {
 }
 
 model Affiliate {
-  id              String           @id @default(uuid()) @db.Uuid
-  userId          String           @unique @map("user_id") @db.Uuid
-  referralCode    String           @unique @map("referral_code") @db.VarChar(50)
-  status          AffiliateStatus @default(active)
-  commissionRate  Decimal          @default(0.5) @map("commission_rate") @db.Decimal(5, 4) // 50% default
-  totalEarned     Decimal          @default(0) @map("total_earned") @db.Decimal(19, 4)
-  totalPaid       Decimal          @default(0) @map("total_paid") @db.Decimal(19, 4)
-  metadata        Json?            @default("{}")
-  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                String           @id @default(uuid()) @db.Uuid
+  userId            String           @map("user_id") @db.Uuid
+  serviceId         String?          @map("service_id") @db.Uuid
+  parentAffiliateId String?          @map("parent_affiliate_id") @db.Uuid
+  referralCode      String           @unique @map("referral_code") @db.VarChar(50)
+  status            AffiliateStatus  @default(active)
+  commissionRate    Decimal          @default(0.5) @map("commission_rate") @db.Decimal(5, 4)
+  totalEarned       Decimal          @default(0) @map("total_earned") @db.Decimal(19, 4)
+  totalPaid         Decimal          @default(0) @map("total_paid") @db.Decimal(19, 4)
+  metadata          Json?            @default("{}")
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  referrals       Referral[]
-  commissions     AffiliateCommission[]
-  payouts         AffiliatePayout[]
+  service           Service?         @relation(fields: [serviceId], references: [id])
+  parentAffiliate   Affiliate?       @relation("AffiliateTree", fields: [parentAffiliateId], references: [id])
+  childAffiliates   Affiliate[]      @relation("AffiliateTree")
+  referrals         Referral[]
+  commissions       AffiliateCommission[]
+  payouts           AffiliatePayout[]
 
+  @@unique([userId, serviceId])
   @@index([referralCode])
   @@index([status])
+  @@index([serviceId])
+  @@index([parentAffiliateId])
   @@map("affiliates")
   @@schema("billing")
 }
@@ -351,7 +397,8 @@ model Affiliate {
 model Referral {
   id              String   @id @default(uuid()) @db.Uuid
   affiliateId     String   @map("affiliate_id") @db.Uuid
-  referredUserId  String   @unique @map("referred_user_id") @db.Uuid
+  referredUserId  String   @map("referred_user_id") @db.Uuid
+  serviceId       String?  @map("service_id") @db.Uuid
   referralCode    String   @map("referral_code") @db.VarChar(50)
   firstOrderId    String?  @map("first_order_id") @db.Uuid
   firstOrderPaid  Boolean  @default(false) @map("first_order_paid")
@@ -359,11 +406,14 @@ model Referral {
   updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   affiliate       Affiliate            @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  service         Service?             @relation(fields: [serviceId], references: [id])
   commissions     AffiliateCommission[]
 
+  @@unique([referredUserId, serviceId])
   @@index([affiliateId])
   @@index([referredUserId])
   @@index([referralCode])
+  @@index([serviceId])
   @@map("referrals")
   @@schema("billing")
 }
@@ -373,6 +423,7 @@ model AffiliateCommission {
   affiliateId     String           @map("affiliate_id") @db.Uuid
   referralId      String           @map("referral_id") @db.Uuid
   orderId         String           @map("order_id") @db.Uuid
+  level           Int              @default(1)
   amount          Decimal          @db.Decimal(19, 4)
   commissionRate  Decimal          @map("commission_rate") @db.Decimal(5, 4)
   currency        String           @db.VarChar(10)
@@ -418,6 +469,24 @@ model AffiliatePayout {
   @@index([status, periodEnd])
   @@index([periodStart, periodEnd])
   @@map("affiliate_payouts")
+  @@schema("billing")
+}
+
+model PaymentProvider {
+  id             String   @id @default(uuid()) @db.Uuid
+  code           String   @unique @db.VarChar(50)    // ONE, LAVA, CRYPTO
+  name           String   @db.VarChar(255)
+  isActive       Boolean  @default(false) @map("is_active")
+  supportedModes String[] @map("supported_modes")    // PAYMENT, SUBSCRIPTION
+  currencies     String[] @default([])                // USD, EUR, BRL
+  countries      String[] @default([])                // BR, US, EU, GLOBAL
+  webhookUrl     String?  @map("webhook_url") @db.Text
+  config         Json?    @default("{}")              // API keys, secrets (encrypted in prod)
+  metadata       Json?    @default("{}")              // display info, logo, description
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("payment_providers")
   @@schema("billing")
 }
 

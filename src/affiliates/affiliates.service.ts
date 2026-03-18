@@ -8,7 +8,7 @@ import {
   PayoutResponseDto,
   AffiliateStatsDto,
 } from '../common/dto/affiliate.dto';
-import { v4 as uuidv4 } from 'uuid';
+import { ReferralLevelsService } from './referral-levels.service';
 
 @Injectable()
 export class AffiliatesService {
@@ -18,16 +18,13 @@ export class AffiliatesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
+    private readonly referralLevelsService: ReferralLevelsService,
   ) {
     this.baseUrl = this.configService.get<string>('FRONTEND_URL') || 'https://app.inite.ai';
   }
 
-  /**
-   * Generate unique referral code
-   */
   private generateReferralCode(): string {
-    // Generate a short, unique code (8 characters)
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclude confusing chars
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let code = '';
     for (let i = 0; i < 8; i++) {
       code += chars.charAt(Math.floor(Math.random() * chars.length));
@@ -35,32 +32,27 @@ export class AffiliatesService {
     return code;
   }
 
-  /**
-   * Create or get affiliate account for user
-   */
   async createOrGetAffiliate(
     userId: string,
     referralCode?: string,
+    serviceId?: string,
   ): Promise<AffiliateResponseDto> {
-    // Check if affiliate already exists
-    let affiliate = await this.prisma.affiliate.findUnique({
-      where: { userId },
+    // Check if affiliate already exists for this user+service
+    let affiliate = await this.prisma.affiliate.findFirst({
+      where: { userId, serviceId: serviceId || null },
     });
 
     if (affiliate) {
       return this.mapAffiliateToDto(affiliate);
     }
 
-    // Generate referral code if not provided
     let code = referralCode;
     if (!code) {
       code = this.generateReferralCode();
-      // Ensure uniqueness
       while (await this.prisma.affiliate.findUnique({ where: { referralCode: code } })) {
         code = this.generateReferralCode();
       }
     } else {
-      // Check if code is already taken
       const existing = await this.prisma.affiliate.findUnique({
         where: { referralCode: code },
       });
@@ -69,13 +61,26 @@ export class AffiliatesService {
       }
     }
 
-    // Create affiliate
+    // If there's a parent referral (this user was referred), link the parent
+    let parentAffiliateId: string | undefined;
+    if (serviceId) {
+      const referral = await this.prisma.referral.findFirst({
+        where: { referredUserId: userId, serviceId },
+        include: { affiliate: true },
+      });
+      if (referral) {
+        parentAffiliateId = referral.affiliateId;
+      }
+    }
+
     affiliate = await this.prisma.affiliate.create({
       data: {
         userId,
+        serviceId,
+        parentAffiliateId,
         referralCode: code,
         status: 'active',
-        commissionRate: 0.5, // 50% default
+        commissionRate: 0.5,
       },
     });
 
@@ -84,13 +89,15 @@ export class AffiliatesService {
     return this.mapAffiliateToDto(affiliate);
   }
 
-  /**
-   * Get affiliate by user ID
-   */
-  async getAffiliateByUserId(userId: string): Promise<AffiliateResponseDto> {
-    const affiliate = await this.prisma.affiliate.findUnique({
-      where: { userId },
-    });
+  async getAffiliateByUserId(userId: string, serviceId?: string): Promise<AffiliateResponseDto> {
+    const where: any = { userId };
+    if (serviceId) {
+      where.serviceId = serviceId;
+    } else {
+      where.serviceId = null;
+    }
+
+    const affiliate = await this.prisma.affiliate.findFirst({ where });
 
     if (!affiliate) {
       throw new NotFoundException(`Affiliate not found for user: ${userId}`);
@@ -99,9 +106,6 @@ export class AffiliatesService {
     return this.mapAffiliateToDto(affiliate);
   }
 
-  /**
-   * Get affiliate by referral code
-   */
   async getAffiliateByCode(referralCode: string): Promise<AffiliateResponseDto | null> {
     const affiliate = await this.prisma.affiliate.findUnique({
       where: { referralCode },
@@ -114,29 +118,30 @@ export class AffiliatesService {
     return this.mapAffiliateToDto(affiliate);
   }
 
-  /**
-   * Track referral (when user signs up with referral code)
-   */
   async trackReferral(
     affiliateId: string,
     referredUserId: string,
     referralCode: string,
+    serviceId?: string,
   ): Promise<ReferralResponseDto> {
-    // Check if referral already exists
-    const existing = await this.prisma.referral.findUnique({
-      where: { referredUserId },
+    // Check if referral already exists for this user+service
+    const existing = await this.prisma.referral.findFirst({
+      where: {
+        referredUserId,
+        serviceId: serviceId || null,
+      },
     });
 
     if (existing) {
       return this.mapReferralToDto(existing);
     }
 
-    // Create referral
     const referral = await this.prisma.referral.create({
       data: {
         affiliateId,
         referredUserId,
         referralCode,
+        serviceId,
         firstOrderPaid: false,
       },
     });
@@ -146,9 +151,6 @@ export class AffiliatesService {
     return this.mapReferralToDto(referral);
   }
 
-  /**
-   * Get referrals for affiliate
-   */
   async getReferrals(affiliateId: string): Promise<ReferralResponseDto[]> {
     const referrals = await this.prisma.referral.findMany({
       where: { affiliateId },
@@ -158,9 +160,6 @@ export class AffiliatesService {
     return referrals.map((r) => this.mapReferralToDto(r));
   }
 
-  /**
-   * Get commissions for affiliate
-   */
   async getCommissions(
     affiliateId: string,
     status?: string,
@@ -178,9 +177,6 @@ export class AffiliatesService {
     return commissions.map((c) => this.mapCommissionToDto(c));
   }
 
-  /**
-   * Get payouts for affiliate
-   */
   async getPayouts(affiliateId: string): Promise<PayoutResponseDto[]> {
     const payouts = await this.prisma.affiliatePayout.findMany({
       where: { affiliateId },
@@ -190,9 +186,6 @@ export class AffiliatesService {
     return payouts.map((p) => this.mapPayoutToDto(p));
   }
 
-  /**
-   * Get affiliate stats
-   */
   async getAffiliateStats(affiliateId: string): Promise<AffiliateStatsDto> {
     const affiliate = await this.prisma.affiliate.findUnique({
       where: { id: affiliateId },
@@ -224,6 +217,168 @@ export class AffiliatesService {
         ? this.mapPayoutToDto(affiliate.payouts[0])
         : undefined,
     };
+  }
+
+  /**
+   * Get affiliate tree (downline) with nested children
+   */
+  async getAffiliateTree(affiliateId: string, maxDepth = 10) {
+    const affiliate = await this.prisma.affiliate.findUnique({
+      where: { id: affiliateId },
+      include: {
+        childAffiliates: {
+          include: {
+            _count: { select: { referrals: true } },
+          },
+        },
+        _count: { select: { referrals: true } },
+      },
+    });
+
+    if (!affiliate) {
+      throw new NotFoundException(`Affiliate not found: ${affiliateId}`);
+    }
+
+    const buildTree = async (aff: any, depth: number): Promise<any> => {
+      if (depth >= maxDepth) return { ...this.mapAffiliateToDto(aff), children: [] };
+
+      const children = await this.prisma.affiliate.findMany({
+        where: { parentAffiliateId: aff.id },
+        include: { _count: { select: { referrals: true } } },
+      });
+
+      const childTrees = await Promise.all(
+        children.map((child) => buildTree(child, depth + 1)),
+      );
+
+      return {
+        ...this.mapAffiliateToDto(aff),
+        totalReferrals: aff._count?.referrals || 0,
+        children: childTrees,
+      };
+    };
+
+    return buildTree(affiliate, 0);
+  }
+
+  /**
+   * Process multi-level commissions when an order is paid
+   */
+  async processMultiLevelCommissions(
+    orderId: string,
+    userId: string,
+    amount: number,
+    currency: string,
+    serviceId?: string,
+    tx?: any,
+  ): Promise<void> {
+    const db = tx || this.prisma;
+
+    // Find referral for this user + service
+    const referral = await db.referral.findFirst({
+      where: {
+        referredUserId: userId,
+        serviceId: serviceId || null,
+      },
+      include: { affiliate: true },
+    });
+
+    if (!referral) {
+      return; // No referral, no commission
+    }
+
+    // Only pay commission on first order
+    if (referral.firstOrderPaid) {
+      this.logger.debug(
+        `Referral ${referral.id} already has first order paid, skipping commission`,
+      );
+      return;
+    }
+
+    // Walk up the affiliate chain
+    let currentAffiliate = referral.affiliate;
+    let currentLevel = 1;
+
+    while (currentAffiliate) {
+      if (currentAffiliate.status !== 'active') {
+        this.logger.debug(
+          `Affiliate ${currentAffiliate.id} is not active, skipping level ${currentLevel}`,
+        );
+        currentAffiliate = currentAffiliate.parentAffiliateId
+          ? await db.affiliate.findUnique({ where: { id: currentAffiliate.parentAffiliateId } })
+          : null;
+        currentLevel++;
+        continue;
+      }
+
+      // Get commission rate for this level
+      let commissionRate: number | null = null;
+
+      if (serviceId) {
+        commissionRate = await this.referralLevelsService.getCommissionRateForLevel(
+          serviceId,
+          currentLevel,
+        );
+      }
+
+      // Fall back to affiliate's own commission rate for level 1 if no service levels configured
+      if (commissionRate === null) {
+        if (currentLevel === 1) {
+          commissionRate = Number(currentAffiliate.commissionRate);
+        } else {
+          // No rate configured for this level, stop walking up
+          break;
+        }
+      }
+
+      const commissionAmount = amount * commissionRate;
+
+      if (commissionAmount > 0) {
+        await db.affiliateCommission.create({
+          data: {
+            affiliateId: currentAffiliate.id,
+            referralId: referral.id,
+            orderId,
+            level: currentLevel,
+            amount: commissionAmount,
+            commissionRate,
+            currency,
+            status: 'earned',
+            earnedAt: new Date(),
+          },
+        });
+
+        await db.affiliate.update({
+          where: { id: currentAffiliate.id },
+          data: {
+            totalEarned: { increment: commissionAmount },
+          },
+        });
+
+        this.logger.log(
+          `Created L${currentLevel} commission for affiliate ${currentAffiliate.id}, order ${orderId}: ${commissionAmount} ${currency}`,
+        );
+      }
+
+      // Walk up to parent
+      if (currentAffiliate.parentAffiliateId) {
+        currentAffiliate = await db.affiliate.findUnique({
+          where: { id: currentAffiliate.parentAffiliateId },
+        });
+      } else {
+        currentAffiliate = null;
+      }
+      currentLevel++;
+    }
+
+    // Update referral
+    await db.referral.update({
+      where: { id: referral.id },
+      data: {
+        firstOrderPaid: true,
+        firstOrderId: orderId,
+      },
+    });
   }
 
   private mapAffiliateToDto(affiliate: any): AffiliateResponseDto {
