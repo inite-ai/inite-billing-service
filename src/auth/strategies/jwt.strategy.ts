@@ -12,12 +12,12 @@ export interface JwtPayload {
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(private readonly configService: ConfigService) {
+    const publicKey = configService.get<string>('JWT_PUBLIC_KEY');
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey:
-        configService.get<string>('JWT_PUBLIC_KEY') ||
-        configService.get<string>('JWT_SECRET'),
+      secretOrKey: publicKey || configService.get<string>('JWT_SECRET'),
+      algorithms: [publicKey ? 'RS256' : 'HS256'],
     });
   }
 

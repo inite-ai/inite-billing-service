@@ -1,5 +1,9 @@
 /**
  * Auth helper functions for OAuth2 integration
+ *
+ * Tokens are stored in-memory only (never in localStorage).
+ * The access_token is managed server-side via httpOnly cookies.
+ * The id_token is kept in-memory for client-side user info display.
  */
 
 import { decodeJWT, isJWTExpired } from './pkce';
@@ -12,32 +16,20 @@ export interface UserSession {
   avatarUrl?: string;
 }
 
-export function getAccessToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('access_token');
-}
+// In-memory token storage — not persisted across page reloads.
+// The httpOnly cookie holds the access_token for authenticated requests.
+let inMemoryIdToken: string | null = null;
 
 export function getIdToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('id_token');
+  return inMemoryIdToken;
 }
 
-export function storeTokens(accessToken: string, idToken: string): void {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem('access_token', accessToken);
-  localStorage.setItem('id_token', idToken);
+export function storeIdToken(idToken: string): void {
+  inMemoryIdToken = idToken;
 }
 
 export function clearTokens(): void {
-  if (typeof window === 'undefined') return;
-  localStorage.removeItem('access_token');
-  localStorage.removeItem('id_token');
-}
-
-export function isAuthenticated(): boolean {
-  const accessToken = getAccessToken();
-  if (!accessToken) return false;
-  return !isJWTExpired(accessToken);
+  inMemoryIdToken = null;
 }
 
 function isAdminFromToken(decoded: Record<string, unknown>): boolean {
@@ -47,36 +39,40 @@ function isAdminFromToken(decoded: Record<string, unknown>): boolean {
 }
 
 export async function getUserSession(): Promise<UserSession | null> {
-  const accessToken = getAccessToken();
-  if (!accessToken) {
-    return null;
+  const idToken = getIdToken();
+
+  // If we have an id_token in memory, try to extract user info from it
+  if (idToken && !isJWTExpired(idToken)) {
+    return getUserSessionFromIdToken(idToken);
   }
-  if (isJWTExpired(accessToken)) {
-    try {
-      const response = await fetch('/api/auth/refresh', {
-        method: 'POST',
-        credentials: 'include',
-      });
-      if (response.ok) {
-        const tokens = await response.json();
-        storeTokens(tokens.access_token, tokens.id_token);
-        return getUserSessionFromToken(tokens.access_token);
+
+  // Try refreshing — the server sets httpOnly cookies and returns id_token
+  try {
+    const response = await fetch('/api/auth/refresh', {
+      method: 'POST',
+      credentials: 'include',
+    });
+    if (response.ok) {
+      const data = await response.json();
+      if (data.id_token) {
+        storeIdToken(data.id_token);
+        return getUserSessionFromIdToken(data.id_token);
       }
-      if (response.status === 401) {
-        clearTokens();
-      }
-    } catch (error) {
-      console.error('Failed to refresh token:', error);
-      return null;
     }
+    if (response.status === 401) {
+      clearTokens();
+    }
+  } catch (error) {
+    console.error('Failed to refresh token:', error);
     return null;
   }
-  return getUserSessionFromToken(accessToken);
+
+  return null;
 }
 
-async function getUserSessionFromToken(accessToken: string): Promise<UserSession | null> {
+function getUserSessionFromIdToken(idToken: string): UserSession | null {
   try {
-    const decoded = decodeJWT(accessToken);
+    const decoded = decodeJWT(idToken);
     if (!decoded || !decoded.sub) {
       return null;
     }
@@ -100,31 +96,12 @@ export async function authenticatedFetch(
   url: string,
   options: RequestInit = {}
 ): Promise<Response> {
-  let accessToken = getAccessToken();
-
-  if (!accessToken) {
-    throw new Error('Authentication required');
-  }
-  if (isJWTExpired(accessToken)) {
-    const refreshResponse = await fetch('/api/auth/refresh', {
-      method: 'POST',
-      credentials: 'include',
-    });
-    if (!refreshResponse.ok) {
-      if (refreshResponse.status === 401) clearTokens();
-      throw new Error('Authentication required');
-    }
-    const tokens = await refreshResponse.json();
-    storeTokens(tokens.access_token, tokens.id_token);
-    accessToken = tokens.access_token;
-  }
-
-  const headers: Record<string, string> = {
-    ...(options.headers as Record<string, string>),
-    Authorization: `Bearer ${accessToken}`,
-  };
-
-  let response = await fetch(url, { ...options, headers });
+  // Send requests with credentials: 'include' so the httpOnly access_token
+  // cookie is attached automatically. No need for Authorization header.
+  let response = await fetch(url, {
+    ...options,
+    credentials: 'include',
+  });
 
   if (response.status === 401) {
     const refreshResponse = await fetch('/api/auth/refresh', {
@@ -132,10 +109,14 @@ export async function authenticatedFetch(
       credentials: 'include',
     });
     if (refreshResponse.ok) {
-      const tokens = await refreshResponse.json();
-      storeTokens(tokens.access_token, tokens.id_token);
-      headers.Authorization = `Bearer ${tokens.access_token}`;
-      response = await fetch(url, { ...options, headers });
+      const data = await refreshResponse.json();
+      if (data.id_token) {
+        storeIdToken(data.id_token);
+      }
+      response = await fetch(url, {
+        ...options,
+        credentials: 'include',
+      });
     } else if (refreshResponse.status === 401) {
       clearTokens();
     }

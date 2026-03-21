@@ -40,8 +40,9 @@ export async function POST(request: NextRequest) {
     const tokens = await tokenResponse.json();
     const { access_token, id_token, expires_in, refresh_token } = tokens;
 
+    // Do not return access_token in the response body — it is set as an
+    // httpOnly cookie below, which is the only secure transport for it.
     const response = NextResponse.json({
-      access_token,
       id_token,
       expires_in,
     });

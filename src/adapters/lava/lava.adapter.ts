@@ -225,7 +225,7 @@ export class LavaAdapter implements PaymentRailAdapter {
     };
 
     return {
-      webhookId: `lava_${contractId}_${Date.now()}`,
+      webhookId: `lava_${contractId}_${eventMap[eventType] || eventType}`,
       eventType: eventMap[eventType] || eventType,
       entityId: contractId,
       rail: 'LAVA',

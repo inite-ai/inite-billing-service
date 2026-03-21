@@ -1,5 +1,12 @@
 /**
  * Authentication middleware helpers
+ *
+ * NOTE: The JWT decode here is used for routing/UX decisions only (e.g.,
+ * redirecting unauthenticated users to login, or showing admin routes).
+ * It does NOT constitute server-side auth validation. All actual
+ * authorization is enforced by the backend, which properly validates
+ * JWT signatures. This client-side decode is acceptable for middleware
+ * routing because the worst case is a UX mismatch, not a security bypass.
  */
 
 import { decodeJWT, isJWTExpired } from '../pkce';
@@ -9,6 +16,15 @@ export interface UserToken {
   email: string;
   name: string;
   role: 'USER' | 'ADMIN';
+}
+
+function parseCookies(cookieHeader: string): Record<string, string> {
+  return Object.fromEntries(
+    cookieHeader.split(';').map(c => {
+      const [key, ...rest] = c.trim().split('=');
+      return [key, rest.join('=')];
+    })
+  );
 }
 
 function isAdminFromToken(decoded: Record<string, unknown>): boolean {
@@ -22,11 +38,8 @@ export async function getUserToken(request: Request): Promise<UserToken | null> 
   let accessTokenFromCookie = null;
 
   if (cookieHeader) {
-    const cookies = cookieHeader.split(';').map(c => c.trim());
-    const accessTokenCookie = cookies.find(c => c.startsWith('access_token='));
-    if (accessTokenCookie) {
-      accessTokenFromCookie = accessTokenCookie.split('=')[1];
-    }
+    const cookies = parseCookies(cookieHeader);
+    accessTokenFromCookie = cookies['access_token'] || null;
   }
 
   const authHeader = request.headers.get('authorization');

@@ -51,112 +51,115 @@ export class AffiliatePayoutProcessor extends WorkerHost {
 
     for (const affiliate of affiliates) {
       try {
-        // Check if payout already exists for this period
-        const existingPayout = await this.prisma.affiliatePayout.findFirst({
-          where: {
-            affiliateId: affiliate.id,
-            periodStart: lastMonth,
-            periodEnd: lastMonthEnd,
-          },
-        });
-
-        if (existingPayout) {
-          this.logger.debug(
-            `Payout already exists for affiliate ${affiliate.id} for period ${lastMonth.toISOString()}`,
-          );
-          continue;
-        }
-
-        // Get earned commissions for the period that haven't been paid
-        const commissions = await this.prisma.affiliateCommission.findMany({
-          where: {
-            affiliateId: affiliate.id,
-            status: { in: ['earned', 'pending'] },
-            earnedAt: {
-              gte: lastMonth,
-              lte: lastMonthEnd,
-            },
-            payoutId: null,
-          },
-        });
-
-        if (commissions.length === 0) {
-          this.logger.debug(
-            `No commissions to payout for affiliate ${affiliate.id}`,
-          );
-          continue;
-        }
-
-        // Calculate total payout amount
-        const totalAmount = commissions.reduce(
-          (sum, c) => sum + Number(c.amount),
-          0,
-        );
-
-        if (totalAmount <= 0) {
-          continue;
-        }
-
-        // Group by currency
-        const byCurrency = new Map<string, number>();
-        for (const commission of commissions) {
-          const current = byCurrency.get(commission.currency) || 0;
-          byCurrency.set(commission.currency, current + Number(commission.amount));
-        }
-
-        // Create payout for each currency
-        for (const [currency, amount] of byCurrency.entries()) {
-          const payout = await this.prisma.affiliatePayout.create({
-            data: {
+        // Wrap per-affiliate payout logic in a transaction (H12)
+        await this.prisma.$transaction(async (tx) => {
+          // Check if payout already exists for this period
+          const existingPayout = await tx.affiliatePayout.findFirst({
+            where: {
               affiliateId: affiliate.id,
               periodStart: lastMonth,
               periodEnd: lastMonthEnd,
-              totalAmount: amount,
-              currency,
-              status: 'pending',
-              payoutDate,
             },
           });
 
-          // Link commissions to payout
-          const currencyCommissions = commissions.filter(
-            (c) => c.currency === currency,
-          );
+          if (existingPayout) {
+            this.logger.debug(
+              `Payout already exists for affiliate ${affiliate.id} for period ${lastMonth.toISOString()}`,
+            );
+            return;
+          }
 
-          await this.prisma.affiliateCommission.updateMany({
+          // Get earned commissions for the period that haven't been paid
+          const commissions = await tx.affiliateCommission.findMany({
             where: {
-              id: { in: currencyCommissions.map((c) => c.id) },
-            },
-            data: {
-              payoutId: payout.id,
-              status: 'paid',
-            },
-          });
-
-          // Update affiliate totals
-          await this.prisma.affiliate.update({
-            where: { id: affiliate.id },
-            data: {
-              totalPaid: {
-                increment: amount,
+              affiliateId: affiliate.id,
+              status: { in: ['earned', 'pending'] },
+              earnedAt: {
+                gte: lastMonth,
+                lte: lastMonthEnd,
               },
+              payoutId: null,
             },
           });
 
-          this.logger.log(
-            `Created payout ${payout.id} for affiliate ${affiliate.id}: ${amount} ${currency}`,
+          if (commissions.length === 0) {
+            this.logger.debug(
+              `No commissions to payout for affiliate ${affiliate.id}`,
+            );
+            return;
+          }
+
+          // Calculate total payout amount
+          const totalAmount = commissions.reduce(
+            (sum, c) => sum + Number(c.amount),
+            0,
           );
 
-          // Emit event
-          await this.outboxService.emit('billing.affiliate.payout.created', {
-            payout_id: payout.id,
-            affiliate_id: affiliate.id,
-            amount: amount.toString(),
-            currency,
-            period_start: lastMonth.toISOString(),
-            period_end: lastMonthEnd.toISOString(),
-          });
-        }
+          if (totalAmount <= 0) {
+            return;
+          }
+
+          // Group by currency
+          const byCurrency = new Map<string, number>();
+          for (const commission of commissions) {
+            const current = byCurrency.get(commission.currency) || 0;
+            byCurrency.set(commission.currency, current + Number(commission.amount));
+          }
+
+          // Create payout for each currency
+          for (const [currency, amount] of byCurrency.entries()) {
+            const payout = await tx.affiliatePayout.create({
+              data: {
+                affiliateId: affiliate.id,
+                periodStart: lastMonth,
+                periodEnd: lastMonthEnd,
+                totalAmount: amount,
+                currency,
+                status: 'pending',
+                payoutDate,
+              },
+            });
+
+            // Link commissions to payout
+            const currencyCommissions = commissions.filter(
+              (c) => c.currency === currency,
+            );
+
+            await tx.affiliateCommission.updateMany({
+              where: {
+                id: { in: currencyCommissions.map((c) => c.id) },
+              },
+              data: {
+                payoutId: payout.id,
+                status: 'paid',
+              },
+            });
+
+            // Update affiliate totals
+            await tx.affiliate.update({
+              where: { id: affiliate.id },
+              data: {
+                totalPaid: {
+                  increment: amount,
+                },
+              },
+            });
+
+            this.logger.log(
+              `Created payout ${payout.id} for affiliate ${affiliate.id}: ${amount} ${currency}`,
+            );
+
+            // Emit event
+            await this.outboxService.emit('billing.affiliate.payout.created', {
+              payout_id: payout.id,
+              affiliate_id: affiliate.id,
+              amount: amount.toString(),
+              currency,
+              period_start: lastMonth.toISOString(),
+              period_end: lastMonthEnd.toISOString(),
+            });
+          }
+        });
       } catch (error: any) {
         this.logger.error(
           `Error processing payout for affiliate ${affiliate.id}: ${error.message}`,

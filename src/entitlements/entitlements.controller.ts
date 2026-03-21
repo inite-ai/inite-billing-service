@@ -2,9 +2,11 @@ import {
   Controller,
   Get,
   Param,
+  Req,
   UseGuards,
   HttpCode,
   HttpStatus,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -35,8 +37,12 @@ export class EntitlementsController {
   @ApiOperation({ summary: 'Get user entitlements (admin/service)' })
   @ApiResponse({ status: 200, type: [EntitlementResponseDto] })
   async getUserEntitlements(
+    @User() user: RequestUser,
     @Param('userId') userId: string,
   ): Promise<EntitlementResponseDto[]> {
+    if (!user.isService && user.userId !== userId) {
+      throw new ForbiddenException('Access denied');
+    }
     return this.entitlementsService.getUserEntitlementsByUserId(userId);
   }
 }

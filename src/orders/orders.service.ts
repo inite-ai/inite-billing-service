@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../common/services/prisma.service';
 import { OrderResponseDto, PaymentIntentResponseDto } from '../common/dto/order.dto';
 
@@ -68,13 +68,19 @@ export class OrdersService {
 
   async getPaymentIntentById(
     paymentIntentId: string,
+    userId?: string,
   ): Promise<PaymentIntentResponseDto> {
     const intent = await this.prisma.paymentIntent.findUnique({
       where: { id: paymentIntentId },
+      include: { order: true },
     });
 
     if (!intent) {
       throw new Error(`Payment intent not found: ${paymentIntentId}`);
+    }
+
+    if (userId && intent.order.userId !== userId) {
+      throw new ForbiddenException('Access denied');
     }
 
     return {

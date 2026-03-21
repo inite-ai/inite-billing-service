@@ -45,6 +45,13 @@ export class ReferralLevelsService {
       throw new NotFoundException(`Service not found: ${data.serviceId}`);
     }
 
+    // Validate commission rate bounds (C5)
+    if (data.commissionRate < 0 || data.commissionRate > 1) {
+      throw new BadRequestException(
+        'commissionRate must be between 0 and 1 (inclusive)',
+      );
+    }
+
     // Check that levels are sequential
     const existingLevels = await this.prisma.referralLevel.findMany({
       where: { serviceId: data.serviceId },
@@ -87,6 +94,13 @@ export class ReferralLevelsService {
     });
     if (!level) {
       throw new NotFoundException(`Referral level not found: ${id}`);
+    }
+
+    // Validate commission rate bounds (C5)
+    if (data.commissionRate !== undefined && (data.commissionRate < 0 || data.commissionRate > 1)) {
+      throw new BadRequestException(
+        'commissionRate must be between 0 and 1 (inclusive)',
+      );
     }
 
     return this.prisma.referralLevel.update({

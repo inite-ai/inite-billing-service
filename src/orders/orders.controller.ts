@@ -52,9 +52,10 @@ export class OrdersController {
   @ApiOperation({ summary: 'Get payment intent by ID' })
   @ApiResponse({ status: 200, type: PaymentIntentResponseDto })
   async getPaymentIntent(
+    @User() user: RequestUser,
     @Param('id') id: string,
   ): Promise<PaymentIntentResponseDto> {
-    return this.ordersService.getPaymentIntentById(id);
+    return this.ordersService.getPaymentIntentById(id, user.userId);
   }
 }
 

@@ -6,23 +6,36 @@ import {
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../common/services/prisma.service';
+import { PaymentOrchestratorService } from '../payment-orchestrator/payment-orchestrator.service';
 
 @Injectable()
 export class AdminService {
   private readonly logger = new Logger(AdminService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly paymentOrchestrator: PaymentOrchestratorService,
+  ) {}
 
   private generateApiKey(): string {
     return `sk_${randomBytes(24).toString('hex')}`;
   }
 
+  private maskApiKey(apiKey: string): string {
+    if (!apiKey || apiKey.length < 4) return '****';
+    return `sk_****${apiKey.slice(-4)}`;
+  }
+
   // ─── Services ──────────────────────────────────────────────
 
   async getServices() {
-    return this.prisma.service.findMany({
+    const services = await this.prisma.service.findMany({
       orderBy: { createdAt: 'desc' },
     });
+    return services.map((s) => ({
+      ...s,
+      apiKey: this.maskApiKey(s.apiKey),
+    }));
   }
 
   async createService(data: { code: string; name: string; metadata?: any }) {
@@ -201,9 +214,30 @@ export class AdminService {
       throw new BadRequestException(`Order is not in paid status`);
     }
 
-    return this.prisma.order.update({
+    // Find the successful payment intent and transition it to refunded
+    // This will revoke entitlements and update invoices via the orchestrator
+    const paidIntent = order.paymentIntents.find(
+      (pi) => pi.status === 'paid',
+    );
+    if (paidIntent) {
+      await this.paymentOrchestrator.applyStateTransition(
+        paidIntent.id,
+        'refunded',
+      );
+    } else {
+      // Fallback: no paid intent found, just update order status directly
+      this.logger.warn(
+        `No paid payment intent found for order ${id}, updating status directly`,
+      );
+      await this.prisma.order.update({
+        where: { id },
+        data: { status: 'refunded' },
+      });
+    }
+
+    return this.prisma.order.findUnique({
       where: { id },
-      data: { status: 'refunded' },
+      include: { paymentIntents: true },
     });
   }
 
@@ -352,6 +386,13 @@ export class AdminService {
     });
     if (!affiliate)
       throw new NotFoundException(`Affiliate not found: ${id}`);
+
+    // Validate commission rate bounds (C5)
+    if (data.commissionRate !== undefined && (data.commissionRate < 0 || data.commissionRate > 1)) {
+      throw new BadRequestException(
+        'commissionRate must be between 0 and 1 (inclusive)',
+      );
+    }
 
     return this.prisma.affiliate.update({
       where: { id },

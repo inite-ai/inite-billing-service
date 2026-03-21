@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../common/services/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -73,6 +74,33 @@ export class AffiliatesService {
       }
     }
 
+    // Circular referral chain prevention (H5): walk parent chain and check for cycles
+    if (parentAffiliateId) {
+      let currentParentId: string | null = parentAffiliateId;
+      const visited = new Set<string>();
+      while (currentParentId) {
+        if (visited.has(currentParentId)) {
+          // Already visited this node — break to avoid infinite loop
+          parentAffiliateId = undefined;
+          break;
+        }
+        visited.add(currentParentId);
+        const parentAff: any = await this.prisma.affiliate.findUnique({
+          where: { id: currentParentId },
+        });
+        if (!parentAff) break;
+        if (parentAff.userId === userId) {
+          // The new affiliate's userId already appears in the parent chain — break chain
+          this.logger.warn(
+            `Circular referral detected: userId ${userId} already in parent chain. Breaking link.`,
+          );
+          parentAffiliateId = undefined;
+          break;
+        }
+        currentParentId = parentAff.parentAffiliateId;
+      }
+    }
+
     affiliate = await this.prisma.affiliate.create({
       data: {
         userId,
@@ -124,6 +152,14 @@ export class AffiliatesService {
     referralCode: string,
     serviceId?: string,
   ): Promise<ReferralResponseDto> {
+    // Self-referral prevention (C3)
+    const affiliate = await this.prisma.affiliate.findUnique({
+      where: { id: affiliateId },
+    });
+    if (affiliate && affiliate.userId === referredUserId) {
+      throw new BadRequestException('Cannot refer yourself');
+    }
+
     // Check if referral already exists for this user+service
     const existing = await this.prisma.referral.findFirst({
       where: {
@@ -396,7 +432,19 @@ export class AffiliatesService {
       return;
     }
 
-    if (referral.firstOrderPaid) {
+    // Atomic check-and-set for firstOrderPaid to prevent double commission (H8)
+    const updateResult = await db.referral.updateMany({
+      where: {
+        id: referral.id,
+        firstOrderPaid: false,
+      },
+      data: {
+        firstOrderPaid: true,
+        firstOrderId: orderId,
+      },
+    });
+
+    if (updateResult.count === 0) {
       this.logger.debug(
         `Referral ${referral.id} already has first order paid, skipping commission`,
       );
@@ -468,7 +516,7 @@ export class AffiliatesService {
         break; // No rate for this level
       }
 
-      const commissionAmount = amount * commissionRate;
+      const commissionAmount = new Decimal(amount).mul(new Decimal(commissionRate)).toDecimalPlaces(4).toNumber();
 
       if (commissionAmount > 0) {
         await db.affiliateCommission.create({
@@ -508,14 +556,7 @@ export class AffiliatesService {
       currentLevel++;
     }
 
-    // Update referral
-    await db.referral.update({
-      where: { id: referral.id },
-      data: {
-        firstOrderPaid: true,
-        firstOrderId: orderId,
-      },
-    });
+    // Note: firstOrderPaid and firstOrderId already set atomically above (H8)
   }
 
   private mapAffiliateToDto(affiliate: any): AffiliateResponseDto {

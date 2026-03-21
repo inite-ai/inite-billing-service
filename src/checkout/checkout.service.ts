@@ -66,16 +66,21 @@ export class CheckoutService {
     if (dto.referralCode) {
       const affiliate = await this.affiliatesService.getAffiliateByCode(dto.referralCode);
       if (affiliate) {
-        // Track referral if not already tracked
-        try {
-          await this.affiliatesService.trackReferral(
-            affiliate.id,
-            userId,
-            dto.referralCode,
-          );
-        } catch (error: any) {
-          // Referral might already exist, that's ok
-          this.logger.debug(`Referral tracking: ${error.message}`);
+        // Self-referral prevention (C3)
+        if (affiliate.userId === userId) {
+          this.logger.debug(`Self-referral blocked for user ${userId}`);
+        } else {
+          // Track referral if not already tracked
+          try {
+            await this.affiliatesService.trackReferral(
+              affiliate.id,
+              userId,
+              dto.referralCode,
+            );
+          } catch (error: any) {
+            // Referral might already exist, that's ok
+            this.logger.debug(`Referral tracking: ${error.message}`);
+          }
         }
       }
     }

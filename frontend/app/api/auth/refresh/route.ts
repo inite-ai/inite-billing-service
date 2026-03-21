@@ -34,10 +34,11 @@ export async function POST(request: NextRequest) {
 
     if (!tokenResponse.ok) {
       const error = await tokenResponse.json();
+      // Log the full error server-side only — never expose to the client
       console.error('Token refresh failed:', error);
 
       const response = NextResponse.json(
-        { error: 'Token refresh failed', details: error },
+        { error: 'Token refresh failed' },
         { status: tokenResponse.status }
       );
 
@@ -47,8 +48,9 @@ export async function POST(request: NextRequest) {
 
     const tokens = await tokenResponse.json();
 
+    // Do not return access_token in the response body — it is set as an
+    // httpOnly cookie below, which is the only secure transport for it.
     const response = NextResponse.json({
-      access_token: tokens.access_token,
       id_token: tokens.id_token,
       expires_in: tokens.expires_in,
     });

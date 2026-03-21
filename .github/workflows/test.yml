@@ -103,10 +103,10 @@ jobs:
         node-version: '20'
 
     - name: Audit backend
-      run: npm audit --audit-level=critical || true
+      run: npm audit --audit-level=critical
 
     - name: Audit frontend
       working-directory: frontend
       run: |
         npm ci
-        npm audit --audit-level=critical || true
+        npm audit --audit-level=critical

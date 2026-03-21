@@ -2,6 +2,9 @@ import { Module, OnModuleInit } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module';
 import { PaymentOrchestratorModule } from './payment-orchestrator/payment-orchestrator.module';
 import { AdaptersModule } from './adapters/adapters.module';
@@ -20,6 +23,9 @@ import { AdminModule } from './admin/admin.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+    }),
+    ThrottlerModule.forRoot({
+      throttlers: [{ ttl: 60000, limit: 60 }],
     }),
     ScheduleModule.forRoot(),
     BullModule.forRootAsync({
@@ -46,6 +52,12 @@ import { AdminModule } from './admin/admin.module';
     WorkersModule,
     AffiliatesModule,
     AdminModule,
+  ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
   ],
 })
 export class AppModule implements OnModuleInit {

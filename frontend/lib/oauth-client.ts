@@ -9,7 +9,6 @@ const AUTH_DOMAIN = process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || 'https://auth.in
 const CLIENT_ID = process.env.NEXT_PUBLIC_OAUTH_CLIENT_ID || 'inite-billing';
 
 export interface TokenResponse {
-  access_token: string;
   id_token: string;
   expires_in: number;
 }

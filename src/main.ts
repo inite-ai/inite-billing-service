@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { PaymentOrchestratorService } from './payment-orchestrator/payment-orchestrator.service';
 import { AffiliatesService } from './affiliates/affiliates.service';
@@ -10,6 +11,9 @@ import { LavaAdapter } from './adapters/lava/lava.adapter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Security headers
+  app.use(helmet());
 
   // Global validation pipe
   app.useGlobalPipes(
@@ -21,18 +25,23 @@ async function bootstrap() {
   );
 
   // CORS
-  app.enableCors();
+  app.enableCors({
+    origin: process.env.CORS_ORIGINS?.split(',') || ['http://localhost:3001'],
+    credentials: true,
+  });
 
-  // Swagger/OpenAPI
-  const config = new DocumentBuilder()
-    .setTitle('INITE Billing Service')
-    .setDescription('Payment-rail agnostic billing and subscriptions API')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .addApiKey({ type: 'apiKey', in: 'header', name: 'x-api-key' }, 'service-key')
-    .build();
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, document);
+  // Swagger/OpenAPI (disabled in production)
+  if (process.env.NODE_ENV !== 'production') {
+    const config = new DocumentBuilder()
+      .setTitle('INITE Billing Service')
+      .setDescription('Payment-rail agnostic billing and subscriptions API')
+      .setVersion('1.0')
+      .addBearerAuth()
+      .addApiKey({ type: 'apiKey', in: 'header', name: 'x-api-key' }, 'service-key')
+      .build();
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('api', app, document);
+  }
 
   // Register adapters with orchestrator
   const orchestrator = app.get(PaymentOrchestratorService);

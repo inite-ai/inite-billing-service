@@ -14,9 +14,11 @@ export class OutboxService {
     eventType: string,
     payload: Record<string, any>,
     aggregate?: Record<string, any>,
+    tx?: any,
   ): Promise<void> {
+    const client = tx || this.prisma;
     try {
-      await this.prisma.outboxEvent.create({
+      await client.outboxEvent.create({
         data: {
           eventType,
           payload: payload || {},

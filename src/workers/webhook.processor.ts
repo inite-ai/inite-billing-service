@@ -71,6 +71,7 @@ export class WebhookProcessor extends WorkerHost {
           providerIntentId: webhookEvent.entityId,
           rail,
         },
+        include: { order: true },
       });
 
       if (!paymentIntent) {
@@ -88,10 +89,41 @@ export class WebhookProcessor extends WorkerHost {
         return;
       }
 
+      let finalStatus = statusResult.status as any;
+
+      if (finalStatus === 'paid' && statusResult.providerData) {
+        const order = paymentIntent.order;
+        const providerAmount = Number(
+          statusResult.providerData.amount ??
+          statusResult.providerData.amountTotal?.amount ??
+          statusResult.providerData.total_amount,
+        );
+        const providerCurrency = (
+          statusResult.providerData.currency ??
+          statusResult.providerData.amountTotal?.currency ??
+          ''
+        ).toUpperCase();
+
+        const orderAmount = Number(order.amount);
+        const orderCurrency = order.currency.toUpperCase();
+
+        if (!isNaN(providerAmount) && providerAmount < orderAmount) {
+          this.logger.warn(
+            `Amount mismatch for intent ${paymentIntent.id}: provider=${providerAmount}, order=${orderAmount}`,
+          );
+          finalStatus = 'failed';
+        } else if (providerCurrency && providerCurrency !== orderCurrency) {
+          this.logger.warn(
+            `Currency mismatch for intent ${paymentIntent.id}: provider=${providerCurrency}, order=${orderCurrency}`,
+          );
+          finalStatus = 'failed';
+        }
+      }
+
       // Apply state transition
       await this.paymentOrchestrator.applyStateTransition(
         paymentIntent.id,
-        statusResult.status as any,
+        finalStatus,
         statusResult.providerData,
       );
 

@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { OAuthClient } from '@/lib/oauth-client';
-import { storeTokens } from '@/lib/auth-helper';
+import { storeIdToken } from '@/lib/auth-helper';
 import { useAuth } from '@/contexts/AuthContext';
 
 function CallbackContent() {
@@ -32,7 +32,9 @@ function CallbackContent() {
         }
 
         const tokens = await OAuthClient.handleCallback(code, state);
-        storeTokens(tokens.access_token, tokens.id_token);
+        if (tokens.id_token) {
+          storeIdToken(tokens.id_token);
+        }
         await refreshSession();
 
         setStatus('success');

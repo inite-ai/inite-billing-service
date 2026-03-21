@@ -111,7 +111,7 @@ export class PaymentOrchestratorService {
         order_id: intent.orderId,
         status: newStatus,
         previous_status: intent.status,
-      });
+      }, undefined, tx);
     });
   }
 
@@ -150,7 +150,7 @@ export class PaymentOrchestratorService {
       user_id: order.userId,
       amount: order.amount.toString(),
       currency: order.currency,
-    });
+    }, undefined, tx);
   }
 
   private async handleOrderRefunded(orderId: string, tx: any): Promise<void> {
@@ -166,30 +166,48 @@ export class PaymentOrchestratorService {
       data: { status: 'refunded' },
     });
 
-    // Revoke entitlements
-    await tx.entitlement.updateMany({
+    // Void affiliate commissions for this order (C4)
+    await tx.affiliateCommission.updateMany({
+      where: { orderId: order.id, status: { in: ['pending', 'earned'] } },
+      data: { status: 'voided' },
+    });
+
+    // Revoke entitlements scoped to this order only (H7)
+    const activeEntitlements = await tx.entitlement.findMany({
       where: {
         userId: order.userId,
         source: 'order',
         status: 'active',
       },
-      data: {
-        status: 'revoked',
-        updatedAt: new Date(),
-      },
     });
+    const orderEntitlementIds = activeEntitlements
+      .filter((e: any) => {
+        const value = e.value as any;
+        return value && value.order_id === order.id;
+      })
+      .map((e: any) => e.id);
+
+    if (orderEntitlementIds.length > 0) {
+      await tx.entitlement.updateMany({
+        where: { id: { in: orderEntitlementIds } },
+        data: {
+          status: 'revoked',
+          updatedAt: new Date(),
+        },
+      });
+    }
 
     // Emit event
     await this.outboxService.emit('billing.payment.refunded', {
       order_id: order.id,
       user_id: order.userId,
-    });
+    }, undefined, tx);
 
     await this.outboxService.emit('billing.entitlement.revoked', {
       user_id: order.userId,
       source: 'order',
       order_id: order.id,
-    });
+    }, undefined, tx);
   }
 
   private async handleOrderFailed(orderId: string, tx: any): Promise<void> {
@@ -209,7 +227,7 @@ export class PaymentOrchestratorService {
     await this.outboxService.emit('billing.payment.failed', {
       order_id: order.id,
       user_id: order.userId,
-    });
+    }, undefined, tx);
   }
 
   private async grantEntitlementsForOrder(order: any, tx: any): Promise<void> {
@@ -237,7 +255,7 @@ export class PaymentOrchestratorService {
         key,
         source: 'order',
         order_id: order.id,
-      });
+      }, undefined, tx);
     }
   }
 
@@ -328,7 +346,7 @@ export class PaymentOrchestratorService {
         source: 'subscription',
         subscription_id: subscription.id,
         expires_at: expiresAt.toISOString(),
-      });
+      }, undefined, tx);
     }
 
     await this.outboxService.emit('billing.subscription.updated', {
@@ -336,7 +354,7 @@ export class PaymentOrchestratorService {
       user_id: order.userId,
       status: subscription.status,
       current_period_end: periodEnd.toISOString(),
-    });
+    }, undefined, tx);
   }
 
   private extractEntitlementKeys(product: any): string[] {
