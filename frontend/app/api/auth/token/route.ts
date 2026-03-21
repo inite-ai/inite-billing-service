@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const AUTH_DOMAIN = process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || 'https://auth.inite.ai';
-const CLIENT_ID = process.env.NEXT_PUBLIC_OAUTH_CLIENT_ID || 'inite-billing';
+const AUTH_DOMAIN = process.env.AUTH_SERVICE_URL || process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || 'https://auth.inite.ai';
+const CLIENT_ID = process.env.OAUTH_CLIENT_ID || process.env.NEXT_PUBLIC_OAUTH_CLIENT_ID || 'inite-billing';
+const CLIENT_SECRET = process.env.OAUTH_CLIENT_SECRET;
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,18 +16,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const params: Record<string, string> = {
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri,
+      client_id: CLIENT_ID,
+      code_verifier,
+    };
+    if (CLIENT_SECRET) {
+      params.client_secret = CLIENT_SECRET;
+    }
+
     const tokenResponse = await fetch(`${AUTH_DOMAIN}/oauth/token`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
-        code,
-        redirect_uri,
-        client_id: CLIENT_ID,
-        code_verifier,
-      }),
+      body: new URLSearchParams(params),
     });
 
     if (!tokenResponse.ok) {
