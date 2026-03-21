@@ -24,7 +24,7 @@
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "db:reset": "prisma migrate reset",
-    "prepare": "husky"
+    "prepare": "husky || true"
   },
   "dependencies": {
     "@nestjs/bullmq": "^10.0.1",
