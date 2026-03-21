@@ -37,14 +37,17 @@ export class CheckoutService {
       }
     }
 
-    // Get price
+    // Get price (includes product via CatalogService)
     const price = await this.catalogService.getPriceByCode(dto.priceCode);
-    const product = await this.prisma.product.findUnique({
-      where: { id: price.productId },
-    });
+    const product = price.product;
 
     if (!product) {
       throw new NotFoundException(`Product not found for price: ${dto.priceCode}`);
+    }
+
+    // L1: Reject checkout if the product is inactive
+    if (!product.isActive) {
+      throw new BadRequestException(`Product ${product.code} is not active`);
     }
 
     // Validate mode matches product type

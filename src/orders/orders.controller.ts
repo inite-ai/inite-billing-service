@@ -34,18 +34,6 @@ export class OrdersController {
     return this.ordersService.getUserOrders(user.userId, query.status);
   }
 
-  @Get(':id')
-  @UseGuards(JwtAuthGuard)
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Get order by ID' })
-  @ApiResponse({ status: 200, type: OrderResponseDto })
-  async getOrder(
-    @User() user: RequestUser,
-    @Param('id') id: string,
-  ): Promise<OrderResponseDto> {
-    return this.ordersService.getOrderById(id, user.userId);
-  }
-
   @Get('payment-intents/:id')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
@@ -56,6 +44,18 @@ export class OrdersController {
     @Param('id') id: string,
   ): Promise<PaymentIntentResponseDto> {
     return this.ordersService.getPaymentIntentById(id, user.userId);
+  }
+
+  @Get(':id')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get order by ID' })
+  @ApiResponse({ status: 200, type: OrderResponseDto })
+  async getOrder(
+    @User() user: RequestUser,
+    @Param('id') id: string,
+  ): Promise<OrderResponseDto> {
+    return this.ordersService.getOrderById(id, user.userId);
   }
 }
 

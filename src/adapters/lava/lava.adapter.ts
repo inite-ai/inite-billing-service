@@ -47,8 +47,17 @@ export class LavaAdapter implements PaymentRailAdapter {
     }
 
     const config = (provider.config as Record<string, any>) || {};
+    const apiBaseUrl = config.apiBaseUrl || 'https://gate.lava.top';
+
+    // SSRF protection: only allow known Lava provider hosts
+    const allowedHosts = ['gate.lava.top', 'sandbox.lava.top'];
+    const url = new URL(apiBaseUrl);
+    if (!allowedHosts.includes(url.hostname)) {
+      throw new Error(`LAVA adapter: untrusted API host: ${url.hostname}`);
+    }
+
     return {
-      apiBaseUrl: config.apiBaseUrl || 'https://gate.lava.top',
+      apiBaseUrl,
       apiKey: config.apiKey || '',
     };
   }

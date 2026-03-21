@@ -45,8 +45,17 @@ export class OneAdapter implements PaymentRailAdapter {
     }
 
     const config = (provider.config as Record<string, any>) || {};
+    const apiBaseUrl = config.apiBaseUrl || 'https://api.one.lat';
+
+    // SSRF protection: only allow known ONE provider hosts
+    const allowedHosts = ['api.one.lat', 'sandbox.one.lat'];
+    const url = new URL(apiBaseUrl);
+    if (!allowedHosts.includes(url.hostname)) {
+      throw new Error(`ONE adapter: untrusted API host: ${url.hostname}`);
+    }
+
     return {
-      apiBaseUrl: config.apiBaseUrl || 'https://api.one.lat',
+      apiBaseUrl,
       apiKey: config.apiKey || '',
       apiSecret: config.apiSecret || '',
     };

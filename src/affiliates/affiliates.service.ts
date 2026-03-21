@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { Decimal } from '@prisma/client/runtime/library';
+import { randomInt } from 'crypto';
 import { PrismaService } from '../common/services/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -28,7 +29,7 @@ export class AffiliatesService {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let code = '';
     for (let i = 0; i < 8; i++) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
+      code += chars.charAt(randomInt(chars.length));
     }
     return code;
   }
