@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Button } from '@/components/ui/Button'
 import type { Product } from '@/lib/types'
+import { useTranslations } from 'next-intl'
 
 interface PriceFormProps {
   products: Product[]
@@ -23,6 +24,8 @@ export function PriceForm({ products, onSubmit, onCancel }: PriceFormProps) {
   const [trialDays, setTrialDays] = useState('')
   const [graceDays, setGraceDays] = useState('')
   const [loading, setLoading] = useState(false)
+  const t = useTranslations('forms')
+  const tc = useTranslations('common')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -44,27 +47,27 @@ export function PriceForm({ products, onSubmit, onCancel }: PriceFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <Select label="Product" value={productId} onChange={(e) => setProductId(e.target.value)} required options={[
-        { value: '', label: 'Select product...' },
+      <Select label={t('product')} value={productId} onChange={(e) => setProductId(e.target.value)} required options={[
+        { value: '', label: t('selectProduct') },
         ...products.map((p) => ({ value: p.id, label: `${p.name} (${p.code})` })),
       ]} />
-      <Input label="Code" value={code} onChange={(e) => setCode(e.target.value)} required />
+      <Input label={t('code')} value={code} onChange={(e) => setCode(e.target.value)} required />
       <div className="grid grid-cols-2 gap-4">
-        <Input label="Amount" type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required />
-        <Input label="Currency" value={currency} onChange={(e) => setCurrency(e.target.value)} required />
+        <Input label={t('amount')} type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required />
+        <Input label={t('currency')} value={currency} onChange={(e) => setCurrency(e.target.value)} required />
       </div>
-      <Select label="Interval" value={interval} onChange={(e) => setInterval(e.target.value)} options={[
-        { value: '', label: 'None (one-time)' },
-        { value: 'month', label: 'Monthly' },
-        { value: 'year', label: 'Yearly' },
+      <Select label={t('interval')} value={interval} onChange={(e) => setInterval(e.target.value)} options={[
+        { value: '', label: t('intervalNone') },
+        { value: 'month', label: t('intervalMonthly') },
+        { value: 'year', label: t('intervalYearly') },
       ]} />
       <div className="grid grid-cols-2 gap-4">
-        <Input label="Trial Days" type="number" value={trialDays} onChange={(e) => setTrialDays(e.target.value)} />
-        <Input label="Grace Days" type="number" value={graceDays} onChange={(e) => setGraceDays(e.target.value)} />
+        <Input label={t('trialDays')} type="number" value={trialDays} onChange={(e) => setTrialDays(e.target.value)} />
+        <Input label={t('graceDays')} type="number" value={graceDays} onChange={(e) => setGraceDays(e.target.value)} />
       </div>
       <div className="flex gap-3 justify-end">
-        <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
-        <Button type="submit" loading={loading}>Create</Button>
+        <Button type="button" variant="ghost" onClick={onCancel}>{tc('cancel')}</Button>
+        <Button type="submit" loading={loading}>{tc('create')}</Button>
       </div>
     </form>
   )

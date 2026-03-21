@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import { Header } from '@/components/layout/Header'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -13,17 +14,19 @@ import { Receipt, Loader2, ExternalLink } from 'lucide-react'
 import api from '@/lib/api'
 import type { Order } from '@/lib/types'
 
-const statusTabs = [
-  { key: '', label: 'All' },
-  { key: 'paid', label: 'Paid' },
-  { key: 'created', label: 'Pending' },
-  { key: 'failed', label: 'Failed' },
-  { key: 'refunded', label: 'Refunded' },
-]
-
 export default function OrdersPage() {
   const { user, isLoading: authLoading } = useAuth()
   const router = useRouter()
+  const t = useTranslations('orders')
+  const tc = useTranslations('common')
+
+  const statusTabs = [
+    { key: '', label: t('tabAll') },
+    { key: 'paid', label: t('tabPaid') },
+    { key: 'created', label: t('tabPending') },
+    { key: 'failed', label: t('tabFailed') },
+    { key: 'refunded', label: t('tabRefunded') },
+  ]
   const [orders, setOrders] = useState<Order[]>([])
   const [statusFilter, setStatusFilter] = useState('')
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
@@ -58,31 +61,31 @@ export default function OrdersPage() {
       <Header />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-between mb-2">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Order History</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('title')}</h1>
           {paidTotal > 0 && (
-            <p className="text-sm text-gray-500">Total spent: <span className="font-semibold text-gray-900 dark:text-white">${paidTotal.toFixed(2)}</span></p>
+            <p className="text-sm text-gray-500">{t('totalSpent', { amount: `$${paidTotal.toFixed(2)}` })}</p>
           )}
         </div>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">{orders.length} order{orders.length !== 1 ? 's' : ''}</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">{t('orderCount', { count: orders.length })}</p>
 
         <div className="mb-4">
           <Tabs tabs={statusTabs} activeTab={statusFilter} onChange={setStatusFilter} />
         </div>
 
         {loading ? (
-          <div className="flex items-center gap-2 text-gray-500"><Loader2 className="w-5 h-5 animate-spin" /> Loading...</div>
+          <div className="flex items-center gap-2 text-gray-500"><Loader2 className="w-5 h-5 animate-spin" /> {tc('loading')}</div>
         ) : orders.length === 0 ? (
           <Card>
             <div className="text-center py-8">
               <Receipt className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-              <p className="text-gray-500 dark:text-gray-400">{statusFilter ? `No ${statusFilter} orders` : 'No orders yet'}</p>
+              <p className="text-gray-500 dark:text-gray-400">{statusFilter ? t('noFilteredOrders', { status: statusFilter }) : t('noOrders')}</p>
             </div>
           </Card>
         ) : (
           <Card>
             <Table>
               <Thead>
-                <tr><Th>Date</Th><Th>Product</Th><Th>Amount</Th><Th>Mode</Th><Th>Status</Th></tr>
+                <tr><Th>{t('tableDate')}</Th><Th>{t('tableProduct')}</Th><Th>{t('tableAmount')}</Th><Th>{t('tableMode')}</Th><Th>{t('tableStatus')}</Th></tr>
               </Thead>
               <Tbody>
                 {orders.map((order) => (
@@ -103,7 +106,7 @@ export default function OrdersPage() {
         <Modal
           isOpen={!!selectedOrder}
           onClose={() => setSelectedOrder(null)}
-          title="Order Details"
+          title={t('detailTitle')}
         >
           {selectedOrder && (
             <div className="space-y-4">
@@ -116,30 +119,30 @@ export default function OrdersPage() {
 
               <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4 space-y-3 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Order ID</span>
+                  <span className="text-gray-500">{t('detailOrderId')}</span>
                   <span className="font-mono text-xs">{selectedOrder.id}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Amount</span>
+                  <span className="text-gray-500">{t('detailAmount')}</span>
                   <span className="font-semibold">{selectedOrder.amount} {selectedOrder.currency}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Mode</span>
+                  <span className="text-gray-500">{t('detailMode')}</span>
                   <span>{selectedOrder.mode}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Date</span>
+                  <span className="text-gray-500">{t('detailDate')}</span>
                   <span>{new Date(selectedOrder.createdAt).toLocaleString()}</span>
                 </div>
                 {selectedOrder.price && (
                   <>
                     <div className="flex justify-between">
-                      <span className="text-gray-500">Price Code</span>
+                      <span className="text-gray-500">{t('detailPriceCode')}</span>
                       <span className="font-mono text-xs">{selectedOrder.price.code}</span>
                     </div>
                     {selectedOrder.price.interval && (
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Billing Interval</span>
+                        <span className="text-gray-500">{t('detailBillingInterval')}</span>
                         <span>{selectedOrder.price.interval}</span>
                       </div>
                     )}
@@ -147,7 +150,7 @@ export default function OrdersPage() {
                 )}
                 {selectedOrder.externalId && (
                   <div className="flex justify-between">
-                    <span className="text-gray-500">External ID</span>
+                    <span className="text-gray-500">{t('detailExternalId')}</span>
                     <span className="font-mono text-xs">{selectedOrder.externalId}</span>
                   </div>
                 )}
@@ -156,20 +159,20 @@ export default function OrdersPage() {
               {/* Payment Intents */}
               {selectedOrder.paymentIntents && selectedOrder.paymentIntents.length > 0 && (
                 <div>
-                  <h5 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Payment Details</h5>
+                  <h5 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{t('paymentDetails')}</h5>
                   {selectedOrder.paymentIntents.map((pi) => (
                     <div key={pi.id} className="bg-gray-50 dark:bg-gray-900 rounded-xl p-3 text-sm space-y-2">
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Payment Rail</span>
+                        <span className="text-gray-500">{t('paymentRail')}</span>
                         <span>{pi.rail}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Status</span>
+                        <span className="text-gray-500">{t('paymentStatus')}</span>
                         <Badge>{pi.status}</Badge>
                       </div>
                       {pi.method && (
                         <div className="flex justify-between">
-                          <span className="text-gray-500">Method</span>
+                          <span className="text-gray-500">{t('paymentMethod')}</span>
                           <span>{pi.method}</span>
                         </div>
                       )}
@@ -180,7 +183,7 @@ export default function OrdersPage() {
                           rel="noopener noreferrer"
                           className="flex items-center gap-1 text-violet-500 hover:text-violet-600 text-sm"
                         >
-                          <ExternalLink className="w-3 h-3" /> Complete Payment
+                          <ExternalLink className="w-3 h-3" /> {t('completePayment')}
                         </a>
                       )}
                     </div>

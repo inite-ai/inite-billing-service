@@ -3,6 +3,8 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import { Toaster } from 'react-hot-toast'
 import { AuthProvider } from '@/contexts/AuthContext'
+import { NextIntlClientProvider } from 'next-intl'
+import { getMessages, getLocale } from 'next-intl/server'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -11,13 +13,18 @@ export const metadata: Metadata = {
   description: 'INITE Billing Service - Manage your subscriptions, orders, and referrals',
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const locale = await getLocale()
+  const messages = await getMessages()
+
   return (
-    <html lang="en">
+    <html lang={locale}>
       <body className={inter.className}>
-        <AuthProvider>
-          {children}
-        </AuthProvider>
+        <NextIntlClientProvider messages={messages}>
+          <AuthProvider>
+            {children}
+          </AuthProvider>
+        </NextIntlClientProvider>
         <Toaster
           position="top-right"
           toastOptions={{

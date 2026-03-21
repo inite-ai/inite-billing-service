@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useTranslations } from 'next-intl'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -13,6 +14,9 @@ import toast from 'react-hot-toast'
 import type { Price, Product } from '@/lib/types'
 
 export default function AdminPricesPage() {
+  const t = useTranslations('admin')
+  const tc = useTranslations('common')
+
   const [prices, setPrices] = useState<Price[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [showModal, setShowModal] = useState(false)
@@ -32,30 +36,30 @@ export default function AdminPricesPage() {
 
   const handleCreate = async (data: any) => {
     await api.post('/v1/admin/prices', data)
-    toast.success('Price created')
+    toast.success(t('prices.created'))
     setShowModal(false)
     load()
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this price?')) return
+    if (!confirm(t('prices.deleteConfirm'))) return
     await api.delete(`/v1/admin/prices/${id}`)
-    toast.success('Price deleted')
+    toast.success(t('prices.deleted'))
     load()
   }
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Prices</h1>
-        <Button size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setShowModal(true)}>Add Price</Button>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('prices.title')}</h1>
+        <Button size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setShowModal(true)}>{t('prices.addPrice')}</Button>
       </div>
 
       <Card>
-        {loading ? <div className="text-gray-500 py-4">Loading...</div> : (
+        {loading ? <div className="text-gray-500 py-4">{tc('loading')}</div> : (
           <Table>
             <Thead>
-              <tr><Th>Code</Th><Th>Product</Th><Th>Amount</Th><Th>Interval</Th><Th>Status</Th><Th>Actions</Th></tr>
+              <tr><Th>{t('prices.tableCode')}</Th><Th>{t('prices.tableProduct')}</Th><Th>{t('prices.tableAmount')}</Th><Th>{t('prices.tableInterval')}</Th><Th>{t('prices.tableStatus')}</Th><Th>{t('prices.tableActions')}</Th></tr>
             </Thead>
             <Tbody>
               {prices.map((p) => (
@@ -63,8 +67,8 @@ export default function AdminPricesPage() {
                   <Td className="font-mono">{p.code}</Td>
                   <Td>{p.product?.name || p.productId}</Td>
                   <Td className="font-semibold">{p.amount} {p.currency}</Td>
-                  <Td>{p.interval || 'one-time'}</Td>
-                  <Td><Badge>{p.isActive ? 'active' : 'inactive'}</Badge></Td>
+                  <Td>{p.interval || t('prices.oneTime')}</Td>
+                  <Td><Badge>{p.isActive ? tc('status.active') : tc('status.inactive')}</Badge></Td>
                   <Td><button onClick={() => handleDelete(p.id)} className="text-gray-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button></Td>
                 </tr>
               ))}
@@ -73,7 +77,7 @@ export default function AdminPricesPage() {
         )}
       </Card>
 
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Create Price">
+      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={t('prices.createTitle')}>
         <PriceForm products={products} onSubmit={handleCreate} onCancel={() => setShowModal(false)} />
       </Modal>
     </div>

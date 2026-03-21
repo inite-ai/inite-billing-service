@@ -2,12 +2,14 @@
 
 import { AffiliateTreeNode } from '@/lib/types'
 import { Users, ChevronRight } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 interface ReferralTreeProps {
   tree: AffiliateTreeNode | null
 }
 
 function TreeNode({ node, depth = 0 }: { node: AffiliateTreeNode; depth?: number }) {
+  const t = useTranslations('referrals')
   return (
     <div className={`${depth > 0 ? 'ml-6 border-l-2 border-gray-200 dark:border-gray-700 pl-4' : ''}`}>
       <div className="flex items-center gap-3 py-2">
@@ -19,7 +21,7 @@ function TreeNode({ node, depth = 0 }: { node: AffiliateTreeNode; depth?: number
             {node.referralCode}
           </p>
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            {node.totalReferrals} referrals | Earned: ${node.totalEarned}
+            {node.totalReferrals} {t('statTotalReferrals').toLowerCase()} | {t('statTotalEarned')}: ${node.totalEarned}
           </p>
         </div>
         {node.children.length > 0 && (
@@ -34,8 +36,9 @@ function TreeNode({ node, depth = 0 }: { node: AffiliateTreeNode; depth?: number
 }
 
 export function ReferralTree({ tree }: ReferralTreeProps) {
+  const t = useTranslations('referrals')
   if (!tree) {
-    return <p className="text-gray-500 dark:text-gray-400 text-sm">No referral tree data</p>
+    return <p className="text-gray-500 dark:text-gray-400 text-sm">{t('noReferrals')}</p>
   }
 
   return <TreeNode node={tree} />

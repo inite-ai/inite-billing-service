@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
+import { useTranslations } from 'next-intl'
 
 interface EntitlementFormProps {
   onSubmit: (data: { userId: string; key: string; expiresAt?: string }) => Promise<void>
@@ -14,6 +15,8 @@ export function EntitlementForm({ onSubmit, onCancel }: EntitlementFormProps) {
   const [key, setKey] = useState('')
   const [expiresAt, setExpiresAt] = useState('')
   const [loading, setLoading] = useState(false)
+  const t = useTranslations('forms')
+  const tc = useTranslations('common')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -27,12 +30,12 @@ export function EntitlementForm({ onSubmit, onCancel }: EntitlementFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <Input label="User ID" value={userId} onChange={(e) => setUserId(e.target.value)} required placeholder="UUID" />
-      <Input label="Entitlement Key" value={key} onChange={(e) => setKey(e.target.value)} required />
-      <Input label="Expires At" type="datetime-local" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
+      <Input label={t('userId')} value={userId} onChange={(e) => setUserId(e.target.value)} required placeholder="UUID" />
+      <Input label={t('key')} value={key} onChange={(e) => setKey(e.target.value)} required />
+      <Input label={t('expiresAt')} type="datetime-local" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
       <div className="flex gap-3 justify-end">
-        <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
-        <Button type="submit" loading={loading}>Create</Button>
+        <Button type="button" variant="ghost" onClick={onCancel}>{tc('cancel')}</Button>
+        <Button type="submit" loading={loading}>{tc('create')}</Button>
       </div>
     </form>
   )

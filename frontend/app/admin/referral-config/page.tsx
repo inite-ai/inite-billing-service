@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useTranslations } from 'next-intl'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -23,6 +24,9 @@ interface Template {
 }
 
 export default function AdminReferralConfigPage() {
+  const t = useTranslations('admin')
+  const tc = useTranslations('common')
+
   const [levels, setLevels] = useState<ReferralLevel[]>([])
   const [services, setServices] = useState<Service[]>([])
   const [filterService, setFilterService] = useState('')
@@ -54,44 +58,44 @@ export default function AdminReferralConfigPage() {
       setTemplates(res.data)
       setShowTemplates(true)
     } catch {
-      toast.error('Failed to load templates')
+      toast.error(t('referralConfig.templateLoadError'))
     }
   }
 
   const handleApplyTemplate = async (templateKey: string) => {
     if (!filterService) {
-      toast.error('Select a service first')
+      toast.error(t('referralConfig.templateSelectServiceError'))
       return
     }
-    if (!confirm('Apply this template? This will create all levels for the selected service.')) return
+    if (!confirm(t('referralConfig.applyConfirm'))) return
     try {
       await api.post('/v1/admin/referral-templates/apply', {
         serviceId: filterService,
         templateKey,
       })
-      toast.success('Template applied!')
+      toast.success(t('referralConfig.templateApplied'))
       setShowTemplates(false)
       load()
     } catch (e: any) {
-      toast.error(e.response?.data?.message || 'Failed to apply template')
+      toast.error(e.response?.data?.message || t('referralConfig.templateApplyError'))
     }
   }
 
   const handleCreate = async (data: { serviceId: string; level: number; commissionRate: number; name: string }) => {
     await api.post('/v1/admin/referral-levels', data)
-    toast.success('Level created')
+    toast.success(t('referralConfig.levelCreated'))
     setShowModal(false)
     load()
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this referral level? Only the highest level for a service can be deleted.')) return
+    if (!confirm(t('referralConfig.deleteConfirm'))) return
     try {
       await api.delete(`/v1/admin/referral-levels/${id}`)
-      toast.success('Level deleted')
+      toast.success(t('referralConfig.levelDeleted'))
       load()
     } catch (e: any) {
-      toast.error(e.response?.data?.message || 'Failed to delete')
+      toast.error(e.response?.data?.message || t('referralConfig.levelDeleteError'))
     }
   }
 
@@ -114,11 +118,11 @@ export default function AdminReferralConfigPage() {
         commissionRate: parseFloat(editRate) / 100,
         name: editName,
       })
-      toast.success('Level updated')
+      toast.success(t('referralConfig.levelUpdated'))
       setEditingId(null)
       load()
     } catch {
-      toast.error('Failed to update')
+      toast.error(t('referralConfig.levelUpdateError'))
     }
   }
 
@@ -130,20 +134,20 @@ export default function AdminReferralConfigPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Referral Levels</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Configure multi-level commission rates per service</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('referralConfig.title')}</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('referralConfig.subtitle')}</p>
         </div>
         <div className="flex gap-3">
           {services.length > 0 && (
             <div className="w-48">
               <Select value={filterService} onChange={(e) => setFilterService(e.target.value)} options={[
-                { value: '', label: 'All Services' },
+                { value: '', label: t('referralConfig.allServices') },
                 ...services.map((s) => ({ value: s.id, label: s.name })),
               ]} />
             </div>
           )}
-          <Button size="sm" variant="secondary" icon={<Zap className="w-4 h-4" />} onClick={loadTemplates}>Templates</Button>
-          <Button size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setShowModal(true)}>Add Level</Button>
+          <Button size="sm" variant="secondary" icon={<Zap className="w-4 h-4" />} onClick={loadTemplates}>{t('referralConfig.templates')}</Button>
+          <Button size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setShowModal(true)}>{t('referralConfig.addLevel')}</Button>
         </div>
       </div>
 
@@ -154,11 +158,11 @@ export default function AdminReferralConfigPage() {
             <div className="flex items-center gap-2">
               <GitBranch className="w-5 h-5 text-violet-500" />
               <span className="font-semibold text-gray-900 dark:text-white">
-                {filteredLevels.length} level{filteredLevels.length !== 1 ? 's' : ''} configured
+                {t('referralConfig.levelsConfigured', { count: filteredLevels.length })}
               </span>
             </div>
             <span className="text-lg font-bold text-gray-900 dark:text-white">
-              Total: {(totalRate * 100).toFixed(1)}%
+              {t('referralConfig.totalRate', { rate: (totalRate * 100).toFixed(1) })}
             </span>
           </div>
         </Card>
@@ -166,17 +170,17 @@ export default function AdminReferralConfigPage() {
 
       <Card>
         {loading ? (
-          <div className="flex items-center gap-2 text-gray-500 py-4"><Loader2 className="w-5 h-5 animate-spin" /> Loading...</div>
+          <div className="flex items-center gap-2 text-gray-500 py-4"><Loader2 className="w-5 h-5 animate-spin" /> {tc('loading')}</div>
         ) : filteredLevels.length === 0 ? (
           <div className="text-center py-8">
             <GitBranch className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-            <p className="text-gray-500 mb-2">No referral levels configured</p>
-            <p className="text-sm text-gray-400">Select a service and add levels to enable multi-level commissions</p>
+            <p className="text-gray-500 mb-2">{t('referralConfig.noLevels')}</p>
+            <p className="text-sm text-gray-400">{t('referralConfig.noLevelsHint')}</p>
           </div>
         ) : (
           <Table>
             <Thead>
-              <tr><Th>Level</Th><Th>Service</Th><Th>Name</Th><Th>Rate</Th><Th>Qualification</Th><Th>Status</Th><Th>Actions</Th></tr>
+              <tr><Th>{t('referralConfig.tableLevel')}</Th><Th>{t('referralConfig.tableService')}</Th><Th>{t('referralConfig.tableName')}</Th><Th>{t('referralConfig.tableRate')}</Th><Th>{t('referralConfig.tableQualification')}</Th><Th>{t('referralConfig.tableStatus')}</Th><Th>{t('referralConfig.tableActions')}</Th></tr>
             </Thead>
             <Tbody>
               {filteredLevels.map((l) => (
@@ -207,17 +211,17 @@ export default function AdminReferralConfigPage() {
                   <Td>
                     {(() => {
                       const c = l.qualificationCriteria
-                      if (!c || Object.keys(c).length === 0) return <span className="text-gray-400 text-xs">None</span>
+                      if (!c || Object.keys(c).length === 0) return <span className="text-gray-400 text-xs">{t('referralConfig.qualNone')}</span>
                       const parts: string[] = []
-                      if (c.minDirectReferrals) parts.push(`${c.minDirectReferrals} refs`)
-                      if (c.minActiveReferrals) parts.push(`${c.minActiveReferrals} active`)
-                      if (c.minPersonalOrders) parts.push(`${c.minPersonalOrders} orders`)
-                      if (c.minMonthlyVolume) parts.push(`$${c.minMonthlyVolume}/mo`)
-                      if (c.personalPurchaseRequired) parts.push('own purchase')
+                      if (c.minDirectReferrals) parts.push(t('referralConfig.qualRefs', { count: c.minDirectReferrals }))
+                      if (c.minActiveReferrals) parts.push(t('referralConfig.qualActive', { count: c.minActiveReferrals }))
+                      if (c.minPersonalOrders) parts.push(t('referralConfig.qualOrders', { count: c.minPersonalOrders }))
+                      if (c.minMonthlyVolume) parts.push(t('referralConfig.qualVolume', { amount: c.minMonthlyVolume }))
+                      if (c.personalPurchaseRequired) parts.push(t('referralConfig.qualOwnPurchase'))
                       return <span className="text-xs text-orange-600 dark:text-orange-400">{parts.join(', ')}</span>
                     })()}
                   </Td>
-                  <Td><Badge>{l.isActive ? 'active' : 'inactive'}</Badge></Td>
+                  <Td><Badge>{l.isActive ? tc('status.active') : tc('status.inactive')}</Badge></Td>
                   <Td>
                     <div className="flex items-center gap-2">
                       {editingId === l.id ? (
@@ -240,16 +244,16 @@ export default function AdminReferralConfigPage() {
         )}
       </Card>
 
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Create Referral Level">
+      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={t('referralConfig.createTitle')}>
         <ReferralLevelConfig services={services} nextLevel={nextLevel} onSubmit={handleCreate} onCancel={() => setShowModal(false)} />
       </Modal>
 
       {/* Templates Modal */}
-      <Modal isOpen={showTemplates} onClose={() => setShowTemplates(false)} title="Apply Referral Template">
+      <Modal isOpen={showTemplates} onClose={() => setShowTemplates(false)} title={t('referralConfig.applyTemplateTitle')}>
         <div className="space-y-4">
           {!filterService && (
             <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl text-sm text-yellow-700 dark:text-yellow-400">
-              Select a service in the filter first to apply a template.
+              {t('referralConfig.selectServiceFirst')}
             </div>
           )}
           {templates.map((tmpl) => (
@@ -278,7 +282,7 @@ export default function AdminReferralConfigPage() {
                 icon={<Zap className="w-4 h-4" />}
                 className="w-full"
               >
-                Apply to {filterService ? services.find((s) => s.id === filterService)?.name || 'Service' : 'Select service...'}
+                {filterService ? t('referralConfig.applyTo', { service: services.find((s) => s.id === filterService)?.name || 'Service' }) : t('referralConfig.selectServicePlaceholder')}
               </Button>
             </div>
           ))}

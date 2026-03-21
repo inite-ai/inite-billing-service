@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import { Header } from '@/components/layout/Header'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -14,17 +15,19 @@ import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import type { Subscription } from '@/lib/types'
 
-const statusTabs = [
-  { key: '', label: 'All' },
-  { key: 'active', label: 'Active' },
-  { key: 'trialing', label: 'Trial' },
-  { key: 'past_due', label: 'Past Due' },
-  { key: 'canceled', label: 'Canceled' },
-]
-
 export default function SubscriptionsPage() {
   const { user, isLoading: authLoading } = useAuth()
   const router = useRouter()
+  const t = useTranslations('subscriptions')
+  const tc = useTranslations('common')
+
+  const statusTabs = [
+    { key: '', label: t('tabAll') },
+    { key: 'active', label: t('tabActive') },
+    { key: 'trialing', label: t('tabTrial') },
+    { key: 'past_due', label: t('tabPastDue') },
+    { key: 'canceled', label: t('tabCanceled') },
+  ]
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
   const [statusFilter, setStatusFilter] = useState('')
   const [selectedSub, setSelectedSub] = useState<Subscription | null>(null)
@@ -50,16 +53,16 @@ export default function SubscriptionsPage() {
   }
 
   const handleCancel = async (id: string) => {
-    if (!confirm('Are you sure you want to cancel this subscription? It will remain active until the end of the current billing period.')) return
+    if (!confirm(t('confirmCancel'))) return
     try {
       await api.post(`/v1/subscriptions/${id}/cancel`)
       setSubscriptions((prev) =>
         prev.map((s) => (s.id === id ? { ...s, status: 'canceled' as const, cancelAtPeriodEnd: true } : s))
       )
       setSelectedSub(null)
-      toast.success('Subscription will cancel at period end')
+      toast.success(t('cancelSuccess'))
     } catch {
-      toast.error('Failed to cancel subscription')
+      toast.error(t('cancelError'))
     }
   }
 
@@ -78,9 +81,9 @@ export default function SubscriptionsPage() {
     <div className="min-h-screen">
       <Header />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">My Subscriptions</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{t('title')}</h1>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-          {activeSubs.length} active subscription{activeSubs.length !== 1 ? 's' : ''}
+          {t('activeCount', { count: activeSubs.length })}
         </p>
 
         <div className="mb-4">
@@ -88,15 +91,15 @@ export default function SubscriptionsPage() {
         </div>
 
         {loading ? (
-          <div className="flex items-center gap-2 text-gray-500"><Loader2 className="w-5 h-5 animate-spin" /> Loading...</div>
+          <div className="flex items-center gap-2 text-gray-500"><Loader2 className="w-5 h-5 animate-spin" /> {tc('loading')}</div>
         ) : filtered.length === 0 ? (
           <Card>
             <div className="text-center py-8">
               <CreditCard className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
               <p className="text-gray-500 dark:text-gray-400 mb-1">
-                {statusFilter ? `No ${statusFilter} subscriptions` : 'No subscriptions yet'}
+                {statusFilter ? t('noFilteredSubscriptions', { status: statusFilter }) : t('noSubscriptions')}
               </p>
-              <p className="text-sm text-gray-400 dark:text-gray-500">Purchase a subscription from the catalog to get started</p>
+              <p className="text-sm text-gray-400 dark:text-gray-500">{t('purchaseHint')}</p>
             </div>
           </Card>
         ) : (
@@ -130,21 +133,21 @@ export default function SubscriptionsPage() {
 
                     <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
                       <Calendar className="w-4 h-4" />
-                      <span>Started {new Date(sub.currentPeriodStart).toLocaleDateString()}</span>
+                      <span>{t('started', { date: new Date(sub.currentPeriodStart).toLocaleDateString() })}</span>
                     </div>
 
                     <div className={`flex items-center gap-2 ${isExpiringSoon ? 'text-orange-500' : 'text-gray-500 dark:text-gray-400'}`}>
                       <Clock className="w-4 h-4" />
                       <span>
-                        {sub.cancelAtPeriodEnd ? 'Cancels' : 'Renews'} {new Date(sub.currentPeriodEnd).toLocaleDateString()}
-                        {' '}({days} day{days !== 1 ? 's' : ''})
+                        {sub.cancelAtPeriodEnd ? t('cancels', { date: new Date(sub.currentPeriodEnd).toLocaleDateString() }) : t('renews', { date: new Date(sub.currentPeriodEnd).toLocaleDateString() })}
+                        {' '}({t('daysLeft', { count: days })})
                       </span>
                     </div>
 
                     {sub.price?.trialDays && sub.status === 'trialing' && (
                       <div className="flex items-center gap-2 text-blue-500">
                         <AlertTriangle className="w-4 h-4" />
-                        <span>Trial period ({sub.price.trialDays} days)</span>
+                        <span>{t('trialPeriod', { days: sub.price.trialDays })}</span>
                       </div>
                     )}
                   </div>
@@ -152,7 +155,7 @@ export default function SubscriptionsPage() {
                   {sub.cancelAtPeriodEnd && (
                     <div className="mt-3 p-2 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
                       <p className="text-xs text-orange-700 dark:text-orange-400">
-                        This subscription will not renew. Access continues until {new Date(sub.currentPeriodEnd).toLocaleDateString()}.
+                        {t('cancelNotice', { date: new Date(sub.currentPeriodEnd).toLocaleDateString() })}
                       </p>
                     </div>
                   )}
@@ -166,7 +169,7 @@ export default function SubscriptionsPage() {
         <Modal
           isOpen={!!selectedSub}
           onClose={() => setSelectedSub(null)}
-          title="Subscription Details"
+          title={t('detailTitle')}
         >
           {selectedSub && (
             <div className="space-y-4">
@@ -180,35 +183,35 @@ export default function SubscriptionsPage() {
               <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4 space-y-3 text-sm">
                 {selectedSub.price && (
                   <div className="flex justify-between">
-                    <span className="text-gray-500">Price</span>
+                    <span className="text-gray-500">{t('detailPrice')}</span>
                     <span className="font-semibold">{selectedSub.price.amount} {selectedSub.price.currency}/{selectedSub.price.interval || 'month'}</span>
                   </div>
                 )}
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Period Start</span>
+                  <span className="text-gray-500">{t('detailPeriodStart')}</span>
                   <span>{new Date(selectedSub.currentPeriodStart).toLocaleDateString()}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Period End</span>
+                  <span className="text-gray-500">{t('detailPeriodEnd')}</span>
                   <span>{new Date(selectedSub.currentPeriodEnd).toLocaleDateString()}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Auto-Renew</span>
-                  <span>{selectedSub.cancelAtPeriodEnd ? 'No (canceling)' : 'Yes'}</span>
+                  <span className="text-gray-500">{t('detailAutoRenew')}</span>
+                  <span>{selectedSub.cancelAtPeriodEnd ? t('detailAutoRenewNo') : t('detailAutoRenewYes')}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Created</span>
+                  <span className="text-gray-500">{t('detailCreated')}</span>
                   <span>{new Date(selectedSub.createdAt).toLocaleDateString()}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">ID</span>
+                  <span className="text-gray-500">{t('detailId')}</span>
                   <span className="font-mono text-xs">{selectedSub.id}</span>
                 </div>
               </div>
 
               {(selectedSub.status === 'active' || selectedSub.status === 'trialing') && !selectedSub.cancelAtPeriodEnd && (
                 <Button variant="danger" onClick={() => handleCancel(selectedSub.id)} className="w-full">
-                  Cancel Subscription
+                  {t('cancelSubscription')}
                 </Button>
               )}
             </div>

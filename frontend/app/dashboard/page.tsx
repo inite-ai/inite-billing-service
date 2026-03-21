@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import { Header } from '@/components/layout/Header'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -17,6 +18,8 @@ import Link from 'next/link'
 export default function DashboardPage() {
   const { user, isLoading: authLoading } = useAuth()
   const router = useRouter()
+  const t = useTranslations('dashboard')
+  const tc = useTranslations('common')
   const [orders, setOrders] = useState<Order[]>([])
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
   const [entitlements, setEntitlements] = useState<Entitlement[]>([])
@@ -63,14 +66,14 @@ export default function DashboardPage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              Welcome, {user.name || user.email}
+              {t('welcome', { name: user.name || user.email })}
             </h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage your subscriptions, orders, and referral program</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('subtitle')}</p>
           </div>
         </div>
 
         {loading ? (
-          <div className="flex items-center gap-2 text-gray-500"><Loader2 className="w-5 h-5 animate-spin" /> Loading...</div>
+          <div className="flex items-center gap-2 text-gray-500"><Loader2 className="w-5 h-5 animate-spin" /> {tc('loading')}</div>
         ) : (
           <div className="space-y-6">
             <StatsCards
@@ -83,16 +86,16 @@ export default function DashboardPage() {
             {/* Active Subscriptions */}
             <Card>
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Active Subscriptions</h3>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{t('activeSubscriptionsTitle')}</h3>
                 <Link href="/subscriptions">
-                  <Button size="sm" variant="ghost" icon={<ArrowRight className="w-4 h-4" />}>View All</Button>
+                  <Button size="sm" variant="ghost" icon={<ArrowRight className="w-4 h-4" />}>{tc('viewAll')}</Button>
                 </Link>
               </div>
               {activeSubs.length === 0 ? (
                 <div className="text-center py-6">
                   <CreditCard className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-                  <p className="text-gray-500 dark:text-gray-400 mb-3">No active subscriptions</p>
-                  <Link href="/catalog"><Button size="sm">Browse Catalog</Button></Link>
+                  <p className="text-gray-500 dark:text-gray-400 mb-3">{t('noActiveSubscriptions')}</p>
+                  <Link href="/catalog"><Button size="sm">{t('browseCatalog')}</Button></Link>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -107,7 +110,7 @@ export default function DashboardPage() {
                       <div className="text-sm text-gray-500 dark:text-gray-400 space-y-1">
                         <div className="flex items-center gap-2">
                           <Calendar className="w-4 h-4" />
-                          <span>Renews {new Date(sub.currentPeriodEnd).toLocaleDateString()}</span>
+                          <span>{t('renews', { date: new Date(sub.currentPeriodEnd).toLocaleDateString() })}</span>
                         </div>
                         {sub.price && (
                           <p className="font-medium text-gray-900 dark:text-white">
@@ -116,7 +119,7 @@ export default function DashboardPage() {
                         )}
                       </div>
                       {sub.cancelAtPeriodEnd && (
-                        <p className="text-xs text-orange-500 mt-2">Cancels at period end</p>
+                        <p className="text-xs text-orange-500 mt-2">{t('cancelsAtPeriodEnd')}</p>
                       )}
                     </div>
                   ))}
@@ -127,14 +130,14 @@ export default function DashboardPage() {
             {/* Active Entitlements */}
             {activeEntitlements.length > 0 && (
               <Card>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Your Entitlements</h3>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">{t('yourEntitlements')}</h3>
                 <div className="flex flex-wrap gap-2">
                   {activeEntitlements.map((e) => (
                     <div key={e.id} className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg px-3 py-2">
                       <p className="text-sm font-medium text-green-800 dark:text-green-300">{e.key}</p>
                       {e.expiresAt && (
                         <p className="text-xs text-green-600 dark:text-green-400">
-                          Expires: {new Date(e.expiresAt).toLocaleDateString()}
+                          {t('expires', { date: new Date(e.expiresAt).toLocaleDateString() })}
                         </p>
                       )}
                     </div>
@@ -146,17 +149,17 @@ export default function DashboardPage() {
             {/* Recent Orders */}
             <Card>
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Orders</h3>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{t('recentOrders')}</h3>
                 <Link href="/orders">
-                  <Button size="sm" variant="ghost" icon={<ArrowRight className="w-4 h-4" />}>View All</Button>
+                  <Button size="sm" variant="ghost" icon={<ArrowRight className="w-4 h-4" />}>{tc('viewAll')}</Button>
                 </Link>
               </div>
               {orders.length === 0 ? (
-                <p className="text-gray-500 dark:text-gray-400 text-sm py-4">No orders yet</p>
+                <p className="text-gray-500 dark:text-gray-400 text-sm py-4">{t('noOrdersYet')}</p>
               ) : (
                 <Table>
                   <Thead>
-                    <tr><Th>Date</Th><Th>Amount</Th><Th>Mode</Th><Th>Status</Th></tr>
+                    <tr><Th>{t('tableDate')}</Th><Th>{t('tableAmount')}</Th><Th>{t('tableMode')}</Th><Th>{t('tableStatus')}</Th></tr>
                   </Thead>
                   <Tbody>
                     {orders.slice(0, 5).map((order) => (

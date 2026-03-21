@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import { Header } from '@/components/layout/Header'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -22,17 +23,19 @@ import type {
   Referral, Commission, Payout, Service,
 } from '@/lib/types'
 
-const tabs = [
-  { key: 'overview', label: 'Overview' },
-  { key: 'referrals', label: 'Referrals' },
-  { key: 'commissions', label: 'Commissions' },
-  { key: 'payouts', label: 'Payouts' },
-  { key: 'tree', label: 'Tree' },
-]
-
 export default function ReferralsPage() {
   const { user, isLoading: authLoading } = useAuth()
   const router = useRouter()
+  const t = useTranslations('referrals')
+  const tc = useTranslations('common')
+
+  const tabs = [
+    { key: 'overview', label: t('tabOverview') },
+    { key: 'referrals', label: t('tabReferrals') },
+    { key: 'commissions', label: t('tabCommissions') },
+    { key: 'payouts', label: t('tabPayouts') },
+    { key: 'tree', label: t('tabTree') },
+  ]
   const [activeTab, setActiveTab] = useState('overview')
   const [affiliate, setAffiliate] = useState<Affiliate | null>(null)
   const [stats, setStats] = useState<AffiliateStats | null>(null)
@@ -90,9 +93,9 @@ export default function ReferralsPage() {
       if (selectedService) params.serviceId = selectedService
       const res = await api.post('/v1/affiliates', {}, { params })
       setAffiliate(res.data)
-      toast.success('Affiliate account created!')
+      toast.success(t('affiliateCreated'))
     } catch {
-      toast.error('Failed to create affiliate account')
+      toast.error(t('affiliateCreateError'))
     }
   }
 
@@ -100,7 +103,7 @@ export default function ReferralsPage() {
     if (affiliate?.referralUrl) {
       navigator.clipboard.writeText(affiliate.referralUrl)
       setCopied(true)
-      toast.success('Referral link copied!')
+      toast.success(tc('toast.linkCopied'))
       setTimeout(() => setCopied(false), 2000)
     }
   }
@@ -132,8 +135,8 @@ export default function ReferralsPage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Referral Program</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Earn commissions by referring new users</p>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('title')}</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('subtitle')}</p>
           </div>
           {services.length > 0 && (
             <div className="w-48">
@@ -141,7 +144,7 @@ export default function ReferralsPage() {
                 value={selectedService}
                 onChange={(e) => setSelectedService(e.target.value)}
                 options={[
-                  { value: '', label: 'All Services' },
+                  { value: '', label: t('allServices') },
                   ...services.map((s) => ({ value: s.id, label: s.name })),
                 ]}
               />
@@ -150,16 +153,16 @@ export default function ReferralsPage() {
         </div>
 
         {loading ? (
-          <div className="flex items-center gap-2 text-gray-500"><Loader2 className="w-5 h-5 animate-spin" /> Loading...</div>
+          <div className="flex items-center gap-2 text-gray-500"><Loader2 className="w-5 h-5 animate-spin" /> {tc('loading')}</div>
         ) : !affiliate ? (
           <Card>
             <div className="text-center py-12">
               <GitBranch className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Join the Referral Program</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">{t('joinTitle')}</h3>
               <p className="text-gray-500 dark:text-gray-400 mb-6 max-w-md mx-auto">
-                Get your unique referral link and earn up to 30% commission on every sale from your referral network across 7 levels.
+                {t('joinDescription')}
               </p>
-              <Button onClick={handleCreateAffiliate}>Create Affiliate Account</Button>
+              <Button onClick={handleCreateAffiliate}>{t('createAffiliate')}</Button>
             </div>
           </Card>
         ) : (
@@ -170,13 +173,13 @@ export default function ReferralsPage() {
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     <LinkIcon className="w-4 h-4 text-violet-500" />
-                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Your referral link</p>
+                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('yourReferralLink')}</p>
                   </div>
                   <p className="text-lg font-mono text-gray-900 dark:text-white break-all">{affiliate.referralUrl}</p>
-                  <p className="text-xs text-gray-400 mt-1">Code: <span className="font-semibold">{affiliate.referralCode}</span></p>
+                  <p className="text-xs text-gray-400 mt-1">{t('code', { code: affiliate.referralCode })}</p>
                 </div>
                 <Button size="sm" variant="secondary" onClick={handleCopyCode} icon={copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}>
-                  {copied ? 'Copied' : 'Copy Link'}
+                  {copied ? tc('copied') : tc('copyLink')}
                 </Button>
               </div>
             </Card>
@@ -189,11 +192,11 @@ export default function ReferralsPage() {
                 {/* Stats Grid */}
                 <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
                   {[
-                    { label: 'Total Referrals', value: stats?.totalReferrals || 0, icon: Users, color: 'text-violet-500' },
-                    { label: 'Total Earned', value: `$${stats?.totalCommissions || '0'}`, icon: DollarSign, color: 'text-green-500' },
-                    { label: 'Pending', value: `$${stats?.pendingCommissions || '0'}`, icon: Clock, color: 'text-yellow-500' },
-                    { label: 'Paid Out', value: `$${stats?.paidCommissions || '0'}`, icon: Wallet, color: 'text-blue-500' },
-                    { label: 'Commissions', value: earnedCount, icon: TrendingUp, color: 'text-emerald-500' },
+                    { label: t('statTotalReferrals'), value: stats?.totalReferrals || 0, icon: Users, color: 'text-violet-500' },
+                    { label: t('statTotalEarned'), value: `$${stats?.totalCommissions || '0'}`, icon: DollarSign, color: 'text-green-500' },
+                    { label: t('statPending'), value: `$${stats?.pendingCommissions || '0'}`, icon: Clock, color: 'text-yellow-500' },
+                    { label: t('statPaidOut'), value: `$${stats?.paidCommissions || '0'}`, icon: Wallet, color: 'text-blue-500' },
+                    { label: t('statCommissions'), value: earnedCount, icon: TrendingUp, color: 'text-emerald-500' },
                   ].map((item) => {
                     const Icon = item.icon
                     return (
@@ -215,11 +218,11 @@ export default function ReferralsPage() {
                   <Card>
                     <div className="flex items-center gap-2 mb-4">
                       <BarChart3 className="w-5 h-5 text-violet-500" />
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Earnings by Level</h3>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{t('earningsByLevel')}</h3>
                     </div>
                     <Table>
                       <Thead>
-                        <tr><Th>Level</Th><Th>Rate</Th><Th>Commissions</Th><Th>Total Earned</Th></tr>
+                        <tr><Th>{t('tableLevel')}</Th><Th>{t('tableRate')}</Th><Th>{t('tableCommissions')}</Th><Th>{t('tableTotalEarned')}</Th></tr>
                       </Thead>
                       <Tbody>
                         {commissionsByLevel.map(([level, data]) => (
@@ -235,7 +238,7 @@ export default function ReferralsPage() {
                           </tr>
                         ))}
                         <tr className="border-t-2 border-gray-300 dark:border-gray-600">
-                          <Td className="font-bold">Total</Td>
+                          <Td className="font-bold">{tc('total')}</Td>
                           <Td>{' '}</Td>
                           <Td className="font-bold">{commissions.length}</Td>
                           <Td className="font-bold text-green-600 dark:text-green-400">${totalCommissionAmount.toFixed(2)}</Td>
@@ -251,10 +254,10 @@ export default function ReferralsPage() {
                     <div className="flex items-center gap-3">
                       <Wallet className="w-6 h-6 text-blue-500" />
                       <div>
-                        <p className="font-semibold text-gray-900 dark:text-white">Upcoming Payout</p>
+                        <p className="font-semibold text-gray-900 dark:text-white">{t('upcomingPayout')}</p>
                         <p className="text-sm text-gray-500">
                           ${stats.upcomingPayout.totalAmount} {stats.upcomingPayout.currency} -
-                          Period: {new Date(stats.upcomingPayout.periodStart).toLocaleDateString()} - {new Date(stats.upcomingPayout.periodEnd).toLocaleDateString()}
+                          {t('payoutPeriod', { start: new Date(stats.upcomingPayout.periodStart).toLocaleDateString(), end: new Date(stats.upcomingPayout.periodEnd).toLocaleDateString() })}
                         </p>
                       </div>
                       <Badge>{stats.upcomingPayout.status}</Badge>
@@ -268,17 +271,17 @@ export default function ReferralsPage() {
             {activeTab === 'referrals' && (
               <Card>
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                  Your Referrals ({referrals.length})
+                  {t('yourReferrals', { count: referrals.length })}
                 </h3>
                 {referrals.length === 0 ? (
                   <div className="text-center py-8">
                     <Users className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-                    <p className="text-gray-500 text-sm">No referrals yet. Share your link to get started!</p>
+                    <p className="text-gray-500 text-sm">{t('noReferrals')}</p>
                   </div>
                 ) : (
                   <Table>
                     <Thead>
-                      <tr><Th>Date</Th><Th>Referred User</Th><Th>First Order</Th><Th>Status</Th></tr>
+                      <tr><Th>{t('tableDate')}</Th><Th>{t('tableReferredUser')}</Th><Th>{t('tableFirstOrder')}</Th><Th>{t('tableStatus')}</Th></tr>
                     </Thead>
                     <Tbody>
                       {referrals.map((ref) => (
@@ -286,7 +289,7 @@ export default function ReferralsPage() {
                           <Td>{new Date(ref.createdAt).toLocaleDateString()}</Td>
                           <Td className="font-mono text-xs">{ref.referredUserId.slice(0, 12)}...</Td>
                           <Td>{ref.firstOrderId ? <span className="font-mono text-xs">{ref.firstOrderId.slice(0, 8)}...</span> : '-'}</Td>
-                          <Td><Badge>{ref.firstOrderPaid ? 'Converted' : 'Pending'}</Badge></Td>
+                          <Td><Badge>{ref.firstOrderPaid ? tc('status.converted') : tc('status.pending')}</Badge></Td>
                         </tr>
                       ))}
                     </Tbody>
@@ -299,17 +302,17 @@ export default function ReferralsPage() {
             {activeTab === 'commissions' && (
               <Card>
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                  Commission History ({commissions.length})
+                  {t('commissionHistory', { count: commissions.length })}
                 </h3>
                 {commissions.length === 0 ? (
                   <div className="text-center py-8">
                     <DollarSign className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-                    <p className="text-gray-500 text-sm">No commissions yet</p>
+                    <p className="text-gray-500 text-sm">{t('noCommissions')}</p>
                   </div>
                 ) : (
                   <Table>
                     <Thead>
-                      <tr><Th>Date</Th><Th>Level</Th><Th>Amount</Th><Th>Rate</Th><Th>Order</Th><Th>Status</Th></tr>
+                      <tr><Th>{t('tableDate')}</Th><Th>{t('tableLevel')}</Th><Th>{t('tableAmount')}</Th><Th>{t('tableRate')}</Th><Th>{t('tableOrder')}</Th><Th>{t('tableStatus')}</Th></tr>
                     </Thead>
                     <Tbody>
                       {commissions.map((com) => (
@@ -336,17 +339,17 @@ export default function ReferralsPage() {
             {activeTab === 'payouts' && (
               <Card>
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                  Payout History ({payouts.length})
+                  {t('payoutHistory', { count: payouts.length })}
                 </h3>
                 {payouts.length === 0 ? (
                   <div className="text-center py-8">
                     <Wallet className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-                    <p className="text-gray-500 text-sm">No payouts yet. Commissions are paid monthly (NET-15).</p>
+                    <p className="text-gray-500 text-sm">{t('noPayouts')}</p>
                   </div>
                 ) : (
                   <Table>
                     <Thead>
-                      <tr><Th>Period</Th><Th>Amount</Th><Th>Payout Date</Th><Th>Status</Th></tr>
+                      <tr><Th>{t('tablePeriod')}</Th><Th>{t('tableAmount')}</Th><Th>{t('tablePayoutDate')}</Th><Th>{t('tableStatus')}</Th></tr>
                     </Thead>
                     <Tbody>
                       {payouts.map((p) => (
@@ -368,10 +371,10 @@ export default function ReferralsPage() {
               <Card>
                 <div className="flex items-center gap-2 mb-4">
                   <GitBranch className="w-5 h-5 text-violet-500" />
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Referral Tree</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{t('referralTree')}</h3>
                 </div>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                  Your downline network. Each level earns a commission when someone in the chain makes a purchase.
+                  {t('treeDescription')}
                 </p>
                 <ReferralTree tree={tree} />
               </Card>

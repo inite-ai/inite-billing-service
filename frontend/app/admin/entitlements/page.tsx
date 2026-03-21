@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useTranslations } from 'next-intl'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -15,14 +16,17 @@ import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import type { Entitlement, PaginatedResponse } from '@/lib/types'
 
-const statusTabs = [
-  { key: '', label: 'All' },
-  { key: 'active', label: 'Active' },
-  { key: 'revoked', label: 'Revoked' },
-  { key: 'expired', label: 'Expired' },
-]
-
 export default function AdminEntitlementsPage() {
+  const t = useTranslations('admin')
+  const tc = useTranslations('common')
+
+  const statusTabs = [
+    { key: '', label: t('entitlements.tabAll') },
+    { key: 'active', label: t('entitlements.tabActive') },
+    { key: 'revoked', label: t('entitlements.tabRevoked') },
+    { key: 'expired', label: t('entitlements.tabExpired') },
+  ]
+
   const [data, setData] = useState<PaginatedResponse<Entitlement> | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [statusFilter, setStatusFilter] = useState('')
@@ -46,49 +50,49 @@ export default function AdminEntitlementsPage() {
 
   const handleCreate = async (formData: { userId: string; key: string; expiresAt?: string }) => {
     await api.post('/v1/admin/entitlements', formData)
-    toast.success('Entitlement created')
+    toast.success(t('entitlements.created'))
     setShowModal(false)
     load()
   }
 
   const handleRevoke = async (id: string) => {
-    if (!confirm('Revoke this entitlement? The user will lose access immediately.')) return
+    if (!confirm(t('entitlements.revokeConfirm'))) return
     await api.post(`/v1/admin/entitlements/${id}/revoke`)
-    toast.success('Entitlement revoked')
+    toast.success(t('entitlements.revokedSuccess'))
     load()
   }
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Entitlements</h1>
-        <Button size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setShowModal(true)}>Add Entitlement</Button>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('entitlements.title')}</h1>
+        <Button size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setShowModal(true)}>{t('entitlements.addEntitlement')}</Button>
       </div>
 
       <div className="flex flex-wrap items-center gap-4 mb-4">
         <Tabs tabs={statusTabs} activeTab={statusFilter} onChange={(v) => { setStatusFilter(v); setPage(1) }} />
         <div className="flex items-center gap-2 ml-auto">
           <div className="w-64">
-            <Input placeholder="Search by User ID..." value={userSearch} onChange={(e) => setUserSearch(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearch()} />
+            <Input placeholder={t('entitlements.searchPlaceholder')} value={userSearch} onChange={(e) => setUserSearch(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearch()} />
           </div>
-          <Button size="sm" variant="secondary" onClick={handleSearch} icon={<Search className="w-4 h-4" />}>Search</Button>
+          <Button size="sm" variant="secondary" onClick={handleSearch} icon={<Search className="w-4 h-4" />}>{tc('search')}</Button>
         </div>
       </div>
 
       <Card>
         {loading ? (
-          <div className="flex items-center gap-2 text-gray-500 py-4"><Loader2 className="w-5 h-5 animate-spin" /> Loading...</div>
+          <div className="flex items-center gap-2 text-gray-500 py-4"><Loader2 className="w-5 h-5 animate-spin" /> {tc('loading')}</div>
         ) : !data || data.items.length === 0 ? (
           <div className="text-center py-8">
             <Key className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-            <p className="text-gray-500">No entitlements found</p>
+            <p className="text-gray-500">{t('entitlements.noEntitlements')}</p>
           </div>
         ) : (
           <>
-            <p className="text-sm text-gray-500 mb-3">{data.total} total entitlements</p>
+            <p className="text-sm text-gray-500 mb-3">{t('entitlements.totalEntitlements', { count: data.total })}</p>
             <Table>
               <Thead>
-                <tr><Th>User</Th><Th>Key</Th><Th>Source</Th><Th>Status</Th><Th>Expires</Th><Th>Actions</Th></tr>
+                <tr><Th>{t('entitlements.tableUser')}</Th><Th>{t('entitlements.tableKey')}</Th><Th>{t('entitlements.tableSource')}</Th><Th>{t('entitlements.tableStatus')}</Th><Th>{t('entitlements.tableExpires')}</Th><Th>{t('entitlements.tableActions')}</Th></tr>
               </Thead>
               <Tbody>
                 {data.items.map((e) => (
@@ -97,10 +101,10 @@ export default function AdminEntitlementsPage() {
                     <Td className="font-mono font-semibold">{e.key}</Td>
                     <Td><Badge variant={e.source === 'admin' ? 'warning' : 'default'}>{e.source}</Badge></Td>
                     <Td><Badge>{e.status}</Badge></Td>
-                    <Td>{e.expiresAt ? new Date(e.expiresAt).toLocaleDateString() : <span className="text-gray-400">Never</span>}</Td>
+                    <Td>{e.expiresAt ? new Date(e.expiresAt).toLocaleDateString() : <span className="text-gray-400">{tc('never')}</span>}</Td>
                     <Td>
                       {e.status === 'active' && (
-                        <Button size="sm" variant="danger" onClick={() => handleRevoke(e.id)}>Revoke</Button>
+                        <Button size="sm" variant="danger" onClick={() => handleRevoke(e.id)}>{tc('revoke')}</Button>
                       )}
                     </Td>
                   </tr>
@@ -112,7 +116,7 @@ export default function AdminEntitlementsPage() {
         )}
       </Card>
 
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Create Entitlement">
+      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={t('entitlements.createTitle')}>
         <EntitlementForm onSubmit={handleCreate} onCancel={() => setShowModal(false)} />
       </Modal>
     </div>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useTranslations } from 'next-intl'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
@@ -9,6 +10,9 @@ import api from '@/lib/api'
 import type { WebhookEvent, PaginatedResponse } from '@/lib/types'
 
 export default function AdminWebhooksPage() {
+  const t = useTranslations('admin')
+  const tc = useTranslations('common')
+
   const [data, setData] = useState<PaginatedResponse<WebhookEvent> | null>(null)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
@@ -25,13 +29,13 @@ export default function AdminWebhooksPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Webhook Events</h1>
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">{t('webhooks.title')}</h1>
       <Card>
-        {loading ? <div className="text-gray-500 py-4">Loading...</div> : !data ? null : (
+        {loading ? <div className="text-gray-500 py-4">{tc('loading')}</div> : !data ? null : (
           <>
             <Table>
               <Thead>
-                <tr><Th>Received</Th><Th>Rail</Th><Th>Type</Th><Th>Entity</Th><Th>Status</Th><Th>Attempts</Th></tr>
+                <tr><Th>{t('webhooks.tableReceived')}</Th><Th>{t('webhooks.tableRail')}</Th><Th>{t('webhooks.tableType')}</Th><Th>{t('webhooks.tableEntity')}</Th><Th>{t('webhooks.tableStatus')}</Th><Th>{t('webhooks.tableAttempts')}</Th></tr>
               </Thead>
               <Tbody>
                 {data.items.map((w) => (

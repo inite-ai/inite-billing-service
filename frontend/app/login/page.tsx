@@ -4,10 +4,12 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { LogIn, Loader2 } from 'lucide-react';
 import { OAuthClient } from '@/lib/oauth-client';
+import { useTranslations } from 'next-intl';
 
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const t = useTranslations('login');
 
   const handleLogin = async () => {
     try {
@@ -44,10 +46,10 @@ export default function LoginPage() {
               <LogIn className="w-8 h-8 text-white" />
             </motion.div>
             <h2 className="text-2xl font-bold text-white mb-2">
-              INITE Billing
+              {t('title')}
             </h2>
             <p className="text-gray-400">
-              Sign in to manage your subscriptions and billing
+              {t('subtitle')}
             </p>
           </div>
 
@@ -71,19 +73,19 @@ export default function LoginPage() {
             {isLoading ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                <span>Connecting...</span>
+                <span>{t('connecting')}</span>
               </>
             ) : (
               <>
                 <LogIn className="w-5 h-5" />
-                <span>Sign in with INITE</span>
+                <span>{t('signInWith')}</span>
               </>
             )}
           </motion.button>
 
           <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl">
             <p className="text-sm text-blue-300 text-center">
-              Secure authentication via INITE Identity Provider
+              {t('secureAuth')}
             </p>
           </div>
         </motion.div>

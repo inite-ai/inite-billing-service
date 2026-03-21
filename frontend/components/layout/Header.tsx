@@ -4,18 +4,21 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { LayoutDashboard, ShoppingBag, Receipt, CreditCard, Users, Settings, LogOut } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { useTranslations } from 'next-intl'
+import LanguageSwitcher from '@/components/ui/LanguageSwitcher'
 
 const navItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/catalog', label: 'Catalog', icon: ShoppingBag },
-  { href: '/orders', label: 'Orders', icon: Receipt },
-  { href: '/subscriptions', label: 'Subscriptions', icon: CreditCard },
-  { href: '/referrals', label: 'Referrals', icon: Users },
+  { href: '/dashboard', key: 'dashboard', icon: LayoutDashboard },
+  { href: '/catalog', key: 'catalog', icon: ShoppingBag },
+  { href: '/orders', key: 'orders', icon: Receipt },
+  { href: '/subscriptions', key: 'subscriptions', icon: CreditCard },
+  { href: '/referrals', key: 'referrals', icon: Users },
 ]
 
 export function Header() {
   const pathname = usePathname()
   const { user, logout } = useAuth()
+  const t = useTranslations('nav')
 
   return (
     <header className="border-b border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm sticky top-0 z-40">
@@ -40,20 +43,21 @@ export function Header() {
                     }`}
                   >
                     <Icon className="w-4 h-4" />
-                    {item.label}
+                    {t(item.key)}
                   </Link>
                 )
               })}
             </nav>
           </div>
           <div className="flex items-center gap-3">
+            <LanguageSwitcher />
             {user?.role === 'ADMIN' && (
               <Link
                 href="/admin"
                 className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
               >
                 <Settings className="w-4 h-4" />
-                Admin
+                {t('admin')}
               </Link>
             )}
             {user && (

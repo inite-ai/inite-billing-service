@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useTranslations } from 'next-intl'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -12,7 +13,7 @@ import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import type { Service } from '@/lib/types'
 
-function ApiKeyCell({ service, onRegenerate }: { service: Service; onRegenerate: () => void }) {
+function ApiKeyCell({ service, onRegenerate, showLabel, hideLabel }: { service: Service; onRegenerate: () => void; showLabel: string; hideLabel: string }) {
   const [visible, setVisible] = useState(false)
   const [copied, setCopied] = useState(false)
 
@@ -29,13 +30,13 @@ function ApiKeyCell({ service, onRegenerate }: { service: Service; onRegenerate:
       <code className="text-xs bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded font-mono">
         {visible ? service.apiKey : masked}
       </code>
-      <button onClick={() => setVisible(!visible)} className="text-gray-400 hover:text-gray-600" title={visible ? 'Hide' : 'Show'}>
+      <button onClick={() => setVisible(!visible)} className="text-gray-400 hover:text-gray-600" title={visible ? hideLabel : showLabel}>
         {visible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
       </button>
       <button onClick={handleCopy} className="text-gray-400 hover:text-blue-500" title="Copy">
         {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
       </button>
-      <button onClick={onRegenerate} className="text-gray-400 hover:text-orange-500" title="Regenerate key">
+      <button onClick={onRegenerate} className="text-gray-400 hover:text-orange-500" title={service.name}>
         <RefreshCw className="w-3.5 h-3.5" />
       </button>
     </div>
@@ -43,6 +44,9 @@ function ApiKeyCell({ service, onRegenerate }: { service: Service; onRegenerate:
 }
 
 export default function AdminServicesPage() {
+  const t = useTranslations('admin')
+  const tc = useTranslations('common')
+
   const [services, setServices] = useState<Service[]>([])
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState<Service | undefined>()
@@ -61,7 +65,7 @@ export default function AdminServicesPage() {
 
   const handleCreate = async (data: { code: string; name: string }) => {
     await api.post('/v1/admin/services', data)
-    toast.success('Service created')
+    toast.success(t('services.created'))
     setShowModal(false)
     load()
   }
@@ -69,7 +73,7 @@ export default function AdminServicesPage() {
   const handleUpdate = async (data: { code: string; name: string }) => {
     if (!editing) return
     await api.put(`/v1/admin/services/${editing.id}`, { name: data.name })
-    toast.success('Service updated')
+    toast.success(t('services.updated'))
     setShowModal(false)
     setEditing(undefined)
     load()
@@ -77,25 +81,25 @@ export default function AdminServicesPage() {
 
   const handleToggleActive = async (id: string, isActive: boolean) => {
     await api.put(`/v1/admin/services/${id}`, { isActive: !isActive })
-    toast.success(isActive ? 'Service deactivated' : 'Service activated')
+    toast.success(isActive ? t('services.deactivated') : t('services.activated'))
     load()
   }
 
   const handleRegenerateKey = async (id: string) => {
-    if (!confirm('Regenerate API key? The old key will stop working immediately.')) return
+    if (!confirm(t('services.regenerateConfirm'))) return
     await api.post(`/v1/admin/services/${id}/regenerate-key`)
-    toast.success('API key regenerated')
+    toast.success(t('services.keyRegenerated'))
     load()
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this service? This will fail if products or referral levels exist for it.')) return
+    if (!confirm(t('services.deleteConfirm'))) return
     try {
       await api.delete(`/v1/admin/services/${id}`)
-      toast.success('Service deleted')
+      toast.success(t('services.deleted'))
       load()
     } catch (e: any) {
-      toast.error(e.response?.data?.message || 'Failed to delete — service may have associated data')
+      toast.error(e.response?.data?.message || t('services.deleteError'))
     }
   }
 
@@ -103,45 +107,45 @@ export default function AdminServicesPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Services</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage application services that billing serves</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('services.title')}</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('services.subtitle')}</p>
         </div>
         <Button size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => { setEditing(undefined); setShowModal(true) }}>
-          Add Service
+          {t('services.addService')}
         </Button>
       </div>
 
       <Card>
         {loading ? (
-          <div className="flex items-center gap-2 text-gray-500 py-4"><Loader2 className="w-5 h-5 animate-spin" /> Loading...</div>
+          <div className="flex items-center gap-2 text-gray-500 py-4"><Loader2 className="w-5 h-5 animate-spin" /> {tc('loading')}</div>
         ) : services.length === 0 ? (
           <div className="text-center py-8">
             <Server className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-            <p className="text-gray-500 mb-2">No services configured</p>
-            <p className="text-sm text-gray-400">Create a service to start configuring products and referral levels</p>
+            <p className="text-gray-500 mb-2">{t('services.noServices')}</p>
+            <p className="text-sm text-gray-400">{t('services.noServicesHint')}</p>
           </div>
         ) : (
           <Table>
             <Thead>
-              <tr><Th>Code</Th><Th>Name</Th><Th>API Key</Th><Th>Status</Th><Th>Created</Th><Th>Actions</Th></tr>
+              <tr><Th>{t('services.tableCode')}</Th><Th>{t('services.tableName')}</Th><Th>{t('services.tableApiKey')}</Th><Th>{t('services.tableStatus')}</Th><Th>{t('services.tableCreated')}</Th><Th>{t('services.tableActions')}</Th></tr>
             </Thead>
             <Tbody>
               {services.map((s) => (
                 <tr key={s.id}>
                   <Td className="font-mono font-semibold">{s.code}</Td>
                   <Td>{s.name}</Td>
-                  <Td><ApiKeyCell service={s} onRegenerate={() => handleRegenerateKey(s.id)} /></Td>
-                  <Td><Badge>{s.isActive ? 'active' : 'inactive'}</Badge></Td>
+                  <Td><ApiKeyCell service={s} onRegenerate={() => handleRegenerateKey(s.id)} showLabel={tc('show')} hideLabel={tc('hide')} /></Td>
+                  <Td><Badge>{s.isActive ? tc('status.active') : tc('status.inactive')}</Badge></Td>
                   <Td>{new Date(s.createdAt).toLocaleDateString()}</Td>
                   <Td>
                     <div className="flex gap-2">
-                      <button onClick={() => { setEditing(s); setShowModal(true) }} className="text-gray-400 hover:text-blue-500" title="Edit">
+                      <button onClick={() => { setEditing(s); setShowModal(true) }} className="text-gray-400 hover:text-blue-500" title={tc('edit')}>
                         <Pencil className="w-4 h-4" />
                       </button>
-                      <button onClick={() => handleToggleActive(s.id, s.isActive)} className="text-gray-400 hover:text-yellow-500" title={s.isActive ? 'Deactivate' : 'Activate'}>
+                      <button onClick={() => handleToggleActive(s.id, s.isActive)} className="text-gray-400 hover:text-yellow-500" title={s.isActive ? tc('deactivate') : tc('activate')}>
                         {s.isActive ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
-                      <button onClick={() => handleDelete(s.id)} className="text-gray-400 hover:text-red-500" title="Delete">
+                      <button onClick={() => handleDelete(s.id)} className="text-gray-400 hover:text-red-500" title={tc('delete')}>
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
@@ -153,7 +157,7 @@ export default function AdminServicesPage() {
         )}
       </Card>
 
-      <Modal isOpen={showModal} onClose={() => { setShowModal(false); setEditing(undefined) }} title={editing ? 'Edit Service' : 'Create Service'}>
+      <Modal isOpen={showModal} onClose={() => { setShowModal(false); setEditing(undefined) }} title={editing ? t('services.editTitle') : t('services.createTitle')}>
         <ServiceForm initial={editing} onSubmit={editing ? handleUpdate : handleCreate} onCancel={() => { setShowModal(false); setEditing(undefined) }} />
       </Modal>
     </div>

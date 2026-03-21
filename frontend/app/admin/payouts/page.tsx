@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useTranslations } from 'next-intl'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -11,6 +12,9 @@ import toast from 'react-hot-toast'
 import type { Payout, PaginatedResponse } from '@/lib/types'
 
 export default function AdminPayoutsPage() {
+  const t = useTranslations('admin')
+  const tc = useTranslations('common')
+
   const [data, setData] = useState<PaginatedResponse<Payout & { affiliate?: { referralCode: string } }> | null>(null)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
@@ -25,42 +29,42 @@ export default function AdminPayoutsPage() {
   useEffect(() => { load() }, [page])
 
   const handleProcess = async (id: string) => {
-    if (!confirm('Mark this payout as processed?')) return
+    if (!confirm(t('payouts.processConfirm'))) return
     await api.post(`/v1/admin/payouts/${id}/process`)
-    toast.success('Payout processed')
+    toast.success(t('payouts.processed'))
     load()
   }
 
   const handleFail = async (id: string) => {
-    const reason = prompt('Failure reason:')
+    const reason = prompt(t('payouts.failReason'))
     if (reason === null) return
     await api.post(`/v1/admin/payouts/${id}/fail`, { reason })
-    toast.success('Payout marked as failed')
+    toast.success(t('payouts.markedFailed'))
     load()
   }
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Payouts</h1>
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">{t('payouts.title')}</h1>
       <Card>
-        {loading ? <div className="text-gray-500 py-4">Loading...</div> : !data ? null : (
+        {loading ? <div className="text-gray-500 py-4">{tc('loading')}</div> : !data ? null : (
           <>
             <Table>
               <Thead>
-                <tr><Th>Affiliate</Th><Th>Period</Th><Th>Amount</Th><Th>Status</Th><Th>Actions</Th></tr>
+                <tr><Th>{t('payouts.tableAffiliate')}</Th><Th>{t('payouts.tablePeriod')}</Th><Th>{t('payouts.tableAmount')}</Th><Th>{t('payouts.tableStatus')}</Th><Th>{t('payouts.tableActions')}</Th></tr>
               </Thead>
               <Tbody>
                 {data.items.map((p) => (
                   <tr key={p.id}>
-                    <Td className="font-mono">{(p as any).affiliate?.referralCode || 'N/A'}</Td>
+                    <Td className="font-mono">{(p as any).affiliate?.referralCode || tc('na')}</Td>
                     <Td>{new Date(p.periodStart).toLocaleDateString()} - {new Date(p.periodEnd).toLocaleDateString()}</Td>
                     <Td className="font-semibold">${p.totalAmount} {p.currency}</Td>
                     <Td><Badge>{p.status}</Badge></Td>
                     <Td>
                       {p.status === 'pending' && (
                         <div className="flex gap-2">
-                          <Button size="sm" onClick={() => handleProcess(p.id)}>Process</Button>
-                          <Button size="sm" variant="danger" onClick={() => handleFail(p.id)}>Fail</Button>
+                          <Button size="sm" onClick={() => handleProcess(p.id)}>{tc('process')}</Button>
+                          <Button size="sm" variant="danger" onClick={() => handleFail(p.id)}>{tc('fail')}</Button>
                         </div>
                       )}
                     </Td>

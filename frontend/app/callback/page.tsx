@@ -7,6 +7,7 @@ import { Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { OAuthClient } from '@/lib/oauth-client';
 import { storeIdToken } from '@/lib/auth-helper';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTranslations } from 'next-intl';
 
 function CallbackContent() {
   const router = useRouter();
@@ -14,6 +15,7 @@ function CallbackContent() {
   const { refreshSession } = useAuth();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
+  const t = useTranslations('callback');
 
   useEffect(() => {
     const handleCallback = async () => {
@@ -78,8 +80,8 @@ function CallbackContent() {
             >
               <Loader2 className="w-10 h-10 text-white" />
             </motion.div>
-            <h2 className="text-2xl font-bold text-white mb-2">Authenticating...</h2>
-            <p className="text-gray-400">Please wait while we complete your login</p>
+            <h2 className="text-2xl font-bold text-white mb-2">{t('authenticating')}</h2>
+            <p className="text-gray-400">{t('pleaseWait')}</p>
           </>
         )}
 
@@ -93,8 +95,8 @@ function CallbackContent() {
             >
               <CheckCircle className="w-10 h-10 text-white" />
             </motion.div>
-            <h2 className="text-2xl font-bold text-white mb-2">Success!</h2>
-            <p className="text-gray-400">You've been successfully authenticated. Redirecting...</p>
+            <h2 className="text-2xl font-bold text-white mb-2">{t('success')}</h2>
+            <p className="text-gray-400">{t('successMessage')}</p>
           </>
         )}
 
@@ -108,9 +110,9 @@ function CallbackContent() {
             >
               <XCircle className="w-10 h-10 text-white" />
             </motion.div>
-            <h2 className="text-2xl font-bold text-white mb-2">Authentication Failed</h2>
-            <p className="text-gray-400 mb-4">{error || 'An error occurred during authentication'}</p>
-            <p className="text-sm text-gray-500">Redirecting to login page...</p>
+            <h2 className="text-2xl font-bold text-white mb-2">{t('failed')}</h2>
+            <p className="text-gray-400 mb-4">{error || t('failedMessage')}</p>
+            <p className="text-sm text-gray-500">{t('redirecting')}</p>
           </>
         )}
       </motion.div>
