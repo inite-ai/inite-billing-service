@@ -1,0 +1,7 @@
+#!/bin/sh
+
+echo "Running backend build check..."
+npx nest build || { echo "Backend build failed — commit blocked."; exit 1; }
+
+echo "Running frontend build check..."
+cd frontend && npx next build || { echo "Frontend build failed — commit blocked."; exit 1; }

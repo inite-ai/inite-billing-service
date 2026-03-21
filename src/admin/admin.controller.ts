@@ -54,6 +54,13 @@ export class AdminController {
     return this.adminService.updateService(id, body);
   }
 
+  @Post('services/:id/regenerate-key')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Regenerate API key for a service' })
+  async regenerateServiceApiKey(@Param('id') id: string) {
+    return this.adminService.regenerateServiceApiKey(id);
+  }
+
   @Delete('services/:id')
   @ApiOperation({ summary: 'Delete a service' })
   async deleteService(@Param('id') id: string) {

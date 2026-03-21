@@ -2,24 +2,24 @@ import { Module, OnModuleInit } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
 import { ScheduleModule } from '@nestjs/schedule';
-import { AuthModule } from './auth/auth.module';
-import { PaymentOrchestratorModule } from './payment-orchestrator/payment-orchestrator.module';
-import { AdaptersModule } from './adapters/adapters.module';
-import { CatalogModule } from './catalog/catalog.module';
-import { CheckoutModule } from './checkout/checkout.module';
-import { OrdersModule } from './orders/orders.module';
-import { SubscriptionsModule } from './subscriptions/subscriptions.module';
-import { EntitlementsModule } from './entitlements/entitlements.module';
-import { WebhooksModule } from './webhooks/webhooks.module';
-import { OutboxModule } from './outbox/outbox.module';
-import { WorkersModule } from './workers/workers.module';
-import { AffiliatesModule } from './affiliates/affiliates.module';
-import { AdminModule } from './admin/admin.module';
-import { MockOneAdapter } from '../test/mocks/one-adapter.mock';
-import { PaymentOrchestratorService } from './payment-orchestrator/payment-orchestrator.service';
-import { AffiliatesService } from './affiliates/affiliates.service';
-import { CryptoAdapter } from './adapters/crypto/crypto.adapter';
-import { OneAdapter } from './adapters/one/one.adapter';
+import { AuthModule } from '../src/auth/auth.module';
+import { PaymentOrchestratorModule } from '../src/payment-orchestrator/payment-orchestrator.module';
+import { AdaptersModule } from '../src/adapters/adapters.module';
+import { CatalogModule } from '../src/catalog/catalog.module';
+import { CheckoutModule } from '../src/checkout/checkout.module';
+import { OrdersModule } from '../src/orders/orders.module';
+import { SubscriptionsModule } from '../src/subscriptions/subscriptions.module';
+import { EntitlementsModule } from '../src/entitlements/entitlements.module';
+import { WebhooksModule } from '../src/webhooks/webhooks.module';
+import { OutboxModule } from '../src/outbox/outbox.module';
+import { WorkersModule } from '../src/workers/workers.module';
+import { AffiliatesModule } from '../src/affiliates/affiliates.module';
+import { AdminModule } from '../src/admin/admin.module';
+import { MockOneAdapter } from './mocks/one-adapter.mock';
+import { PaymentOrchestratorService } from '../src/payment-orchestrator/payment-orchestrator.service';
+import { AffiliatesService } from '../src/affiliates/affiliates.service';
+import { CryptoAdapter } from '../src/adapters/crypto/crypto.adapter';
+import { OneAdapter } from '../src/adapters/one/one.adapter';
 
 @Module({
   imports: [
@@ -30,7 +30,6 @@ import { OneAdapter } from './adapters/one/one.adapter';
     ScheduleModule.forRoot(),
     BullModule.forRootAsync({
       useFactory: () => {
-        // Use in-memory Redis for tests (or mock)
         return {
           connection: {
             host: 'localhost',

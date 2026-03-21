@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import {
   PaymentRailAdapter,
   CreateIntentInput,
@@ -7,6 +6,12 @@ import {
   IntentStatusResult,
   WebhookParseResult,
 } from '../../common/interfaces/payment-rail-adapter.interface';
+import { PrismaService } from '../../common/services/prisma.service';
+
+interface LavaProviderConfig {
+  apiBaseUrl: string;
+  apiKey: string;
+}
 
 /**
  * Lava.top (gate.lava.top) payment adapter
@@ -29,17 +34,23 @@ import {
 @Injectable()
 export class LavaAdapter implements PaymentRailAdapter {
   private readonly logger = new Logger(LavaAdapter.name);
-  private readonly apiBaseUrl: string;
-  private readonly apiKey: string;
 
-  constructor(private readonly configService: ConfigService) {
-    this.apiBaseUrl =
-      this.configService.get<string>('LAVA_API_BASE_URL') || 'https://gate.lava.top';
-    this.apiKey = this.configService.get<string>('LAVA_API_KEY') || '';
+  constructor(private readonly prisma: PrismaService) {}
 
-    if (!this.apiKey) {
-      this.logger.warn('Lava.top API key not configured — adapter in stub mode');
+  private async getConfig(): Promise<LavaProviderConfig> {
+    const provider = await this.prisma.paymentProvider.findUnique({
+      where: { code: 'LAVA' },
+    });
+
+    if (!provider || !provider.isActive) {
+      throw new Error('LAVA payment provider is not configured or inactive');
     }
+
+    const config = (provider.config as Record<string, any>) || {};
+    return {
+      apiBaseUrl: config.apiBaseUrl || 'https://gate.lava.top',
+      apiKey: config.apiKey || '',
+    };
   }
 
   rail(): string {
@@ -62,17 +73,7 @@ export class LavaAdapter implements PaymentRailAdapter {
   }
 
   async createPaymentIntent(input: CreateIntentInput): Promise<CreateIntentResult> {
-    if (!this.apiKey) {
-      // Stub mode
-      const fakeId = `lava_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
-      this.logger.warn(`LavaAdapter STUB: created fake intent ${fakeId}`);
-      return {
-        providerIntentId: fakeId,
-        checkoutUrl: `https://pay.lava.top/checkout/${fakeId}`,
-        expiresAt: new Date(Date.now() + 3600000),
-        metadata: { stub: true, order_id: input.orderId },
-      };
-    }
+    const { apiBaseUrl, apiKey } = await this.getConfig();
 
     try {
       // Lava.top requires an offerId (product must be pre-created on their side)
@@ -108,11 +109,11 @@ export class LavaAdapter implements PaymentRailAdapter {
         body.clientUtm = input.metadata.clientUtm;
       }
 
-      const response = await fetch(`${this.apiBaseUrl}/api/v3/invoice`, {
+      const response = await fetch(`${apiBaseUrl}/api/v3/invoice`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Api-Key': this.apiKey,
+          'X-Api-Key': apiKey,
         },
         body: JSON.stringify(body),
       });
@@ -145,18 +146,13 @@ export class LavaAdapter implements PaymentRailAdapter {
   }
 
   async getIntentStatus(providerIntentId: string): Promise<IntentStatusResult> {
-    if (!this.apiKey) {
-      return {
-        status: 'created',
-        metadata: { stub: true, provider_intent_id: providerIntentId },
-      };
-    }
+    const { apiBaseUrl, apiKey } = await this.getConfig();
 
     try {
       const response = await fetch(
-        `${this.apiBaseUrl}/api/v2/invoices/${providerIntentId}`,
+        `${apiBaseUrl}/api/v2/invoices/${providerIntentId}`,
         {
-          headers: { 'X-Api-Key': this.apiKey },
+          headers: { 'X-Api-Key': apiKey },
         },
       );
 

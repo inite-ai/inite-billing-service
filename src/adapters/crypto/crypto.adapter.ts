@@ -1,11 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import {
   PaymentRailAdapter,
   CreateIntentInput,
   CreateIntentResult,
   IntentStatusResult,
 } from '../../common/interfaces/payment-rail-adapter.interface';
+import { PrismaService } from '../../common/services/prisma.service';
 
 /**
  * Crypto adapter stub - implements interface but uses fake provider
@@ -15,11 +15,8 @@ import {
 @Injectable()
 export class CryptoAdapter implements PaymentRailAdapter {
   private readonly logger = new Logger(CryptoAdapter.name);
-  private readonly cryptoMode: string;
 
-  constructor(private readonly configService: ConfigService) {
-    this.cryptoMode =
-      this.configService.get<string>('FEATURE_CRYPTO_MODE') || 'ONCHAIN_INVOICE';
+  constructor(private readonly prisma: PrismaService) {
     this.logger.warn(
       'CryptoAdapter is a stub implementation - not for production use',
     );
@@ -32,15 +29,7 @@ export class CryptoAdapter implements PaymentRailAdapter {
   async createPaymentIntent(
     input: CreateIntentInput,
   ): Promise<CreateIntentResult> {
-    if (this.cryptoMode === 'ONE_CRYPTO') {
-      // Mode 1: ONE CRYPTO - would delegate to ONE adapter
-      // For now, throw error as this should use ONE adapter directly
-      throw new Error(
-        'ONE_CRYPTO mode should use ONE adapter with crypto payment method',
-      );
-    }
-
-    // Mode 2: ONCHAIN_INVOICE (stub)
+    // Stub: ONCHAIN_INVOICE mode
     if (!input.cryptoChainId || !input.cryptoToken || !input.receiverAddress) {
       throw new Error(
         'Crypto adapter requires: cryptoChainId, cryptoToken, receiverAddress',

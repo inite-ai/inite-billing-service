@@ -2,6 +2,7 @@ export interface Service {
   id: string
   code: string
   name: string
+  apiKey: string
   isActive: boolean
   metadata?: Record<string, unknown>
   createdAt: string

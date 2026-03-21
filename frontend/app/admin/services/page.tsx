@@ -7,10 +7,40 @@ import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
 import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
 import { ServiceForm } from '@/components/admin/ServiceForm'
-import { Plus, Pencil, Trash2, Eye, EyeOff, Server, Loader2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, Eye, EyeOff, Server, Loader2, Copy, RefreshCw, Check } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import type { Service } from '@/lib/types'
+
+function ApiKeyCell({ service, onRegenerate }: { service: Service; onRegenerate: () => void }) {
+  const [visible, setVisible] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(service.apiKey)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const masked = service.apiKey.slice(0, 6) + '••••••••' + service.apiKey.slice(-4)
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <code className="text-xs bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded font-mono">
+        {visible ? service.apiKey : masked}
+      </code>
+      <button onClick={() => setVisible(!visible)} className="text-gray-400 hover:text-gray-600" title={visible ? 'Hide' : 'Show'}>
+        {visible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+      </button>
+      <button onClick={handleCopy} className="text-gray-400 hover:text-blue-500" title="Copy">
+        {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+      </button>
+      <button onClick={onRegenerate} className="text-gray-400 hover:text-orange-500" title="Regenerate key">
+        <RefreshCw className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  )
+}
 
 export default function AdminServicesPage() {
   const [services, setServices] = useState<Service[]>([])
@@ -51,6 +81,13 @@ export default function AdminServicesPage() {
     load()
   }
 
+  const handleRegenerateKey = async (id: string) => {
+    if (!confirm('Regenerate API key? The old key will stop working immediately.')) return
+    await api.post(`/v1/admin/services/${id}/regenerate-key`)
+    toast.success('API key regenerated')
+    load()
+  }
+
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this service? This will fail if products or referral levels exist for it.')) return
     try {
@@ -86,13 +123,14 @@ export default function AdminServicesPage() {
         ) : (
           <Table>
             <Thead>
-              <tr><Th>Code</Th><Th>Name</Th><Th>Status</Th><Th>Created</Th><Th>Actions</Th></tr>
+              <tr><Th>Code</Th><Th>Name</Th><Th>API Key</Th><Th>Status</Th><Th>Created</Th><Th>Actions</Th></tr>
             </Thead>
             <Tbody>
               {services.map((s) => (
                 <tr key={s.id}>
                   <Td className="font-mono font-semibold">{s.code}</Td>
                   <Td>{s.name}</Td>
+                  <Td><ApiKeyCell service={s} onRegenerate={() => handleRegenerateKey(s.id)} /></Td>
                   <Td><Badge>{s.isActive ? 'active' : 'inactive'}</Badge></Td>
                   <Td>{new Date(s.createdAt).toLocaleDateString()}</Td>
                   <Td>

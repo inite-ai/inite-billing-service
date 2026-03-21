@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import {
   PaymentRailAdapter,
   CreateIntentInput,
@@ -7,6 +6,7 @@ import {
   IntentStatusResult,
   WebhookParseResult,
 } from '../../common/interfaces/payment-rail-adapter.interface';
+import { PrismaService } from '../../common/services/prisma.service';
 
 interface OnePaymentOrder {
   id: string;
@@ -23,23 +23,33 @@ interface OneCheckoutPreference {
   expires_at?: string;
 }
 
+interface OneProviderConfig {
+  apiBaseUrl: string;
+  apiKey: string;
+  apiSecret: string;
+}
+
 @Injectable()
 export class OneAdapter implements PaymentRailAdapter {
   private readonly logger = new Logger(OneAdapter.name);
-  private readonly apiBaseUrl: string;
-  private readonly apiKey: string;
-  private readonly apiSecret: string;
 
-  constructor(private readonly configService: ConfigService) {
-    this.apiBaseUrl =
-      this.configService.get<string>('ONE_API_BASE_URL') ||
-      'https://api.one.lat';
-    this.apiKey = this.configService.get<string>('ONE_API_KEY') || '';
-    this.apiSecret = this.configService.get<string>('ONE_API_SECRET') || '';
+  constructor(private readonly prisma: PrismaService) {}
 
-    if (!this.apiKey || !this.apiSecret) {
-      this.logger.warn('ONE API credentials not configured');
+  private async getConfig(): Promise<OneProviderConfig> {
+    const provider = await this.prisma.paymentProvider.findUnique({
+      where: { code: 'ONE' },
+    });
+
+    if (!provider || !provider.isActive) {
+      throw new Error('ONE payment provider is not configured or inactive');
     }
+
+    const config = (provider.config as Record<string, any>) || {};
+    return {
+      apiBaseUrl: config.apiBaseUrl || 'https://api.one.lat',
+      apiKey: config.apiKey || '',
+      apiSecret: config.apiSecret || '',
+    };
   }
 
   rail(): string {
@@ -49,6 +59,8 @@ export class OneAdapter implements PaymentRailAdapter {
   async createPaymentIntent(
     input: CreateIntentInput,
   ): Promise<CreateIntentResult> {
+    const { apiBaseUrl, apiKey, apiSecret } = await this.getConfig();
+
     const preferenceType = input.mode === 'SUBSCRIPTION' ? 'SUBSCRIPTION' : 'PAYMENT';
 
     const preferenceData: any = {
@@ -76,12 +88,12 @@ export class OneAdapter implements PaymentRailAdapter {
     }
 
     try {
-      const response = await fetch(`${this.apiBaseUrl}/v1/checkout_preferences`, {
+      const response = await fetch(`${apiBaseUrl}/v1/checkout_preferences`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': this.apiKey,
-          'x-api-secret': this.apiSecret,
+          'x-api-key': apiKey,
+          'x-api-secret': apiSecret,
         },
         body: JSON.stringify(preferenceData),
       });
@@ -95,12 +107,12 @@ export class OneAdapter implements PaymentRailAdapter {
       const preference: OneCheckoutPreference = await response.json();
 
       // Create payment order
-      const orderResponse = await fetch(`${this.apiBaseUrl}/v1/payment_orders`, {
+      const orderResponse = await fetch(`${apiBaseUrl}/v1/payment_orders`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': this.apiKey,
-          'x-api-secret': this.apiSecret,
+          'x-api-key': apiKey,
+          'x-api-secret': apiSecret,
         },
         body: JSON.stringify({
           checkout_preference_id: preference.id,
@@ -135,14 +147,16 @@ export class OneAdapter implements PaymentRailAdapter {
   }
 
   async getIntentStatus(providerIntentId: string): Promise<IntentStatusResult> {
+    const { apiBaseUrl, apiKey, apiSecret } = await this.getConfig();
+
     try {
       const response = await fetch(
-        `${this.apiBaseUrl}/v1/payment_orders/${providerIntentId}`,
+        `${apiBaseUrl}/v1/payment_orders/${providerIntentId}`,
         {
           method: 'GET',
           headers: {
-            'x-api-key': this.apiKey,
-            'x-api-secret': this.apiSecret,
+            'x-api-key': apiKey,
+            'x-api-secret': apiSecret,
           },
         },
       );

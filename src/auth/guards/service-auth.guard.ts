@@ -4,38 +4,40 @@ import {
   ExecutionContext,
   UnauthorizedException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { Observable } from 'rxjs';
+import { PrismaService } from '../../common/services/prisma.service';
 
 @Injectable()
 export class ServiceAuthGuard implements CanActivate {
-  constructor(private readonly configService: ConfigService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  canActivate(
-    context: ExecutionContext,
-  ): boolean | Promise<boolean> | Observable<boolean> {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
-    const authHeader = request.headers['x-api-key'] as string;
+    const apiKey = request.headers['x-api-key'] as string;
 
-    const serviceApiKey = this.configService.get<string>('SERVICE_API_KEY');
-
-    if (!serviceApiKey) {
-      // If no service API key is configured, deny access
-      throw new UnauthorizedException('Service authentication not configured');
+    if (!apiKey) {
+      throw new UnauthorizedException('Missing x-api-key header');
     }
 
-    if (!authHeader || authHeader !== serviceApiKey) {
-      throw new UnauthorizedException('Invalid service API key');
+    const service = await this.prisma.service.findUnique({
+      where: { apiKey },
+    });
+
+    if (!service) {
+      throw new UnauthorizedException('Invalid API key');
     }
 
-    // Set user context for service requests
+    if (!service.isActive) {
+      throw new UnauthorizedException('Service is inactive');
+    }
+
     request.user = {
-      userId: null, // Service requests don't have a user
+      userId: null,
       roles: ['service'],
       isService: true,
+      serviceId: service.id,
+      serviceCode: service.code,
     };
 
     return true;
   }
 }
-

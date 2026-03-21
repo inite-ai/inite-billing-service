@@ -24,10 +24,12 @@ import { AdminModule } from './admin/admin.module';
     ScheduleModule.forRoot(),
     BullModule.forRootAsync({
       useFactory: () => {
-        const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-        // BullMQ/ioredis accepts URL string directly
+        const redisUrl = new URL(process.env.REDIS_URL || 'redis://localhost:6379');
         return {
-          connection: redisUrl,
+          connection: {
+            host: redisUrl.hostname,
+            port: Number(redisUrl.port) || 6379,
+          },
         };
       },
     }),

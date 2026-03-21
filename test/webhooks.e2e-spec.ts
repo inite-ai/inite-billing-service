@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import * as request from 'supertest';
-import { TestAppModule } from '../src/test-app.module';
+import { TestAppModule } from './test-app.module';
 import { PrismaService } from '../src/common/services/prisma.service';
 import { JwtAuthGuard } from '../src/auth/guards/jwt-auth.guard';
 import { MockJwtAuthGuard } from './mocks/auth.mock';

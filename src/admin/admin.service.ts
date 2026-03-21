@@ -4,6 +4,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { randomBytes } from 'crypto';
 import { PrismaService } from '../common/services/prisma.service';
 
 @Injectable()
@@ -11,6 +12,10 @@ export class AdminService {
   private readonly logger = new Logger(AdminService.name);
 
   constructor(private readonly prisma: PrismaService) {}
+
+  private generateApiKey(): string {
+    return `sk_${randomBytes(24).toString('hex')}`;
+  }
 
   // ─── Services ──────────────────────────────────────────────
 
@@ -21,7 +26,12 @@ export class AdminService {
   }
 
   async createService(data: { code: string; name: string; metadata?: any }) {
-    return this.prisma.service.create({ data });
+    return this.prisma.service.create({
+      data: {
+        ...data,
+        apiKey: this.generateApiKey(),
+      },
+    });
   }
 
   async updateService(
@@ -31,6 +41,15 @@ export class AdminService {
     const service = await this.prisma.service.findUnique({ where: { id } });
     if (!service) throw new NotFoundException(`Service not found: ${id}`);
     return this.prisma.service.update({ where: { id }, data });
+  }
+
+  async regenerateServiceApiKey(id: string) {
+    const service = await this.prisma.service.findUnique({ where: { id } });
+    if (!service) throw new NotFoundException(`Service not found: ${id}`);
+    return this.prisma.service.update({
+      where: { id },
+      data: { apiKey: this.generateApiKey() },
+    });
   }
 
   async deleteService(id: string) {

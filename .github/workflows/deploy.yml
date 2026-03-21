@@ -88,8 +88,6 @@ jobs:
           echo "JWT_PUBLIC_KEY=\"$(printf '%s' '${{ secrets.JWT_PUBLIC_KEY }}' | sed ':a;N;$!ba;s/\n/\\n/g')\""
           echo "OAUTH_CLIENT_SECRET=${{ secrets.BILLING_OAUTH_CLIENT_SECRET }}"
           echo "DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}"
-          echo "ONE_API_KEY=${{ secrets.ONE_API_KEY }}"
-          echo "ONE_API_SECRET=${{ secrets.ONE_API_SECRET }}"
         } > .env
 
         # docker-compose — no local postgres/redis, uses shared infra via traefik-global
@@ -126,10 +124,6 @@ jobs:
               - JWT_SECRET=\${JWT_SECRET}
               - JWT_PUBLIC_KEY=\${JWT_PUBLIC_KEY}
               - CORS_ORIGINS=https://billing.inite.ai,https://billing-api.inite.ai
-              - ONE_API_BASE_URL=https://api.one.lat
-              - ONE_API_KEY=\${ONE_API_KEY}
-              - ONE_API_SECRET=\${ONE_API_SECRET}
-              - ONE_WEBHOOK_URL=https://billing-api.inite.ai/v1/webhooks/one
             networks:
               - traefik-global
             healthcheck:
