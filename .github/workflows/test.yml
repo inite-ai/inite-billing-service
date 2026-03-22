@@ -1,10 +1,10 @@
-name: Test INITE Billing Service
+name: Tests
 
 on:
-  pull_request:
-    branches: [ main ]
   push:
-    branches: [ develop ]
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
 
 jobs:
   test-backend:
@@ -50,8 +50,8 @@ jobs:
     - name: Generate Prisma client
       run: npx prisma generate
 
-    - name: Run linter
-      run: npm run lint || true
+    - name: Build
+      run: npx nest build
 
     - name: Create test schema
       run: npx prisma db push --skip-generate
@@ -65,6 +65,9 @@ jobs:
         REDIS_URL: redis://localhost:6381
         JWT_SECRET: test-jwt-secret
         NODE_ENV: test
+
+    - name: Security audit
+      run: npm audit --audit-level=critical
 
   test-frontend:
     runs-on: ubuntu-latest
@@ -83,30 +86,10 @@ jobs:
       working-directory: frontend
       run: npm ci
 
-    - name: Lint
-      working-directory: frontend
-      run: npm run lint || true
-
     - name: Build
       working-directory: frontend
       run: npm run build
 
-  security-scan:
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-
-    - name: Audit backend
-      run: npm audit --audit-level=critical
-
-    - name: Audit frontend
+    - name: Security audit
       working-directory: frontend
-      run: |
-        npm ci
-        npm audit --audit-level=critical
+      run: npm audit --audit-level=critical

@@ -1,33 +1,63 @@
-name: Deploy INITE Billing Service
+name: Deploy
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
+    inputs:
+      force_all:
+        description: 'Force deploy both backend and frontend'
+        type: boolean
+        default: false
 
 env:
   PROJECT_NAME: inite-billing-service
   DOMAIN: billing.inite.ai
 
 jobs:
-  build-and-push:
+  # ── Tests (required) ───────────────────────────────────────
+  tests:
+    uses: ./.github/workflows/test.yml
+
+  # ── Detect what changed ────────────────────────────────────
+  changes:
     runs-on: ubuntu-latest
-
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      infra: ${{ steps.filter.outputs.infra }}
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
+    - uses: dorny/paths-filter@v3
+      id: filter
+      with:
+        filters: |
+          backend:
+            - 'src/**'
+            - 'prisma/**'
+            - 'package.json'
+            - 'package-lock.json'
+            - 'tsconfig.json'
+            - 'nest-cli.json'
+            - 'Dockerfile'
+          frontend:
+            - 'frontend/**'
+          infra:
+            - '.github/workflows/deploy.yml'
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-
-    - name: Login to Docker Hub
-      uses: docker/login-action@v3
+  # ── Build backend ──────────────────────────────────────────
+  build-backend:
+    needs: [tests, changes]
+    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.infra == 'true' || github.event.inputs.force_all == 'true'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: docker/setup-buildx-action@v3
+    - uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-    - name: Build and push backend
-      uses: docker/build-push-action@v5
+    - uses: docker/build-push-action@v5
       with:
         context: .
         file: ./Dockerfile
@@ -39,8 +69,19 @@ jobs:
         cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/inite-billing-service:buildcache,mode=max
         platforms: linux/amd64
 
-    - name: Build and push frontend
-      uses: docker/build-push-action@v5
+  # ── Build frontend ─────────────────────────────────────────
+  build-frontend:
+    needs: [tests, changes]
+    if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.infra == 'true' || github.event.inputs.force_all == 'true'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: docker/setup-buildx-action@v3
+    - uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+    - uses: docker/build-push-action@v5
       with:
         context: ./frontend
         file: ./frontend/Dockerfile
@@ -56,30 +97,97 @@ jobs:
         cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/inite-billing-frontend:buildcache,mode=max
         platforms: linux/amd64
 
-    - name: Build info
-      run: |
-        echo "Docker images built and pushed successfully!"
-        echo "Backend: ${{ secrets.DOCKERHUB_USERNAME }}/inite-billing-service:latest"
-        echo "Frontend: ${{ secrets.DOCKERHUB_USERNAME }}/inite-billing-frontend:latest"
-        echo "SHA: ${{ github.sha }}"
-
-  deploy:
-    needs: build-and-push
+  # ── Deploy backend ─────────────────────────────────────────
+  deploy-backend:
+    needs: [build-backend]
     runs-on: self-hosted
-
     steps:
-    - name: Login to Docker Hub
-      uses: docker/login-action@v3
+    - uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-    - name: Deploy to server
+    - name: Deploy backend
       run: |
         mkdir -p /opt/projects/${{ env.PROJECT_NAME }}
         cd /opt/projects/${{ env.PROJECT_NAME }}
 
-        # Create .env — uses shared postgres + redis from inite-temporal stack
+        # Ensure .env exists
+        if [ ! -f .env ]; then
+          {
+            echo "DATABASE_URL=postgresql://${{ secrets.ORCH_POSTGRES_USER }}:${{ secrets.ORCH_POSTGRES_PASSWORD }}@postgres:5432/inite_billing?schema=billing"
+            echo "REDIS_URL=redis://redis:6379"
+            echo "JWT_SECRET=${{ secrets.JWT_SECRET }}"
+            echo "JWT_PUBLIC_KEY=\"$(printf '%s' '${{ secrets.JWT_PUBLIC_KEY }}' | sed ':a;N;$!ba;s/\n/\\n/g')\""
+            echo "OAUTH_CLIENT_SECRET=${{ secrets.BILLING_OAUTH_CLIENT_SECRET }}"
+            echo "DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}"
+          } > .env
+        fi
+
+        # Ensure docker-compose.yml exists
+        if [ ! -f docker-compose.yml ]; then
+          echo "docker-compose.yml not found — run full deploy first"
+          exit 1
+        fi
+
+        docker pull ${{ secrets.DOCKERHUB_USERNAME }}/inite-billing-service:latest
+        docker-compose up -d --no-deps --force-recreate billing-service
+        sleep 15
+
+        if docker-compose ps billing-service | grep -q "Up"; then
+          echo "Backend deployed successfully"
+        else
+          echo "Backend deployment failed!"
+          docker-compose logs billing-service
+          exit 1
+        fi
+
+  # ── Deploy frontend ────────────────────────────────────────
+  deploy-frontend:
+    needs: [build-frontend]
+    runs-on: self-hosted
+    steps:
+    - uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+    - name: Deploy frontend
+      run: |
+        mkdir -p /opt/projects/${{ env.PROJECT_NAME }}
+        cd /opt/projects/${{ env.PROJECT_NAME }}
+
+        if [ ! -f docker-compose.yml ]; then
+          echo "docker-compose.yml not found — run full deploy first"
+          exit 1
+        fi
+
+        docker pull ${{ secrets.DOCKERHUB_USERNAME }}/inite-billing-frontend:latest
+        docker-compose up -d --no-deps --force-recreate billing-frontend
+        sleep 10
+
+        if docker-compose ps billing-frontend | grep -q "Up"; then
+          echo "Frontend deployed successfully"
+        else
+          echo "Frontend deployment failed!"
+          docker-compose logs billing-frontend
+          exit 1
+        fi
+
+  # ── Full infra deploy (docker-compose.yml + .env + both services) ──
+  deploy-infra:
+    needs: [tests, changes]
+    if: needs.changes.outputs.infra == 'true' || github.event.inputs.force_all == 'true'
+    runs-on: self-hosted
+    steps:
+    - uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+    - name: Deploy full stack
+      run: |
+        mkdir -p /opt/projects/${{ env.PROJECT_NAME }}
+        cd /opt/projects/${{ env.PROJECT_NAME }}
+
+        # Recreate .env
         {
           echo "DATABASE_URL=postgresql://${{ secrets.ORCH_POSTGRES_USER }}:${{ secrets.ORCH_POSTGRES_PASSWORD }}@postgres:5432/inite_billing?schema=billing"
           echo "REDIS_URL=redis://redis:6379"
@@ -89,7 +197,7 @@ jobs:
           echo "DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}"
         } > .env
 
-        # docker-compose — no local postgres/redis, uses shared infra via traefik-global
+        # Recreate docker-compose.yml
         cat > docker-compose.yml << COMPOSE_EOF
         services:
           billing-service:
@@ -162,24 +270,16 @@ jobs:
             external: true
         COMPOSE_EOF
 
-        # Pull latest images
-        echo "Pulling latest Docker images..."
         docker pull ${{ secrets.DOCKERHUB_USERNAME }}/inite-billing-service:latest
         docker pull ${{ secrets.DOCKERHUB_USERNAME }}/inite-billing-frontend:latest
 
-        # Deploy
-        echo "Deploying billing service..."
         docker-compose down --remove-orphans
         docker-compose up -d
 
-        # Wait for services
         sleep 30
 
-        # Verify
         if docker-compose ps | grep -q "Up"; then
-          echo "Deployment successful!"
-          echo "Frontend: https://${{ env.DOMAIN }}"
-          echo "API: https://${{ env.DOMAIN }}"
+          echo "Full deploy successful!"
         else
           echo "Deployment failed!"
           docker-compose logs
@@ -188,17 +288,4 @@ jobs:
 
     - name: Cleanup
       if: always()
-      run: |
-        docker system prune -f
-
-    - name: Notify
-      if: always()
-      run: |
-        if [ "${{ job.status }}" == "success" ]; then
-          echo "INITE Billing Service deployed successfully!"
-          echo "Frontend: https://${{ env.DOMAIN }}"
-          echo "API: https://${{ env.DOMAIN }}"
-          echo "Swagger: https://${{ env.DOMAIN }}/api"
-        else
-          echo "Deployment failed! Check the logs above."
-        fi
+      run: docker system prune -f
