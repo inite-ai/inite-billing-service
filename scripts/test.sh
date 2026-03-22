@@ -71,4 +71,4 @@ npx prisma db push --skip-generate --accept-data-loss 2>&1 | tail -3
 # ── Run tests ──
 echo ""
 echo "Running tests..."
-npx jest --forceExit "$@"
+npx jest --forceExit --runInBand "$@"

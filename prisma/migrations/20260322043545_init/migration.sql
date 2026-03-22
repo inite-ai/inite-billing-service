@@ -244,7 +244,7 @@ CREATE TABLE "billing"."affiliates" (
 CREATE TABLE "billing"."referrals" (
     "id" UUID NOT NULL,
     "affiliate_id" UUID NOT NULL,
-    "referred_user_id" UUID NOT NULL,
+    "referred_user_id" VARCHAR(255) NOT NULL,
     "service_id" UUID,
     "referral_code" VARCHAR(50) NOT NULL,
     "first_order_id" UUID,

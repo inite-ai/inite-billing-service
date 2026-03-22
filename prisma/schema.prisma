@@ -411,7 +411,7 @@ model Affiliate {
 model Referral {
   id              String   @id @default(uuid()) @db.Uuid
   affiliateId     String   @map("affiliate_id") @db.Uuid
-  referredUserId  String   @map("referred_user_id") @db.Uuid
+  referredUserId  String   @map("referred_user_id") @db.VarChar(255)
   serviceId       String?  @map("service_id") @db.Uuid
   referralCode    String   @map("referral_code") @db.VarChar(50)
   firstOrderId    String?  @map("first_order_id") @db.Uuid

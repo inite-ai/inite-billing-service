@@ -19,7 +19,6 @@ export class CommissionSettlementScheduler {
 
   @Cron(CronExpression.EVERY_HOUR)
   async settleCommissions() {
-    // Get all services with their settlement periods
     const services = await this.prisma.service.findMany({
       where: { isActive: true },
       select: { id: true, metadata: true },
@@ -32,42 +31,32 @@ export class CommissionSettlementScheduler {
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - settlementDays);
 
-      // Find pending commissions older than settlement period
+      // Find pending commissions for affiliates of this service
       const pendingCommissions = await this.prisma.affiliateCommission.findMany({
         where: {
           status: 'pending',
           createdAt: { lte: cutoffDate },
-          order: {
-            price: {
-              product: { serviceId: service.id },
-            },
-          },
+          affiliate: { serviceId: service.id },
         },
-        include: { affiliate: true },
       });
 
       for (const commission of pendingCommissions) {
         await this.prisma.$transaction([
           this.prisma.affiliateCommission.update({
             where: { id: commission.id },
-            data: {
-              status: 'earned',
-              earnedAt: new Date(),
-            },
+            data: { status: 'earned', earnedAt: new Date() },
           }),
           this.prisma.affiliate.update({
             where: { id: commission.affiliateId },
-            data: {
-              totalEarned: { increment: Number(commission.amount) },
-            },
+            data: { totalEarned: { increment: Number(commission.amount) } },
           }),
         ]);
         totalSettled++;
       }
     }
 
-    // Also settle commissions without a service (global affiliates)
-    const defaultSettlementDays = 30;
+    // Settle commissions for affiliates without a service (global)
+    const defaultSettlementDays = 15;
     const globalCutoff = new Date();
     globalCutoff.setDate(globalCutoff.getDate() - defaultSettlementDays);
 
@@ -75,11 +64,7 @@ export class CommissionSettlementScheduler {
       where: {
         status: 'pending',
         createdAt: { lte: globalCutoff },
-        order: {
-          price: {
-            product: { serviceId: null },
-          },
-        },
+        affiliate: { serviceId: null },
       },
     });
 
@@ -87,16 +72,11 @@ export class CommissionSettlementScheduler {
       await this.prisma.$transaction([
         this.prisma.affiliateCommission.update({
           where: { id: commission.id },
-          data: {
-            status: 'earned',
-            earnedAt: new Date(),
-          },
+          data: { status: 'earned', earnedAt: new Date() },
         }),
         this.prisma.affiliate.update({
           where: { id: commission.affiliateId },
-          data: {
-            totalEarned: { increment: Number(commission.amount) },
-          },
+          data: { totalEarned: { increment: Number(commission.amount) } },
         }),
       ]);
       totalSettled++;
