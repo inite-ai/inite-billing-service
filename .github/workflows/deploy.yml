@@ -81,7 +81,7 @@ jobs:
 
         # Create .env — uses shared postgres + redis from inite-temporal stack
         {
-          echo "DATABASE_URL=postgresql://${{ secrets.ORCH_POSTGRES_USER }}:${{ secrets.ORCH_POSTGRES_PASSWORD }}@postgres:5432/inite_billing?schema=billing&sslmode=require"
+          echo "DATABASE_URL=postgresql://${{ secrets.ORCH_POSTGRES_USER }}:${{ secrets.ORCH_POSTGRES_PASSWORD }}@postgres:5432/inite_billing?schema=billing"
           echo "REDIS_URL=redis://redis:6379"
           echo "JWT_SECRET=${{ secrets.JWT_SECRET }}"
           echo "JWT_PUBLIC_KEY=\"$(printf '%s' '${{ secrets.JWT_PUBLIC_KEY }}' | sed ':a;N;$!ba;s/\n/\\n/g')\""
