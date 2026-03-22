@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Server, Package, DollarSign, Receipt,
-  CreditCard, Key, Users, GitBranch, Wallet, Webhook, ArrowLeft, Plug
+  CreditCard, Key, Users, GitBranch, Wallet, Webhook, ArrowLeft, Plug, ChevronRight
 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 
@@ -29,18 +29,20 @@ export function Sidebar() {
   ]
 
   return (
-    <aside className="w-64 min-h-screen bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 p-4">
-      <div className="mb-6">
+    <aside className="sidebar w-64 min-h-screen flex flex-col">
+      <div className="px-5 py-6">
         <Link
           href="/dashboard"
-          className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+          className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-300 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           {t('backToDashboard')}
         </Link>
       </div>
-      <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">{t('adminPanel')}</h2>
-      <nav className="flex flex-col gap-1">
+      <div className="px-5 mb-4">
+        <h2 className="text-lg font-bold text-white">{t('adminPanel')}</h2>
+      </div>
+      <nav className="flex-1 px-3 space-y-1">
         {sidebarItems.map((item) => {
           const Icon = item.icon
           const isActive = item.exact
@@ -50,14 +52,13 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-              }`}
+              className={`sidebar-item ${isActive ? 'active' : ''}`}
             >
-              <Icon className="w-4 h-4" />
-              {item.label}
+              <Icon className={`w-[18px] h-[18px] sidebar-icon ${isActive ? 'text-violet-500' : ''}`} />
+              <span className="flex-1">{item.label}</span>
+              {isActive && (
+                <ChevronRight className="w-3.5 h-3.5 text-violet-500/50" />
+              )}
             </Link>
           )
         })}

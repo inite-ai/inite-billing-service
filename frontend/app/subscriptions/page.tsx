@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
-import { Header } from '@/components/layout/Header'
+import { motion } from 'framer-motion'
+import { ClientLayout } from '@/components/layout/ClientLayout'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -77,147 +78,174 @@ export default function SubscriptionsPage() {
     return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
   }
 
+  const periodProgress = (start: string, end: string) => {
+    const total = new Date(end).getTime() - new Date(start).getTime()
+    const elapsed = Date.now() - new Date(start).getTime()
+    return Math.min(100, Math.max(0, (elapsed / total) * 100))
+  }
+
   return (
-    <div className="min-h-screen">
-      <Header />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{t('title')}</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+    <ClientLayout>
+      <div className="mb-2">
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">{t('title')}</h1>
+        <p className="text-sm text-slate-500 mt-1">
           {t('activeCount', { count: activeSubs.length })}
         </p>
+      </div>
 
-        <div className="mb-4">
-          <Tabs tabs={statusTabs} activeTab={statusFilter} onChange={setStatusFilter} />
-        </div>
+      <div className="mb-5 mt-5">
+        <Tabs tabs={statusTabs} activeTab={statusFilter} onChange={setStatusFilter} />
+      </div>
 
-        {loading ? (
-          <div className="flex items-center gap-2 text-gray-500"><Loader2 className="w-5 h-5 animate-spin" /> {tc('loading')}</div>
-        ) : filtered.length === 0 ? (
-          <Card>
-            <div className="text-center py-8">
-              <CreditCard className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-              <p className="text-gray-500 dark:text-gray-400 mb-1">
-                {statusFilter ? t('noFilteredSubscriptions', { status: statusFilter }) : t('noSubscriptions')}
-              </p>
-              <p className="text-sm text-gray-400 dark:text-gray-500">{t('purchaseHint')}</p>
+      {loading ? (
+        <div className="flex items-center gap-2 text-slate-500"><Loader2 className="w-5 h-5 animate-spin" /> {tc('loading')}</div>
+      ) : filtered.length === 0 ? (
+        <Card>
+          <div className="text-center py-12">
+            <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-4">
+              <CreditCard className="w-7 h-7 text-slate-400" />
             </div>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filtered.map((sub) => {
-              const days = daysUntil(sub.currentPeriodEnd)
-              const isExpiringSoon = days <= 3 && (sub.status === 'active' || sub.status === 'trialing')
+            <p className="text-slate-500 font-medium mb-1">
+              {statusFilter ? t('noFilteredSubscriptions', { status: statusFilter }) : t('noSubscriptions')}
+            </p>
+            <p className="text-sm text-slate-400">{t('purchaseHint')}</p>
+          </div>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {filtered.map((sub, index) => {
+            const days = daysUntil(sub.currentPeriodEnd)
+            const progress = periodProgress(sub.currentPeriodStart, sub.currentPeriodEnd)
+            const isExpiringSoon = days <= 3 && (sub.status === 'active' || sub.status === 'trialing')
 
-              return (
-                <Card key={sub.id} className="cursor-pointer hover:shadow-xl transition-shadow" onClick={() => setSelectedSub(sub)}>
+            return (
+              <motion.div
+                key={sub.id}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.06, duration: 0.3 }}
+              >
+                <Card hover onClick={() => setSelectedSub(sub)}>
                   <div className="flex items-start justify-between mb-3">
                     <div>
-                      <h3 className="font-semibold text-gray-900 dark:text-white text-lg">
+                      <h3 className="font-semibold text-slate-900 dark:text-white">
                         {sub.price?.product?.name || 'Subscription'}
                       </h3>
                       {sub.price?.product?.code && (
-                        <p className="text-xs text-gray-400 font-mono">{sub.price.product.code}</p>
+                        <p className="text-xs text-slate-400 font-mono">{sub.price.product.code}</p>
                       )}
                     </div>
                     <Badge>{sub.status}</Badge>
                   </div>
 
-                  <div className="space-y-2 text-sm">
+                  <div className="space-y-2.5 text-sm">
                     {sub.price && (
-                      <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
-                        <DollarSign className="w-4 h-4 text-green-500" />
+                      <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
+                        <DollarSign className="w-4 h-4 text-emerald-500 shrink-0" />
                         <span className="font-semibold">{sub.price.amount} {sub.price.currency}</span>
-                        <span className="text-gray-400">/ {sub.price.interval || 'month'}</span>
+                        <span className="text-slate-400">/ {sub.price.interval || 'month'}</span>
                       </div>
                     )}
 
-                    <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
-                      <Calendar className="w-4 h-4" />
+                    <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+                      <Calendar className="w-4 h-4 shrink-0" />
                       <span>{t('started', { date: new Date(sub.currentPeriodStart).toLocaleDateString() })}</span>
                     </div>
 
-                    <div className={`flex items-center gap-2 ${isExpiringSoon ? 'text-orange-500' : 'text-gray-500 dark:text-gray-400'}`}>
-                      <Clock className="w-4 h-4" />
+                    <div className={`flex items-center gap-2 ${isExpiringSoon ? 'text-orange-500' : 'text-slate-500 dark:text-slate-400'}`}>
+                      <Clock className="w-4 h-4 shrink-0" />
                       <span>
                         {sub.cancelAtPeriodEnd ? t('cancels', { date: new Date(sub.currentPeriodEnd).toLocaleDateString() }) : t('renews', { date: new Date(sub.currentPeriodEnd).toLocaleDateString() })}
                         {' '}({t('daysLeft', { count: days })})
                       </span>
                     </div>
 
+                    {/* Period Progress Bar */}
+                    {(sub.status === 'active' || sub.status === 'trialing') && (
+                      <div className="pt-1">
+                        <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${isExpiringSoon ? 'bg-orange-500' : 'progress-bar'}`}
+                            style={{ width: `${progress}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
                     {sub.price?.trialDays && sub.status === 'trialing' && (
                       <div className="flex items-center gap-2 text-blue-500">
-                        <AlertTriangle className="w-4 h-4" />
+                        <AlertTriangle className="w-4 h-4 shrink-0" />
                         <span>{t('trialPeriod', { days: sub.price.trialDays })}</span>
                       </div>
                     )}
                   </div>
 
                   {sub.cancelAtPeriodEnd && (
-                    <div className="mt-3 p-2 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
-                      <p className="text-xs text-orange-700 dark:text-orange-400">
+                    <div className="mt-3 p-2.5 bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800/50 rounded-xl">
+                      <p className="text-xs text-orange-600 dark:text-orange-400">
                         {t('cancelNotice', { date: new Date(sub.currentPeriodEnd).toLocaleDateString() })}
                       </p>
                     </div>
                   )}
                 </Card>
-              )
-            })}
+              </motion.div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Subscription Detail Modal */}
+      <Modal
+        isOpen={!!selectedSub}
+        onClose={() => setSelectedSub(null)}
+        title={t('detailTitle')}
+      >
+        {selectedSub && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h4 className="font-semibold text-slate-900 dark:text-white">
+                {selectedSub.price?.product?.name || 'Subscription'}
+              </h4>
+              <Badge>{selectedSub.status}</Badge>
+            </div>
+
+            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 space-y-3 text-sm">
+              {selectedSub.price && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500">{t('detailPrice')}</span>
+                  <span className="font-semibold text-slate-900 dark:text-white">{selectedSub.price.amount} {selectedSub.price.currency}/{selectedSub.price.interval || 'month'}</span>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <span className="text-slate-500">{t('detailPeriodStart')}</span>
+                <span className="text-slate-700 dark:text-slate-300">{new Date(selectedSub.currentPeriodStart).toLocaleDateString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">{t('detailPeriodEnd')}</span>
+                <span className="text-slate-700 dark:text-slate-300">{new Date(selectedSub.currentPeriodEnd).toLocaleDateString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">{t('detailAutoRenew')}</span>
+                <span className="text-slate-700 dark:text-slate-300">{selectedSub.cancelAtPeriodEnd ? t('detailAutoRenewNo') : t('detailAutoRenewYes')}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">{t('detailCreated')}</span>
+                <span className="text-slate-700 dark:text-slate-300">{new Date(selectedSub.createdAt).toLocaleDateString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">{t('detailId')}</span>
+                <span className="font-mono text-xs text-slate-500">{selectedSub.id}</span>
+              </div>
+            </div>
+
+            {(selectedSub.status === 'active' || selectedSub.status === 'trialing') && !selectedSub.cancelAtPeriodEnd && (
+              <Button variant="danger" onClick={() => handleCancel(selectedSub.id)} className="w-full">
+                {t('cancelSubscription')}
+              </Button>
+            )}
           </div>
         )}
-
-        {/* Subscription Detail Modal */}
-        <Modal
-          isOpen={!!selectedSub}
-          onClose={() => setSelectedSub(null)}
-          title={t('detailTitle')}
-        >
-          {selectedSub && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="font-semibold text-gray-900 dark:text-white">
-                  {selectedSub.price?.product?.name || 'Subscription'}
-                </h4>
-                <Badge>{selectedSub.status}</Badge>
-              </div>
-
-              <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4 space-y-3 text-sm">
-                {selectedSub.price && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">{t('detailPrice')}</span>
-                    <span className="font-semibold">{selectedSub.price.amount} {selectedSub.price.currency}/{selectedSub.price.interval || 'month'}</span>
-                  </div>
-                )}
-                <div className="flex justify-between">
-                  <span className="text-gray-500">{t('detailPeriodStart')}</span>
-                  <span>{new Date(selectedSub.currentPeriodStart).toLocaleDateString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">{t('detailPeriodEnd')}</span>
-                  <span>{new Date(selectedSub.currentPeriodEnd).toLocaleDateString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">{t('detailAutoRenew')}</span>
-                  <span>{selectedSub.cancelAtPeriodEnd ? t('detailAutoRenewNo') : t('detailAutoRenewYes')}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">{t('detailCreated')}</span>
-                  <span>{new Date(selectedSub.createdAt).toLocaleDateString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">{t('detailId')}</span>
-                  <span className="font-mono text-xs">{selectedSub.id}</span>
-                </div>
-              </div>
-
-              {(selectedSub.status === 'active' || selectedSub.status === 'trialing') && !selectedSub.cancelAtPeriodEnd && (
-                <Button variant="danger" onClick={() => handleCancel(selectedSub.id)} className="w-full">
-                  {t('cancelSubscription')}
-                </Button>
-              )}
-            </div>
-          )}
-        </Modal>
-      </main>
-    </div>
+      </Modal>
+    </ClientLayout>
   )
 }

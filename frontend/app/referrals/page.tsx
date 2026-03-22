@@ -3,7 +3,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
-import { Header } from '@/components/layout/Header'
+import { motion } from 'framer-motion'
+import { ClientLayout } from '@/components/layout/ClientLayout'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -108,7 +109,6 @@ export default function ReferralsPage() {
     }
   }
 
-  // Commission breakdown by level
   const commissionsByLevel = useMemo(() => {
     const map = new Map<number, { count: number; total: number; rate: number }>()
     for (const c of commissions) {
@@ -121,7 +121,6 @@ export default function ReferralsPage() {
     return Array.from(map.entries()).sort((a, b) => a[0] - b[0])
   }, [commissions])
 
-  // Total stats
   const totalCommissionAmount = commissions.reduce((s, c) => s + Number(c.amount), 0)
   const earnedCount = commissions.filter((c) => c.status === 'earned' || c.status === 'paid').length
 
@@ -129,259 +128,271 @@ export default function ReferralsPage() {
     return <div className="min-h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-violet-500" /></div>
   }
 
+  const statGradients = ['stat-gradient-violet', 'stat-gradient-green', 'stat-gradient-amber', 'stat-gradient-blue', 'stat-gradient-emerald']
+
   return (
-    <div className="min-h-screen">
-      <Header />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('title')}</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('subtitle')}</p>
-          </div>
-          {services.length > 0 && (
-            <div className="w-48">
-              <Select
-                value={selectedService}
-                onChange={(e) => setSelectedService(e.target.value)}
-                options={[
-                  { value: '', label: t('allServices') },
-                  ...services.map((s) => ({ value: s.id, label: s.name })),
-                ]}
-              />
-            </div>
-          )}
+    <ClientLayout>
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">{t('title')}</h1>
+          <p className="text-sm text-slate-500 mt-1">{t('subtitle')}</p>
         </div>
-
-        {loading ? (
-          <div className="flex items-center gap-2 text-gray-500"><Loader2 className="w-5 h-5 animate-spin" /> {tc('loading')}</div>
-        ) : !affiliate ? (
-          <Card>
-            <div className="text-center py-12">
-              <GitBranch className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">{t('joinTitle')}</h3>
-              <p className="text-gray-500 dark:text-gray-400 mb-6 max-w-md mx-auto">
-                {t('joinDescription')}
-              </p>
-              <Button onClick={handleCreateAffiliate}>{t('createAffiliate')}</Button>
-            </div>
-          </Card>
-        ) : (
-          <div className="space-y-6">
-            {/* Referral Link */}
-            <Card>
-              <div className="flex items-center justify-between flex-wrap gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <LinkIcon className="w-4 h-4 text-violet-500" />
-                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('yourReferralLink')}</p>
-                  </div>
-                  <p className="text-lg font-mono text-gray-900 dark:text-white break-all">{affiliate.referralUrl}</p>
-                  <p className="text-xs text-gray-400 mt-1">{t('code', { code: affiliate.referralCode })}</p>
-                </div>
-                <Button size="sm" variant="secondary" onClick={handleCopyCode} icon={copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}>
-                  {copied ? tc('copied') : tc('copyLink')}
-                </Button>
-              </div>
-            </Card>
-
-            <Tabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
-
-            {/* Overview Tab */}
-            {activeTab === 'overview' && (
-              <div className="space-y-6">
-                {/* Stats Grid */}
-                <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-                  {[
-                    { label: t('statTotalReferrals'), value: stats?.totalReferrals || 0, icon: Users, color: 'text-violet-500' },
-                    { label: t('statTotalEarned'), value: `$${stats?.totalCommissions || '0'}`, icon: DollarSign, color: 'text-green-500' },
-                    { label: t('statPending'), value: `$${stats?.pendingCommissions || '0'}`, icon: Clock, color: 'text-yellow-500' },
-                    { label: t('statPaidOut'), value: `$${stats?.paidCommissions || '0'}`, icon: Wallet, color: 'text-blue-500' },
-                    { label: t('statCommissions'), value: earnedCount, icon: TrendingUp, color: 'text-emerald-500' },
-                  ].map((item) => {
-                    const Icon = item.icon
-                    return (
-                      <Card key={item.label}>
-                        <div className="flex items-center gap-3">
-                          <Icon className={`w-6 h-6 ${item.color}`} />
-                          <div>
-                            <p className="text-xl font-bold text-gray-900 dark:text-white">{item.value}</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">{item.label}</p>
-                          </div>
-                        </div>
-                      </Card>
-                    )
-                  })}
-                </div>
-
-                {/* Commission Breakdown by Level */}
-                {commissionsByLevel.length > 0 && (
-                  <Card>
-                    <div className="flex items-center gap-2 mb-4">
-                      <BarChart3 className="w-5 h-5 text-violet-500" />
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{t('earningsByLevel')}</h3>
-                    </div>
-                    <Table>
-                      <Thead>
-                        <tr><Th>{t('tableLevel')}</Th><Th>{t('tableRate')}</Th><Th>{t('tableCommissions')}</Th><Th>{t('tableTotalEarned')}</Th></tr>
-                      </Thead>
-                      <Tbody>
-                        {commissionsByLevel.map(([level, data]) => (
-                          <tr key={level}>
-                            <Td>
-                              <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 text-sm font-semibold">
-                                {level}
-                              </span>
-                            </Td>
-                            <Td>{(data.rate * 100).toFixed(1)}%</Td>
-                            <Td>{data.count}</Td>
-                            <Td className="font-semibold">${data.total.toFixed(2)}</Td>
-                          </tr>
-                        ))}
-                        <tr className="border-t-2 border-gray-300 dark:border-gray-600">
-                          <Td className="font-bold">{tc('total')}</Td>
-                          <Td>{' '}</Td>
-                          <Td className="font-bold">{commissions.length}</Td>
-                          <Td className="font-bold text-green-600 dark:text-green-400">${totalCommissionAmount.toFixed(2)}</Td>
-                        </tr>
-                      </Tbody>
-                    </Table>
-                  </Card>
-                )}
-
-                {/* Upcoming Payout */}
-                {stats?.upcomingPayout && (
-                  <Card variant="info">
-                    <div className="flex items-center gap-3">
-                      <Wallet className="w-6 h-6 text-blue-500" />
-                      <div>
-                        <p className="font-semibold text-gray-900 dark:text-white">{t('upcomingPayout')}</p>
-                        <p className="text-sm text-gray-500">
-                          ${stats.upcomingPayout.totalAmount} {stats.upcomingPayout.currency} -
-                          {t('payoutPeriod', { start: new Date(stats.upcomingPayout.periodStart).toLocaleDateString(), end: new Date(stats.upcomingPayout.periodEnd).toLocaleDateString() })}
-                        </p>
-                      </div>
-                      <Badge>{stats.upcomingPayout.status}</Badge>
-                    </div>
-                  </Card>
-                )}
-              </div>
-            )}
-
-            {/* Referrals Tab */}
-            {activeTab === 'referrals' && (
-              <Card>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                  {t('yourReferrals', { count: referrals.length })}
-                </h3>
-                {referrals.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Users className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-                    <p className="text-gray-500 text-sm">{t('noReferrals')}</p>
-                  </div>
-                ) : (
-                  <Table>
-                    <Thead>
-                      <tr><Th>{t('tableDate')}</Th><Th>{t('tableReferredUser')}</Th><Th>{t('tableFirstOrder')}</Th><Th>{t('tableStatus')}</Th></tr>
-                    </Thead>
-                    <Tbody>
-                      {referrals.map((ref) => (
-                        <tr key={ref.id}>
-                          <Td>{new Date(ref.createdAt).toLocaleDateString()}</Td>
-                          <Td className="font-mono text-xs">{ref.referredUserId.slice(0, 12)}...</Td>
-                          <Td>{ref.firstOrderId ? <span className="font-mono text-xs">{ref.firstOrderId.slice(0, 8)}...</span> : '-'}</Td>
-                          <Td><Badge>{ref.firstOrderPaid ? tc('status.converted') : tc('status.pending')}</Badge></Td>
-                        </tr>
-                      ))}
-                    </Tbody>
-                  </Table>
-                )}
-              </Card>
-            )}
-
-            {/* Commissions Tab */}
-            {activeTab === 'commissions' && (
-              <Card>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                  {t('commissionHistory', { count: commissions.length })}
-                </h3>
-                {commissions.length === 0 ? (
-                  <div className="text-center py-8">
-                    <DollarSign className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-                    <p className="text-gray-500 text-sm">{t('noCommissions')}</p>
-                  </div>
-                ) : (
-                  <Table>
-                    <Thead>
-                      <tr><Th>{t('tableDate')}</Th><Th>{t('tableLevel')}</Th><Th>{t('tableAmount')}</Th><Th>{t('tableRate')}</Th><Th>{t('tableOrder')}</Th><Th>{t('tableStatus')}</Th></tr>
-                    </Thead>
-                    <Tbody>
-                      {commissions.map((com) => (
-                        <tr key={com.id}>
-                          <Td>{new Date(com.createdAt).toLocaleDateString()}</Td>
-                          <Td>
-                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 text-xs font-bold">
-                              L{com.level}
-                            </span>
-                          </Td>
-                          <Td className="font-semibold text-green-600 dark:text-green-400">${com.amount} {com.currency}</Td>
-                          <Td>{(Number(com.commissionRate) * 100).toFixed(1)}%</Td>
-                          <Td className="font-mono text-xs">{com.orderId.slice(0, 8)}...</Td>
-                          <Td><Badge>{com.status}</Badge></Td>
-                        </tr>
-                      ))}
-                    </Tbody>
-                  </Table>
-                )}
-              </Card>
-            )}
-
-            {/* Payouts Tab */}
-            {activeTab === 'payouts' && (
-              <Card>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                  {t('payoutHistory', { count: payouts.length })}
-                </h3>
-                {payouts.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Wallet className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-                    <p className="text-gray-500 text-sm">{t('noPayouts')}</p>
-                  </div>
-                ) : (
-                  <Table>
-                    <Thead>
-                      <tr><Th>{t('tablePeriod')}</Th><Th>{t('tableAmount')}</Th><Th>{t('tablePayoutDate')}</Th><Th>{t('tableStatus')}</Th></tr>
-                    </Thead>
-                    <Tbody>
-                      {payouts.map((p) => (
-                        <tr key={p.id}>
-                          <Td>{new Date(p.periodStart).toLocaleDateString()} - {new Date(p.periodEnd).toLocaleDateString()}</Td>
-                          <Td className="font-semibold">${p.totalAmount} {p.currency}</Td>
-                          <Td>{p.payoutDate ? new Date(p.payoutDate).toLocaleDateString() : '-'}</Td>
-                          <Td><Badge>{p.status}</Badge></Td>
-                        </tr>
-                      ))}
-                    </Tbody>
-                  </Table>
-                )}
-              </Card>
-            )}
-
-            {/* Tree Tab */}
-            {activeTab === 'tree' && (
-              <Card>
-                <div className="flex items-center gap-2 mb-4">
-                  <GitBranch className="w-5 h-5 text-violet-500" />
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{t('referralTree')}</h3>
-                </div>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                  {t('treeDescription')}
-                </p>
-                <ReferralTree tree={tree} />
-              </Card>
-            )}
+        {services.length > 0 && (
+          <div className="w-48">
+            <Select
+              value={selectedService}
+              onChange={(e) => setSelectedService(e.target.value)}
+              options={[
+                { value: '', label: t('allServices') },
+                ...services.map((s) => ({ value: s.id, label: s.name })),
+              ]}
+            />
           </div>
         )}
-      </main>
-    </div>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center gap-2 text-slate-500"><Loader2 className="w-5 h-5 animate-spin" /> {tc('loading')}</div>
+      ) : !affiliate ? (
+        <Card>
+          <div className="text-center py-16">
+            <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-violet-100 to-purple-100 dark:from-violet-900/20 dark:to-purple-900/20 flex items-center justify-center mx-auto mb-5">
+              <GitBranch className="w-9 h-9 text-violet-500" />
+            </div>
+            <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">{t('joinTitle')}</h3>
+            <p className="text-slate-500 mb-6 max-w-sm mx-auto text-sm">
+              {t('joinDescription')}
+            </p>
+            <Button onClick={handleCreateAffiliate} size="lg">{t('createAffiliate')}</Button>
+          </div>
+        </Card>
+      ) : (
+        <div className="space-y-6">
+          {/* Referral Link */}
+          <Card>
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <LinkIcon className="w-4 h-4 text-violet-500 shrink-0" />
+                  <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">{t('yourReferralLink')}</p>
+                </div>
+                <p className="text-sm font-mono text-slate-700 dark:text-slate-200 break-all bg-slate-50 dark:bg-slate-800/50 rounded-lg px-3 py-2 border border-slate-100 dark:border-slate-800">
+                  {affiliate.referralUrl}
+                </p>
+                <p className="text-xs text-slate-400 mt-1.5">{t('code', { code: affiliate.referralCode })}</p>
+              </div>
+              <Button size="sm" variant="secondary" onClick={handleCopyCode} icon={copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}>
+                {copied ? tc('copied') : tc('copyLink')}
+              </Button>
+            </div>
+          </Card>
+
+          <Tabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
+
+          {/* Overview Tab */}
+          {activeTab === 'overview' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+                {[
+                  { label: t('statTotalReferrals'), value: stats?.totalReferrals || 0, icon: Users, color: 'text-violet-500' },
+                  { label: t('statTotalEarned'), value: `$${stats?.totalCommissions || '0'}`, icon: DollarSign, color: 'text-emerald-500' },
+                  { label: t('statPending'), value: `$${stats?.pendingCommissions || '0'}`, icon: Clock, color: 'text-amber-500' },
+                  { label: t('statPaidOut'), value: `$${stats?.paidCommissions || '0'}`, icon: Wallet, color: 'text-blue-500' },
+                  { label: t('statCommissions'), value: earnedCount, icon: TrendingUp, color: 'text-emerald-500' },
+                ].map((item, i) => {
+                  const Icon = item.icon
+                  return (
+                    <motion.div
+                      key={item.label}
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.06, duration: 0.3 }}
+                      className={`rounded-2xl border p-4 ${statGradients[i]}`}
+                    >
+                      <div className={`p-1.5 rounded-lg ${item.color} bg-white/80 dark:bg-slate-900/50 w-fit mb-2`}>
+                        <Icon className="w-4 h-4" />
+                      </div>
+                      <p className="text-xl font-bold text-slate-900 dark:text-white">{item.value}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">{item.label}</p>
+                    </motion.div>
+                  )
+                })}
+              </div>
+
+              {commissionsByLevel.length > 0 && (
+                <Card>
+                  <div className="flex items-center gap-2 mb-4">
+                    <BarChart3 className="w-5 h-5 text-violet-500" />
+                    <h3 className="font-semibold text-slate-900 dark:text-white">{t('earningsByLevel')}</h3>
+                  </div>
+                  <Table>
+                    <Thead>
+                      <tr><Th>{t('tableLevel')}</Th><Th>{t('tableRate')}</Th><Th>{t('tableCommissions')}</Th><Th>{t('tableTotalEarned')}</Th></tr>
+                    </Thead>
+                    <Tbody>
+                      {commissionsByLevel.map(([level, data]) => (
+                        <tr key={level} className="table-row-hover">
+                          <Td>
+                            <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-300 text-sm font-semibold">
+                              {level}
+                            </span>
+                          </Td>
+                          <Td>{(data.rate * 100).toFixed(1)}%</Td>
+                          <Td>{data.count}</Td>
+                          <Td className="font-semibold">${data.total.toFixed(2)}</Td>
+                        </tr>
+                      ))}
+                      <tr className="border-t-2 border-slate-200 dark:border-slate-700">
+                        <Td className="font-bold text-slate-900 dark:text-white">{tc('total')}</Td>
+                        <Td>{' '}</Td>
+                        <Td className="font-bold">{commissions.length}</Td>
+                        <Td className="font-bold text-emerald-600 dark:text-emerald-400">${totalCommissionAmount.toFixed(2)}</Td>
+                      </tr>
+                    </Tbody>
+                  </Table>
+                </Card>
+              )}
+
+              {stats?.upcomingPayout && (
+                <Card variant="info">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-xl bg-blue-100 dark:bg-blue-900/30">
+                      <Wallet className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-slate-900 dark:text-white text-sm">{t('upcomingPayout')}</p>
+                      <p className="text-xs text-slate-500">
+                        ${stats.upcomingPayout.totalAmount} {stats.upcomingPayout.currency} -
+                        {t('payoutPeriod', { start: new Date(stats.upcomingPayout.periodStart).toLocaleDateString(), end: new Date(stats.upcomingPayout.periodEnd).toLocaleDateString() })}
+                      </p>
+                    </div>
+                    <Badge>{stats.upcomingPayout.status}</Badge>
+                  </div>
+                </Card>
+              )}
+            </div>
+          )}
+
+          {/* Referrals Tab */}
+          {activeTab === 'referrals' && (
+            <Card>
+              <h3 className="font-semibold text-slate-900 dark:text-white mb-4">
+                {t('yourReferrals', { count: referrals.length })}
+              </h3>
+              {referrals.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-3">
+                    <Users className="w-6 h-6 text-slate-400" />
+                  </div>
+                  <p className="text-slate-500 text-sm">{t('noReferrals')}</p>
+                </div>
+              ) : (
+                <Table>
+                  <Thead>
+                    <tr><Th>{t('tableDate')}</Th><Th>{t('tableReferredUser')}</Th><Th>{t('tableFirstOrder')}</Th><Th>{t('tableStatus')}</Th></tr>
+                  </Thead>
+                  <Tbody>
+                    {referrals.map((ref) => (
+                      <tr key={ref.id} className="table-row-hover">
+                        <Td>{new Date(ref.createdAt).toLocaleDateString()}</Td>
+                        <Td className="font-mono text-xs">{ref.referredUserId.slice(0, 12)}...</Td>
+                        <Td>{ref.firstOrderId ? <span className="font-mono text-xs">{ref.firstOrderId.slice(0, 8)}...</span> : '-'}</Td>
+                        <Td><Badge>{ref.firstOrderPaid ? tc('status.converted') : tc('status.pending')}</Badge></Td>
+                      </tr>
+                    ))}
+                  </Tbody>
+                </Table>
+              )}
+            </Card>
+          )}
+
+          {/* Commissions Tab */}
+          {activeTab === 'commissions' && (
+            <Card>
+              <h3 className="font-semibold text-slate-900 dark:text-white mb-4">
+                {t('commissionHistory', { count: commissions.length })}
+              </h3>
+              {commissions.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-3">
+                    <DollarSign className="w-6 h-6 text-slate-400" />
+                  </div>
+                  <p className="text-slate-500 text-sm">{t('noCommissions')}</p>
+                </div>
+              ) : (
+                <Table>
+                  <Thead>
+                    <tr><Th>{t('tableDate')}</Th><Th>{t('tableLevel')}</Th><Th>{t('tableAmount')}</Th><Th>{t('tableRate')}</Th><Th>{t('tableOrder')}</Th><Th>{t('tableStatus')}</Th></tr>
+                  </Thead>
+                  <Tbody>
+                    {commissions.map((com) => (
+                      <tr key={com.id} className="table-row-hover">
+                        <Td>{new Date(com.createdAt).toLocaleDateString()}</Td>
+                        <Td>
+                          <span className="inline-flex items-center justify-center w-6 h-6 rounded-lg bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-300 text-xs font-bold">
+                            L{com.level}
+                          </span>
+                        </Td>
+                        <Td className="font-semibold text-emerald-600 dark:text-emerald-400">${com.amount} {com.currency}</Td>
+                        <Td>{(Number(com.commissionRate) * 100).toFixed(1)}%</Td>
+                        <Td className="font-mono text-xs">{com.orderId.slice(0, 8)}...</Td>
+                        <Td><Badge>{com.status}</Badge></Td>
+                      </tr>
+                    ))}
+                  </Tbody>
+                </Table>
+              )}
+            </Card>
+          )}
+
+          {/* Payouts Tab */}
+          {activeTab === 'payouts' && (
+            <Card>
+              <h3 className="font-semibold text-slate-900 dark:text-white mb-4">
+                {t('payoutHistory', { count: payouts.length })}
+              </h3>
+              {payouts.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-3">
+                    <Wallet className="w-6 h-6 text-slate-400" />
+                  </div>
+                  <p className="text-slate-500 text-sm">{t('noPayouts')}</p>
+                </div>
+              ) : (
+                <Table>
+                  <Thead>
+                    <tr><Th>{t('tablePeriod')}</Th><Th>{t('tableAmount')}</Th><Th>{t('tablePayoutDate')}</Th><Th>{t('tableStatus')}</Th></tr>
+                  </Thead>
+                  <Tbody>
+                    {payouts.map((p) => (
+                      <tr key={p.id} className="table-row-hover">
+                        <Td>{new Date(p.periodStart).toLocaleDateString()} - {new Date(p.periodEnd).toLocaleDateString()}</Td>
+                        <Td className="font-semibold">${p.totalAmount} {p.currency}</Td>
+                        <Td>{p.payoutDate ? new Date(p.payoutDate).toLocaleDateString() : '-'}</Td>
+                        <Td><Badge>{p.status}</Badge></Td>
+                      </tr>
+                    ))}
+                  </Tbody>
+                </Table>
+              )}
+            </Card>
+          )}
+
+          {/* Tree Tab */}
+          {activeTab === 'tree' && (
+            <Card>
+              <div className="flex items-center gap-2 mb-4">
+                <GitBranch className="w-5 h-5 text-violet-500" />
+                <h3 className="font-semibold text-slate-900 dark:text-white">{t('referralTree')}</h3>
+              </div>
+              <p className="text-sm text-slate-500 mb-4">
+                {t('treeDescription')}
+              </p>
+              <ReferralTree tree={tree} />
+            </Card>
+          )}
+        </div>
+      )}
+    </ClientLayout>
   )
 }

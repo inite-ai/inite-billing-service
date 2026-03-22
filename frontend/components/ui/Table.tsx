@@ -2,8 +2,8 @@
 
 export function Table({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`overflow-x-auto ${className}`}>
-      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+    <div className={`overflow-x-auto -mx-5 px-5 ${className}`}>
+      <table className="min-w-full">
         {children}
       </table>
     </div>
@@ -12,7 +12,7 @@ export function Table({ children, className = '' }: { children: React.ReactNode;
 
 export function Thead({ children }: { children: React.ReactNode }) {
   return (
-    <thead className="bg-gray-50 dark:bg-gray-800/50">
+    <thead>
       {children}
     </thead>
   )
@@ -20,7 +20,7 @@ export function Thead({ children }: { children: React.ReactNode }) {
 
 export function Tbody({ children }: { children: React.ReactNode }) {
   return (
-    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
       {children}
     </tbody>
   )
@@ -28,7 +28,7 @@ export function Tbody({ children }: { children: React.ReactNode }) {
 
 export function Th({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
-    <th className={`px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider ${className}`}>
+    <th className={`px-4 py-3 text-left text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800 ${className}`}>
       {children}
     </th>
   )
@@ -36,7 +36,7 @@ export function Th({ children, className = '' }: { children: React.ReactNode; cl
 
 export function Td({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
-    <td className={`px-4 py-3 text-sm text-gray-900 dark:text-gray-100 whitespace-nowrap ${className}`}>
+    <td className={`px-4 py-3.5 text-sm text-slate-700 dark:text-slate-300 ${className}`}>
       {children}
     </td>
   )

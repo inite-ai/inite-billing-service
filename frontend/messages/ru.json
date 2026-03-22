@@ -91,7 +91,8 @@
     "admin": "Администрирование",
     "backToDashboard": "Назад к панели управления",
     "adminPanel": "Панель администратора",
-    "signOut": "Выйти"
+    "signOut": "Выйти",
+    "menu": "Меню"
   },
   "landing": {
     "brand": "INITE",

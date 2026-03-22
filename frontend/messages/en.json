@@ -91,7 +91,8 @@
     "admin": "Admin",
     "backToDashboard": "Back to Dashboard",
     "adminPanel": "Admin Panel",
-    "signOut": "Sign Out"
+    "signOut": "Sign Out",
+    "menu": "Menu"
   },
   "landing": {
     "brand": "INITE",
