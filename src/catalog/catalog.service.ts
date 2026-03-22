@@ -6,14 +6,14 @@ import { ProductResponseDto, PriceResponseDto } from '../common/dto/catalog.dto'
 export class CatalogService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getProducts(): Promise<ProductResponseDto[]> {
+  async getProducts(serviceId?: string): Promise<ProductResponseDto[]> {
+    const where: any = { isActive: true };
+    if (serviceId) where.serviceId = serviceId;
+
     const products = await this.prisma.product.findMany({
-      where: {
-        isActive: true,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
+      where,
+      include: { prices: { where: { isActive: true } } },
+      orderBy: { createdAt: 'desc' },
     });
 
     return products.map((p) => ({
@@ -24,13 +24,12 @@ export class CatalogService {
       type: p.type,
       isActive: p.isActive,
       metadata: p.metadata as Record<string, any> | undefined,
+      prices: p.prices,
     }));
   }
 
-  async getPrices(productCode?: string): Promise<PriceResponseDto[]> {
-    const where: any = {
-      isActive: true,
-    };
+  async getPrices(productCode?: string, serviceId?: string): Promise<PriceResponseDto[]> {
+    const where: any = { isActive: true };
 
     if (productCode) {
       const product = await this.prisma.product.findUnique({
@@ -42,14 +41,14 @@ export class CatalogService {
       where.productId = product.id;
     }
 
+    if (serviceId) {
+      where.product = { ...where.product, serviceId };
+    }
+
     const prices = await this.prisma.price.findMany({
       where,
-      include: {
-        product: true,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
+      include: { product: true },
+      orderBy: { createdAt: 'desc' },
     });
 
     return prices.map((p) => ({
@@ -78,4 +77,3 @@ export class CatalogService {
     return price;
   }
 }
-
