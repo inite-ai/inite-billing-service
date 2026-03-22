@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { PaymentOrchestratorService } from './payment-orchestrator/payment-orchestrator.service';
 import { AffiliatesService } from './affiliates/affiliates.service';
@@ -12,8 +13,9 @@ import { LavaAdapter } from './adapters/lava/lava.adapter';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Security headers
+  // Security headers & cookie parsing
   app.use(helmet());
+  app.use(cookieParser());
 
   // Global validation pipe
   app.useGlobalPipes(

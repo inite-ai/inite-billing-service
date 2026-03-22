@@ -3,11 +3,22 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy, StrategyOptionsWithoutRequest } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { passportJwtSecret } from 'jwks-rsa';
+import { Request } from 'express';
 
 export interface JwtPayload {
   sub: string; // inite_user_id (uuid)
   roles?: string[];
   email?: string;
+}
+
+/** Extract JWT from Authorization header OR access_token cookie */
+function extractJwt(req: Request): string | null {
+  // Try Authorization: Bearer ... header first
+  const fromHeader = ExtractJwt.fromAuthHeaderAsBearerToken()(req);
+  if (fromHeader) return fromHeader;
+
+  // Fall back to httpOnly cookie
+  return req?.cookies?.access_token || null;
 }
 
 function buildJwtOptions(configService: ConfigService): StrategyOptionsWithoutRequest {
@@ -18,7 +29,7 @@ function buildJwtOptions(configService: ConfigService): StrategyOptionsWithoutRe
     'https://auth.inite.ai';
 
   const base = {
-    jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+    jwtFromRequest: extractJwt,
     ignoreExpiration: false,
   };
 
