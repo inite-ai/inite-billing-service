@@ -13,6 +13,9 @@ export class OrdersService {
     const where: any = { userId };
     if (status) {
       where.status = status;
+    } else {
+      // By default, exclude 'created' orders (abandoned checkout sessions)
+      where.status = { not: 'created' };
     }
 
     const orders = await this.prisma.order.findMany({

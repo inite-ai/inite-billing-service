@@ -47,7 +47,13 @@ function CallbackContent() {
         setStatus('success');
 
         setTimeout(() => {
-          router.push('/dashboard');
+          const returnTo = searchParams?.get('returnTo') || sessionStorage.getItem('returnTo');
+          if (returnTo && returnTo.startsWith('/')) {
+            sessionStorage.removeItem('returnTo');
+            router.push(returnTo);
+          } else {
+            router.push('/dashboard');
+          }
         }, 1500);
       } catch (err) {
         console.error('OAuth callback error:', err);

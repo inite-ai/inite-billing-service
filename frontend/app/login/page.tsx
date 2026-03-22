@@ -1,20 +1,26 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { LogIn, Loader2 } from 'lucide-react';
 import { OAuthClient } from '@/lib/oauth-client';
 import { useTranslations } from 'next-intl';
 
-export default function LoginPage() {
+function LoginContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const t = useTranslations('login');
+  const searchParams = useSearchParams();
+  const returnTo = searchParams?.get('returnTo');
 
   const handleLogin = async () => {
     try {
       setIsLoading(true);
       setError(null);
+      if (returnTo) {
+        sessionStorage.setItem('returnTo', returnTo);
+      }
       await OAuthClient.login();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Authentication failed');
@@ -91,5 +97,17 @@ export default function LoginPage() {
         </motion.div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex items-center justify-center">
+        <Loader2 className="w-10 h-10 text-white animate-spin" />
+      </div>
+    }>
+      <LoginContent />
+    </Suspense>
   );
 }

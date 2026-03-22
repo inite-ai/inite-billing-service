@@ -24,8 +24,12 @@ export async function middleware(request: NextRequest) {
 
   const token = await getUserToken(request);
 
-  // Redirect logged-in users from login page to dashboard
+  // Redirect logged-in users from login page to dashboard (or returnTo)
   if (pathname === '/login' && shouldRedirectFromAuth(token)) {
+    const returnTo = request.nextUrl.searchParams.get('returnTo');
+    if (returnTo && returnTo.startsWith('/')) {
+      return redirect(request, returnTo);
+    }
     const destination = getUserDestination(token!);
     return redirect(request, destination);
   }

@@ -106,7 +106,7 @@ export function checkRouteAccess(
   }
 
   if (!token) {
-    return { allowed: false, redirectTo: '/login' };
+    return { allowed: false, redirectTo: `/login?returnTo=${encodeURIComponent(pathname)}` };
   }
 
   const allowedRoles = PROTECTED_ROUTES[protectedRoute];

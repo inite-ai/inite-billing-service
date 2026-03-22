@@ -55,6 +55,26 @@ export class FunnelService {
     await this.detectAbandonedCheckouts();
     await this.processFollowUpRules();
     await this.detectChurningSubscriptions();
+    await this.cleanupStaleOrders();
+  }
+
+  /**
+   * Delete orders with status 'created' older than 24 hours that have no payment intents.
+   * These are abandoned checkout sessions that never proceeded to payment.
+   */
+  async cleanupStaleOrders(): Promise<number> {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24h ago
+    const result = await this.prisma.order.deleteMany({
+      where: {
+        status: 'created',
+        createdAt: { lt: cutoff },
+        paymentIntents: { none: {} },
+      },
+    });
+    if (result.count > 0) {
+      this.logger.log(`Cleaned up ${result.count} stale orders`);
+    }
+    return result.count;
   }
 
   /**
