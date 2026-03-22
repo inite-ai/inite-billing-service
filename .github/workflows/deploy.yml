@@ -222,6 +222,7 @@ jobs:
               - REDIS_URL=\${REDIS_URL}
               - JWT_SECRET=\${JWT_SECRET}
               - JWT_PUBLIC_KEY=\${JWT_PUBLIC_KEY}
+              - AUTH_SERVICE_URL=https://auth.inite.ai
               - CORS_ORIGINS=https://${{ env.DOMAIN }}
             networks:
               - traefik-global
