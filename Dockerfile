@@ -32,6 +32,7 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/prisma ./prisma
+COPY scripts/migrate.sh ./scripts/migrate.sh
 
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nestjs -u 1001
@@ -42,4 +43,4 @@ USER nestjs
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "npx prisma migrate resolve --applied 20260322051612_init 2>/dev/null; npx prisma migrate deploy && node dist/main"]
+CMD ["sh", "-c", "sh scripts/migrate.sh && node dist/main"]
