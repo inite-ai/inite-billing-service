@@ -835,7 +835,17 @@
     "minPersonalOrders": "Min Personal Orders",
     "minMonthlyVolume": "Min Monthly Volume ($)",
     "personalPurchaseRequired": "Personal purchase required",
-    "placeholderDirectReferral": "e.g. Direct Referral"
+    "placeholderDirectReferral": "e.g. Direct Referral",
+    "description": "Description",
+    "descriptionPlaceholder": "Short description for pricing page",
+    "highlighted": "Mark as Popular",
+    "featuresList": "Features",
+    "addFeature": "Add feature",
+    "featurePlaceholder": "e.g. Unlimited API calls",
+    "creditsPerPeriod": "Credits per period",
+    "bonusCredits": "Bonus credits (yearly)",
+    "entitlementKeys": "Entitlement keys",
+    "entitlementKeysHint": "Comma-separated keys that grant access on purchase"
   },
   "assistant": {
     "title": "AI Assistant",

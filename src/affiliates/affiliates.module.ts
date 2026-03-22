@@ -5,6 +5,7 @@ import { AffiliatesService } from './affiliates.service';
 import { ReferralLevelsService } from './referral-levels.service';
 import { AffiliatePayoutScheduler } from './affiliate-payout.scheduler';
 import { AffiliatePayoutProcessor } from './affiliate-payout.processor';
+import { CommissionSettlementScheduler } from './commission-settlement.scheduler';
 import { PrismaService } from '../common/services/prisma.service';
 import { OutboxModule } from '../outbox/outbox.module';
 
@@ -28,6 +29,7 @@ import { OutboxModule } from '../outbox/outbox.module';
     ReferralLevelsService,
     AffiliatePayoutScheduler,
     AffiliatePayoutProcessor,
+    CommissionSettlementScheduler,
     PrismaService,
   ],
   exports: [AffiliatesService, ReferralLevelsService],

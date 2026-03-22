@@ -108,6 +108,31 @@ export class AffiliatesController {
     return this.affiliatesService.getPayouts(affiliate.id);
   }
 
+  @Get('me/balance')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get available balance for withdrawal' })
+  async getMyBalance(
+    @User() user: RequestUser,
+    @Query('serviceId') serviceId?: string,
+  ) {
+    const affiliate = await this.affiliatesService.getAffiliateByUserId(user.userId, serviceId);
+    return this.affiliatesService.getBalance(affiliate.id);
+  }
+
+  @Post('me/withdraw')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Request withdrawal from affiliate balance' })
+  async requestWithdrawal(
+    @User() user: RequestUser,
+    @Body() body: { amount?: number; currency?: string },
+    @Query('serviceId') serviceId?: string,
+  ) {
+    const affiliate = await this.affiliatesService.getAffiliateByUserId(user.userId, serviceId);
+    return this.affiliatesService.requestWithdrawal(affiliate.id, body.amount, body.currency);
+  }
+
   @Get('me/tree')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)

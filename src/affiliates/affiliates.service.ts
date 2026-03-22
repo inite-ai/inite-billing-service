@@ -394,6 +394,84 @@ export class AffiliatesService {
     return true;
   }
 
+  // ─── Balance & Withdrawal ─────────────────────────────────
+
+  async getBalance(affiliateId: string) {
+    const affiliate = await this.prisma.affiliate.findUnique({
+      where: { id: affiliateId },
+      include: { service: true },
+    });
+    if (!affiliate) throw new NotFoundException(`Affiliate not found: ${affiliateId}`);
+
+    const available = Number(affiliate.totalEarned) - Number(affiliate.totalPaid);
+    const minWithdrawal = (affiliate.service?.metadata as any)?.minWithdrawalAmount
+      ? Number((affiliate.service!.metadata as any).minWithdrawalAmount)
+      : 10;
+
+    return {
+      totalEarned: affiliate.totalEarned.toString(),
+      totalPaid: affiliate.totalPaid.toString(),
+      available: available.toFixed(4),
+      canWithdraw: available >= minWithdrawal,
+      minWithdrawalAmount: minWithdrawal.toString(),
+    };
+  }
+
+  async requestWithdrawal(affiliateId: string, amount?: number, currency?: string) {
+    const affiliate = await this.prisma.affiliate.findUnique({
+      where: { id: affiliateId },
+      include: { service: true },
+    });
+    if (!affiliate) throw new NotFoundException(`Affiliate not found: ${affiliateId}`);
+    if (affiliate.status !== 'active') {
+      throw new BadRequestException('Affiliate account is not active');
+    }
+
+    const available = Number(affiliate.totalEarned) - Number(affiliate.totalPaid);
+    const minWithdrawal = (affiliate.service?.metadata as any)?.minWithdrawalAmount
+      ? Number((affiliate.service!.metadata as any).minWithdrawalAmount)
+      : 10;
+
+    const withdrawAmount = amount || available;
+    if (withdrawAmount <= 0) {
+      throw new BadRequestException('Nothing to withdraw');
+    }
+    if (withdrawAmount > available) {
+      throw new BadRequestException(`Insufficient balance. Available: ${available.toFixed(2)}`);
+    }
+    if (withdrawAmount < minWithdrawal) {
+      throw new BadRequestException(`Minimum withdrawal amount is ${minWithdrawal}`);
+    }
+
+    const pendingPayout = await this.prisma.affiliatePayout.findFirst({
+      where: { affiliateId, status: 'pending' },
+    });
+    if (pendingPayout) {
+      throw new BadRequestException('You already have a pending withdrawal request');
+    }
+
+    const now = new Date();
+    const payout = await this.prisma.affiliatePayout.create({
+      data: {
+        affiliateId,
+        periodStart: now,
+        periodEnd: now,
+        totalAmount: withdrawAmount,
+        currency: currency || 'USD',
+        status: 'pending',
+      },
+    });
+
+    await this.prisma.affiliate.update({
+      where: { id: affiliateId },
+      data: { totalPaid: { increment: withdrawAmount } },
+    });
+
+    this.logger.log(`Withdrawal request: ${payout.id}, amount: ${withdrawAmount}`);
+    return this.mapPayoutToDto(payout);
+  }
+
+
   /**
    * Process multi-level commissions when an order is paid.
    *
@@ -520,6 +598,7 @@ export class AffiliatesService {
       const commissionAmount = new Decimal(amount).mul(new Decimal(commissionRate)).toDecimalPlaces(4).toNumber();
 
       if (commissionAmount > 0) {
+        // Commission starts as 'pending' — becomes 'earned' after settlement period
         await db.affiliateCommission.create({
           data: {
             affiliateId: currentAffiliate.id,
@@ -529,20 +608,12 @@ export class AffiliatesService {
             amount: commissionAmount,
             commissionRate,
             currency,
-            status: 'earned',
-            earnedAt: new Date(),
-          },
-        });
-
-        await db.affiliate.update({
-          where: { id: currentAffiliate.id },
-          data: {
-            totalEarned: { increment: commissionAmount },
+            status: 'pending',
           },
         });
 
         this.logger.log(
-          `Created L${currentLevel} commission for affiliate ${currentAffiliate.id}, order ${orderId}: ${commissionAmount} ${currency}`,
+          `Created L${currentLevel} pending commission for affiliate ${currentAffiliate.id}, order ${orderId}: ${commissionAmount} ${currency}`,
         );
       }
 

@@ -835,7 +835,17 @@
     "minPersonalOrders": "Мин. личных заказов",
     "minMonthlyVolume": "Мин. месячный оборот ($)",
     "personalPurchaseRequired": "Требуется личная покупка",
-    "placeholderDirectReferral": "напр. Прямой реферал"
+    "placeholderDirectReferral": "напр. Прямой реферал",
+    "description": "Описание",
+    "descriptionPlaceholder": "Краткое описание для страницы тарифов",
+    "highlighted": "Отметить как популярный",
+    "featuresList": "Возможности",
+    "addFeature": "Добавить возможность",
+    "featurePlaceholder": "напр. Безлимитные API-вызовы",
+    "creditsPerPeriod": "Кредитов за период",
+    "bonusCredits": "Бонусные кредиты (за год)",
+    "entitlementKeys": "Ключи доступа",
+    "entitlementKeysHint": "Через запятую, ключи доступа при покупке"
   },
   "assistant": {
     "title": "AI-ассистент",

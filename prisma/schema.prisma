@@ -109,10 +109,11 @@ model Service {
   code      String   @unique @db.VarChar(100)
   name      String   @db.VarChar(255)
   apiKey    String   @unique @map("api_key") @db.VarChar(64)
-  isActive  Boolean  @default(true) @map("is_active")
-  metadata  Json?    @default("{}")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  isActive            Boolean  @default(true) @map("is_active")
+  minWithdrawalAmount Decimal? @map("min_withdrawal_amount") @db.Decimal(19, 4)
+  metadata            Json?    @default("{}")
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   products       Product[]
   referralLevels ReferralLevel[]
