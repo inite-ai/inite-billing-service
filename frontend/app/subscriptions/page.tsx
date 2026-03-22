@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Tabs } from '@/components/ui/Tabs'
 import { useAuth } from '@/contexts/AuthContext'
 import { CreditCard, Calendar, Clock, DollarSign, AlertTriangle, Loader2 } from 'lucide-react'
@@ -33,6 +34,13 @@ export default function SubscriptionsPage() {
   const [statusFilter, setStatusFilter] = useState('')
   const [selectedSub, setSelectedSub] = useState<Subscription | null>(null)
   const [loading, setLoading] = useState(true)
+  const [confirmState, setConfirmState] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    onConfirm: () => Promise<void>
+    variant?: 'danger' | 'default'
+  } | null>(null)
 
   useEffect(() => {
     if (authLoading) return
@@ -42,6 +50,9 @@ export default function SubscriptionsPage() {
       try {
         const res = await api.get('/v1/subscriptions/me')
         setSubscriptions(res.data)
+      } catch (e: unknown) {
+        const err = e as { response?: { data?: { message?: string } } }
+        toast.error(err.response?.data?.message || 'Failed to load subscriptions')
       } finally {
         setLoading(false)
       }
@@ -53,18 +64,27 @@ export default function SubscriptionsPage() {
     return <div className="min-h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-violet-500" /></div>
   }
 
-  const handleCancel = async (id: string) => {
-    if (!confirm(t('confirmCancel'))) return
-    try {
-      await api.post('/v1/subscriptions/cancel', { subscriptionId: id })
-      setSubscriptions((prev) =>
-        prev.map((s) => (s.id === id ? { ...s, status: 'canceled' as const, cancelAtPeriodEnd: true } : s))
-      )
-      setSelectedSub(null)
-      toast.success(t('cancelSuccess'))
-    } catch {
-      toast.error(t('cancelError'))
-    }
+  const handleCancel = (id: string) => {
+    setConfirmState({
+      isOpen: true,
+      title: t('confirmCancel'),
+      message: t('confirmCancel'),
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await api.post('/v1/subscriptions/cancel', { subscriptionId: id })
+          setSubscriptions((prev) =>
+            prev.map((s) => (s.id === id ? { ...s, status: 'canceled' as const, cancelAtPeriodEnd: true } : s))
+          )
+          setSelectedSub(null)
+          toast.success(t('cancelSuccess'))
+        } catch (e: unknown) {
+          const err = e as { response?: { data?: { message?: string } } }
+          toast.error(err.response?.data?.message || t('cancelError'))
+          throw e
+        }
+      },
+    })
   }
 
   const filtered = statusFilter
@@ -246,6 +266,17 @@ export default function SubscriptionsPage() {
           </div>
         )}
       </Modal>
+
+      {confirmState && (
+        <ConfirmDialog
+          isOpen={confirmState.isOpen}
+          onClose={() => setConfirmState(null)}
+          onConfirm={confirmState.onConfirm}
+          title={confirmState.title}
+          message={confirmState.message}
+          variant={confirmState.variant}
+        />
+      )}
     </ClientLayout>
   )
 }

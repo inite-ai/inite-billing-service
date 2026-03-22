@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
@@ -217,6 +218,13 @@ export default function AdminPromoCodesPage() {
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState<PromoCode | undefined>()
   const [loading, setLoading] = useState(true)
+  const [confirmState, setConfirmState] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    onConfirm: () => Promise<void>
+    variant?: 'danger' | 'default'
+  } | null>(null)
 
   const load = async () => {
     try {
@@ -226,6 +234,9 @@ export default function AdminPromoCodesPage() {
       ])
       setPromoCodes(promoRes.data)
       setServices(servicesRes.data)
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } }
+      toast.error(err.response?.data?.message || 'Failed to load promo codes')
     } finally {
       setLoading(false)
     }
@@ -285,21 +296,34 @@ export default function AdminPromoCodesPage() {
   }
 
   const handleToggleActive = async (id: string, isActive: boolean) => {
-    await api.put(`/v1/admin/promo-codes/${id}`, { isActive: !isActive })
-    toast.success(isActive ? t('promoCodes.deactivated') : t('promoCodes.activated'))
-    load()
-  }
-
-  const handleDelete = async (id: string) => {
-    if (!confirm(t('promoCodes.deleteConfirm'))) return
     try {
-      await api.delete(`/v1/admin/promo-codes/${id}`)
-      toast.success(t('promoCodes.deleted'))
+      await api.put(`/v1/admin/promo-codes/${id}`, { isActive: !isActive })
+      toast.success(isActive ? t('promoCodes.deactivated') : t('promoCodes.activated'))
       load()
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } }
-      toast.error(err.response?.data?.message || t('promoCodes.deleteError'))
+      toast.error(err.response?.data?.message || 'Failed to toggle promo code status')
     }
+  }
+
+  const handleDelete = (id: string) => {
+    setConfirmState({
+      isOpen: true,
+      title: t('promoCodes.deleteConfirm'),
+      message: t('promoCodes.deleteConfirm'),
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await api.delete(`/v1/admin/promo-codes/${id}`)
+          toast.success(t('promoCodes.deleted'))
+          load()
+        } catch (e: unknown) {
+          const err = e as { response?: { data?: { message?: string } } }
+          toast.error(err.response?.data?.message || t('promoCodes.deleteError'))
+          throw e
+        }
+      },
+    })
   }
 
   const formatDiscount = (promo: PromoCode) => {
@@ -421,6 +445,17 @@ export default function AdminPromoCodesPage() {
           tf={tf}
         />
       </Modal>
+
+      {confirmState && (
+        <ConfirmDialog
+          isOpen={confirmState.isOpen}
+          onClose={() => setConfirmState(null)}
+          onConfirm={confirmState.onConfirm}
+          title={confirmState.title}
+          message={confirmState.message}
+          variant={confirmState.variant}
+        />
+      )}
     </div>
   )
 }

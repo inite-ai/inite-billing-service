@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
 import { Pagination } from '@/components/ui/Pagination'
 import { Tabs } from '@/components/ui/Tabs'
@@ -33,15 +34,28 @@ export default function AdminEntitlementsPage() {
   const [userSearch, setUserSearch] = useState('')
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
+  const [confirmState, setConfirmState] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    onConfirm: () => Promise<void>
+    variant?: 'danger' | 'default'
+  } | null>(null)
 
   const load = async () => {
     setLoading(true)
-    const params: Record<string, string | number> = { page, limit: 20 }
-    if (statusFilter) params.status = statusFilter
-    if (userSearch.trim()) params.userId = userSearch.trim()
-    const res = await api.get('/v1/admin/entitlements', { params })
-    setData(res.data)
-    setLoading(false)
+    try {
+      const params: Record<string, string | number> = { page, limit: 20 }
+      if (statusFilter) params.status = statusFilter
+      if (userSearch.trim()) params.userId = userSearch.trim()
+      const res = await api.get('/v1/admin/entitlements', { params })
+      setData(res.data)
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } }
+      toast.error(err.response?.data?.message || 'Failed to load entitlements')
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { load() }, [page, statusFilter])
@@ -55,11 +69,24 @@ export default function AdminEntitlementsPage() {
     load()
   }
 
-  const handleRevoke = async (id: string) => {
-    if (!confirm(t('entitlements.revokeConfirm'))) return
-    await api.post(`/v1/admin/entitlements/${id}/revoke`)
-    toast.success(t('entitlements.revokedSuccess'))
-    load()
+  const handleRevoke = (id: string) => {
+    setConfirmState({
+      isOpen: true,
+      title: t('entitlements.revokeConfirm'),
+      message: t('entitlements.revokeConfirm'),
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await api.post(`/v1/admin/entitlements/${id}/revoke`)
+          toast.success(t('entitlements.revokedSuccess'))
+          load()
+        } catch (e: unknown) {
+          const err = e as { response?: { data?: { message?: string } } }
+          toast.error(err.response?.data?.message || 'Failed to revoke entitlement')
+          throw e
+        }
+      },
+    })
   }
 
   return (
@@ -119,6 +146,17 @@ export default function AdminEntitlementsPage() {
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={t('entitlements.createTitle')}>
         <EntitlementForm onSubmit={handleCreate} onCancel={() => setShowModal(false)} />
       </Modal>
+
+      {confirmState && (
+        <ConfirmDialog
+          isOpen={confirmState.isOpen}
+          onClose={() => setConfirmState(null)}
+          onConfirm={confirmState.onConfirm}
+          title={confirmState.title}
+          message={confirmState.message}
+          variant={confirmState.variant}
+        />
+      )}
     </div>
   )
 }

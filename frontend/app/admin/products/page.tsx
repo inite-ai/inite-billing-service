@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Select } from '@/components/ui/Select'
 import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
 import { ProductForm } from '@/components/admin/ProductForm'
@@ -23,17 +24,30 @@ export default function AdminProductsPage() {
   const [filterService, setFilterService] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [confirmState, setConfirmState] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    onConfirm: () => Promise<void>
+    variant?: 'danger' | 'default'
+  } | null>(null)
 
   const load = async () => {
-    const params: Record<string, string> = {}
-    if (filterService) params.serviceId = filterService
-    const [prodRes, svcRes] = await Promise.all([
-      api.get('/v1/admin/products', { params }),
-      api.get('/v1/admin/services').catch(() => ({ data: [] })),
-    ])
-    setProducts(prodRes.data)
-    setServices(svcRes.data)
-    setLoading(false)
+    try {
+      const params: Record<string, string> = {}
+      if (filterService) params.serviceId = filterService
+      const [prodRes, svcRes] = await Promise.all([
+        api.get('/v1/admin/products', { params }),
+        api.get('/v1/admin/services').catch(() => ({ data: [] })),
+      ])
+      setProducts(prodRes.data)
+      setServices(svcRes.data)
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } }
+      toast.error(err.response?.data?.message || 'Failed to load products')
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { load() }, [filterService])
@@ -46,20 +60,34 @@ export default function AdminProductsPage() {
   }
 
   const handleToggleActive = async (id: string, isActive: boolean) => {
-    await api.put(`/v1/admin/products/${id}`, { isActive: !isActive })
-    toast.success(isActive ? t('products.deactivated') : t('products.activated'))
-    load()
+    try {
+      await api.put(`/v1/admin/products/${id}`, { isActive: !isActive })
+      toast.success(isActive ? t('products.deactivated') : t('products.activated'))
+      load()
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } }
+      toast.error(err.response?.data?.message || 'Failed to toggle product status')
+    }
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm(t('products.deleteConfirm'))) return
-    try {
-      await api.delete(`/v1/admin/products/${id}`)
-      toast.success(t('products.deleted'))
-      load()
-    } catch (e: any) {
-      toast.error(e.response?.data?.message || t('products.deleteError'))
-    }
+  const handleDelete = (id: string) => {
+    setConfirmState({
+      isOpen: true,
+      title: t('products.deleteConfirm'),
+      message: t('products.deleteConfirm'),
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await api.delete(`/v1/admin/products/${id}`)
+          toast.success(t('products.deleted'))
+          load()
+        } catch (e: unknown) {
+          const err = e as { response?: { data?: { message?: string } } }
+          toast.error(err.response?.data?.message || t('products.deleteError'))
+          throw e
+        }
+      },
+    })
   }
 
   return (
@@ -126,6 +154,17 @@ export default function AdminProductsPage() {
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={t('products.createTitle')}>
         <ProductForm services={services} onSubmit={handleCreate} onCancel={() => setShowModal(false)} />
       </Modal>
+
+      {confirmState && (
+        <ConfirmDialog
+          isOpen={confirmState.isOpen}
+          onClose={() => setConfirmState(null)}
+          onConfirm={confirmState.onConfirm}
+          title={confirmState.title}
+          message={confirmState.message}
+          variant={confirmState.variant}
+        />
+      )}
     </div>
   )
 }

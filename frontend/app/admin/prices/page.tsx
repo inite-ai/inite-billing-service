@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
 import { PriceForm } from '@/components/admin/PriceForm'
 import { Plus, Trash2 } from 'lucide-react'
@@ -21,15 +22,28 @@ export default function AdminPricesPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [showModal, setShowModal] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [confirmState, setConfirmState] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    onConfirm: () => Promise<void>
+    variant?: 'danger' | 'default'
+  } | null>(null)
 
   const load = async () => {
-    const [priceRes, prodRes] = await Promise.all([
-      api.get('/v1/admin/prices'),
-      api.get('/v1/admin/products'),
-    ])
-    setPrices(priceRes.data)
-    setProducts(prodRes.data)
-    setLoading(false)
+    try {
+      const [priceRes, prodRes] = await Promise.all([
+        api.get('/v1/admin/prices'),
+        api.get('/v1/admin/products'),
+      ])
+      setPrices(priceRes.data)
+      setProducts(prodRes.data)
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } }
+      toast.error(err.response?.data?.message || 'Failed to load prices')
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { load() }, [])
@@ -41,11 +55,24 @@ export default function AdminPricesPage() {
     load()
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm(t('prices.deleteConfirm'))) return
-    await api.delete(`/v1/admin/prices/${id}`)
-    toast.success(t('prices.deleted'))
-    load()
+  const handleDelete = (id: string) => {
+    setConfirmState({
+      isOpen: true,
+      title: t('prices.deleteConfirm'),
+      message: t('prices.deleteConfirm'),
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await api.delete(`/v1/admin/prices/${id}`)
+          toast.success(t('prices.deleted'))
+          load()
+        } catch (e: unknown) {
+          const err = e as { response?: { data?: { message?: string } } }
+          toast.error(err.response?.data?.message || 'Failed to delete price')
+          throw e
+        }
+      },
+    })
   }
 
   return (
@@ -80,6 +107,17 @@ export default function AdminPricesPage() {
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={t('prices.createTitle')}>
         <PriceForm products={products} onSubmit={handleCreate} onCancel={() => setShowModal(false)} />
       </Modal>
+
+      {confirmState && (
+        <ConfirmDialog
+          isOpen={confirmState.isOpen}
+          onClose={() => setConfirmState(null)}
+          onConfirm={confirmState.onConfirm}
+          title={confirmState.title}
+          message={confirmState.message}
+          variant={confirmState.variant}
+        />
+      )}
     </div>
   )
 }

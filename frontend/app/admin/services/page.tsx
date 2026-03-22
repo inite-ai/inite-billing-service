@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
 import { ServiceForm } from '@/components/admin/ServiceForm'
 import { Plus, Pencil, Trash2, Eye, EyeOff, Server, Loader2, Copy, RefreshCw, Check, Power, PowerOff } from 'lucide-react'
@@ -86,11 +87,21 @@ export default function AdminServicesPage() {
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState<Service | undefined>()
   const [loading, setLoading] = useState(true)
+  const [confirmState, setConfirmState] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    onConfirm: () => Promise<void>
+    variant?: 'danger' | 'default'
+  } | null>(null)
 
   const load = async () => {
     try {
       const res = await api.get('/v1/admin/services')
       setServices(res.data)
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } }
+      toast.error(err.response?.data?.message || 'Failed to load services')
     } finally {
       setLoading(false)
     }
@@ -115,27 +126,54 @@ export default function AdminServicesPage() {
   }
 
   const handleToggleActive = async (id: string, isActive: boolean) => {
-    await api.put(`/v1/admin/services/${id}`, { isActive: !isActive })
-    toast.success(isActive ? t('services.deactivated') : t('services.activated'))
-    load()
-  }
-
-  const handleRegenerateKey = async (id: string) => {
-    if (!confirm(t('services.regenerateConfirm'))) return
-    await api.post(`/v1/admin/services/${id}/regenerate-key`)
-    toast.success(t('services.keyRegenerated'))
-    load()
-  }
-
-  const handleDelete = async (id: string) => {
-    if (!confirm(t('services.deleteConfirm'))) return
     try {
-      await api.delete(`/v1/admin/services/${id}`)
-      toast.success(t('services.deleted'))
+      await api.put(`/v1/admin/services/${id}`, { isActive: !isActive })
+      toast.success(isActive ? t('services.deactivated') : t('services.activated'))
       load()
-    } catch (e: any) {
-      toast.error(e.response?.data?.message || t('services.deleteError'))
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } }
+      toast.error(err.response?.data?.message || 'Failed to toggle service status')
     }
+  }
+
+  const handleRegenerateKey = (id: string) => {
+    setConfirmState({
+      isOpen: true,
+      title: t('services.regenerateConfirm'),
+      message: t('services.regenerateConfirm'),
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await api.post(`/v1/admin/services/${id}/regenerate-key`)
+          toast.success(t('services.keyRegenerated'))
+          load()
+        } catch (e: unknown) {
+          const err = e as { response?: { data?: { message?: string } } }
+          toast.error(err.response?.data?.message || 'Failed to regenerate key')
+          throw e
+        }
+      },
+    })
+  }
+
+  const handleDelete = (id: string) => {
+    setConfirmState({
+      isOpen: true,
+      title: t('services.deleteConfirm'),
+      message: t('services.deleteConfirm'),
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await api.delete(`/v1/admin/services/${id}`)
+          toast.success(t('services.deleted'))
+          load()
+        } catch (e: unknown) {
+          const err = e as { response?: { data?: { message?: string } } }
+          toast.error(err.response?.data?.message || t('services.deleteError'))
+          throw e
+        }
+      },
+    })
   }
 
   return (
@@ -195,6 +233,17 @@ export default function AdminServicesPage() {
       <Modal isOpen={showModal} onClose={() => { setShowModal(false); setEditing(undefined) }} title={editing ? t('services.editTitle') : t('services.createTitle')}>
         <ServiceForm initial={editing} onSubmit={editing ? handleUpdate : handleCreate} onCancel={() => { setShowModal(false); setEditing(undefined) }} />
       </Modal>
+
+      {confirmState && (
+        <ConfirmDialog
+          isOpen={confirmState.isOpen}
+          onClose={() => setConfirmState(null)}
+          onConfirm={confirmState.onConfirm}
+          title={confirmState.title}
+          message={confirmState.message}
+          variant={confirmState.variant}
+        />
+      )}
     </div>
   )
 }

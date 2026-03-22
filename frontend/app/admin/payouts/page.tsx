@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
 import { Pagination } from '@/components/ui/Pagination'
 import api from '@/lib/api'
@@ -18,29 +19,60 @@ export default function AdminPayoutsPage() {
   const [data, setData] = useState<PaginatedResponse<Payout & { affiliate?: { referralCode: string } }> | null>(null)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
+  const [confirmState, setConfirmState] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    onConfirm: () => Promise<void>
+    variant?: 'danger' | 'default'
+  } | null>(null)
 
   const load = async () => {
     setLoading(true)
-    const res = await api.get('/v1/admin/payouts', { params: { page, limit: 20 } })
-    setData(res.data)
-    setLoading(false)
+    try {
+      const res = await api.get('/v1/admin/payouts', { params: { page, limit: 20 } })
+      setData(res.data)
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } }
+      toast.error(err.response?.data?.message || 'Failed to load payouts')
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { load() }, [page])
 
-  const handleProcess = async (id: string) => {
-    if (!confirm(t('payouts.processConfirm'))) return
-    await api.post(`/v1/admin/payouts/${id}/process`)
-    toast.success(t('payouts.processed'))
-    load()
+  const handleProcess = (id: string) => {
+    setConfirmState({
+      isOpen: true,
+      title: t('payouts.processConfirm'),
+      message: t('payouts.processConfirm'),
+      variant: 'default',
+      onConfirm: async () => {
+        try {
+          await api.post(`/v1/admin/payouts/${id}/process`)
+          toast.success(t('payouts.processed'))
+          load()
+        } catch (e: unknown) {
+          const err = e as { response?: { data?: { message?: string } } }
+          toast.error(err.response?.data?.message || 'Failed to process payout')
+          throw e
+        }
+      },
+    })
   }
 
   const handleFail = async (id: string) => {
     const reason = prompt(t('payouts.failReason'))
     if (reason === null) return
-    await api.post(`/v1/admin/payouts/${id}/fail`, { reason })
-    toast.success(t('payouts.markedFailed'))
-    load()
+    try {
+      await api.post(`/v1/admin/payouts/${id}/fail`, { reason })
+      toast.success(t('payouts.markedFailed'))
+      load()
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } }
+      toast.error(err.response?.data?.message || 'Failed to mark payout as failed')
+    }
   }
 
   return (
@@ -76,6 +108,17 @@ export default function AdminPayoutsPage() {
           </>
         )}
       </Card>
+
+      {confirmState && (
+        <ConfirmDialog
+          isOpen={confirmState.isOpen}
+          onClose={() => setConfirmState(null)}
+          onConfirm={confirmState.onConfirm}
+          title={confirmState.title}
+          message={confirmState.message}
+          variant={confirmState.variant}
+        />
+      )}
     </div>
   )
 }

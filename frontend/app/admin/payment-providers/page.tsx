@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
 import { Plus, Pencil, Trash2, Eye, EyeOff, Plug, Loader2, Globe, CreditCard, Zap } from 'lucide-react'
 import api from '@/lib/api'
@@ -37,11 +38,21 @@ export default function AdminPaymentProvidersPage() {
   const [formApiKey, setFormApiKey] = useState('')
   const [formApiSecret, setFormApiSecret] = useState('')
   const [saving, setSaving] = useState(false)
+  const [confirmState, setConfirmState] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    onConfirm: () => Promise<void>
+    variant?: 'danger' | 'default'
+  } | null>(null)
 
   const load = async () => {
     try {
       const res = await api.get('/v1/admin/payment-providers')
       setProviders(res.data)
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } }
+      toast.error(err.response?.data?.message || 'Failed to load payment providers')
     } finally {
       setLoading(false)
     }
@@ -82,16 +93,34 @@ export default function AdminPaymentProvidersPage() {
   }
 
   const handleToggleActive = async (id: string, isActive: boolean) => {
-    await api.put(`/v1/admin/payment-providers/${id}`, { isActive: !isActive })
-    toast.success(isActive ? t('providers.deactivated') : t('providers.activated'))
-    load()
+    try {
+      await api.put(`/v1/admin/payment-providers/${id}`, { isActive: !isActive })
+      toast.success(isActive ? t('providers.deactivated') : t('providers.activated'))
+      load()
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } }
+      toast.error(err.response?.data?.message || 'Failed to toggle provider status')
+    }
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm(t('providers.deleteConfirm'))) return
-    await api.delete(`/v1/admin/payment-providers/${id}`)
-    toast.success(t('providers.deleted'))
-    load()
+  const handleDelete = (id: string) => {
+    setConfirmState({
+      isOpen: true,
+      title: t('providers.deleteConfirm'),
+      message: t('providers.deleteConfirm'),
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await api.delete(`/v1/admin/payment-providers/${id}`)
+          toast.success(t('providers.deleted'))
+          load()
+        } catch (e: unknown) {
+          const err = e as { response?: { data?: { message?: string } } }
+          toast.error(err.response?.data?.message || 'Failed to delete payment provider')
+          throw e
+        }
+      },
+    })
   }
 
   const handleUpdateConfig = async () => {
@@ -110,6 +139,9 @@ export default function AdminPaymentProvidersPage() {
       setEditing(null)
       resetForm()
       load()
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } }
+      toast.error(err.response?.data?.message || 'Failed to update provider')
     } finally {
       setSaving(false)
     }
@@ -268,6 +300,17 @@ export default function AdminPaymentProvidersPage() {
           </div>
         </div>
       </Modal>
+
+      {confirmState && (
+        <ConfirmDialog
+          isOpen={confirmState.isOpen}
+          onClose={() => setConfirmState(null)}
+          onConfirm={confirmState.onConfirm}
+          title={confirmState.title}
+          message={confirmState.message}
+          variant={confirmState.variant}
+        />
+      )}
     </div>
   )
 }

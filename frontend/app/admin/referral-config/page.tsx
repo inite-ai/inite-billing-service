@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Select } from '@/components/ui/Select'
 import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
 import { ReferralLevelConfig } from '@/components/referrals/ReferralLevelConfig'
@@ -37,17 +38,30 @@ export default function AdminReferralConfigPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editRate, setEditRate] = useState('')
   const [editName, setEditName] = useState('')
+  const [confirmState, setConfirmState] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    onConfirm: () => Promise<void>
+    variant?: 'danger' | 'default'
+  } | null>(null)
 
   const load = async () => {
-    const params: Record<string, string> = {}
-    if (filterService) params.serviceId = filterService
-    const [levelsRes, svcRes] = await Promise.all([
-      api.get('/v1/admin/referral-levels', { params }),
-      api.get('/v1/admin/services').catch(() => ({ data: [] })),
-    ])
-    setLevels(levelsRes.data)
-    setServices(svcRes.data)
-    setLoading(false)
+    try {
+      const params: Record<string, string> = {}
+      if (filterService) params.serviceId = filterService
+      const [levelsRes, svcRes] = await Promise.all([
+        api.get('/v1/admin/referral-levels', { params }),
+        api.get('/v1/admin/services').catch(() => ({ data: [] })),
+      ])
+      setLevels(levelsRes.data)
+      setServices(svcRes.data)
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } }
+      toast.error(err.response?.data?.message || 'Failed to load referral levels')
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { load() }, [filterService])
@@ -64,25 +78,34 @@ export default function AdminReferralConfigPage() {
 
   const [templateServiceId, setTemplateServiceId] = useState('')
 
-  const handleApplyTemplate = async (templateKey: string) => {
+  const handleApplyTemplate = (templateKey: string) => {
     const targetServiceId = templateServiceId || filterService
     if (!targetServiceId) {
       toast.error(t('referralConfig.templateSelectServiceError'))
       return
     }
-    if (!confirm(t('referralConfig.applyConfirm'))) return
-    try {
-      await api.post('/v1/admin/referral-templates/apply', {
-        serviceId: targetServiceId,
-        templateKey,
-      })
-      toast.success(t('referralConfig.templateApplied'))
-      setShowTemplates(false)
-      setFilterService(targetServiceId)
-      load()
-    } catch (e: any) {
-      toast.error(e.response?.data?.message || t('referralConfig.templateApplyError'))
-    }
+    setConfirmState({
+      isOpen: true,
+      title: t('referralConfig.applyConfirm'),
+      message: t('referralConfig.applyConfirm'),
+      variant: 'default',
+      onConfirm: async () => {
+        try {
+          await api.post('/v1/admin/referral-templates/apply', {
+            serviceId: targetServiceId,
+            templateKey,
+          })
+          toast.success(t('referralConfig.templateApplied'))
+          setShowTemplates(false)
+          setFilterService(targetServiceId)
+          load()
+        } catch (e: unknown) {
+          const err = e as { response?: { data?: { message?: string } } }
+          toast.error(err.response?.data?.message || t('referralConfig.templateApplyError'))
+          throw e
+        }
+      },
+    })
   }
 
   const handleCreate = async (data: { serviceId: string; level: number; commissionRate: number; name: string }) => {
@@ -92,15 +115,24 @@ export default function AdminReferralConfigPage() {
     load()
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm(t('referralConfig.deleteConfirm'))) return
-    try {
-      await api.delete(`/v1/admin/referral-levels/${id}`)
-      toast.success(t('referralConfig.levelDeleted'))
-      load()
-    } catch (e: any) {
-      toast.error(e.response?.data?.message || t('referralConfig.levelDeleteError'))
-    }
+  const handleDelete = (id: string) => {
+    setConfirmState({
+      isOpen: true,
+      title: t('referralConfig.deleteConfirm'),
+      message: t('referralConfig.deleteConfirm'),
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await api.delete(`/v1/admin/referral-levels/${id}`)
+          toast.success(t('referralConfig.levelDeleted'))
+          load()
+        } catch (e: unknown) {
+          const err = e as { response?: { data?: { message?: string } } }
+          toast.error(err.response?.data?.message || t('referralConfig.levelDeleteError'))
+          throw e
+        }
+      },
+    })
   }
 
   const startEdit = (level: ReferralLevel) => {
@@ -300,6 +332,17 @@ export default function AdminReferralConfigPage() {
           })}
         </div>
       </Modal>
+
+      {confirmState && (
+        <ConfirmDialog
+          isOpen={confirmState.isOpen}
+          onClose={() => setConfirmState(null)}
+          onConfirm={confirmState.onConfirm}
+          title={confirmState.title}
+          message={confirmState.message}
+          variant={confirmState.variant}
+        />
+      )}
     </div>
   )
 }

@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
 import { Pagination } from '@/components/ui/Pagination'
 import { Tabs } from '@/components/ui/Tabs'
@@ -34,15 +35,28 @@ export default function AdminOrdersPage() {
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Order | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
+  const [confirmState, setConfirmState] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    onConfirm: () => Promise<void>
+    variant?: 'danger' | 'default'
+  } | null>(null)
 
   const load = async () => {
     setLoading(true)
-    const params: Record<string, string | number> = { page, limit: 20 }
-    if (statusFilter) params.status = statusFilter
-    if (userSearch.trim()) params.userId = userSearch.trim()
-    const res = await api.get('/v1/admin/orders', { params })
-    setData(res.data)
-    setLoading(false)
+    try {
+      const params: Record<string, string | number> = { page, limit: 20 }
+      if (statusFilter) params.status = statusFilter
+      if (userSearch.trim()) params.userId = userSearch.trim()
+      const res = await api.get('/v1/admin/orders', { params })
+      setData(res.data)
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } }
+      toast.error(err.response?.data?.message || 'Failed to load orders')
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { load() }, [statusFilter, page])
@@ -61,16 +75,25 @@ export default function AdminOrdersPage() {
     }
   }
 
-  const handleRefund = async (id: string) => {
-    if (!confirm(t('orders.refundConfirm'))) return
-    try {
-      await api.post(`/v1/admin/orders/${id}/refund`)
-      toast.success(t('orders.refunded'))
-      setSelected(null)
-      load()
-    } catch {
-      toast.error(t('orders.refundError'))
-    }
+  const handleRefund = (id: string) => {
+    setConfirmState({
+      isOpen: true,
+      title: t('orders.refundConfirm'),
+      message: t('orders.refundConfirm'),
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await api.post(`/v1/admin/orders/${id}/refund`)
+          toast.success(t('orders.refunded'))
+          setSelected(null)
+          load()
+        } catch (e: unknown) {
+          const err = e as { response?: { data?: { message?: string } } }
+          toast.error(err.response?.data?.message || t('orders.refundError'))
+          throw e
+        }
+      },
+    })
   }
 
   return (
@@ -185,6 +208,17 @@ export default function AdminOrdersPage() {
           </div>
         )}
       </Modal>
+
+      {confirmState && (
+        <ConfirmDialog
+          isOpen={confirmState.isOpen}
+          onClose={() => setConfirmState(null)}
+          onConfirm={confirmState.onConfirm}
+          title={confirmState.title}
+          message={confirmState.message}
+          variant={confirmState.variant}
+        />
+      )}
     </div>
   )
 }

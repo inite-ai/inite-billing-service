@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
 import { Pagination } from '@/components/ui/Pagination'
 import { Tabs } from '@/components/ui/Tabs'
@@ -33,31 +34,53 @@ export default function AdminSubscriptionsPage() {
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Subscription | null>(null)
+  const [confirmState, setConfirmState] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    onConfirm: () => Promise<void>
+    variant?: 'danger' | 'default'
+  } | null>(null)
 
   const load = async () => {
     setLoading(true)
-    const params: Record<string, string | number> = { page, limit: 20 }
-    if (statusFilter) params.status = statusFilter
-    if (userSearch.trim()) params.userId = userSearch.trim()
-    const res = await api.get('/v1/admin/subscriptions', { params })
-    setData(res.data)
-    setLoading(false)
+    try {
+      const params: Record<string, string | number> = { page, limit: 20 }
+      if (statusFilter) params.status = statusFilter
+      if (userSearch.trim()) params.userId = userSearch.trim()
+      const res = await api.get('/v1/admin/subscriptions', { params })
+      setData(res.data)
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } }
+      toast.error(err.response?.data?.message || 'Failed to load subscriptions')
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { load() }, [statusFilter, page])
 
   const handleSearch = () => { setPage(1); load() }
 
-  const handleCancel = async (id: string) => {
-    if (!confirm(t('subscriptions.forceCancelConfirm'))) return
-    try {
-      await api.post(`/v1/admin/subscriptions/${id}/cancel`)
-      toast.success(t('subscriptions.canceled'))
-      setSelected(null)
-      load()
-    } catch {
-      toast.error(t('subscriptions.cancelError'))
-    }
+  const handleCancel = (id: string) => {
+    setConfirmState({
+      isOpen: true,
+      title: t('subscriptions.forceCancelConfirm'),
+      message: t('subscriptions.forceCancelConfirm'),
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await api.post(`/v1/admin/subscriptions/${id}/cancel`)
+          toast.success(t('subscriptions.canceled'))
+          setSelected(null)
+          load()
+        } catch (e: unknown) {
+          const err = e as { response?: { data?: { message?: string } } }
+          toast.error(err.response?.data?.message || t('subscriptions.cancelError'))
+          throw e
+        }
+      },
+    })
   }
 
   const daysUntil = (date: string) => Math.max(0, Math.ceil((new Date(date).getTime() - Date.now()) / 86400000))
@@ -146,6 +169,17 @@ export default function AdminSubscriptionsPage() {
           </div>
         )}
       </Modal>
+
+      {confirmState && (
+        <ConfirmDialog
+          isOpen={confirmState.isOpen}
+          onClose={() => setConfirmState(null)}
+          onConfirm={confirmState.onConfirm}
+          title={confirmState.title}
+          message={confirmState.message}
+          variant={confirmState.variant}
+        />
+      )}
     </div>
   )
 }
