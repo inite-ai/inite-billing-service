@@ -62,19 +62,23 @@ export default function AdminReferralConfigPage() {
     }
   }
 
+  const [templateServiceId, setTemplateServiceId] = useState('')
+
   const handleApplyTemplate = async (templateKey: string) => {
-    if (!filterService) {
+    const targetServiceId = templateServiceId || filterService
+    if (!targetServiceId) {
       toast.error(t('referralConfig.templateSelectServiceError'))
       return
     }
     if (!confirm(t('referralConfig.applyConfirm'))) return
     try {
       await api.post('/v1/admin/referral-templates/apply', {
-        serviceId: filterService,
+        serviceId: targetServiceId,
         templateKey,
       })
       toast.success(t('referralConfig.templateApplied'))
       setShowTemplates(false)
+      setFilterService(targetServiceId)
       load()
     } catch (e: any) {
       toast.error(e.response?.data?.message || t('referralConfig.templateApplyError'))
@@ -251,41 +255,49 @@ export default function AdminReferralConfigPage() {
       {/* Templates Modal */}
       <Modal isOpen={showTemplates} onClose={() => setShowTemplates(false)} title={t('referralConfig.applyTemplateTitle')}>
         <div className="space-y-4">
-          {!filterService && (
-            <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl text-sm text-yellow-700 dark:text-yellow-400">
-              {t('referralConfig.selectServiceFirst')}
-            </div>
-          )}
-          {templates.map((tmpl) => (
-            <div key={tmpl.key} className="border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-              <div className="flex items-start justify-between mb-2">
-                <div>
-                  <h4 className="font-semibold text-gray-900 dark:text-white">{tmpl.name}</h4>
-                  <p className="text-xs text-gray-500 mt-0.5">{tmpl.description}</p>
-                </div>
-                <span className="text-lg font-bold text-violet-600 dark:text-violet-400">
-                  {(tmpl.totalRate * 100).toFixed(0)}%
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-1.5 mb-3">
-                {tmpl.levels.map((lvl) => (
-                  <span key={lvl.level} className="text-xs bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 px-2 py-0.5 rounded-full">
-                    L{lvl.level}: {(lvl.rate * 100).toFixed(1)}%
-                    {lvl.criteria && Object.keys(lvl.criteria).length > 0 && ' *'}
+          <Select
+            label={t('referralConfig.targetService')}
+            value={templateServiceId || filterService}
+            onChange={(e) => setTemplateServiceId(e.target.value)}
+            options={[
+              { value: '', label: t('referralConfig.selectServicePlaceholder') },
+              ...services.map((s) => ({ value: s.id, label: s.name })),
+            ]}
+          />
+          {templates.map((tmpl) => {
+            const targetId = templateServiceId || filterService
+            const targetName = services.find((s) => s.id === targetId)?.name
+            return (
+              <div key={tmpl.key} className="border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <h4 className="font-semibold text-gray-900 dark:text-white">{tmpl.name}</h4>
+                    <p className="text-xs text-gray-500 mt-0.5">{tmpl.description}</p>
+                  </div>
+                  <span className="text-lg font-bold text-violet-600 dark:text-violet-400">
+                    {(tmpl.totalRate * 100).toFixed(0)}%
                   </span>
-                ))}
+                </div>
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {tmpl.levels.map((lvl) => (
+                    <span key={lvl.level} className="text-xs bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 px-2 py-0.5 rounded-full">
+                      L{lvl.level}: {(lvl.rate * 100).toFixed(1)}%
+                      {lvl.criteria && Object.keys(lvl.criteria).length > 0 && ' *'}
+                    </span>
+                  ))}
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => handleApplyTemplate(tmpl.key)}
+                  disabled={!targetId}
+                  icon={<Zap className="w-4 h-4" />}
+                  className="w-full"
+                >
+                  {targetName ? t('referralConfig.applyTo', { service: targetName }) : t('referralConfig.selectServicePlaceholder')}
+                </Button>
               </div>
-              <Button
-                size="sm"
-                onClick={() => handleApplyTemplate(tmpl.key)}
-                disabled={!filterService}
-                icon={<Zap className="w-4 h-4" />}
-                className="w-full"
-              >
-                {filterService ? t('referralConfig.applyTo', { service: services.find((s) => s.id === filterService)?.name || 'Service' }) : t('referralConfig.selectServicePlaceholder')}
-              </Button>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </Modal>
     </div>
