@@ -12,20 +12,31 @@ export interface JwtPayload {
 
 function buildJwtOptions(configService: ConfigService): StrategyOptionsWithoutRequest {
   const logger = new Logger('JwtStrategy');
+  const jwtSecret = configService.get<string>('JWT_SECRET');
   const authServiceUrl =
     configService.get<string>('AUTH_SERVICE_URL') ||
     'https://auth.inite.ai';
 
-  logger.log(`Using JWKS endpoint: ${authServiceUrl}/.well-known/jwks.json`);
-
-  return {
+  const base = {
     jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
     ignoreExpiration: false,
+  };
+
+  // Test/dev fallback: symmetric HS256 via JWT_SECRET
+  if (jwtSecret && configService.get<string>('NODE_ENV') !== 'production') {
+    logger.log('Using HS256 symmetric secret (non-production)');
+    return { ...base, secretOrKey: jwtSecret, algorithms: ['HS256'] };
+  }
+
+  // Production: JWKS from auth service
+  logger.log(`Using JWKS endpoint: ${authServiceUrl}/.well-known/jwks.json`);
+  return {
+    ...base,
     secretOrKeyProvider: passportJwtSecret({
       jwksUri: `${authServiceUrl}/.well-known/jwks.json`,
       cache: true,
       cacheMaxEntries: 5,
-      cacheMaxAge: 600000, // 10 minutes
+      cacheMaxAge: 600000,
       rateLimit: true,
       jwksRequestsPerMinute: 10,
     }),
