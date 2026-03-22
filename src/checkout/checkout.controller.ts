@@ -67,11 +67,13 @@ export class CheckoutController {
     @Body() dto: CreateCheckoutSessionDto,
     @Headers('idempotency-key') idempotencyKey?: string,
   ): Promise<CheckoutSessionResponseDto> {
-    // Service callers pass userId in body; JWT users use their own
+    // Service callers pass userId in body; JWT users always use their own token
     const userId = req.user?.isService ? dto.userId : req.user?.userId;
     if (!userId) {
-      throw new BadRequestException('userId is required');
+      throw new BadRequestException('userId is required (pass in body for service API key calls)');
     }
+    // Strip userId from dto so it never leaks into metadata or downstream logic
+    delete dto.userId;
     return this.checkoutService.createSession(
       userId,
       dto,
