@@ -27,7 +27,6 @@ interface PromoCodeFormData {
   maxDiscountAmount: string
   maxUsageCount: string
   maxUsagePerUser: string
-  stackWithReferral: boolean
 }
 
 function defaultDatetime(offsetMs = 0): string {
@@ -47,7 +46,6 @@ const emptyForm: PromoCodeFormData = {
   maxDiscountAmount: '',
   maxUsageCount: '',
   maxUsagePerUser: '1',
-  stackWithReferral: false,
 }
 
 function PromoCodeForm({
@@ -81,7 +79,6 @@ function PromoCodeForm({
         maxDiscountAmount: initial.maxDiscountAmount || '',
         maxUsageCount: initial.maxUsageCount?.toString() || '',
         maxUsagePerUser: initial.maxUsagePerUser?.toString() || '1',
-        stackWithReferral: initial.stackWithReferral,
       }
     }
     return { ...emptyForm }
@@ -196,18 +193,6 @@ function PromoCodeForm({
           onChange={(e) => update('maxUsagePerUser', e.target.value)}
         />
       </div>
-      <div>
-        <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={form.stackWithReferral}
-            onChange={(e) => update('stackWithReferral', e.target.checked)}
-            className="rounded border-slate-300 dark:border-slate-600 text-violet-600 focus:ring-violet-500"
-          />
-          {t('promoCodes.stackWithReferral')}
-        </label>
-        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 ml-6">{t('promoCodes.stackWithReferralHint')}</p>
-      </div>
       <div className="flex gap-3 justify-end">
         <Button type="button" variant="ghost" onClick={onCancel}>{tc('cancel')}</Button>
         <Button type="submit" loading={loading}>{initial ? tc('update') : tc('create')}</Button>
@@ -259,7 +244,6 @@ export default function AdminPromoCodesPage() {
       discountType: data.discountType,
       discountValue: data.discountValue,
       validFrom: new Date(data.validFrom).toISOString(),
-      stackWithReferral: data.stackWithReferral,
     }
     if (data.serviceId) payload.serviceId = data.serviceId
     if (data.validUntil) payload.validUntil = new Date(data.validUntil).toISOString()
@@ -281,7 +265,6 @@ export default function AdminPromoCodesPage() {
       discountType: data.discountType,
       discountValue: data.discountValue,
       validFrom: new Date(data.validFrom).toISOString(),
-      stackWithReferral: data.stackWithReferral,
     }
     if (data.serviceId) payload.serviceId = data.serviceId
     else payload.serviceId = null

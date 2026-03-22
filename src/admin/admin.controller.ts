@@ -539,7 +539,6 @@ export class AdminController {
       isActive?: boolean;
       maxUsageCount?: number;
       maxUsagePerUser?: number;
-      stackWithReferral?: boolean;
       metadata?: any;
     },
   ) {
@@ -564,7 +563,6 @@ export class AdminController {
       isActive?: boolean;
       maxUsageCount?: number;
       maxUsagePerUser?: number;
-      stackWithReferral?: boolean;
       metadata?: any;
     },
   ) {

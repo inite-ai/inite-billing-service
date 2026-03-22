@@ -28,7 +28,6 @@ describe('PromoCodesService — validation logic', () => {
     currentUsageCount: 0,
     validFrom: new Date('2020-01-01'),
     validUntil: null,
-    stackWithReferral: false,
   };
 
   beforeEach(() => {

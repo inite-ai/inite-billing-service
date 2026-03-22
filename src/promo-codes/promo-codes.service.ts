@@ -191,7 +191,6 @@ export class PromoCodesService {
     isActive?: boolean;
     maxUsageCount?: number;
     maxUsagePerUser?: number;
-    stackWithReferral?: boolean;
     metadata?: any;
   }) {
     if (!['percentage', 'fixed_amount'].includes(data.discountType)) {
@@ -221,7 +220,6 @@ export class PromoCodesService {
         isActive: data.isActive ?? true,
         maxUsageCount: data.maxUsageCount,
         maxUsagePerUser: data.maxUsagePerUser ?? 1,
-        stackWithReferral: data.stackWithReferral ?? false,
         metadata: data.metadata || {},
       },
     });
@@ -274,7 +272,6 @@ export class PromoCodesService {
       isActive?: boolean;
       maxUsageCount?: number;
       maxUsagePerUser?: number;
-      stackWithReferral?: boolean;
       metadata?: any;
     },
   ) {

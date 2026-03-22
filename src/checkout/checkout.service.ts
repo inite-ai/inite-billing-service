@@ -279,15 +279,7 @@ export class CheckoutService {
         );
       }
 
-      // Check stackWithReferral
-      if (
-        !promoValidation.promoCode.stackWithReferral &&
-        metadata.referralCode
-      ) {
-        throw new BadRequestException(
-          'This promo code cannot be combined with a referral code',
-        );
-      }
+
 
       orderAmount = promoValidation.finalAmount;
 

@@ -180,7 +180,6 @@ export interface PromoCode {
   maxUsageCount?: number
   currentUsageCount: number
   maxUsagePerUser?: number
-  stackWithReferral: boolean
   metadata?: Record<string, unknown>
   createdAt: string
   updatedAt: string

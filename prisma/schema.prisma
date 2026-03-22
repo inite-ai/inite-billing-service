@@ -547,7 +547,6 @@ model PromoCode {
   maxUsageCount     Int?     @map("max_usage_count")
   currentUsageCount Int      @default(0) @map("current_usage_count")
   maxUsagePerUser   Int?     @default(1) @map("max_usage_per_user")
-  stackWithReferral Boolean  @default(false) @map("stack_with_referral")
   metadata          Json?    @default("{}")
   createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
