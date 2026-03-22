@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl'
 import { motion } from 'framer-motion'
 import { Loader2, Tag, Check, X, CreditCard, Lock, ShoppingBag } from 'lucide-react'
 import api from '@/lib/api'
+import { OAuthClient } from '@/lib/oauth-client'
 import toast from 'react-hot-toast'
 
 interface SessionData {
@@ -91,6 +92,12 @@ export default function CheckoutPage() {
           setSelectedRail(data.paymentMethods[0].code)
         }
       } catch (e: any) {
+        if (e.response?.status === 401) {
+          // Not authenticated — auto-trigger OAuth silently
+          sessionStorage.setItem('returnTo', `/checkout/${sessionId}`)
+          OAuthClient.login()
+          return
+        }
         if (e.response?.status === 404) {
           setError('sessionNotFound')
         } else {

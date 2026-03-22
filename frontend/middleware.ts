@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { getUserToken, shouldRedirectFromAuth, getUserDestination, checkRouteAccess } from './lib/middleware/auth';
+import { getUserToken, shouldRedirectFromAuth, getUserDestination, checkRouteAccess, CLIENT_AUTH_ROUTES } from './lib/middleware/auth';
 
 function redirect(request: NextRequest, path: string): NextResponse {
   return NextResponse.redirect(new URL(path, request.url));
@@ -32,6 +32,12 @@ export async function middleware(request: NextRequest) {
     }
     const destination = getUserDestination(token!);
     return redirect(request, destination);
+  }
+
+  // Client-auth routes handle auth themselves (auto-trigger OAuth)
+  const isClientAuth = CLIENT_AUTH_ROUTES.some(r => pathname.startsWith(r));
+  if (isClientAuth) {
+    return NextResponse.next();
   }
 
   // Check route access

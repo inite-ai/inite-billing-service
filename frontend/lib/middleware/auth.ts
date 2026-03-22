@@ -86,12 +86,14 @@ export function getUserDestination(token: UserToken): string {
 const PROTECTED_ROUTES: Record<string, Array<'USER' | 'ADMIN'>> = {
   '/dashboard': ['USER', 'ADMIN'],
   '/catalog': ['USER', 'ADMIN'],
-  '/checkout': ['USER', 'ADMIN'],
   '/orders': ['USER', 'ADMIN'],
   '/subscriptions': ['USER', 'ADMIN'],
   '/referrals': ['USER', 'ADMIN'],
   '/admin': ['ADMIN'],
 };
+
+// Routes that handle auth on the client side (auto-trigger OAuth if needed)
+export const CLIENT_AUTH_ROUTES = ['/checkout'];
 
 export function checkRouteAccess(
   token: UserToken | null,
