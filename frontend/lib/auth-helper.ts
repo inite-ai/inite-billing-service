@@ -61,6 +61,7 @@ export async function getUserSession(): Promise<UserSession | null> {
     }
     if (response.status === 401) {
       clearTokens();
+      // Server already cleared httpOnly cookies in the 401 response
     }
   } catch (error) {
     console.error('Failed to refresh token:', error);

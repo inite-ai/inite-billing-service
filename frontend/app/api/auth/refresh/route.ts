@@ -13,10 +13,19 @@ export async function POST(request: NextRequest) {
     const refreshToken = request.cookies.get('refresh_token')?.value;
 
     if (!refreshToken) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { error: 'No refresh token found' },
         { status: 401 }
       );
+      // Clear stale access_token so middleware stops treating user as authenticated
+      response.cookies.set('access_token', '', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 0,
+        path: '/',
+      });
+      return response;
     }
 
     const tokenResponse = await fetch(`${AUTH_DOMAIN}/oauth/token`, {
@@ -43,6 +52,14 @@ export async function POST(request: NextRequest) {
       );
 
       response.cookies.delete('refresh_token');
+      // Clear stale access_token so middleware stops treating user as authenticated
+      response.cookies.set('access_token', '', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 0,
+        path: '/',
+      });
       return response;
     }
 
