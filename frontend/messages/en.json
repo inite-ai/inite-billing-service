@@ -754,5 +754,12 @@
     "minMonthlyVolume": "Min Monthly Volume ($)",
     "personalPurchaseRequired": "Personal purchase required",
     "placeholderDirectReferral": "e.g. Direct Referral"
+  },
+  "assistant": {
+    "title": "AI Assistant",
+    "placeholder": "Ask about your subscriptions, orders...",
+    "thinking": "Thinking...",
+    "error": "Something went wrong. Try again.",
+    "welcome": "Hi! I can help you with your subscriptions, orders, referrals, and billing. What would you like to know?"
   }
 }

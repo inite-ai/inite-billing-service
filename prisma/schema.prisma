@@ -551,6 +551,37 @@ model PromoCodeUsage {
   @@schema("billing")
 }
 
+model Conversation {
+  id         String        @id @default(uuid()) @db.Uuid
+  userId     String        @map("user_id") @db.Uuid
+  mode       String        @db.VarChar(20) // admin | user
+  status     String        @default("active") @db.VarChar(20) // active | resolved
+  createdAt  DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  messages   ChatMessage[]
+
+  @@index([userId, updatedAt(sort: Desc)])
+  @@map("conversations")
+  @@schema("billing")
+}
+
+model ChatMessage {
+  id              String   @id @default(uuid()) @db.Uuid
+  conversationId  String   @map("conversation_id") @db.Uuid
+  role            String   @db.VarChar(20) // user | assistant | tool
+  content         String   @db.Text
+  toolCalls       Json?    @map("tool_calls")
+  toolResults     Json?    @map("tool_results")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@map("chat_messages")
+  @@schema("billing")
+}
+
 model FunnelEvent {
   id          String   @id @default(uuid()) @db.Uuid
   userId      String   @map("user_id") @db.Uuid

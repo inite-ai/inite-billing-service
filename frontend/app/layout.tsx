@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import { Toaster } from 'react-hot-toast'
 import { AuthProvider } from '@/contexts/AuthContext'
+import ChatWrapper from '@/components/assistant/ChatWrapper'
 import { NextIntlClientProvider } from 'next-intl'
 import { getMessages, getLocale } from 'next-intl/server'
 
@@ -23,6 +24,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <NextIntlClientProvider messages={messages}>
           <AuthProvider>
             {children}
+            <ChatWrapper />
           </AuthProvider>
         </NextIntlClientProvider>
         <Toaster

@@ -21,6 +21,7 @@ import { AdminModule } from './admin/admin.module';
 import { PromoCodesModule } from './promo-codes/promo-codes.module';
 import { HealthModule } from './health/health.module';
 import { FunnelModule } from './funnel/funnel.module';
+import { ConversationsModule } from './conversations/conversations.module';
 
 @Module({
   imports: [
@@ -58,6 +59,7 @@ import { FunnelModule } from './funnel/funnel.module';
     PromoCodesModule,
     HealthModule,
     FunnelModule,
+    ConversationsModule,
   ],
   providers: [
     {
