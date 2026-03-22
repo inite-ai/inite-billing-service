@@ -206,7 +206,7 @@ jobs:
               - "traefik.enable=true"
               - "traefik.docker.network=traefik-global"
               - "traefik.http.services.billing-api-service.loadbalancer.server.port=3000"
-              - "traefik.http.routers.billing-api.rule=Host(\`${{ env.DOMAIN }}\`) && (PathPrefix(\`/v1\`) || PathPrefix(\`/health\`))"
+              - "traefik.http.routers.billing-api.rule=Host(\`${{ env.DOMAIN }}\`) && (PathPrefix(\`/v1\`) || PathPrefix(\`/health\`) || PathPrefix(\`/webhooks\`))"
               - "traefik.http.routers.billing-api.entrypoints=websecure"
               - "traefik.http.routers.billing-api.tls=true"
               - "traefik.http.routers.billing-api.tls.certresolver=letsencrypt"

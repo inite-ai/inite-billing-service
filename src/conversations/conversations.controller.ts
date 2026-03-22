@@ -96,7 +96,7 @@ export class ConversationsController {
 
     return this.conversationsService.getMessages(
       conversationId,
-      limit ? parseInt(limit, 10) : undefined,
+      limit ? Math.min(parseInt(limit, 10), 100) : undefined,
     );
   }
 

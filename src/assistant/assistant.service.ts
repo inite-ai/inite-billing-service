@@ -587,7 +587,10 @@ Example: ["Unlimited API calls", "Priority support", "Advanced analytics"]`,
 
       case 'get_services': {
         if (!isAdmin) throw new Error('Admin access required');
-        return this.prisma.service.findMany();
+        return this.prisma.service.findMany({
+          where: { isActive: true },
+          select: { id: true, code: true, name: true, isActive: true, createdAt: true },
+        });
       }
 
       case 'get_promo_codes': {

@@ -12,22 +12,38 @@ interface ChatMessage {
   content: string
 }
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+function applyInlineMarkdown(line: string): string {
+  // Bold
+  line = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+  // Links (block javascript: URLs)
+  line = line.replace(
+    /\[([^\]]+)\]\(([^)]+)\)/g,
+    (_, label: string, url: string) => {
+      if (url.toLowerCase().startsWith('javascript:')) return label
+      return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-violet-400 underline hover:text-violet-300">${label}</a>`
+    }
+  )
+  // Inline code
+  line = line.replace(/`([^`]+)`/g, '<code class="bg-gray-700/50 px-1 py-0.5 rounded text-sm">$1</code>')
+  return line
+}
+
 function renderMarkdown(text: string) {
-  const lines = text.split('\n')
+  // Escape HTML entities first, then apply markdown transformations
+  const escaped = escapeHtml(text)
+  const lines = escaped.split('\n')
   const elements: React.ReactNode[] = []
 
   for (let i = 0; i < lines.length; i++) {
-    let line = lines[i]
-
-    // Bold
-    line = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    // Links
-    line = line.replace(
-      /\[([^\]]+)\]\(([^)]+)\)/g,
-      '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-violet-400 underline hover:text-violet-300">$1</a>'
-    )
-    // Inline code
-    line = line.replace(/`([^`]+)`/g, '<code class="bg-gray-700/50 px-1 py-0.5 rounded text-sm">$1</code>')
+    let line = applyInlineMarkdown(lines[i])
 
     // Unordered list items
     if (/^[-*]\s/.test(line)) {

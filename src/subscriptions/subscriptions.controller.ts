@@ -9,6 +9,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -66,6 +67,10 @@ export class SubscriptionsController {
     @Param('userId') userId: string,
     @Req() req: any,
   ): Promise<SubscriptionResponseDto[]> {
+    // Non-service callers can only access their own subscriptions
+    if (!req.user?.isService && req.user?.userId !== userId) {
+      throw new ForbiddenException('Access denied');
+    }
     // Service API key → filter by that service's ID
     const serviceId = req.user?.isService ? req.user.serviceId : undefined;
     return this.subscriptionsService.getUserSubscriptions(userId, serviceId);
