@@ -44,6 +44,7 @@ CREATE TABLE "billing"."services" (
     "name" VARCHAR(255) NOT NULL,
     "api_key" VARCHAR(64) NOT NULL,
     "is_active" BOOLEAN NOT NULL DEFAULT true,
+    "min_withdrawal_amount" DECIMAL(19,4),
     "metadata" JSONB DEFAULT '{}',
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ(6) NOT NULL,
