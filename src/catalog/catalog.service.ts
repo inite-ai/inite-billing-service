@@ -20,11 +20,22 @@ export class CatalogService {
       id: p.id,
       code: p.code,
       name: p.name,
+      serviceId: p.serviceId || undefined,
       moduleScope: p.moduleScope,
       type: p.type,
       isActive: p.isActive,
       metadata: p.metadata as Record<string, any> | undefined,
-      prices: p.prices,
+      prices: p.prices.map((pr) => ({
+        id: pr.id,
+        productId: pr.productId,
+        code: pr.code,
+        currency: pr.currency,
+        amount: pr.amount.toString(),
+        interval: pr.interval || undefined,
+        trialDays: pr.trialDays || undefined,
+        graceDays: pr.graceDays || undefined,
+        isActive: pr.isActive,
+      })),
     }));
   }
 
