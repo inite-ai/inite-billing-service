@@ -21,11 +21,6 @@ export class CreateCheckoutSessionDto {
   @IsEnum(CheckoutMode)
   mode: CheckoutMode;
 
-  @ApiPropertyOptional({ description: 'Payment rail (default: ONE)' })
-  @IsEnum(PaymentRail)
-  @IsOptional()
-  rail?: PaymentRail;
-
   @ApiPropertyOptional({ description: 'Success redirect URL' })
   @IsUrl()
   @IsOptional()
@@ -45,6 +40,21 @@ export class CreateCheckoutSessionDto {
   @IsString()
   @IsOptional()
   referralCode?: string;
+}
+
+export class CheckoutSessionResponseDto {
+  @ApiProperty({ description: 'Session ID (order ID)' })
+  sessionId: string;
+
+  @ApiProperty({ description: 'Checkout URL to redirect user' })
+  checkoutUrl: string;
+}
+
+export class PaySessionDto {
+  @ApiPropertyOptional({ description: 'Payment rail (provider code)' })
+  @IsString()
+  @IsOptional()
+  rail?: string;
 
   @ApiPropertyOptional({ description: 'Promo code for discount' })
   @IsString()
@@ -52,14 +62,10 @@ export class CreateCheckoutSessionDto {
   promoCode?: string;
 }
 
-export class CheckoutSessionResponseDto {
-  @ApiProperty({ description: 'Order ID' })
-  orderId: string;
-
-  @ApiProperty({ description: 'Payment Intent ID' })
-  paymentIntentId: string;
-
-  @ApiProperty({ description: 'Checkout URL to redirect user' })
+export class PaySessionResponseDto {
+  @ApiProperty({ description: 'Checkout/redirect URL' })
   checkoutUrl: string;
-}
 
+  @ApiPropertyOptional({ description: 'Payment Intent ID (if payment created)' })
+  paymentIntentId?: string;
+}

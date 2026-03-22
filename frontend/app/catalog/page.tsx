@@ -7,30 +7,11 @@ import { ClientLayout } from '@/components/layout/ClientLayout'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
-import { Input } from '@/components/ui/Input'
-import { Modal } from '@/components/ui/Modal'
 import { Tabs } from '@/components/ui/Tabs'
-import { ShoppingBag, Loader2, Zap, Tag, Check, X, Sparkles, CreditCard } from 'lucide-react'
+import { ShoppingBag, Loader2, Zap, Check, Sparkles } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import type { Product, Service, Price } from '@/lib/types'
-
-interface PromoValidation {
-  valid: boolean
-  discountType: 'percentage' | 'fixed_amount'
-  discountValue: string
-  originalAmount: string
-  discountAmount: string
-  finalAmount: string
-  currency: string
-}
-
-interface PaymentMethod {
-  code: string
-  name: string
-  supportedModes: string[]
-  currencies: string[]
-}
 
 type BillingInterval = 'month' | 'year'
 
@@ -91,19 +72,7 @@ export default function CatalogPage() {
   const [selectedService, setSelectedService] = useState('all')
   const [billingInterval, setBillingInterval] = useState<BillingInterval>('month')
   const [loading, setLoading] = useState(true)
-
-  // Checkout modal state
-  const [checkoutPrice, setCheckoutPrice] = useState<Price | null>(null)
-  const [checkoutProduct, setCheckoutProduct] = useState<Product | null>(null)
-  const [promoCode, setPromoCode] = useState('')
-  const [promoLoading, setPromoLoading] = useState(false)
-  const [promoResult, setPromoResult] = useState<PromoValidation | null>(null)
-  const [checkoutLoading, setCheckoutLoading] = useState(false)
-
-  // Payment method state
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
-  const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(false)
-  const [selectedRail, setSelectedRail] = useState<string>('')
+  const [buyLoading, setBuyLoading] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -149,95 +118,21 @@ export default function CatalogPage() {
     return tabs
   }, [services, t])
 
-  const openCheckout = async (product: Product, price: Price) => {
-    setCheckoutProduct(product)
-    setCheckoutPrice(price)
-    setPromoCode('')
-    setPromoResult(null)
-    setSelectedRail('')
-    setPaymentMethodsLoading(true)
+  const handleBuy = async (product: Product, price: Price) => {
+    const key = `${product.id}:${price.id}`
+    setBuyLoading(key)
     try {
-      const res = await api.get('/v1/checkout/payment-methods')
-      const methods: PaymentMethod[] = res.data
-      setPaymentMethods(methods)
-      if (methods.length > 0) {
-        setSelectedRail(methods[0].code)
-      }
-    } catch {
-      setPaymentMethods([])
-    } finally {
-      setPaymentMethodsLoading(false)
-    }
-  }
-
-  const closeCheckout = () => {
-    setCheckoutProduct(null)
-    setCheckoutPrice(null)
-    setPromoCode('')
-    setPromoResult(null)
-    setPaymentMethods([])
-    setSelectedRail('')
-  }
-
-  const handleApplyPromo = async () => {
-    if (!promoCode.trim() || !checkoutPrice) return
-    setPromoLoading(true)
-    try {
-      const res = await api.post('/v1/checkout/validate-promo', {
-        promoCode: promoCode.trim(),
-        priceCode: checkoutPrice.code,
-      })
-      setPromoResult(res.data)
-      if (res.data.valid) {
-        toast.success(t('promoApplied'))
-      } else {
-        toast.error(t('promoInvalid'))
-        setPromoResult(null)
-      }
-    } catch {
-      toast.error(t('promoInvalid'))
-      setPromoResult(null)
-    } finally {
-      setPromoLoading(false)
-    }
-  }
-
-  const handleProceedToPayment = async () => {
-    if (!checkoutPrice || !checkoutProduct) return
-    const isFree = promoResult?.valid && Number(promoResult.finalAmount) === 0
-    if (!isFree && !selectedRail) return
-    setCheckoutLoading(true)
-    try {
-      const payload: Record<string, unknown> = {
-        priceCode: checkoutPrice.code,
-        mode: checkoutProduct.type === 'subscription' ? 'SUBSCRIPTION' : 'PAYMENT',
+      const res = await api.post('/v1/checkout/sessions', {
+        priceCode: price.code,
+        mode: product.type === 'subscription' ? 'SUBSCRIPTION' : 'PAYMENT',
         successUrl: window.location.origin + '/orders',
         errorUrl: window.location.origin + '/catalog',
-      }
-      if (!isFree && selectedRail) {
-        payload.rail = selectedRail
-      }
-      if (promoResult?.valid && promoCode.trim()) {
-        payload.promoCode = promoCode.trim()
-      }
-      const res = await api.post('/v1/checkout/session', payload)
-      if (res.data.checkoutUrl) {
-        window.location.href = res.data.checkoutUrl
-      } else {
-        // Free order — no checkout URL, go to orders
-        toast.success(t('orderCompleted'))
-        window.location.href = '/orders'
-      }
+      })
+      window.location.href = `/checkout/${res.data.sessionId}`
     } catch (e: any) {
       toast.error(e.response?.data?.message || tc('errors.generic'))
-    } finally {
-      setCheckoutLoading(false)
+      setBuyLoading(null)
     }
-  }
-
-  const clearPromo = () => {
-    setPromoCode('')
-    setPromoResult(null)
   }
 
   return (
@@ -347,7 +242,8 @@ export default function CatalogPage() {
                   product={product}
                   billingInterval={billingInterval}
                   index={index}
-                  onSubscribe={openCheckout}
+                  onSubscribe={handleBuy}
+                  buyLoading={buyLoading}
                   t={t}
                 />
               ))}
@@ -366,7 +262,8 @@ export default function CatalogPage() {
                     key={product.id}
                     product={product}
                     index={index}
-                    onBuy={openCheckout}
+                    onBuy={handleBuy}
+                    buyLoading={buyLoading}
                     t={t}
                   />
                 ))}
@@ -375,153 +272,11 @@ export default function CatalogPage() {
           )}
         </>
       )}
-
-      {/* Checkout Modal */}
-      <Modal
-        isOpen={!!checkoutPrice && !!checkoutProduct}
-        onClose={closeCheckout}
-        title={checkoutProduct?.name || ''}
-      >
-        {checkoutPrice && checkoutProduct && (
-          <div className="space-y-5">
-            <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-500">{checkoutProduct.name}</span>
-                <span className="text-lg font-bold text-slate-900 dark:text-white">
-                  {checkoutPrice.amount} {checkoutPrice.currency}
-                  {checkoutPrice.interval && (
-                    <span className="text-sm font-normal text-slate-400">/{checkoutPrice.interval}</span>
-                  )}
-                </span>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">
-                <Tag className="w-3.5 h-3.5 inline mr-1" />
-                {t('promoCode')}
-              </label>
-              <div className="flex gap-2">
-                <div className="flex-1 relative">
-                  <Input
-                    value={promoCode}
-                    onChange={(e) => {
-                      setPromoCode(e.target.value.toUpperCase())
-                      if (promoResult) setPromoResult(null)
-                    }}
-                    placeholder="SUMMER2024"
-                    disabled={!!promoResult?.valid}
-                  />
-                  {promoResult?.valid && (
-                    <button
-                      onClick={clearPromo}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-                <Button
-                  variant={promoResult?.valid ? 'secondary' : 'outline'}
-                  onClick={handleApplyPromo}
-                  loading={promoLoading}
-                  disabled={!promoCode.trim() || !!promoResult?.valid}
-                >
-                  {promoResult?.valid ? <Check className="w-4 h-4" /> : t('applyPromo')}
-                </Button>
-              </div>
-            </div>
-
-            {promoResult?.valid && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                className="p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800 space-y-2"
-              >
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-500">{t('originalPrice')}</span>
-                  <span className="text-slate-700 dark:text-slate-300">{promoResult.originalAmount} {promoResult.currency}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-green-600">{t('discount')}</span>
-                  <span className="text-green-600 font-medium">-{promoResult.discountAmount} {promoResult.currency}</span>
-                </div>
-                <div className="border-t border-green-200 dark:border-green-800 pt-2 flex justify-between">
-                  <span className="font-medium text-slate-700 dark:text-slate-200">{t('finalPrice')}</span>
-                  <span className="font-bold text-lg text-slate-900 dark:text-white">{promoResult.finalAmount} {promoResult.currency}</span>
-                </div>
-              </motion.div>
-            )}
-
-            {/* Payment method selector */}
-            <div>
-              <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">
-                <CreditCard className="w-3.5 h-3.5 inline mr-1" />
-                {t('paymentMethod')}
-              </label>
-              {paymentMethodsLoading ? (
-                <div className="flex items-center gap-2 text-slate-400 text-sm py-3">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  {t('selectPaymentMethod')}
-                </div>
-              ) : paymentMethods.length === 0 ? (
-                <p className="text-sm text-red-500 py-2">{t('noPaymentMethods')}</p>
-              ) : (
-                <div className="space-y-2">
-                  {paymentMethods.map((method) => (
-                    <button
-                      key={method.code}
-                      type="button"
-                      onClick={() => setSelectedRail(method.code)}
-                      className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all text-left ${
-                        selectedRail === method.code
-                          ? 'border-violet-500 ring-2 ring-violet-500/20 bg-violet-50 dark:bg-violet-900/20'
-                          : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 hover:border-slate-300 dark:hover:border-slate-600'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                            selectedRail === method.code
-                              ? 'border-violet-500'
-                              : 'border-slate-300 dark:border-slate-600'
-                          }`}
-                        >
-                          {selectedRail === method.code && (
-                            <div className="w-2 h-2 rounded-full bg-violet-500" />
-                          )}
-                        </div>
-                        <span className="text-sm font-medium text-slate-900 dark:text-white">
-                          {method.name}
-                        </span>
-                      </div>
-                      <span className="text-xs text-slate-400">
-                        {method.currencies.join(', ')}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <Button
-              className="w-full"
-              size="lg"
-              onClick={handleProceedToPayment}
-              loading={checkoutLoading}
-              disabled={(!selectedRail && !(promoResult?.valid && Number(promoResult.finalAmount) === 0)) || paymentMethodsLoading}
-              icon={<Zap className="w-4 h-4" />}
-            >
-              {t('proceedToPayment')}
-            </Button>
-          </div>
-        )}
-      </Modal>
     </ClientLayout>
   )
 }
 
-/* ── Savings Badge (global, shown near toggle) ── */
+/* -- Savings Badge (global, shown near toggle) -- */
 
 function SavingsBadgeGlobal({
   products,
@@ -530,7 +285,6 @@ function SavingsBadgeGlobal({
   products: Product[]
   t: ReturnType<typeof useTranslations<'catalog'>>
 }) {
-  // Find the max savings across all products
   let maxSavings = 0
   for (const product of products) {
     const monthly = getPriceByInterval(product, 'month')
@@ -561,19 +315,21 @@ function SavingsBadgeGlobal({
   )
 }
 
-/* ── Pricing Card (subscription) ── */
+/* -- Pricing Card (subscription) -- */
 
 function PricingCard({
   product,
   billingInterval,
   index,
   onSubscribe,
+  buyLoading,
   t,
 }: {
   product: Product
   billingInterval: BillingInterval
   index: number
   onSubscribe: (product: Product, price: Price) => void
+  buyLoading: string | null
   t: ReturnType<typeof useTranslations<'catalog'>>
 }) {
   const monthlyPrice = getPriceByInterval(product, 'month')
@@ -583,7 +339,6 @@ function PricingCard({
   const features = getMetaFeatures(product)
   const creditsPerPeriod = getMetaNumber(product, 'creditsPerPeriod')
 
-  // Determine which price to show based on toggle
   const activePrice = billingInterval === 'year' && yearlyPrice
     ? yearlyPrice
     : billingInterval === 'month' && monthlyPrice
@@ -597,20 +352,19 @@ function PricingCard({
   const monthlyAmount = monthlyPrice ? parseFloat(monthlyPrice.amount) : null
   const yearlyAmount = yearlyPrice ? parseFloat(yearlyPrice.amount) : null
 
-  // Calculate savings
   let savingsPercent = 0
   if (monthlyAmount && yearlyAmount && monthlyAmount > 0) {
     savingsPercent = Math.round((1 - yearlyAmount / (monthlyAmount * 12)) * 100)
   }
 
-  // Per-month equivalent when yearly
   const perMonthEquivalent = isYearly ? priceAmount / 12 : null
 
-  // Credits
   const yearlyCredits = getMetaNumber(product, 'creditsPerPeriodYearly')
   const bonusCredits = yearlyCredits && creditsPerPeriod
     ? yearlyCredits - creditsPerPeriod * 12
     : undefined
+
+  const isLoading = buyLoading === `${product.id}:${activePrice.id}`
 
   return (
     <motion.div
@@ -634,7 +388,6 @@ function PricingCard({
             : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-gray-800 hover:shadow-lg'
         }`}
       >
-        {/* Product name & description */}
         <div className="mb-6">
           <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
             {product.name}
@@ -646,7 +399,6 @@ function PricingCard({
           )}
         </div>
 
-        {/* Price */}
         <div className="mb-6">
           <div className="flex items-baseline gap-1">
             <span className="text-4xl font-bold text-slate-900 dark:text-white">
@@ -698,7 +450,6 @@ function PricingCard({
           )}
         </div>
 
-        {/* Features */}
         {(features.length > 0 || creditsPerPeriod) && (
           <div className="mb-6 flex-1">
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">
@@ -735,15 +486,14 @@ function PricingCard({
           </div>
         )}
 
-        {/* Spacer if no features */}
         {features.length === 0 && !creditsPerPeriod && <div className="flex-1" />}
 
-        {/* CTA */}
         <Button
           className="w-full"
           size="lg"
           variant={isHighlighted ? 'primary' : 'outline'}
           onClick={() => onSubscribe(product, activePrice)}
+          loading={isLoading}
         >
           {t('subscribe')}
         </Button>
@@ -752,17 +502,19 @@ function PricingCard({
   )
 }
 
-/* ── One-time Purchase Card ── */
+/* -- One-time Purchase Card -- */
 
 function OneTimeCard({
   product,
   index,
   onBuy,
+  buyLoading,
   t,
 }: {
   product: Product
   index: number
   onBuy: (product: Product, price: Price) => void
+  buyLoading: string | null
   t: ReturnType<typeof useTranslations<'catalog'>>
 }) {
   const description = getMetaString(product, 'description')
@@ -792,26 +544,30 @@ function OneTimeCard({
         </div>
 
         <div className="mt-auto space-y-2">
-          {activePrices.map((price) => (
-            <div
-              key={price.id}
-              className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800"
-            >
-              <span className="text-2xl font-bold text-slate-900 dark:text-white">
-                ${formatPrice(price.amount)}
-                <span className="text-sm font-normal text-slate-400 ml-1">
-                  {price.currency}
-                </span>
-              </span>
-              <Button
-                size="sm"
-                icon={<Zap className="w-3.5 h-3.5" />}
-                onClick={() => onBuy(product, price)}
+          {activePrices.map((price) => {
+            const isLoading = buyLoading === `${product.id}:${price.id}`
+            return (
+              <div
+                key={price.id}
+                className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800"
               >
-                {t('buyNow')}
-              </Button>
-            </div>
-          ))}
+                <span className="text-2xl font-bold text-slate-900 dark:text-white">
+                  ${formatPrice(price.amount)}
+                  <span className="text-sm font-normal text-slate-400 ml-1">
+                    {price.currency}
+                  </span>
+                </span>
+                <Button
+                  size="sm"
+                  icon={<Zap className="w-3.5 h-3.5" />}
+                  onClick={() => onBuy(product, price)}
+                  loading={isLoading}
+                >
+                  {t('buyNow')}
+                </Button>
+              </div>
+            )
+          })}
         </div>
       </div>
     </motion.div>
