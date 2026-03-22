@@ -41,7 +41,7 @@ export default function OrdersPage() {
       try {
         const params: Record<string, string> = {}
         if (statusFilter) params.status = statusFilter
-        const res = await api.get('/v1/orders', { params })
+        const res = await api.get('/v1/orders/me', { params })
         setOrders(res.data)
       } finally {
         setLoading(false)

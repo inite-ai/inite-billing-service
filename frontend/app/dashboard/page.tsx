@@ -34,9 +34,9 @@ export default function DashboardPage() {
     async function load() {
       try {
         const [ordersRes, subsRes, entRes] = await Promise.all([
-          api.get('/v1/orders').catch(() => ({ data: [] })),
-          api.get('/v1/subscriptions').catch(() => ({ data: [] })),
-          api.get('/v1/entitlements').catch(() => ({ data: [] })),
+          api.get('/v1/orders/me').catch(() => ({ data: [] })),
+          api.get('/v1/subscriptions/me').catch(() => ({ data: [] })),
+          api.get('/v1/entitlements/me').catch(() => ({ data: [] })),
         ])
         setOrders(ordersRes.data)
         setSubscriptions(subsRes.data)

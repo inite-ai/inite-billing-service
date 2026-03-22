@@ -40,7 +40,7 @@ export default function SubscriptionsPage() {
 
     async function load() {
       try {
-        const res = await api.get('/v1/subscriptions')
+        const res = await api.get('/v1/subscriptions/me')
         setSubscriptions(res.data)
       } finally {
         setLoading(false)
@@ -56,7 +56,7 @@ export default function SubscriptionsPage() {
   const handleCancel = async (id: string) => {
     if (!confirm(t('confirmCancel'))) return
     try {
-      await api.post(`/v1/subscriptions/${id}/cancel`)
+      await api.post('/v1/subscriptions/cancel', { subscriptionId: id })
       setSubscriptions((prev) =>
         prev.map((s) => (s.id === id ? { ...s, status: 'canceled' as const, cancelAtPeriodEnd: true } : s))
       )
