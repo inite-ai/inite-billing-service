@@ -35,7 +35,7 @@ describe('ReferralLevelsService', () => {
 
     // Create test service
     const svc = await prisma.service.create({
-      data: { code: `rl-test-${Date.now()}`, name: 'RL Test Service' },
+      data: { code: `rl-test-${Date.now()}`, name: 'RL Test Service', apiKey: `sk_test_${Date.now()}` },
     });
     serviceId = svc.id;
   });

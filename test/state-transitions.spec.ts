@@ -9,8 +9,8 @@ describe('State Transitions', () => {
   let outbox: OutboxService;
 
   beforeEach(async () => {
-    const mockPrisma = {
-      $transaction: jest.fn((callback) => callback(mockPrisma)),
+    const mockPrisma: any = {
+      $transaction: jest.fn((callback: any) => callback(mockPrisma)),
       paymentIntent: {
         findUnique: jest.fn(),
         update: jest.fn(),
