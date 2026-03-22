@@ -351,6 +351,36 @@ CREATE TABLE "billing"."promo_code_usages" (
 );
 
 -- CreateTable
+CREATE TABLE "billing"."credit_balances" (
+    "id" UUID NOT NULL,
+    "user_id" VARCHAR(255) NOT NULL,
+    "service_id" UUID,
+    "balance" INTEGER NOT NULL DEFAULT 0,
+    "total_granted" INTEGER NOT NULL DEFAULT 0,
+    "total_used" INTEGER NOT NULL DEFAULT 0,
+    "resets_at" TIMESTAMPTZ(6),
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL,
+
+    CONSTRAINT "credit_balances_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "billing"."credit_usages" (
+    "id" UUID NOT NULL,
+    "credit_balance_id" UUID NOT NULL,
+    "user_id" VARCHAR(255) NOT NULL,
+    "amount" INTEGER NOT NULL,
+    "type" VARCHAR(20) NOT NULL,
+    "description" VARCHAR(255),
+    "order_id" UUID,
+    "metadata" JSONB DEFAULT '{}',
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "credit_usages_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "billing"."conversations" (
     "id" UUID NOT NULL,
     "user_id" VARCHAR(255) NOT NULL,
@@ -562,6 +592,18 @@ CREATE INDEX "promo_code_usages_promo_code_id_user_id_idx" ON "billing"."promo_c
 CREATE INDEX "promo_code_usages_order_id_idx" ON "billing"."promo_code_usages"("order_id");
 
 -- CreateIndex
+CREATE INDEX "credit_balances_user_id_idx" ON "billing"."credit_balances"("user_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "credit_balances_user_id_service_id_key" ON "billing"."credit_balances"("user_id", "service_id");
+
+-- CreateIndex
+CREATE INDEX "credit_usages_credit_balance_id_created_at_idx" ON "billing"."credit_usages"("credit_balance_id", "created_at");
+
+-- CreateIndex
+CREATE INDEX "credit_usages_user_id_created_at_idx" ON "billing"."credit_usages"("user_id", "created_at");
+
+-- CreateIndex
 CREATE INDEX "conversations_user_id_updated_at_idx" ON "billing"."conversations"("user_id", "updated_at" DESC);
 
 -- CreateIndex
@@ -638,6 +680,12 @@ ALTER TABLE "billing"."promo_code_usages" ADD CONSTRAINT "promo_code_usages_prom
 
 -- AddForeignKey
 ALTER TABLE "billing"."promo_code_usages" ADD CONSTRAINT "promo_code_usages_order_id_fkey" FOREIGN KEY ("order_id") REFERENCES "billing"."orders"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "billing"."credit_balances" ADD CONSTRAINT "credit_balances_service_id_fkey" FOREIGN KEY ("service_id") REFERENCES "billing"."services"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "billing"."credit_usages" ADD CONSTRAINT "credit_usages_credit_balance_id_fkey" FOREIGN KEY ("credit_balance_id") REFERENCES "billing"."credit_balances"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "billing"."chat_messages" ADD CONSTRAINT "chat_messages_conversation_id_fkey" FOREIGN KEY ("conversation_id") REFERENCES "billing"."conversations"("id") ON DELETE CASCADE ON UPDATE CASCADE;

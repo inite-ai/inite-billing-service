@@ -554,7 +554,7 @@ model PromoCodeUsage {
 
 model CreditBalance {
   id          String   @id @default(uuid()) @db.Uuid
-  userId      String   @map("user_id") @db.Uuid
+  userId      String   @map("user_id") @db.VarChar(255)
   serviceId   String?  @map("service_id") @db.Uuid
   balance     Int      @default(0)
   totalGranted Int     @default(0) @map("total_granted")
@@ -575,7 +575,7 @@ model CreditBalance {
 model CreditUsage {
   id              String   @id @default(uuid()) @db.Uuid
   creditBalanceId String   @map("credit_balance_id") @db.Uuid
-  userId          String   @map("user_id") @db.Uuid
+  userId          String   @map("user_id") @db.VarChar(255)
   amount          Int
   type            String   @db.VarChar(20)
   description     String?  @db.VarChar(255)
