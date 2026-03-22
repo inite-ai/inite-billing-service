@@ -361,7 +361,12 @@
     "tablePeriod": "Период",
     "tablePayoutDate": "Дата выплаты",
     "referralTree": "Реферальное дерево",
-    "treeDescription": "Ваша нижестоящая сеть. Каждый уровень приносит комиссию, когда кто-то в цепочке совершает покупку."
+    "treeDescription": "Ваша нижестоящая сеть. Каждый уровень приносит комиссию, когда кто-то в цепочке совершает покупку.",
+    "availableBalance": "Доступный баланс",
+    "minWithdrawal": "Мин. вывод: ${amount}",
+    "requestWithdrawal": "Запросить вывод",
+    "withdrawalRequested": "Запрос на вывод отправлен!",
+    "withdrawalError": "Не удалось запросить вывод"
   },
   "admin": {
     "dashboard": {

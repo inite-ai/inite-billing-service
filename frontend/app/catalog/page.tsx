@@ -97,7 +97,7 @@ export default function CatalogPage() {
     async function load() {
       try {
         const [productsRes, servicesRes] = await Promise.all([
-          api.get('/v1/catalog/products'),
+          api.get('/v1/products'),
           api.get('/v1/admin/services').catch(() => ({ data: [] })),
         ])
         setProducts(productsRes.data)
@@ -182,7 +182,7 @@ export default function CatalogPage() {
       if (promoResult?.valid && promoCode.trim()) {
         payload.promoCode = promoCode.trim()
       }
-      const res = await api.post('/v1/checkout/sessions', payload)
+      const res = await api.post('/v1/checkout/session', payload)
       if (res.data.checkoutUrl) {
         window.location.href = res.data.checkoutUrl
       }

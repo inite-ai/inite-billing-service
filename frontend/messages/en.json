@@ -361,7 +361,12 @@
     "tablePeriod": "Period",
     "tablePayoutDate": "Payout Date",
     "referralTree": "Referral Tree",
-    "treeDescription": "Your downline network. Each level earns a commission when someone in the chain makes a purchase."
+    "treeDescription": "Your downline network. Each level earns a commission when someone in the chain makes a purchase.",
+    "availableBalance": "Available balance",
+    "minWithdrawal": "Min. withdrawal: ${amount}",
+    "requestWithdrawal": "Request Withdrawal",
+    "withdrawalRequested": "Withdrawal request submitted!",
+    "withdrawalError": "Failed to request withdrawal"
   },
   "admin": {
     "dashboard": {

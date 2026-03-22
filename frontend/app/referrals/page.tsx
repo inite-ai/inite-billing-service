@@ -46,6 +46,8 @@ export default function ReferralsPage() {
   const [tree, setTree] = useState<AffiliateTreeNode | null>(null)
   const [services, setServices] = useState<Service[]>([])
   const [selectedService, setSelectedService] = useState('')
+  const [balance, setBalance] = useState<{ available: string; canWithdraw: boolean; minWithdrawalAmount: string; totalEarned: string; totalPaid: string } | null>(null)
+  const [withdrawing, setWithdrawing] = useState(false)
   const [copied, setCopied] = useState(false)
   const [loading, setLoading] = useState(true)
 
@@ -66,18 +68,20 @@ export default function ReferralsPage() {
         const affRes = await api.get('/v1/affiliates/me', { params })
         setAffiliate(affRes.data)
 
-        const [statsRes, refsRes, comsRes, payRes, treeRes] = await Promise.all([
+        const [statsRes, refsRes, comsRes, payRes, treeRes, balRes] = await Promise.all([
           api.get('/v1/affiliates/me/stats', { params }),
           api.get('/v1/affiliates/me/referrals', { params }),
           api.get('/v1/affiliates/me/commissions', { params }),
           api.get('/v1/affiliates/me/payouts', { params }),
           api.get('/v1/affiliates/me/tree', { params }).catch(() => ({ data: null })),
+          api.get('/v1/affiliates/me/balance', { params }).catch(() => ({ data: null })),
         ])
         setStats(statsRes.data)
         setReferrals(refsRes.data)
         setCommissions(comsRes.data)
         setPayouts(payRes.data)
         setTree(treeRes.data)
+        setBalance(balRes.data)
       } catch {
         // User may not have an affiliate account
       } finally {
@@ -97,6 +101,26 @@ export default function ReferralsPage() {
       toast.success(t('affiliateCreated'))
     } catch {
       toast.error(t('affiliateCreateError'))
+    }
+  }
+
+  const handleWithdraw = async () => {
+    if (!balance?.canWithdraw) return
+    setWithdrawing(true)
+    try {
+      await api.post('/v1/affiliates/me/withdraw', {
+        currency: 'USD',
+      })
+      toast.success(t('withdrawalRequested'))
+      // Reload balance
+      const balRes = await api.get('/v1/affiliates/me/balance').catch(() => ({ data: null }))
+      setBalance(balRes.data)
+      const payRes = await api.get('/v1/affiliates/me/payouts')
+      setPayouts(payRes.data)
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || t('withdrawalError'))
+    } finally {
+      setWithdrawing(false)
     }
   }
 
@@ -186,6 +210,34 @@ export default function ReferralsPage() {
               </Button>
             </div>
           </Card>
+
+          {/* Balance & Withdrawal */}
+          {balance && (
+            <Card className={balance.canWithdraw ? 'border-emerald-200 dark:border-emerald-800/50 bg-emerald-50/50 dark:bg-emerald-900/10' : ''}>
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="p-2.5 rounded-xl bg-emerald-100 dark:bg-emerald-900/30">
+                    <Wallet className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 uppercase tracking-wide">{t('availableBalance')}</p>
+                    <p className="text-2xl font-bold text-slate-900 dark:text-white">${Number(balance.available).toFixed(2)}</p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {t('minWithdrawal', { amount: Number(balance.minWithdrawalAmount).toFixed(0) })}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  onClick={handleWithdraw}
+                  disabled={!balance.canWithdraw || withdrawing}
+                  loading={withdrawing}
+                  icon={<DollarSign className="w-4 h-4" />}
+                >
+                  {t('requestWithdrawal')}
+                </Button>
+              </div>
+            </Card>
+          )}
 
           <Tabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
 
