@@ -40,6 +40,11 @@ export class CreateCheckoutSessionDto {
   @IsString()
   @IsOptional()
   referralCode?: string;
+
+  @ApiPropertyOptional({ description: 'User ID (required for service-to-service calls)' })
+  @IsString()
+  @IsOptional()
+  userId?: string;
 }
 
 export class CheckoutSessionResponseDto {

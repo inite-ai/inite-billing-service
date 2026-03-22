@@ -9,6 +9,7 @@ import {
   HttpCode,
   HttpStatus,
   Req,
+  BadRequestException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiHeader } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -62,12 +63,17 @@ export class CheckoutController {
   })
   @ApiResponse({ status: 201, type: CheckoutSessionResponseDto })
   async createCheckoutSession(
-    @User() user: RequestUser,
+    @Req() req: any,
     @Body() dto: CreateCheckoutSessionDto,
     @Headers('idempotency-key') idempotencyKey?: string,
   ): Promise<CheckoutSessionResponseDto> {
+    // Service callers pass userId in body; JWT users use their own
+    const userId = req.user?.isService ? dto.userId : req.user?.userId;
+    if (!userId) {
+      throw new BadRequestException('userId is required');
+    }
     return this.checkoutService.createSession(
-      user.userId,
+      userId,
       dto,
       idempotencyKey,
     );
