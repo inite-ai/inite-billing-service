@@ -322,6 +322,7 @@
     "discount": "Скидка",
     "finalPrice": "Итоговая цена",
     "proceedToPayment": "Перейти к оплате",
+    "orderCompleted": "Заказ успешно оформлен!",
     "failedToLoad": "Не удалось загрузить каталог",
     "paymentMethod": "Способ оплаты",
     "selectPaymentMethod": "Выберите способ оплаты",

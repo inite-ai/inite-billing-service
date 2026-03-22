@@ -322,6 +322,7 @@
     "discount": "Discount",
     "finalPrice": "Final price",
     "proceedToPayment": "Proceed to Payment",
+    "orderCompleted": "Order completed successfully!",
     "failedToLoad": "Failed to load catalog",
     "paymentMethod": "Payment Method",
     "selectPaymentMethod": "Select payment method",

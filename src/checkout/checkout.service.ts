@@ -66,20 +66,6 @@ export class CheckoutService {
       );
     }
 
-    // Determine rail
-    let rail: string;
-    if (!dto.rail) {
-      const activeProvider = await this.prisma.paymentProvider.findFirst({
-        where: { isActive: true },
-      });
-      if (!activeProvider) {
-        throw new BadRequestException('No payment providers are configured. Please contact support.');
-      }
-      rail = activeProvider.code;
-    } else {
-      rail = dto.rail;
-    }
-
     // Validate promo code if provided
     let promoValidation: any = null;
     let orderAmount = price.amount;
@@ -180,11 +166,56 @@ export class CheckoutService {
       currency: order.currency,
       properties: {
         priceCode: dto.priceCode,
-        rail,
         promoCode: dto.promoCode,
         referralCode: dto.referralCode,
       },
     });
+
+    // If amount is 0 (100% discount), skip payment — fulfill immediately
+    if (Number(orderAmount) === 0) {
+      // Create a virtual payment intent record
+      const paymentIntent = await this.prisma.paymentIntent.create({
+        data: {
+          orderId: order.id,
+          rail: 'PROMO',
+          status: 'paid',
+          providerIntentId: `promo_${order.id}`,
+          amount: 0,
+          currency: price.currency,
+          snapshot: { promoCode: dto.promoCode, fullDiscount: true },
+        },
+      });
+
+      // Trigger fulfillment through the orchestrator
+      await this.paymentOrchestrator.applyStateTransition(paymentIntent.id, 'paid');
+
+      const response: CheckoutSessionResponseDto = {
+        orderId: order.id,
+        paymentIntentId: paymentIntent.id,
+        checkoutUrl: dto.successUrl || '',
+      };
+
+      if (idempotencyKey) {
+        this.idempotencyStore.set(`${userId}:${idempotencyKey}`, response);
+        setTimeout(() => { this.idempotencyStore.delete(`${userId}:${idempotencyKey}`); }, 3600000);
+      }
+
+      return response;
+    }
+
+    // Determine rail for payment
+    let rail: string;
+    if (dto.rail) {
+      rail = dto.rail;
+    } else {
+      const activeProvider = await this.prisma.paymentProvider.findFirst({
+        where: { isActive: true },
+      });
+      if (!activeProvider) {
+        throw new BadRequestException('No payment providers are configured.');
+      }
+      rail = activeProvider.code;
+    }
 
     // Get adapter
     let adapter;
@@ -194,7 +225,7 @@ export class CheckoutService {
       throw new BadRequestException(`Payment provider ${rail} is not available. Please select another payment method.`);
     }
 
-    // Create payment intent with adapter (use discounted amount)
+    // Create payment intent with adapter
     const intentResult = await adapter.createPaymentIntent({
       orderId: order.externalId!,
       amount: Number(orderAmount),

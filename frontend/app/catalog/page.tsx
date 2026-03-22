@@ -203,15 +203,19 @@ export default function CatalogPage() {
   }
 
   const handleProceedToPayment = async () => {
-    if (!checkoutPrice || !checkoutProduct || !selectedRail) return
+    if (!checkoutPrice || !checkoutProduct) return
+    const isFree = promoResult?.valid && Number(promoResult.finalAmount) === 0
+    if (!isFree && !selectedRail) return
     setCheckoutLoading(true)
     try {
       const payload: Record<string, unknown> = {
         priceCode: checkoutPrice.code,
         mode: checkoutProduct.type === 'subscription' ? 'SUBSCRIPTION' : 'PAYMENT',
-        rail: selectedRail,
         successUrl: window.location.origin + '/orders',
         errorUrl: window.location.origin + '/catalog',
+      }
+      if (!isFree && selectedRail) {
+        payload.rail = selectedRail
       }
       if (promoResult?.valid && promoCode.trim()) {
         payload.promoCode = promoCode.trim()
@@ -219,9 +223,13 @@ export default function CatalogPage() {
       const res = await api.post('/v1/checkout/session', payload)
       if (res.data.checkoutUrl) {
         window.location.href = res.data.checkoutUrl
+      } else {
+        // Free order — no checkout URL, go to orders
+        toast.success(t('orderCompleted'))
+        window.location.href = '/orders'
       }
-    } catch {
-      toast.error(tc('errors.generic'))
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || tc('errors.generic'))
     } finally {
       setCheckoutLoading(false)
     }
@@ -501,7 +509,7 @@ export default function CatalogPage() {
               size="lg"
               onClick={handleProceedToPayment}
               loading={checkoutLoading}
-              disabled={!selectedRail || paymentMethodsLoading}
+              disabled={(!selectedRail && !(promoResult?.valid && Number(promoResult.finalAmount) === 0)) || paymentMethodsLoading}
               icon={<Zap className="w-4 h-4" />}
             >
               {t('proceedToPayment')}
