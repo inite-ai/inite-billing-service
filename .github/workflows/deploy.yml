@@ -128,6 +128,9 @@ jobs:
           exit 1
         fi
 
+        # Clean up failed prisma migrations table if exists (switch from migrate to db push)
+        docker exec postgres psql -U ${{ secrets.ORCH_POSTGRES_USER }} -d inite_billing -c "DROP TABLE IF EXISTS billing._prisma_migrations;" 2>/dev/null || true
+
         docker pull ${{ secrets.DOCKERHUB_USERNAME }}/inite-billing-service:latest
         docker-compose up -d --no-deps --force-recreate billing-service
         sleep 15
@@ -267,6 +270,9 @@ jobs:
           traefik-global:
             external: true
         COMPOSE_EOF
+
+        # Clean up failed prisma migrations table if exists
+        docker exec postgres psql -U ${{ secrets.ORCH_POSTGRES_USER }} -d inite_billing -c "DROP TABLE IF EXISTS billing._prisma_migrations;" 2>/dev/null || true
 
         docker pull ${{ secrets.DOCKERHUB_USERNAME }}/inite-billing-service:latest
         docker pull ${{ secrets.DOCKERHUB_USERNAME }}/inite-billing-frontend:latest
