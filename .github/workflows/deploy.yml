@@ -153,7 +153,7 @@ jobs:
               - "traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true"
             environment:
               - NODE_ENV=production
-              - NEXT_PUBLIC_API_URL=
+              - NEXT_PUBLIC_API_URL=https://billing-api.inite.ai
               - NEXT_PUBLIC_AUTH_SERVICE_URL=https://auth.inite.ai
               - NEXT_PUBLIC_OAUTH_CLIENT_ID=inite-billing
               - OAUTH_CLIENT_SECRET=\${OAUTH_CLIENT_SECRET}

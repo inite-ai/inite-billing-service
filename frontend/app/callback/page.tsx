@@ -18,7 +18,12 @@ function CallbackContent() {
   const t = useTranslations('callback');
 
   useEffect(() => {
+    let handled = false;
+
     const handleCallback = async () => {
+      if (handled) return;
+      handled = true;
+
       try {
         const code = searchParams?.get('code');
         const state = searchParams?.get('state');
@@ -56,7 +61,7 @@ function CallbackContent() {
     };
 
     handleCallback();
-  }, [searchParams, router, refreshSession]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
