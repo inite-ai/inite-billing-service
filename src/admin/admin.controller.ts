@@ -175,6 +175,28 @@ export class AdminController {
     return this.adminService.deletePrice(id);
   }
 
+  // ─── Customers ────────────────────────────────────────────
+
+  @Get('customers')
+  @ApiOperation({ summary: 'List all customers (aggregated from orders)' })
+  async getCustomers(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+  ) {
+    return this.adminService.getCustomers({
+      page: page ? parseInt(page, 10) : undefined,
+      limit: limit ? parseInt(limit, 10) : undefined,
+      search: search || undefined,
+    });
+  }
+
+  @Get('customers/:userId')
+  @ApiOperation({ summary: 'Get customer detail' })
+  async getCustomerDetail(@Param('userId') userId: string) {
+    return this.adminService.getCustomerDetail(userId);
+  }
+
   // ─── Orders ────────────────────────────────────────────────
 
   @Get('orders')

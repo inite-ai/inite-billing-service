@@ -279,19 +279,43 @@ CREATE TABLE "billing"."affiliate_commissions" (
 CREATE TABLE "billing"."affiliate_payouts" (
     "id" UUID NOT NULL,
     "affiliate_id" UUID NOT NULL,
+    "payout_provider_id" UUID,
     "period_start" TIMESTAMPTZ(6) NOT NULL,
     "period_end" TIMESTAMPTZ(6) NOT NULL,
     "total_amount" DECIMAL(19,4) NOT NULL,
+    "fee_amount" DECIMAL(19,4),
+    "net_amount" DECIMAL(19,4),
     "currency" VARCHAR(10) NOT NULL,
     "status" "billing"."PayoutStatus" NOT NULL DEFAULT 'pending',
     "payout_date" TIMESTAMPTZ(6),
     "processed_at" TIMESTAMPTZ(6),
+    "external_id" VARCHAR(255),
     "failure_reason" TEXT,
+    "payout_details" JSONB DEFAULT '{}',
     "metadata" JSONB DEFAULT '{}',
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ(6) NOT NULL,
 
     CONSTRAINT "affiliate_payouts_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "billing"."payout_providers" (
+    "id" UUID NOT NULL,
+    "code" VARCHAR(50) NOT NULL,
+    "name" VARCHAR(255) NOT NULL,
+    "is_active" BOOLEAN NOT NULL DEFAULT false,
+    "currencies" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "min_amount" DECIMAL(19,4),
+    "max_amount" DECIMAL(19,4),
+    "fee_percent" DECIMAL(5,4),
+    "fee_fixed" DECIMAL(19,4),
+    "config" JSONB DEFAULT '{}',
+    "metadata" JSONB DEFAULT '{}',
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL,
+
+    CONSTRAINT "payout_providers_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -575,6 +599,9 @@ CREATE INDEX "affiliate_payouts_status_period_end_idx" ON "billing"."affiliate_p
 CREATE INDEX "affiliate_payouts_period_start_period_end_idx" ON "billing"."affiliate_payouts"("period_start", "period_end");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "payout_providers_code_key" ON "billing"."payout_providers"("code");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "payment_providers_code_key" ON "billing"."payment_providers"("code");
 
 -- CreateIndex
@@ -672,6 +699,9 @@ ALTER TABLE "billing"."affiliate_commissions" ADD CONSTRAINT "affiliate_commissi
 
 -- AddForeignKey
 ALTER TABLE "billing"."affiliate_payouts" ADD CONSTRAINT "affiliate_payouts_affiliate_id_fkey" FOREIGN KEY ("affiliate_id") REFERENCES "billing"."affiliates"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "billing"."affiliate_payouts" ADD CONSTRAINT "affiliate_payouts_payout_provider_id_fkey" FOREIGN KEY ("payout_provider_id") REFERENCES "billing"."payout_providers"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "billing"."promo_codes" ADD CONSTRAINT "promo_codes_service_id_fkey" FOREIGN KEY ("service_id") REFERENCES "billing"."services"("id") ON DELETE SET NULL ON UPDATE CASCADE;

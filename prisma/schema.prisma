@@ -462,27 +462,54 @@ model AffiliateCommission {
 }
 
 model AffiliatePayout {
-  id              String       @id @default(uuid()) @db.Uuid
-  affiliateId     String       @map("affiliate_id") @db.Uuid
-  periodStart     DateTime     @map("period_start") @db.Timestamptz(6)
-  periodEnd       DateTime     @map("period_end") @db.Timestamptz(6)
-  totalAmount     Decimal      @map("total_amount") @db.Decimal(19, 4)
-  currency        String       @db.VarChar(10)
-  status          PayoutStatus @default(pending)
-  payoutDate      DateTime?    @map("payout_date") @db.Timestamptz(6)
-  processedAt     DateTime?    @map("processed_at") @db.Timestamptz(6)
-  failureReason   String?      @map("failure_reason") @db.Text
-  metadata        Json?        @default("{}")
-  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id               String        @id @default(uuid()) @db.Uuid
+  affiliateId      String        @map("affiliate_id") @db.Uuid
+  payoutProviderId String?       @map("payout_provider_id") @db.Uuid
+  periodStart      DateTime      @map("period_start") @db.Timestamptz(6)
+  periodEnd        DateTime      @map("period_end") @db.Timestamptz(6)
+  totalAmount      Decimal       @map("total_amount") @db.Decimal(19, 4)
+  feeAmount        Decimal?      @map("fee_amount") @db.Decimal(19, 4)
+  netAmount        Decimal?      @map("net_amount") @db.Decimal(19, 4)
+  currency         String        @db.VarChar(10)
+  status           PayoutStatus  @default(pending)
+  payoutDate       DateTime?     @map("payout_date") @db.Timestamptz(6)
+  processedAt      DateTime?     @map("processed_at") @db.Timestamptz(6)
+  externalId       String?       @map("external_id") @db.VarChar(255)
+  failureReason    String?       @map("failure_reason") @db.Text
+  payoutDetails    Json?         @map("payout_details") @default("{}")
+  metadata         Json?         @default("{}")
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  affiliate       Affiliate            @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
-  commissions     AffiliateCommission[]
+  affiliate        Affiliate            @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  payoutProvider   PayoutProvider?      @relation(fields: [payoutProviderId], references: [id])
+  commissions      AffiliateCommission[]
 
   @@index([affiliateId, status])
   @@index([status, periodEnd])
   @@index([periodStart, periodEnd])
   @@map("affiliate_payouts")
+  @@schema("billing")
+}
+
+model PayoutProvider {
+  id             String   @id @default(uuid()) @db.Uuid
+  code           String   @unique @db.VarChar(50)    // BANK, CRYPTO, PAYPAL
+  name           String   @db.VarChar(255)
+  isActive       Boolean  @default(false) @map("is_active")
+  currencies     String[] @default([])                // USD, EUR, USDT
+  minAmount      Decimal? @map("min_amount") @db.Decimal(19, 4)
+  maxAmount      Decimal? @map("max_amount") @db.Decimal(19, 4)
+  feePercent     Decimal? @map("fee_percent") @db.Decimal(5, 4)
+  feeFixed       Decimal? @map("fee_fixed") @db.Decimal(19, 4)
+  config         Json?    @default("{}")              // API keys, secrets
+  metadata       Json?    @default("{}")              // display info, description
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  payouts        AffiliatePayout[]
+
+  @@map("payout_providers")
   @@schema("billing")
 }
 
