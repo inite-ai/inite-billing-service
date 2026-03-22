@@ -103,7 +103,7 @@ CREATE TABLE "billing"."prices" (
 -- CreateTable
 CREATE TABLE "billing"."orders" (
     "id" UUID NOT NULL,
-    "user_id" UUID NOT NULL,
+    "user_id" VARCHAR(255) NOT NULL,
     "price_id" UUID NOT NULL,
     "mode" "billing"."OrderMode" NOT NULL,
     "status" "billing"."OrderStatus" NOT NULL DEFAULT 'created',
@@ -145,7 +145,7 @@ CREATE TABLE "billing"."payment_intents" (
 -- CreateTable
 CREATE TABLE "billing"."subscriptions" (
     "id" UUID NOT NULL,
-    "user_id" UUID NOT NULL,
+    "user_id" VARCHAR(255) NOT NULL,
     "price_id" UUID NOT NULL,
     "status" "billing"."SubscriptionStatus" NOT NULL DEFAULT 'trialing',
     "current_period_start" TIMESTAMPTZ(6) NOT NULL,
@@ -162,7 +162,7 @@ CREATE TABLE "billing"."subscriptions" (
 -- CreateTable
 CREATE TABLE "billing"."entitlements" (
     "id" UUID NOT NULL,
-    "user_id" UUID NOT NULL,
+    "user_id" VARCHAR(255) NOT NULL,
     "key" VARCHAR(100) NOT NULL,
     "status" "billing"."EntitlementStatus" NOT NULL DEFAULT 'active',
     "value" JSONB DEFAULT '{}',
@@ -224,7 +224,7 @@ CREATE TABLE "billing"."outbox_events" (
 -- CreateTable
 CREATE TABLE "billing"."affiliates" (
     "id" UUID NOT NULL,
-    "user_id" UUID NOT NULL,
+    "user_id" VARCHAR(255) NOT NULL,
     "service_id" UUID,
     "parent_affiliate_id" UUID,
     "referral_code" VARCHAR(50) NOT NULL,
@@ -341,7 +341,7 @@ CREATE TABLE "billing"."promo_code_usages" (
     "id" UUID NOT NULL,
     "promo_code_id" UUID NOT NULL,
     "order_id" UUID NOT NULL,
-    "user_id" UUID NOT NULL,
+    "user_id" VARCHAR(255) NOT NULL,
     "discount_applied" DECIMAL(19,4) NOT NULL,
     "original_amount" DECIMAL(19,4) NOT NULL,
     "final_amount" DECIMAL(19,4) NOT NULL,
@@ -353,7 +353,7 @@ CREATE TABLE "billing"."promo_code_usages" (
 -- CreateTable
 CREATE TABLE "billing"."conversations" (
     "id" UUID NOT NULL,
-    "user_id" UUID NOT NULL,
+    "user_id" VARCHAR(255) NOT NULL,
     "mode" VARCHAR(20) NOT NULL,
     "status" VARCHAR(20) NOT NULL DEFAULT 'active',
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -378,7 +378,7 @@ CREATE TABLE "billing"."chat_messages" (
 -- CreateTable
 CREATE TABLE "billing"."funnel_events" (
     "id" UUID NOT NULL,
-    "user_id" UUID NOT NULL,
+    "user_id" VARCHAR(255) NOT NULL,
     "session_id" VARCHAR(100),
     "event_type" VARCHAR(50) NOT NULL,
     "stage" VARCHAR(30) NOT NULL,

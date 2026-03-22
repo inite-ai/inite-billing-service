@@ -198,7 +198,7 @@ model Price {
 
 model Order {
   id           String      @id @default(uuid()) @db.Uuid
-  userId       String      @map("user_id") @db.Uuid
+  userId       String      @map("user_id") @db.VarChar(255)
   priceId      String      @map("price_id") @db.Uuid
   mode         OrderMode
   status       OrderStatus @default(created)
@@ -257,7 +257,7 @@ model PaymentIntent {
 
 model Subscription {
   id                      String            @id @default(uuid()) @db.Uuid
-  userId                  String            @map("user_id") @db.Uuid
+  userId                  String            @map("user_id") @db.VarChar(255)
   priceId                 String            @map("price_id") @db.Uuid
   status                  SubscriptionStatus @default(trialing)
   currentPeriodStart      DateTime          @map("current_period_start") @db.Timestamptz(6)
@@ -279,7 +279,7 @@ model Subscription {
 
 model Entitlement {
   id        String            @id @default(uuid()) @db.Uuid
-  userId    String            @map("user_id") @db.Uuid
+  userId    String            @map("user_id") @db.VarChar(255)
   key       String            @db.VarChar(100)
   status    EntitlementStatus @default(active)
   value     Json?             @default("{}")
@@ -378,7 +378,7 @@ enum PayoutStatus {
 
 model Affiliate {
   id                String           @id @default(uuid()) @db.Uuid
-  userId            String           @map("user_id") @db.Uuid
+  userId            String           @map("user_id") @db.VarChar(255)
   serviceId         String?          @map("service_id") @db.Uuid
   parentAffiliateId String?          @map("parent_affiliate_id") @db.Uuid
   referralCode      String           @unique @map("referral_code") @db.VarChar(50)
@@ -536,7 +536,7 @@ model PromoCodeUsage {
   id              String   @id @default(uuid()) @db.Uuid
   promoCodeId     String   @map("promo_code_id") @db.Uuid
   orderId         String   @map("order_id") @db.Uuid
-  userId          String   @map("user_id") @db.Uuid
+  userId          String   @map("user_id") @db.VarChar(255)
   discountApplied Decimal  @map("discount_applied") @db.Decimal(19, 4)
   originalAmount  Decimal  @map("original_amount") @db.Decimal(19, 4)
   finalAmount     Decimal  @map("final_amount") @db.Decimal(19, 4)
@@ -553,7 +553,7 @@ model PromoCodeUsage {
 
 model Conversation {
   id         String        @id @default(uuid()) @db.Uuid
-  userId     String        @map("user_id") @db.Uuid
+  userId     String        @map("user_id") @db.VarChar(255)
   mode       String        @db.VarChar(20) // admin | user
   status     String        @default("active") @db.VarChar(20) // active | resolved
   createdAt  DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -584,7 +584,7 @@ model ChatMessage {
 
 model FunnelEvent {
   id          String   @id @default(uuid()) @db.Uuid
-  userId      String   @map("user_id") @db.Uuid
+  userId      String   @map("user_id") @db.VarChar(255)
   sessionId   String?  @map("session_id") @db.VarChar(100)
   eventType   String   @map("event_type") @db.VarChar(50)
   // eventType values: catalog_view, checkout_started, payment_pending,
