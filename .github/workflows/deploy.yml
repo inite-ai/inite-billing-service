@@ -100,30 +100,30 @@ jobs:
             labels:
               - "traefik.enable=true"
               - "traefik.docker.network=traefik-global"
-              - "traefik.http.routers.billing-api.rule=Host(\`billing-api.inite.ai\`)"
+              - "traefik.http.routers.billing-api.rule=Host(\`${{ env.API_DOMAIN }}\`)"
               - "traefik.http.routers.billing-api.entrypoints=websecure"
               - "traefik.http.routers.billing-api.tls=true"
               - "traefik.http.routers.billing-api.tls.certresolver=letsencrypt"
               - "traefik.http.routers.billing-api.service=billing-api-service"
               - "traefik.http.services.billing-api-service.loadbalancer.server.port=3000"
-              - "traefik.http.routers.billing-api-path.rule=Host(\`billing.inite.ai\`) && (PathPrefix(\`/v1\`) || PathPrefix(\`/api\`) || PathPrefix(\`/health\`))"
+              - "traefik.http.routers.billing-api-path.rule=Host(\`${{ env.DOMAIN }}\`) && (PathPrefix(\`/v1\`) || PathPrefix(\`/api\`) || PathPrefix(\`/health\`))"
               - "traefik.http.routers.billing-api-path.entrypoints=websecure"
               - "traefik.http.routers.billing-api-path.tls=true"
               - "traefik.http.routers.billing-api-path.tls.certresolver=letsencrypt"
               - "traefik.http.routers.billing-api-path.priority=100"
               - "traefik.http.routers.billing-api-path.service=billing-api-service"
-              - "traefik.http.routers.billing-api-http.rule=Host(\`billing-api.inite.ai\`)"
+              - "traefik.http.routers.billing-api-http.rule=Host(\`${{ env.API_DOMAIN }}\`)"
               - "traefik.http.routers.billing-api-http.entrypoints=web"
               - "traefik.http.routers.billing-api-http.middlewares=redirect-to-https"
             environment:
               - NODE_ENV=production
               - PORT=3000
-              - FRONTEND_URL=https://billing.inite.ai
+              - FRONTEND_URL=https://${{ env.DOMAIN }}
               - DATABASE_URL=\${DATABASE_URL}
               - REDIS_URL=\${REDIS_URL}
               - JWT_SECRET=\${JWT_SECRET}
               - JWT_PUBLIC_KEY=\${JWT_PUBLIC_KEY}
-              - CORS_ORIGINS=https://billing.inite.ai,https://billing-api.inite.ai
+              - CORS_ORIGINS=https://${{ env.DOMAIN }},https://${{ env.API_DOMAIN }}
             networks:
               - traefik-global
             healthcheck:
@@ -140,20 +140,20 @@ jobs:
             labels:
               - "traefik.enable=true"
               - "traefik.docker.network=traefik-global"
-              - "traefik.http.routers.billing-frontend.rule=Host(\`billing.inite.ai\`)"
+              - "traefik.http.routers.billing-frontend.rule=Host(\`${{ env.DOMAIN }}\`)"
               - "traefik.http.routers.billing-frontend.entrypoints=websecure"
               - "traefik.http.routers.billing-frontend.tls=true"
               - "traefik.http.routers.billing-frontend.tls.certresolver=letsencrypt"
               - "traefik.http.routers.billing-frontend.priority=10"
               - "traefik.http.services.billing-frontend.loadbalancer.server.port=3001"
-              - "traefik.http.routers.billing-frontend-http.rule=Host(\`billing.inite.ai\`)"
+              - "traefik.http.routers.billing-frontend-http.rule=Host(\`${{ env.DOMAIN }}\`)"
               - "traefik.http.routers.billing-frontend-http.entrypoints=web"
               - "traefik.http.routers.billing-frontend-http.middlewares=redirect-to-https"
               - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
               - "traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true"
             environment:
               - NODE_ENV=production
-              - NEXT_PUBLIC_API_URL=https://billing-api.inite.ai
+              - NEXT_PUBLIC_API_URL=https://${{ env.API_DOMAIN }}
               - NEXT_PUBLIC_AUTH_SERVICE_URL=https://auth.inite.ai
               - NEXT_PUBLIC_OAUTH_CLIENT_ID=inite-billing
               - OAUTH_CLIENT_SECRET=\${OAUTH_CLIENT_SECRET}
