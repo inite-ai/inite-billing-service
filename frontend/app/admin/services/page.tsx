@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
 import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
 import { ServiceForm } from '@/components/admin/ServiceForm'
-import { Plus, Pencil, Trash2, Eye, EyeOff, Server, Loader2, Copy, RefreshCw, Check } from 'lucide-react'
+import { Plus, Pencil, Trash2, Eye, EyeOff, Server, Loader2, Copy, RefreshCw, Check, Power, PowerOff } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import type { Service } from '@/lib/types'
@@ -177,8 +177,8 @@ export default function AdminServicesPage() {
                       <button onClick={() => { setEditing(s); setShowModal(true) }} className="text-gray-400 hover:text-blue-500" title={tc('edit')}>
                         <Pencil className="w-4 h-4" />
                       </button>
-                      <button onClick={() => handleToggleActive(s.id, s.isActive)} className="text-gray-400 hover:text-yellow-500" title={s.isActive ? tc('deactivate') : tc('activate')}>
-                        {s.isActive ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      <button onClick={() => handleToggleActive(s.id, s.isActive)} className={s.isActive ? 'text-green-500 hover:text-yellow-500' : 'text-gray-400 hover:text-green-500'} title={s.isActive ? tc('deactivate') : tc('activate')}>
+                        {s.isActive ? <Power className="w-4 h-4" /> : <PowerOff className="w-4 h-4" />}
                       </button>
                       <button onClick={() => handleDelete(s.id)} className="text-gray-400 hover:text-red-500" title={tc('delete')}>
                         <Trash2 className="w-4 h-4" />
