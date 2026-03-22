@@ -47,7 +47,7 @@ jobs:
         file: ./frontend/Dockerfile
         push: true
         build-args: |
-          NEXT_PUBLIC_API_URL=
+          NEXT_PUBLIC_API_URL=https://${{ env.API_DOMAIN }}
           NEXT_PUBLIC_AUTH_SERVICE_URL=https://auth.inite.ai
           NEXT_PUBLIC_OAUTH_CLIENT_ID=inite-billing
         tags: |
