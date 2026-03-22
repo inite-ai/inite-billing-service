@@ -42,4 +42,4 @@ USER nestjs
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main"]
+CMD ["sh", "-c", "npx prisma db push --skip-generate --accept-data-loss 2>/dev/null || npx prisma migrate deploy; node dist/main"]
