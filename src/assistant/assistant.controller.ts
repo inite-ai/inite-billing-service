@@ -7,7 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
-import { SkipThrottle } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { User, RequestUser } from '../auth/decorators/user.decorator';
@@ -16,7 +16,7 @@ import { AssistantService } from './assistant.service';
 @ApiTags('Assistant')
 @Controller('v1/assistant')
 @UseGuards(JwtAuthGuard)
-@SkipThrottle()
+@Throttle({ default: { limit: 10, ttl: 60000 } })
 export class AssistantController {
   private readonly logger = new Logger(AssistantController.name);
 

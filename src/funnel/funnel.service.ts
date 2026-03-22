@@ -351,26 +351,38 @@ export class FunnelService {
           ? 'week'
           : 'month';
 
-    const serviceFilter = params.serviceId
-      ? `AND service_id = '${params.serviceId}'::uuid`
-      : '';
+    // Use Prisma.sql tagged template literals to prevent SQL injection
+    const { Prisma } = require('@prisma/client');
+
+    const truncSql =
+      truncFn === 'day'
+        ? Prisma.sql`day`
+        : truncFn === 'week'
+          ? Prisma.sql`week`
+          : Prisma.sql`month`;
 
     const rows: Array<{
       period: Date;
       event_type: string;
       cnt: bigint;
-    }> = await this.prisma.$queryRawUnsafe(
-      `SELECT date_trunc('${truncFn}', created_at) AS period,
-              event_type,
-              COUNT(*)::bigint AS cnt
-       FROM billing.funnel_events
-       WHERE created_at >= $1 AND created_at <= $2
-       ${serviceFilter}
-       GROUP BY period, event_type
-       ORDER BY period`,
-      params.from,
-      params.to,
-    );
+    }> = params.serviceId
+      ? await this.prisma.$queryRaw`
+          SELECT date_trunc(${truncSql}, created_at) AS period,
+                 event_type,
+                 COUNT(*)::bigint AS cnt
+          FROM billing.funnel_events
+          WHERE created_at >= ${params.from} AND created_at <= ${params.to}
+            AND service_id = ${params.serviceId}::uuid
+          GROUP BY period, event_type
+          ORDER BY period`
+      : await this.prisma.$queryRaw`
+          SELECT date_trunc(${truncSql}, created_at) AS period,
+                 event_type,
+                 COUNT(*)::bigint AS cnt
+          FROM billing.funnel_events
+          WHERE created_at >= ${params.from} AND created_at <= ${params.to}
+          GROUP BY period, event_type
+          ORDER BY period`;
 
     // Group by period
     const periodMap = new Map<

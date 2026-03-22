@@ -5,9 +5,11 @@ import {
   Body,
   Param,
   Query,
+  Req,
   UseGuards,
   HttpCode,
   HttpStatus,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -54,6 +56,7 @@ export class CreditsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Consume credits for a user' })
   async consumeCredits(
+    @User() user: RequestUser,
     @Body()
     body: {
       userId: string;
@@ -63,13 +66,22 @@ export class CreditsController {
       metadata?: Record<string, any>;
     },
   ) {
-    return this.creditsService.consume(body);
+    // C3 fix: Force userId for non-service callers to prevent IDOR
+    const userId = user.isService ? body.userId : user.userId;
+    return this.creditsService.consume({ ...body, userId });
   }
 
   @Get(':userId')
   @UseGuards(JwtOrServiceGuard)
   @ApiOperation({ summary: 'Get user balances (service-to-service)' })
-  async getUserBalances(@Param('userId') userId: string) {
+  async getUserBalances(
+    @User() user: RequestUser,
+    @Param('userId') userId: string,
+  ) {
+    // C4 fix: Non-service callers can only access their own balances
+    if (!user.isService && userId !== user.userId) {
+      throw new ForbiddenException('You can only access your own credit balances');
+    }
     return this.creditsService.getUserBalances(userId);
   }
 }

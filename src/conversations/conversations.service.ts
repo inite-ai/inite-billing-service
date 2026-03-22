@@ -19,6 +19,12 @@ export class ConversationsService {
     });
   }
 
+  async getConversationById(id: string): Promise<Conversation | null> {
+    return this.prisma.conversation.findUnique({
+      where: { id },
+    });
+  }
+
   async addMessage(
     conversationId: string,
     role: string,

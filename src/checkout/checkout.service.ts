@@ -264,7 +264,7 @@ export class CheckoutService {
     let orderAmount = Number(order.amount);
     const originalAmount = orderAmount;
 
-    // Validate + apply promo code if provided
+    // Validate + apply promo code if provided (wrapped in transaction to prevent race conditions)
     let promoValidation: any = null;
     if (data.promoCode) {
       promoValidation = await this.promoCodesService.validatePromoCode(
@@ -279,34 +279,51 @@ export class CheckoutService {
         );
       }
 
-
-
       orderAmount = promoValidation.finalAmount;
 
-      // Update order with discounted amount and promo metadata
-      await this.prisma.order.update({
-        where: { id: order.id },
-        data: {
-          amount: orderAmount,
-          metadata: {
-            ...metadata,
-            promoCode: data.promoCode,
-            promoCodeId: promoValidation.promoCode.id,
-            originalAmount,
-            discountAmount: promoValidation.discountAmount,
+      // Atomic transaction: increment usage count + create usage record + update order
+      await this.prisma.$transaction(async (tx) => {
+        // Atomically increment usage count with WHERE condition to prevent race
+        const updated = await tx.promoCode.updateMany({
+          where: {
+            id: promoValidation.promoCode.id,
+            currentUsageCount: {
+              lt: promoValidation.promoCode.maxUsageCount || 999999999,
+            },
           },
-        },
-      });
+          data: { currentUsageCount: { increment: 1 } },
+        });
+        if (updated.count === 0) {
+          throw new BadRequestException('Promo code usage limit reached');
+        }
 
-      // Record promo code usage
-      await this.promoCodesService.applyPromoCode(
-        promoValidation.promoCode.id,
-        order.id,
-        userId,
-        originalAmount,
-        promoValidation.discountAmount,
-        promoValidation.finalAmount,
-      );
+        // Create usage record (pass tx to skip the non-atomic increment in applyPromoCode)
+        await tx.promoCodeUsage.create({
+          data: {
+            promoCodeId: promoValidation.promoCode.id,
+            orderId: order.id,
+            userId,
+            discountApplied: promoValidation.discountAmount,
+            originalAmount,
+            finalAmount: promoValidation.finalAmount,
+          },
+        });
+
+        // Update order with discounted amount and promo metadata
+        await tx.order.update({
+          where: { id: order.id },
+          data: {
+            amount: orderAmount,
+            metadata: {
+              ...metadata,
+              promoCode: data.promoCode,
+              promoCodeId: promoValidation.promoCode.id,
+              originalAmount,
+              discountAmount: promoValidation.discountAmount,
+            },
+          },
+        });
+      });
     }
 
     const successUrl = metadata.successUrl || '';

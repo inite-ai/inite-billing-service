@@ -205,7 +205,12 @@ export class PromoCodesService {
       );
     }
 
-    if (data.discountType === 'percentage' && (data.discountValue < 0 || data.discountValue > 100)) {
+    // M4 fix: Validate discountValue > 0 for all discount types
+    if (data.discountValue <= 0) {
+      throw new BadRequestException('discountValue must be greater than 0');
+    }
+
+    if (data.discountType === 'percentage' && data.discountValue > 100) {
       throw new BadRequestException(
         'Percentage discount must be between 0 and 100',
       );

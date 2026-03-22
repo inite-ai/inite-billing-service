@@ -278,6 +278,13 @@ export class CreditsService {
         });
       }
 
+      // M5 fix: Check that negative adjustment doesn't result in balance < 0
+      if (data.amount < 0 && balance.balance < Math.abs(data.amount)) {
+        throw new Error(
+          `Cannot adjust by ${data.amount}: current balance is ${balance.balance}. Adjustment would result in negative balance.`,
+        );
+      }
+
       const updateData: any = {};
       if (data.amount > 0) {
         updateData.balance = { increment: data.amount };

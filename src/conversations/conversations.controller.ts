@@ -52,9 +52,23 @@ export class ConversationsController {
     @Param('id') conversationId: string,
     @Body() body: { role: string; content: string; toolCalls?: any; toolResults?: any },
   ) {
+    // H1 fix: Verify conversation ownership
+    if (!user.isService) {
+      const conversation = await this.conversationsService.getConversationById(conversationId);
+      if (!conversation) {
+        throw new ForbiddenException('Conversation not found');
+      }
+      if (conversation.userId !== user.userId) {
+        throw new ForbiddenException('You do not have access to this conversation');
+      }
+    }
+
+    // M7 fix: Non-service callers can only send user messages
+    const role = user.isService ? body.role : 'user';
+
     return this.conversationsService.addMessage(
       conversationId,
-      body.role,
+      role,
       body.content,
       body.toolCalls,
       body.toolResults,
@@ -65,9 +79,21 @@ export class ConversationsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get conversation messages' })
   async getMessages(
+    @User() user: RequestUser,
     @Param('id') conversationId: string,
     @Query('limit') limit?: string,
   ) {
+    // H1 fix: Verify conversation ownership
+    if (!user.isService) {
+      const conversation = await this.conversationsService.getConversationById(conversationId);
+      if (!conversation) {
+        throw new ForbiddenException('Conversation not found');
+      }
+      if (conversation.userId !== user.userId) {
+        throw new ForbiddenException('You do not have access to this conversation');
+      }
+    }
+
     return this.conversationsService.getMessages(
       conversationId,
       limit ? parseInt(limit, 10) : undefined,
