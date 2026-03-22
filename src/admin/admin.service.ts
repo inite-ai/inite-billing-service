@@ -56,6 +56,12 @@ export class AdminService {
     return this.prisma.service.update({ where: { id }, data });
   }
 
+  async revealServiceApiKey(id: string) {
+    const service = await this.prisma.service.findUnique({ where: { id } });
+    if (!service) throw new NotFoundException(`Service not found: ${id}`);
+    return { apiKey: service.apiKey };
+  }
+
   async regenerateServiceApiKey(id: string) {
     const service = await this.prisma.service.findUnique({ where: { id } });
     if (!service) throw new NotFoundException(`Service not found: ${id}`);

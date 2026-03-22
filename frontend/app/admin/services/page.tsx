@@ -15,23 +15,58 @@ import type { Service } from '@/lib/types'
 
 function ApiKeyCell({ service, onRegenerate, showLabel, hideLabel }: { service: Service; onRegenerate: () => void; showLabel: string; hideLabel: string }) {
   const [visible, setVisible] = useState(false)
+  const [fullKey, setFullKey] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [loading, setLoading] = useState(false)
+
+  const handleReveal = async () => {
+    if (visible) {
+      setVisible(false)
+      return
+    }
+    if (fullKey) {
+      setVisible(true)
+      return
+    }
+    setLoading(true)
+    try {
+      const res = await api.get(`/v1/admin/services/${service.id}/reveal-key`)
+      setFullKey(res.data.apiKey)
+      setVisible(true)
+    } catch {
+      toast.error('Failed to reveal key')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(service.apiKey)
+    const key = fullKey || service.apiKey
+    if (!fullKey) {
+      try {
+        const res = await api.get(`/v1/admin/services/${service.id}/reveal-key`)
+        setFullKey(res.data.apiKey)
+        await navigator.clipboard.writeText(res.data.apiKey)
+      } catch {
+        toast.error('Failed to copy key')
+        return
+      }
+    } else {
+      await navigator.clipboard.writeText(key)
+    }
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const masked = service.apiKey.slice(0, 6) + '••••••••' + service.apiKey.slice(-4)
+  const displayKey = visible && fullKey ? fullKey : service.apiKey
 
   return (
     <div className="flex items-center gap-1.5">
       <code className="text-xs bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded font-mono">
-        {visible ? service.apiKey : masked}
+        {displayKey}
       </code>
-      <button onClick={() => setVisible(!visible)} className="text-gray-400 hover:text-gray-600" title={visible ? hideLabel : showLabel}>
-        {visible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+      <button onClick={handleReveal} className="text-gray-400 hover:text-gray-600" title={visible ? hideLabel : showLabel} disabled={loading}>
+        {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : visible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
       </button>
       <button onClick={handleCopy} className="text-gray-400 hover:text-blue-500" title="Copy">
         {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}

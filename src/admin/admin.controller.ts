@@ -58,6 +58,12 @@ export class AdminController {
     return this.adminService.updateService(id, body);
   }
 
+  @Get('services/:id/reveal-key')
+  @ApiOperation({ summary: 'Get full (unmasked) API key for a service' })
+  async revealServiceApiKey(@Param('id') id: string) {
+    return this.adminService.revealServiceApiKey(id);
+  }
+
   @Post('services/:id/regenerate-key')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Regenerate API key for a service' })
