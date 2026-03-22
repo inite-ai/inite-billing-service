@@ -19,6 +19,7 @@ import { WorkersModule } from './workers/workers.module';
 import { AffiliatesModule } from './affiliates/affiliates.module';
 import { AdminModule } from './admin/admin.module';
 import { PromoCodesModule } from './promo-codes/promo-codes.module';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { PromoCodesModule } from './promo-codes/promo-codes.module';
     AffiliatesModule,
     AdminModule,
     PromoCodesModule,
+    HealthModule,
   ],
   providers: [
     {
