@@ -28,6 +28,7 @@
     "prepare": "husky || true"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.80.0",
     "@nestjs/bullmq": "^10.0.1",
     "@nestjs/common": "^10.3.0",
     "@nestjs/config": "^3.1.1",

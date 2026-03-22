@@ -1,0 +1,55 @@
+import {
+  Controller,
+  Post,
+  Body,
+  Res,
+  UseGuards,
+  Logger,
+} from '@nestjs/common';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { SkipThrottle } from '@nestjs/throttler';
+import { Response } from 'express';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { User, RequestUser } from '../auth/decorators/user.decorator';
+import { AssistantService } from './assistant.service';
+
+@ApiTags('Assistant')
+@Controller('v1/assistant')
+@UseGuards(JwtAuthGuard)
+@SkipThrottle()
+export class AssistantController {
+  private readonly logger = new Logger(AssistantController.name);
+
+  constructor(private readonly assistantService: AssistantService) {}
+
+  @Post('chat')
+  @ApiOperation({ summary: 'Chat with AI assistant (SSE streaming)' })
+  async chat(
+    @User() user: RequestUser,
+    @Res() res: Response,
+    @Body() body: { message: string; conversationId?: string },
+  ) {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+
+    try {
+      for await (const chunk of this.assistantService.chat(
+        user.userId,
+        body.message,
+        body.conversationId,
+        user.roles || [],
+      )) {
+        res.write(chunk);
+      }
+    } catch (error: any) {
+      this.logger.error(`Chat error: ${error.message}`, error.stack);
+      res.write(
+        `event: error\ndata: ${JSON.stringify({ error: 'An error occurred processing your request.' })}\n\n`,
+      );
+    }
+
+    res.end();
+  }
+}

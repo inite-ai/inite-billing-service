@@ -47,10 +47,19 @@ export class FunnelService {
   }
 
   /**
-   * Detect abandoned checkouts (orders created >1hr ago, still in 'created' status).
+   * Process all automated funnel actions.
    * Runs every 15 minutes.
    */
   @Cron('0 */15 * * * *')
+  async processAutomatedActions(): Promise<void> {
+    await this.detectAbandonedCheckouts();
+    await this.processFollowUpRules();
+    await this.detectChurningSubscriptions();
+  }
+
+  /**
+   * Detect abandoned checkouts (orders created >1hr ago, still in 'created' status).
+   */
   async detectAbandonedCheckouts(): Promise<number> {
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
 
@@ -95,6 +104,115 @@ export class FunnelService {
 
     if (count > 0) {
       this.logger.log(`Detected ${count} abandoned checkouts`);
+    }
+
+    return count;
+  }
+
+  /**
+   * Process follow-up rules for abandoned checkouts.
+   * Finds checkout_abandoned events from last 24h that haven't been followed up.
+   */
+  async processFollowUpRules(): Promise<number> {
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    const abandonedEvents = await this.prisma.funnelEvent.findMany({
+      where: {
+        eventType: 'checkout_abandoned',
+        createdAt: { gte: twentyFourHoursAgo },
+      },
+    });
+
+    let count = 0;
+
+    for (const event of abandonedEvents) {
+      // Check if follow_up_sent already exists for this order
+      const existing = await this.prisma.funnelEvent.findFirst({
+        where: {
+          orderId: event.orderId,
+          eventType: 'follow_up_sent',
+        },
+      });
+
+      if (existing) continue;
+
+      await this.track({
+        userId: event.userId,
+        eventType: 'follow_up_sent',
+        stage: 'churned',
+        orderId: event.orderId ?? undefined,
+        productId: event.productId ?? undefined,
+        serviceId: event.serviceId ?? undefined,
+        properties: {
+          triggeredBy: 'automated_rule',
+          abandonedAt: event.createdAt.toISOString(),
+          followUpAt: new Date().toISOString(),
+        },
+      });
+
+      count++;
+    }
+
+    if (count > 0) {
+      this.logger.log(`Sent ${count} follow-up actions for abandoned checkouts`);
+    }
+
+    return count;
+  }
+
+  /**
+   * Detect churning subscriptions.
+   * Finds subscriptions where currentPeriodEnd is within 3 days and cancelAtPeriodEnd=true.
+   */
+  async detectChurningSubscriptions(): Promise<number> {
+    const threeDaysFromNow = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+
+    const churningSubscriptions = await this.prisma.subscription.findMany({
+      where: {
+        status: 'active',
+        cancelAtPeriodEnd: true,
+        currentPeriodEnd: { lte: threeDaysFromNow },
+      },
+      include: {
+        price: { include: { product: true } },
+      },
+    });
+
+    let count = 0;
+
+    for (const sub of churningSubscriptions) {
+      // Check if subscription_churning event already exists
+      const existing = await this.prisma.funnelEvent.findFirst({
+        where: {
+          userId: sub.userId,
+          eventType: 'subscription_churning',
+          properties: {
+            path: ['subscriptionId'],
+            equals: sub.id,
+          },
+        },
+      });
+
+      if (existing) continue;
+
+      await this.track({
+        userId: sub.userId,
+        eventType: 'subscription_churning',
+        stage: 'churned',
+        productId: sub.price?.product?.id,
+        serviceId: sub.price?.product?.serviceId ?? undefined,
+        properties: {
+          subscriptionId: sub.id,
+          currentPeriodEnd: sub.currentPeriodEnd?.toISOString(),
+          detectedAt: new Date().toISOString(),
+        },
+      });
+
+      count++;
+    }
+
+    if (count > 0) {
+      this.logger.log(`Detected ${count} churning subscriptions`);
     }
 
     return count;

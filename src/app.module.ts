@@ -22,6 +22,7 @@ import { PromoCodesModule } from './promo-codes/promo-codes.module';
 import { HealthModule } from './health/health.module';
 import { FunnelModule } from './funnel/funnel.module';
 import { ConversationsModule } from './conversations/conversations.module';
+import { AssistantModule } from './assistant/assistant.module';
 
 @Module({
   imports: [
@@ -60,6 +61,7 @@ import { ConversationsModule } from './conversations/conversations.module';
     HealthModule,
     FunnelModule,
     ConversationsModule,
+    AssistantModule,
   ],
   providers: [
     {

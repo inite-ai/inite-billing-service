@@ -1,10 +1,16 @@
 'use client'
 
-import { useChat } from '@ai-sdk/react'
-import { useState, useRef, useEffect, useMemo } from 'react'
-import { MessageCircle, X, Send, Loader2, Bot, User } from 'lucide-react'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { MessageCircle, X, Send, Loader2, Bot, User, Wrench } from 'lucide-react'
 import { useTranslations } from 'next-intl'
-import { DefaultChatTransport, type UIMessage } from 'ai'
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
+
+interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+}
 
 function renderMarkdown(text: string) {
   const lines = text.split('\n')
@@ -61,35 +67,119 @@ function renderMarkdown(text: string) {
   return <div className="space-y-1">{elements}</div>
 }
 
-function getMessageText(message: UIMessage): string {
-  return message.parts
-    .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
-    .map((part) => part.text)
-    .join('')
-}
-
 export default function ChatPanel() {
   const [isOpen, setIsOpen] = useState(false)
   const [input, setInput] = useState('')
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [conversationId, setConversationId] = useState<string | null>(null)
+  const [toolIndicator, setToolIndicator] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const t = useTranslations('assistant')
-  const transport = useMemo(() => new DefaultChatTransport({ api: '/api/assistant/chat' }), [])
-  const { messages, sendMessage, status, error } = useChat({
-    transport,
-  })
-
-  const isLoading = status === 'submitted' || status === 'streaming'
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isLoading])
+
+  const sendMessage = useCallback(async (message: string) => {
+    const userMsg: ChatMessage = {
+      id: `user-${Date.now()}`,
+      role: 'user',
+      content: message,
+    }
+    setMessages(prev => [...prev, userMsg])
+    setIsLoading(true)
+    setError(null)
+    setToolIndicator(null)
+
+    try {
+      const res = await fetch(`${API_URL}/v1/assistant/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          message,
+          conversationId: conversationId || undefined,
+        }),
+      })
+
+      if (!res.ok) {
+        throw new Error(`Request failed: ${res.status}`)
+      }
+
+      const reader = res.body?.getReader()
+      if (!reader) throw new Error('No response body')
+
+      const decoder = new TextDecoder()
+      let assistantText = ''
+      let buffer = ''
+      const assistantMsgId = `assistant-${Date.now()}`
+
+      // Add placeholder assistant message
+      setMessages(prev => [
+        ...prev,
+        { id: assistantMsgId, role: 'assistant', content: '' },
+      ])
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const blocks = buffer.split('\n\n')
+        buffer = blocks.pop() || ''
+
+        for (const block of blocks) {
+          if (!block.trim()) continue
+          const eventMatch = block.match(/^event: (\w+)\ndata: (.+)$/s)
+          if (!eventMatch) continue
+          const [, eventType, data] = eventMatch
+
+          try {
+            const parsed = JSON.parse(data)
+
+            if (eventType === 'text_delta') {
+              assistantText += parsed.text
+              setMessages(prev =>
+                prev.map(m =>
+                  m.id === assistantMsgId
+                    ? { ...m, content: assistantText }
+                    : m
+                )
+              )
+              setToolIndicator(null)
+            } else if (eventType === 'tool_call') {
+              setToolIndicator(parsed.toolName)
+            } else if (eventType === 'conversation') {
+              setConversationId(parsed.conversationId)
+            } else if (eventType === 'done') {
+              setToolIndicator(null)
+            }
+          } catch {
+            // ignore parse errors
+          }
+        }
+      }
+
+      // If assistant didn't produce any text, remove the placeholder
+      if (!assistantText) {
+        setMessages(prev => prev.filter(m => m.id !== assistantMsgId))
+      }
+    } catch (err: any) {
+      setError(err.message || 'An error occurred')
+    } finally {
+      setIsLoading(false)
+      setToolIndicator(null)
+    }
+  }, [conversationId])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!input.trim() || isLoading) return
     const text = input
     setInput('')
-    await sendMessage({ text })
+    await sendMessage(text)
   }
 
   return (
@@ -140,8 +230,7 @@ export default function ChatPanel() {
             )}
 
             {messages.map((message) => {
-              const text = getMessageText(message)
-              if (!text) return null
+              if (!message.content && message.role === 'assistant') return null
 
               return (
                 <div
@@ -163,9 +252,9 @@ export default function ChatPanel() {
                     }`}
                   >
                     {message.role === 'assistant' ? (
-                      renderMarkdown(text)
+                      renderMarkdown(message.content)
                     ) : (
-                      <p className="whitespace-pre-wrap">{text}</p>
+                      <p className="whitespace-pre-wrap">{message.content}</p>
                     )}
                   </div>
                   {message.role === 'user' && (
@@ -177,8 +266,23 @@ export default function ChatPanel() {
               )
             })}
 
+            {/* Tool indicator */}
+            {toolIndicator && (
+              <div className="flex gap-2">
+                <div className="flex-shrink-0 w-7 h-7 rounded-full bg-gradient-to-r from-violet-600 to-purple-600 flex items-center justify-center">
+                  <Bot className="w-4 h-4 text-white" />
+                </div>
+                <div className="bg-gray-100 dark:bg-gray-800 rounded-2xl rounded-tl-sm px-3 py-2">
+                  <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                    <Wrench className="w-3 h-3" />
+                    {toolIndicator.replace(/_/g, ' ')}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Loading indicator */}
-            {isLoading && (
+            {isLoading && !toolIndicator && (
               <div className="flex gap-2">
                 <div className="flex-shrink-0 w-7 h-7 rounded-full bg-gradient-to-r from-violet-600 to-purple-600 flex items-center justify-center">
                   <Bot className="w-4 h-4 text-white" />

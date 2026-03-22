@@ -117,6 +117,7 @@ jobs:
             echo "DATABASE_URL=postgresql://${{ secrets.ORCH_POSTGRES_USER }}:${{ secrets.ORCH_POSTGRES_PASSWORD }}@postgres:5432/inite_billing?schema=billing"
             echo "REDIS_URL=redis://redis:6379"
             echo "OAUTH_CLIENT_SECRET=${{ secrets.BILLING_OAUTH_CLIENT_SECRET }}"
+            echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}"
             echo "DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}"
           } > .env
         fi
@@ -190,6 +191,7 @@ jobs:
           echo "DATABASE_URL=postgresql://${{ secrets.ORCH_POSTGRES_USER }}:${{ secrets.ORCH_POSTGRES_PASSWORD }}@postgres:5432/inite_billing?schema=billing"
           echo "REDIS_URL=redis://redis:6379"
           echo "OAUTH_CLIENT_SECRET=${{ secrets.BILLING_OAUTH_CLIENT_SECRET }}"
+          echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}"
           echo "DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}"
         } > .env
 
@@ -218,6 +220,7 @@ jobs:
               - REDIS_URL=\${REDIS_URL}
               - AUTH_SERVICE_URL=https://auth.inite.ai
               - CORS_ORIGINS=https://${{ env.DOMAIN }}
+              - ANTHROPIC_API_KEY=\${ANTHROPIC_API_KEY}
             networks:
               - traefik-global
             healthcheck:
