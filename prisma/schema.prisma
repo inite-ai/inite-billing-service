@@ -119,6 +119,7 @@ model Service {
   affiliates     Affiliate[]
   referrals      Referral[]
   promoCodes     PromoCode[]
+  creditBalances CreditBalance[]
 
   @@map("services")
   @@schema("billing")
@@ -548,6 +549,45 @@ model PromoCodeUsage {
   @@index([promoCodeId, userId])
   @@index([orderId])
   @@map("promo_code_usages")
+  @@schema("billing")
+}
+
+model CreditBalance {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  serviceId   String?  @map("service_id") @db.Uuid
+  balance     Int      @default(0)
+  totalGranted Int     @default(0) @map("total_granted")
+  totalUsed   Int      @default(0) @map("total_used")
+  resetsAt    DateTime? @map("resets_at") @db.Timestamptz(6)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  service     Service? @relation(fields: [serviceId], references: [id])
+  usages      CreditUsage[]
+
+  @@unique([userId, serviceId])
+  @@index([userId])
+  @@map("credit_balances")
+  @@schema("billing")
+}
+
+model CreditUsage {
+  id              String   @id @default(uuid()) @db.Uuid
+  creditBalanceId String   @map("credit_balance_id") @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  amount          Int
+  type            String   @db.VarChar(20)
+  description     String?  @db.VarChar(255)
+  orderId         String?  @map("order_id") @db.Uuid
+  metadata        Json?    @default("{}")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  creditBalance   CreditBalance @relation(fields: [creditBalanceId], references: [id], onDelete: Cascade)
+
+  @@index([creditBalanceId, createdAt])
+  @@index([userId, createdAt])
+  @@map("credit_usages")
   @@schema("billing")
 }
 

@@ -9,6 +9,7 @@ import {
 import { OutboxService } from '../outbox/outbox.service';
 import { AffiliatesService } from '../affiliates/affiliates.service';
 import { FunnelService } from '../funnel/funnel.service';
+import { CreditsService } from '../credits/credits.service';
 
 @Injectable()
 export class PaymentOrchestratorService {
@@ -16,6 +17,7 @@ export class PaymentOrchestratorService {
   private adapters: Map<string, PaymentRailAdapter> = new Map();
   private affiliatesService: AffiliatesService;
   private funnelService: FunnelService;
+  private creditsService: CreditsService;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -28,6 +30,10 @@ export class PaymentOrchestratorService {
 
   setAffiliatesService(affiliatesService: AffiliatesService) {
     this.affiliatesService = affiliatesService;
+  }
+
+  setCreditsService(creditsService: CreditsService) {
+    this.creditsService = creditsService;
   }
 
   registerAdapter(adapter: PaymentRailAdapter) {
@@ -183,6 +189,9 @@ export class PaymentOrchestratorService {
     // Handle affiliate commission (only for first payment)
     await this.handleAffiliateCommission(order, tx);
 
+    // Grant credits if product defines them
+    await this.handleCreditsGrant(order, tx);
+
     // Emit event
     await this.outboxService.emit('billing.payment.succeeded', {
       order_id: order.id,
@@ -210,6 +219,9 @@ export class PaymentOrchestratorService {
       where: { orderId: order.id, status: { in: ['pending', 'earned'] } },
       data: { status: 'voided' },
     });
+
+    // Refund credits if they were granted for this order
+    await this.handleCreditsRefund(order, tx);
 
     // Revoke entitlements scoped to this order only (H7)
     const activeEntitlements = await tx.entitlement.findMany({
@@ -436,6 +448,94 @@ export class PaymentOrchestratorService {
       end.setFullYear(end.getFullYear() + 1);
     }
     return end;
+  }
+
+  /**
+   * Grant credits if product metadata defines creditsPerPeriod or credits
+   */
+  private async handleCreditsGrant(order: any, tx: any): Promise<void> {
+    if (!this.creditsService) {
+      return;
+    }
+
+    const product = order.price?.product;
+    if (!product) return;
+
+    const metadata = product.metadata || {};
+    const creditsPerPeriod = metadata.creditsPerPeriod || metadata.credits;
+    if (!creditsPerPeriod) return;
+
+    const serviceId = product.serviceId;
+
+    try {
+      if (order.mode === 'SUBSCRIPTION') {
+        // For subscriptions, find the subscription to get period end
+        const subscription = await tx.subscription.findFirst({
+          where: {
+            userId: order.userId,
+            priceId: order.priceId,
+            status: { in: ['trialing', 'active', 'past_due'] },
+          },
+          orderBy: { updatedAt: 'desc' },
+        });
+
+        const periodEnd = subscription?.currentPeriodEnd || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+        await this.creditsService.resetForPeriod({
+          userId: order.userId,
+          serviceId,
+          newBalance: creditsPerPeriod,
+          resetsAt: periodEnd,
+        });
+      } else {
+        await this.creditsService.grant({
+          userId: order.userId,
+          serviceId,
+          amount: creditsPerPeriod,
+          description: `Credits from order ${order.id}`,
+          orderId: order.id,
+        });
+      }
+    } catch (error: any) {
+      this.logger.error(
+        `Error granting credits for order ${order.id}: ${error.message}`,
+        error.stack,
+      );
+    }
+  }
+
+  /**
+   * Refund credits that were granted for an order
+   */
+  private async handleCreditsRefund(order: any, tx: any): Promise<void> {
+    if (!this.creditsService) {
+      return;
+    }
+
+    // Look up credit usages tied to this order
+    const creditUsages = await tx.creditUsage.findMany({
+      where: {
+        orderId: order.id,
+        type: 'grant',
+      },
+      include: { creditBalance: true },
+    });
+
+    for (const usage of creditUsages) {
+      try {
+        await this.creditsService.refund({
+          userId: usage.userId,
+          serviceId: usage.creditBalance.serviceId ?? undefined,
+          amount: usage.amount,
+          orderId: order.id,
+        });
+      } catch (error: any) {
+        this.logger.error(
+          `Error refunding credits for order ${order.id}: ${error.message}`,
+          error.stack,
+        );
+      }
+    }
   }
 
   /**

@@ -19,6 +19,7 @@ import { AdminService } from './admin.service';
 import { ReferralLevelsService } from '../affiliates/referral-levels.service';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
 import { FunnelService } from '../funnel/funnel.service';
+import { CreditsService } from '../credits/credits.service';
 
 @ApiTags('Admin')
 @Controller('v1/admin')
@@ -30,6 +31,7 @@ export class AdminController {
     private readonly referralLevelsService: ReferralLevelsService,
     private readonly promoCodesService: PromoCodesService,
     private readonly funnelService: FunnelService,
+    private readonly creditsService: CreditsService,
   ) {}
 
   // ─── Services ──────────────────────────────────────────────
@@ -580,6 +582,56 @@ export class AdminController {
     @Query('limit') limit?: string,
   ) {
     return this.funnelService.getAbandonedCheckouts({
+      page: page ? parseInt(page, 10) : undefined,
+      limit: limit ? parseInt(limit, 10) : undefined,
+    });
+  }
+
+  // ─── Credits ────────────────────────────────────────────────
+
+  @Get('credits')
+  @ApiOperation({ summary: 'List all credit balances with filters' })
+  async getCreditBalances(
+    @Query('userId') userId?: string,
+    @Query('serviceId') serviceId?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.creditsService.listBalances({
+      userId,
+      serviceId,
+      page: page ? parseInt(page, 10) : undefined,
+      limit: limit ? parseInt(limit, 10) : undefined,
+    });
+  }
+
+  @Post('credits/adjust')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Manual credit adjustment' })
+  async adjustCredits(
+    @Body()
+    body: {
+      userId: string;
+      serviceId?: string;
+      amount: number;
+      description: string;
+    },
+  ) {
+    return this.creditsService.adminAdjust(body);
+  }
+
+  @Get('credits/:userId/usage')
+  @ApiOperation({ summary: 'Get user credit usage history' })
+  async getUserCreditUsage(
+    @Param('userId') userId: string,
+    @Query('serviceId') serviceId?: string,
+    @Query('type') type?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.creditsService.getUsageHistory(userId, {
+      serviceId,
+      type,
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
     });

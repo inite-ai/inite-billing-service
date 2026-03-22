@@ -224,7 +224,9 @@
     "tableDate": "Дата",
     "tableAmount": "Сумма",
     "tableMode": "Тип",
-    "tableStatus": "Статус"
+    "tableStatus": "Статус",
+    "credits": "Кредиты",
+    "creditsBalance": "Баланс кредитов"
   },
   "orders": {
     "title": "История заказов",
@@ -674,6 +676,34 @@
       "processed": "Выплата обработана",
       "failReason": "Причина отказа:",
       "markedFailed": "Выплата отмечена как неуспешная"
+    },
+    "credits": {
+      "title": "Кредиты",
+      "subtitle": "Управление балансами кредитов и потреблением",
+      "balance": "Баланс",
+      "totalGranted": "Всего начислено",
+      "totalUsed": "Всего использовано",
+      "resetsAt": "Обновление",
+      "userId": "ID пользователя",
+      "service": "Сервис",
+      "noBalances": "Кредитные балансы не найдены",
+      "usageHistory": "История использования",
+      "type": "Тип",
+      "amount": "Количество",
+      "description": "Описание",
+      "date": "Дата",
+      "typeGrant": "Начислено",
+      "typeConsume": "Списано",
+      "typeReset": "Сброшено",
+      "typeRefund": "Возврат",
+      "typeAdjust": "Коррекция",
+      "adjust": "Корректировка кредитов",
+      "adjustAmount": "Количество (положительное для добавления, отрицательное для списания)",
+      "adjustReason": "Причина",
+      "adjustSuccess": "Кредиты скорректированы",
+      "adjustError": "Ошибка корректировки кредитов",
+      "searchUser": "Поиск по ID пользователя...",
+      "allServices": "Все сервисы"
     },
     "funnel": {
       "title": "Воронка конверсии",

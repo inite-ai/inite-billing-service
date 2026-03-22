@@ -224,7 +224,9 @@
     "tableDate": "Date",
     "tableAmount": "Amount",
     "tableMode": "Mode",
-    "tableStatus": "Status"
+    "tableStatus": "Status",
+    "credits": "Credits",
+    "creditsBalance": "Credit Balance"
   },
   "orders": {
     "title": "Order History",
@@ -674,6 +676,34 @@
       "processed": "Payout processed",
       "failReason": "Failure reason:",
       "markedFailed": "Payout marked as failed"
+    },
+    "credits": {
+      "title": "Credits",
+      "subtitle": "Manage user credit balances and usage",
+      "balance": "Balance",
+      "totalGranted": "Total Granted",
+      "totalUsed": "Total Used",
+      "resetsAt": "Resets At",
+      "userId": "User ID",
+      "service": "Service",
+      "noBalances": "No credit balances found",
+      "usageHistory": "Usage History",
+      "type": "Type",
+      "amount": "Amount",
+      "description": "Description",
+      "date": "Date",
+      "typeGrant": "Granted",
+      "typeConsume": "Consumed",
+      "typeReset": "Reset",
+      "typeRefund": "Refunded",
+      "typeAdjust": "Adjusted",
+      "adjust": "Adjust Credits",
+      "adjustAmount": "Amount (positive to add, negative to subtract)",
+      "adjustReason": "Reason",
+      "adjustSuccess": "Credits adjusted",
+      "adjustError": "Failed to adjust credits",
+      "searchUser": "Search by User ID...",
+      "allServices": "All Services"
     },
     "funnel": {
       "title": "Conversion Funnel",

@@ -23,6 +23,7 @@ import { HealthModule } from './health/health.module';
 import { FunnelModule } from './funnel/funnel.module';
 import { ConversationsModule } from './conversations/conversations.module';
 import { AssistantModule } from './assistant/assistant.module';
+import { CreditsModule } from './credits/credits.module';
 
 @Module({
   imports: [
@@ -62,6 +63,7 @@ import { AssistantModule } from './assistant/assistant.module';
     FunnelModule,
     ConversationsModule,
     AssistantModule,
+    CreditsModule,
   ],
   providers: [
     {

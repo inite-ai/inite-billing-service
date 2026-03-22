@@ -11,9 +11,9 @@ import { Button } from '@/components/ui/Button'
 import { StatsCards } from '@/components/dashboard/StatsCards'
 import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
 import { useAuth } from '@/contexts/AuthContext'
-import { CreditCard, ArrowRight, Calendar, Loader2, Sparkles } from 'lucide-react'
+import { CreditCard, ArrowRight, Calendar, Loader2, Sparkles, Coins } from 'lucide-react'
 import api from '@/lib/api'
-import type { Order, Subscription, AffiliateStats, Entitlement } from '@/lib/types'
+import type { Order, Subscription, AffiliateStats, Entitlement, CreditBalance } from '@/lib/types'
 import Link from 'next/link'
 
 export default function DashboardPage() {
@@ -24,6 +24,7 @@ export default function DashboardPage() {
   const [orders, setOrders] = useState<Order[]>([])
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
   const [entitlements, setEntitlements] = useState<Entitlement[]>([])
+  const [creditBalances, setCreditBalances] = useState<CreditBalance[]>([])
   const [affiliateStats, setAffiliateStats] = useState<AffiliateStats | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -33,14 +34,16 @@ export default function DashboardPage() {
 
     async function load() {
       try {
-        const [ordersRes, subsRes, entRes] = await Promise.all([
+        const [ordersRes, subsRes, entRes, creditsRes] = await Promise.all([
           api.get('/v1/orders/me').catch(() => ({ data: [] })),
           api.get('/v1/subscriptions/me').catch(() => ({ data: [] })),
           api.get('/v1/entitlements/me').catch(() => ({ data: [] })),
+          api.get('/v1/credits/me').catch(() => ({ data: [] })),
         ])
         setOrders(ordersRes.data)
         setSubscriptions(subsRes.data)
         setEntitlements(entRes.data)
+        setCreditBalances(Array.isArray(creditsRes.data) ? creditsRes.data : creditsRes.data.items || [])
 
         try {
           const statsRes = await api.get('/v1/affiliates/me/stats')
@@ -162,6 +165,51 @@ export default function DashboardPage() {
               </Card>
             </motion.div>
           </div>
+
+          {/* Credits */}
+          {creditBalances.length > 0 && (
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
+              <Card className="h-full">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold text-slate-900 dark:text-white">{t('creditsBalance')}</h3>
+                </div>
+                <div className="space-y-3">
+                  {creditBalances.map((cb) => {
+                    const total = cb.totalGranted || 1
+                    const used = cb.totalUsed || 0
+                    const pct = Math.min(100, Math.round((used / total) * 100))
+                    return (
+                      <div key={cb.id} className="border border-slate-100 dark:border-slate-800 rounded-xl p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <Coins className="w-4 h-4 text-violet-500" />
+                            <span className="text-sm font-medium text-slate-900 dark:text-white">
+                              {cb.service?.name || t('credits')}
+                            </span>
+                          </div>
+                          <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                            {cb.balance}
+                          </span>
+                        </div>
+                        <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 mb-1.5">
+                          <div
+                            className="bg-violet-500 h-2 rounded-full transition-all"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between text-xs text-slate-500">
+                          <span>{used} / {total} used</span>
+                          {cb.resetsAt && (
+                            <span>{t('expires', { date: new Date(cb.resetsAt).toLocaleDateString() })}</span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </Card>
+            </motion.div>
+          )}
 
           {/* Recent Orders */}
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>

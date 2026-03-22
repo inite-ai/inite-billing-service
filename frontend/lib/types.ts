@@ -218,6 +218,31 @@ export interface PaymentProvider {
   updatedAt: string
 }
 
+export interface CreditBalance {
+  id: string
+  userId: string
+  serviceId?: string
+  balance: number
+  totalGranted: number
+  totalUsed: number
+  resetsAt?: string
+  createdAt: string
+  updatedAt: string
+  service?: Service
+}
+
+export interface CreditUsage {
+  id: string
+  creditBalanceId: string
+  userId: string
+  amount: number
+  type: 'grant' | 'consume' | 'reset' | 'refund' | 'admin_adjust'
+  description?: string
+  orderId?: string
+  metadata?: Record<string, unknown>
+  createdAt: string
+}
+
 export interface WebhookEvent {
   id: string
   rail: string
