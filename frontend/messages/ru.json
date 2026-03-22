@@ -902,7 +902,13 @@
     "creditsPerPeriod": "Кредитов за период",
     "bonusCredits": "Бонусные кредиты (за год)",
     "entitlementKeys": "Ключи доступа",
-    "entitlementKeysHint": "Через запятую, ключи доступа при покупке"
+    "entitlementKeysHint": "Через запятую, ключи доступа при покупке",
+    "applyTemplate": "Применить шаблон",
+    "generateFeatures": "Сгенерировать с AI",
+    "featuresGenerated": "Возможности сгенерированы",
+    "featuresGenerateError": "Не удалось сгенерировать",
+    "templateApplied": "Шаблон применён",
+    "templateConfirm": "Заменить существующие возможности шаблоном?"
   },
   "assistant": {
     "title": "AI-ассистент",

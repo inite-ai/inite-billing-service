@@ -1,12 +1,21 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Button } from '@/components/ui/Button'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import type { Product, Service } from '@/lib/types'
 import { useTranslations } from 'next-intl'
-import { Plus, X } from 'lucide-react'
+import { Plus, X, Sparkles, ClipboardList, Loader2 } from 'lucide-react'
+import toast from 'react-hot-toast'
+import api from '@/lib/api'
+
+const FEATURE_TEMPLATES: Record<string, string[]> = {
+  subscription: ['Auto-renewal', 'Cancel anytime', 'Priority support'],
+  one_time: ['Lifetime access', 'One-time payment'],
+  usage: ['Pay as you go', 'No monthly commitment'],
+}
 
 interface ProductFormProps {
   initial?: Product
@@ -53,10 +62,35 @@ export function ProductForm({ initial, services, onSubmit, onCancel }: ProductFo
   )
 
   const [loading, setLoading] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [showTemplateConfirm, setShowTemplateConfirm] = useState(false)
   const t = useTranslations('forms')
   const tc = useTranslations('common')
 
   const showCredits = type === 'subscription' || type === 'usage'
+
+  // Track previous type to detect changes
+  const prevTypeRef = useRef(type)
+  useEffect(() => {
+    if (prevTypeRef.current !== type) {
+      prevTypeRef.current = type
+      // Auto-populate features from template when type changes and features are empty
+      if (features.length === 0 && FEATURE_TEMPLATES[type]) {
+        setFeatures([...FEATURE_TEMPLATES[type]])
+      }
+    }
+  }, [type, features.length])
+
+  // Auto-add credit feature when creditsPerPeriod changes
+  useEffect(() => {
+    if (creditsPerPeriod && Number(creditsPerPeriod) > 0) {
+      const creditPattern = /\d+\s*(credits?|кредит)/i
+      const hasCreditsFeature = features.some((f) => creditPattern.test(f))
+      if (!hasCreditsFeature) {
+        setFeatures((prev) => [...prev, `${creditsPerPeriod} credits per month`])
+      }
+    }
+  }, [creditsPerPeriod]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const addFeature = () => setFeatures([...features, ''])
   const removeFeature = (idx: number) => setFeatures(features.filter((_, i) => i !== idx))
@@ -64,6 +98,48 @@ export function ProductForm({ initial, services, onSubmit, onCancel }: ProductFo
     const next = [...features]
     next[idx] = val
     setFeatures(next)
+  }
+
+  const applyTemplate = () => {
+    const template = FEATURE_TEMPLATES[type]
+    if (!template) return
+    if (features.length > 0) {
+      setShowTemplateConfirm(true)
+    } else {
+      setFeatures([...template])
+      toast.success(t('templateApplied'))
+    }
+  }
+
+  const confirmApplyTemplate = () => {
+    const template = FEATURE_TEMPLATES[type]
+    if (template) {
+      setFeatures([...template])
+      toast.success(t('templateApplied'))
+    }
+  }
+
+  const handleGenerateFeatures = async () => {
+    setGenerating(true)
+    try {
+      const cookieStore = document.cookie
+      const locale = cookieStore.includes('locale=ru') ? 'ru' : 'en'
+      const res = await api.post('/v1/assistant/generate-features', {
+        name,
+        type,
+        description,
+        creditsPerPeriod: creditsPerPeriod ? Number(creditsPerPeriod) : undefined,
+        locale,
+      })
+      if (Array.isArray(res.data)) {
+        setFeatures(res.data)
+        toast.success(t('featuresGenerated'))
+      }
+    } catch {
+      toast.error(t('featuresGenerateError'))
+    } finally {
+      setGenerating(false)
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -181,9 +257,51 @@ export function ProductForm({ initial, services, onSubmit, onCancel }: ProductFo
       {/* Features */}
       <div className={sectionDivider}>
         <div className="space-y-3">
-          <label className="block text-sm font-medium text-slate-600 dark:text-slate-400">
-            {t('featuresList')}
-          </label>
+          <div className="flex items-center justify-between">
+            <label className="block text-sm font-medium text-slate-600 dark:text-slate-400">
+              {t('featuresList')}
+            </label>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={applyTemplate}
+                disabled={generating || !FEATURE_TEMPLATES[type]}
+                className="
+                  inline-flex items-center gap-1.5 px-2.5 py-1
+                  text-xs font-medium rounded-lg
+                  border border-slate-200 dark:border-slate-700
+                  text-slate-600 dark:text-slate-400
+                  hover:bg-slate-50 dark:hover:bg-slate-800
+                  disabled:opacity-50 disabled:cursor-not-allowed
+                  transition-colors
+                "
+              >
+                <ClipboardList className="w-3.5 h-3.5" />
+                {t('applyTemplate')}
+              </button>
+              <button
+                type="button"
+                onClick={handleGenerateFeatures}
+                disabled={generating || !name}
+                className="
+                  inline-flex items-center gap-1.5 px-2.5 py-1
+                  text-xs font-medium rounded-lg
+                  border border-violet-300 dark:border-violet-600
+                  text-violet-600 dark:text-violet-400
+                  hover:bg-violet-50 dark:hover:bg-violet-900/30
+                  disabled:opacity-50 disabled:cursor-not-allowed
+                  transition-colors
+                "
+              >
+                {generating ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="w-3.5 h-3.5" />
+                )}
+                {t('generateFeatures')}
+              </button>
+            </div>
+          </div>
           {features.map((feat, idx) => (
             <div key={idx} className="flex items-center gap-2">
               <input
@@ -264,6 +382,15 @@ export function ProductForm({ initial, services, onSubmit, onCancel }: ProductFo
           {initial ? tc('update') : tc('create')}
         </Button>
       </div>
+
+      {/* Template confirmation dialog */}
+      <ConfirmDialog
+        isOpen={showTemplateConfirm}
+        onClose={() => setShowTemplateConfirm(false)}
+        onConfirm={confirmApplyTemplate}
+        title={t('applyTemplate')}
+        message={t('templateConfirm')}
+      />
     </form>
   )
 }

@@ -188,6 +188,43 @@ export class AssistantService {
     }
   }
 
+  async generateProductFeatures(data: {
+    name: string;
+    type: string;
+    description?: string;
+    creditsPerPeriod?: number;
+    locale?: string;
+  }): Promise<string[]> {
+    const response = await this.client.messages.create({
+      model: 'claude-sonnet-4-5-20250514',
+      max_tokens: 500,
+      messages: [
+        {
+          role: 'user',
+          content: `Generate 5-7 short feature bullet points for a SaaS product.
+
+Product name: ${data.name}
+Product type: ${data.type}
+${data.description ? `Description: ${data.description}` : ''}
+${data.creditsPerPeriod ? `Included credits per period: ${data.creditsPerPeriod}` : ''}
+
+Language: ${data.locale === 'ru' ? 'Russian' : 'English'}
+
+Return ONLY a JSON array of strings, no other text. Each string should be a concise feature (3-8 words).
+Example: ["Unlimited API calls", "Priority support", "Advanced analytics"]`,
+        },
+      ],
+    });
+
+    const text =
+      response.content[0].type === 'text' ? response.content[0].text : '';
+    const match = text.match(/\[[\s\S]*\]/);
+    if (match) {
+      return JSON.parse(match[0]);
+    }
+    return [];
+  }
+
   private buildMessages(
     history: Array<{ role: string; content: string }>,
     currentMessage: string,

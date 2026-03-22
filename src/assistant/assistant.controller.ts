@@ -22,6 +22,21 @@ export class AssistantController {
 
   constructor(private readonly assistantService: AssistantService) {}
 
+  @Post('generate-features')
+  @ApiOperation({ summary: 'Generate product features with AI' })
+  async generateFeatures(
+    @Body()
+    body: {
+      name: string;
+      type: string;
+      description?: string;
+      creditsPerPeriod?: number;
+      locale?: string;
+    },
+  ) {
+    return this.assistantService.generateProductFeatures(body);
+  }
+
   @Post('chat')
   @ApiOperation({ summary: 'Chat with AI assistant (SSE streaming)' })
   async chat(

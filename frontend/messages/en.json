@@ -902,7 +902,13 @@
     "creditsPerPeriod": "Credits per period",
     "bonusCredits": "Bonus credits (yearly)",
     "entitlementKeys": "Entitlement keys",
-    "entitlementKeysHint": "Comma-separated keys that grant access on purchase"
+    "entitlementKeysHint": "Comma-separated keys that grant access on purchase",
+    "applyTemplate": "Apply template",
+    "generateFeatures": "Generate with AI",
+    "featuresGenerated": "Features generated",
+    "featuresGenerateError": "Failed to generate features",
+    "templateApplied": "Template applied",
+    "templateConfirm": "Replace existing features with template?"
   },
   "assistant": {
     "title": "AI Assistant",
