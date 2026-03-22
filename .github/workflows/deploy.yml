@@ -8,7 +8,6 @@ on:
 env:
   PROJECT_NAME: inite-billing-service
   DOMAIN: billing.inite.ai
-  API_DOMAIN: billing-api.inite.ai
 
 jobs:
   build-and-push:
@@ -47,7 +46,7 @@ jobs:
         file: ./frontend/Dockerfile
         push: true
         build-args: |
-          NEXT_PUBLIC_API_URL=https://${{ env.API_DOMAIN }}
+          NEXT_PUBLIC_API_URL=https://${{ env.DOMAIN }}
           NEXT_PUBLIC_AUTH_SERVICE_URL=https://auth.inite.ai
           NEXT_PUBLIC_OAUTH_CLIENT_ID=inite-billing
         tags: |
@@ -100,21 +99,13 @@ jobs:
             labels:
               - "traefik.enable=true"
               - "traefik.docker.network=traefik-global"
-              - "traefik.http.routers.billing-api.rule=Host(\`${{ env.API_DOMAIN }}\`)"
+              - "traefik.http.services.billing-api-service.loadbalancer.server.port=3000"
+              - "traefik.http.routers.billing-api.rule=Host(\`${{ env.DOMAIN }}\`) && (PathPrefix(\`/v1\`) || PathPrefix(\`/api\`) || PathPrefix(\`/health\`))"
               - "traefik.http.routers.billing-api.entrypoints=websecure"
               - "traefik.http.routers.billing-api.tls=true"
               - "traefik.http.routers.billing-api.tls.certresolver=letsencrypt"
+              - "traefik.http.routers.billing-api.priority=100"
               - "traefik.http.routers.billing-api.service=billing-api-service"
-              - "traefik.http.services.billing-api-service.loadbalancer.server.port=3000"
-              - "traefik.http.routers.billing-api-path.rule=Host(\`${{ env.DOMAIN }}\`) && (PathPrefix(\`/v1\`) || PathPrefix(\`/api\`) || PathPrefix(\`/health\`))"
-              - "traefik.http.routers.billing-api-path.entrypoints=websecure"
-              - "traefik.http.routers.billing-api-path.tls=true"
-              - "traefik.http.routers.billing-api-path.tls.certresolver=letsencrypt"
-              - "traefik.http.routers.billing-api-path.priority=100"
-              - "traefik.http.routers.billing-api-path.service=billing-api-service"
-              - "traefik.http.routers.billing-api-http.rule=Host(\`${{ env.API_DOMAIN }}\`)"
-              - "traefik.http.routers.billing-api-http.entrypoints=web"
-              - "traefik.http.routers.billing-api-http.middlewares=redirect-to-https"
             environment:
               - NODE_ENV=production
               - PORT=3000
@@ -123,7 +114,7 @@ jobs:
               - REDIS_URL=\${REDIS_URL}
               - JWT_SECRET=\${JWT_SECRET}
               - JWT_PUBLIC_KEY=\${JWT_PUBLIC_KEY}
-              - CORS_ORIGINS=https://${{ env.DOMAIN }},https://${{ env.API_DOMAIN }}
+              - CORS_ORIGINS=https://${{ env.DOMAIN }}
             networks:
               - traefik-global
             healthcheck:
@@ -153,7 +144,7 @@ jobs:
               - "traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true"
             environment:
               - NODE_ENV=production
-              - NEXT_PUBLIC_API_URL=https://${{ env.API_DOMAIN }}
+              - NEXT_PUBLIC_API_URL=https://${{ env.DOMAIN }}
               - NEXT_PUBLIC_AUTH_SERVICE_URL=https://auth.inite.ai
               - NEXT_PUBLIC_OAUTH_CLIENT_ID=inite-billing
               - OAUTH_CLIENT_SECRET=\${OAUTH_CLIENT_SECRET}
@@ -188,7 +179,7 @@ jobs:
         if docker-compose ps | grep -q "Up"; then
           echo "Deployment successful!"
           echo "Frontend: https://${{ env.DOMAIN }}"
-          echo "API: https://${{ env.API_DOMAIN }}"
+          echo "API: https://${{ env.DOMAIN }}"
         else
           echo "Deployment failed!"
           docker-compose logs
@@ -206,8 +197,8 @@ jobs:
         if [ "${{ job.status }}" == "success" ]; then
           echo "INITE Billing Service deployed successfully!"
           echo "Frontend: https://${{ env.DOMAIN }}"
-          echo "API: https://${{ env.API_DOMAIN }}"
-          echo "Swagger: https://${{ env.API_DOMAIN }}/api"
+          echo "API: https://${{ env.DOMAIN }}"
+          echo "Swagger: https://${{ env.DOMAIN }}/api"
         else
           echo "Deployment failed! Check the logs above."
         fi
