@@ -33,7 +33,7 @@ export type InvoiceStatus = 'open' | 'paid' | 'void' | 'failed' | 'refunded';
  * Valid state transitions for payment intents
  */
 export const VALID_INTENT_TRANSITIONS: Record<IntentStatus, IntentStatus[]> = {
-  created: ['opened', 'failed', 'expired'],
+  created: ['opened', 'paid', 'failed', 'expired'],
   opened: ['paid', 'failed', 'expired', 'refunded'],
   paid: ['refunded'],
   failed: [],

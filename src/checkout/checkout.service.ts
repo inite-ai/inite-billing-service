@@ -326,7 +326,7 @@ export class CheckoutService {
         data: {
           orderId: order.id,
           rail: 'PROMO',
-          status: 'paid',
+          status: 'created',
           providerIntentId: `promo_${order.id}`,
           amount: 0,
           currency: price.currency,
@@ -334,6 +334,7 @@ export class CheckoutService {
         },
       });
 
+      // Transition created → paid triggers full fulfillment (order status, entitlements, etc.)
       await this.paymentOrchestrator.applyStateTransition(
         paymentIntent.id,
         'paid',
