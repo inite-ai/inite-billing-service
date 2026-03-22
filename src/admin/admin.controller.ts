@@ -409,6 +409,38 @@ export class AdminController {
     return this.adminService.failPayout(id, body?.reason);
   }
 
+  // ─── Payout Providers ──────────────────────────────────────
+
+  @Get('payout-providers')
+  @ApiOperation({ summary: 'List all payout providers' })
+  async getPayoutProviders() {
+    return this.adminService.getPayoutProviders();
+  }
+
+  @Post('payout-providers')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a payout provider' })
+  async createPayoutProvider(
+    @Body() body: { code: string; name: string; currencies?: string[]; minAmount?: number; maxAmount?: number; feePercent?: number; feeFixed?: number; config?: any; metadata?: any },
+  ) {
+    return this.adminService.createPayoutProvider(body);
+  }
+
+  @Put('payout-providers/:id')
+  @ApiOperation({ summary: 'Update a payout provider' })
+  async updatePayoutProvider(
+    @Param('id') id: string,
+    @Body() body: { name?: string; isActive?: boolean; currencies?: string[]; minAmount?: number; maxAmount?: number; feePercent?: number; feeFixed?: number; config?: any; metadata?: any },
+  ) {
+    return this.adminService.updatePayoutProvider(id, body);
+  }
+
+  @Delete('payout-providers/:id')
+  @ApiOperation({ summary: 'Delete a payout provider' })
+  async deletePayoutProvider(@Param('id') id: string) {
+    return this.adminService.deletePayoutProvider(id);
+  }
+
   // ─── Payment Providers ──────────────────────────────────────
 
   @Get('payment-providers')

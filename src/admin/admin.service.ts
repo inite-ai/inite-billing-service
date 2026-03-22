@@ -458,6 +458,43 @@ export class AdminService {
     });
   }
 
+  // ─── Payout Providers ──────────────────────────────────────
+
+  async getPayoutProviders() {
+    return this.prisma.payoutProvider.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async createPayoutProvider(data: {
+    code: string;
+    name: string;
+    currencies?: string[];
+    minAmount?: number;
+    maxAmount?: number;
+    feePercent?: number;
+    feeFixed?: number;
+    config?: any;
+    metadata?: any;
+  }) {
+    return this.prisma.payoutProvider.create({ data });
+  }
+
+  async updatePayoutProvider(
+    id: string,
+    data: { name?: string; isActive?: boolean; currencies?: string[]; minAmount?: number; maxAmount?: number; feePercent?: number; feeFixed?: number; config?: any; metadata?: any },
+  ) {
+    const provider = await this.prisma.payoutProvider.findUnique({ where: { id } });
+    if (!provider) throw new NotFoundException(`Payout provider not found: ${id}`);
+    return this.prisma.payoutProvider.update({ where: { id }, data });
+  }
+
+  async deletePayoutProvider(id: string) {
+    const provider = await this.prisma.payoutProvider.findUnique({ where: { id } });
+    if (!provider) throw new NotFoundException(`Payout provider not found: ${id}`);
+    return this.prisma.payoutProvider.delete({ where: { id } });
+  }
+
   // ─── Webhooks ──────────────────────────────────────────────
 
   async getWebhooks(params: { page?: number; limit?: number }) {
