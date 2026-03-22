@@ -56,14 +56,14 @@ describe('PromoCodesService — validation logic', () => {
     mockPrisma.promoCode.findUnique.mockResolvedValue(null);
     const result = await service.validatePromoCode('NOPE', 'price-1', 'user-1');
     expect(result.isValid).toBe(false);
-    expect(result.error).toContain('not found');
+    expect(result.errorCode).toBe('not_found');
   });
 
   it('returns invalid if code inactive', async () => {
     mockPrisma.promoCode.findUnique.mockResolvedValue({ ...basePromo, isActive: false });
     const result = await service.validatePromoCode('SAVE10', 'price-1', 'user-1');
     expect(result.isValid).toBe(false);
-    expect(result.error).toContain('not active');
+    expect(result.errorCode).toBe('inactive');
   });
 
   it('returns invalid if code expired', async () => {
@@ -73,7 +73,7 @@ describe('PromoCodesService — validation logic', () => {
     });
     const result = await service.validatePromoCode('SAVE10', 'price-1', 'user-1');
     expect(result.isValid).toBe(false);
-    expect(result.error).toContain('expired');
+    expect(result.errorCode).toBe('expired');
   });
 
   it('returns invalid if not yet valid', async () => {
@@ -83,7 +83,7 @@ describe('PromoCodesService — validation logic', () => {
     });
     const result = await service.validatePromoCode('SAVE10', 'price-1', 'user-1');
     expect(result.isValid).toBe(false);
-    expect(result.error).toContain('not yet valid');
+    expect(result.errorCode).toBe('not_yet_valid');
   });
 
   it('returns invalid if global usage limit reached', async () => {
@@ -94,7 +94,7 @@ describe('PromoCodesService — validation logic', () => {
     });
     const result = await service.validatePromoCode('SAVE10', 'price-1', 'user-1');
     expect(result.isValid).toBe(false);
-    expect(result.error).toContain('limit reached');
+    expect(result.errorCode).toBe('usage_limit_reached');
   });
 
   it('returns invalid if per-user limit reached', async () => {
@@ -105,7 +105,7 @@ describe('PromoCodesService — validation logic', () => {
     mockPrisma.promoCodeUsage.count.mockResolvedValue(1);
     const result = await service.validatePromoCode('SAVE10', 'price-1', 'user-1');
     expect(result.isValid).toBe(false);
-    expect(result.error).toContain('maximum number of times');
+    expect(result.errorCode).toBe('per_user_limit_reached');
   });
 
   it('returns invalid if service scope mismatch', async () => {
@@ -115,7 +115,7 @@ describe('PromoCodesService — validation logic', () => {
     });
     const result = await service.validatePromoCode('SAVE10', 'price-1', 'user-1');
     expect(result.isValid).toBe(false);
-    expect(result.error).toContain('not valid for this service');
+    expect(result.errorCode).toBe('wrong_service');
   });
 
   it('returns invalid if min purchase amount not met', async () => {
@@ -123,10 +123,9 @@ describe('PromoCodesService — validation logic', () => {
       ...basePromo,
       minPurchaseAmount: decimal(200),
     });
-    // price is $100, min is $200
     const result = await service.validatePromoCode('SAVE10', 'price-1', 'user-1');
     expect(result.isValid).toBe(false);
-    expect(result.error).toContain('Minimum purchase');
+    expect(result.errorCode).toBe('min_purchase_not_met');
   });
 
   it('calculates percentage discount correctly', async () => {
