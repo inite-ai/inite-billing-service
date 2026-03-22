@@ -30,14 +30,19 @@ interface PromoCodeFormData {
   stackWithReferral: boolean
 }
 
+function defaultDatetime(offsetMs = 0): string {
+  const d = new Date(Date.now() + offsetMs)
+  return d.toISOString().slice(0, 16)
+}
+
 const emptyForm: PromoCodeFormData = {
   code: '',
   name: '',
   discountType: 'percentage',
   discountValue: '',
   serviceId: '',
-  validFrom: '',
-  validUntil: '',
+  validFrom: defaultDatetime(),
+  validUntil: defaultDatetime(365 * 24 * 60 * 60 * 1000),
   minPurchaseAmount: '',
   maxDiscountAmount: '',
   maxUsageCount: '',
@@ -191,15 +196,18 @@ function PromoCodeForm({
           onChange={(e) => update('maxUsagePerUser', e.target.value)}
         />
       </div>
-      <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={form.stackWithReferral}
-          onChange={(e) => update('stackWithReferral', e.target.checked)}
-          className="rounded border-slate-300 dark:border-slate-600 text-violet-600 focus:ring-violet-500"
-        />
-        {t('promoCodes.stackWithReferral')}
-      </label>
+      <div>
+        <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={form.stackWithReferral}
+            onChange={(e) => update('stackWithReferral', e.target.checked)}
+            className="rounded border-slate-300 dark:border-slate-600 text-violet-600 focus:ring-violet-500"
+          />
+          {t('promoCodes.stackWithReferral')}
+        </label>
+        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 ml-6">{t('promoCodes.stackWithReferralHint')}</p>
+      </div>
       <div className="flex gap-3 justify-end">
         <Button type="button" variant="ghost" onClick={onCancel}>{tc('cancel')}</Button>
         <Button type="submit" loading={loading}>{initial ? tc('update') : tc('create')}</Button>
