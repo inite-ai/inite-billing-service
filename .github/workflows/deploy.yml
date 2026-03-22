@@ -128,8 +128,10 @@ jobs:
           exit 1
         fi
 
-        # Clean up failed prisma migrations table if exists (switch from migrate to db push)
-        docker exec postgres psql -U ${{ secrets.ORCH_POSTGRES_USER }} -d inite_billing -c "DROP TABLE IF EXISTS billing._prisma_migrations;" 2>/dev/null || true
+        # Mark init migration as applied if DB already exists (baseline)
+        docker exec postgres psql -U ${{ secrets.ORCH_POSTGRES_USER }} -d inite_billing -c "
+          DELETE FROM billing._prisma_migrations WHERE migration_name = '20260322051612_init' AND finished_at IS NULL;
+        " 2>/dev/null || true
 
         docker pull ${{ secrets.DOCKERHUB_USERNAME }}/inite-billing-service:latest
         docker-compose up -d --no-deps --force-recreate billing-service
