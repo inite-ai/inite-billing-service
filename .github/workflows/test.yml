@@ -60,7 +60,7 @@ jobs:
         DATABASE_URL: postgresql://postgres:postgres@localhost:5433/inite_billing_test?schema=billing
 
     - name: Run tests
-      run: npm test
+      run: npm run test:ci
       env:
         DATABASE_URL: postgresql://postgres:postgres@localhost:5433/inite_billing_test?schema=billing
         REDIS_URL: redis://localhost:6381

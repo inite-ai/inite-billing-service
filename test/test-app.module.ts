@@ -30,10 +30,12 @@ import { OneAdapter } from '../src/adapters/one/one.adapter';
     ScheduleModule.forRoot(),
     BullModule.forRootAsync({
       useFactory: () => {
+        const redisUrl = process.env.REDIS_URL || 'redis://localhost:6381';
+        const url = new URL(redisUrl);
         return {
           connection: {
-            host: 'localhost',
-            port: 6379,
+            host: url.hostname,
+            port: parseInt(url.port, 10) || 6379,
           },
         };
       },
