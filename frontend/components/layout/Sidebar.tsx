@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Server, Package, DollarSign, Receipt,
-  CreditCard, Key, Users, GitBranch, Wallet, Webhook, ArrowLeft, Plug, ChevronRight, Tag
+  CreditCard, Key, Users, GitBranch, Wallet, Webhook, ArrowLeft, Plug, ChevronRight, Tag, TrendingUp
 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 
@@ -15,6 +15,7 @@ export function Sidebar() {
 
   const sidebarItems = [
     { href: '/admin', label: t('dashboard'), icon: LayoutDashboard, exact: true },
+    { href: '/admin/funnel', label: ta('funnel.title'), icon: TrendingUp },
     { href: '/admin/services', label: ta('services.title'), icon: Server },
     { href: '/admin/products', label: ta('products.title'), icon: Package },
     { href: '/admin/prices', label: ta('prices.title'), icon: DollarSign },

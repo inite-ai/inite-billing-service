@@ -18,6 +18,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { AdminService } from './admin.service';
 import { ReferralLevelsService } from '../affiliates/referral-levels.service';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
+import { FunnelService } from '../funnel/funnel.service';
 
 @ApiTags('Admin')
 @Controller('v1/admin')
@@ -28,6 +29,7 @@ export class AdminController {
     private readonly adminService: AdminService,
     private readonly referralLevelsService: ReferralLevelsService,
     private readonly promoCodesService: PromoCodesService,
+    private readonly funnelService: FunnelService,
   ) {}
 
   // ─── Services ──────────────────────────────────────────────
@@ -517,6 +519,56 @@ export class AdminController {
   @ApiOperation({ summary: 'Get promo code usage stats' })
   async getPromoCodeUsage(@Param('id') id: string) {
     return this.promoCodesService.getUsageStats(id);
+  }
+
+  // ─── Funnel / CJM ────────────────────────────────────────────
+
+  @Get('funnel/metrics')
+  @ApiOperation({ summary: 'Get funnel metrics' })
+  async getFunnelMetrics(
+    @Query('serviceId') serviceId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.funnelService.getFunnelMetrics({
+      serviceId,
+      from: from ? new Date(from) : undefined,
+      to: to ? new Date(to) : undefined,
+    });
+  }
+
+  @Get('funnel/timeseries')
+  @ApiOperation({ summary: 'Get funnel time series breakdown' })
+  async getFunnelTimeSeries(
+    @Query('serviceId') serviceId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('granularity') granularity?: string,
+  ) {
+    return this.funnelService.getFunnelTimeSeries({
+      serviceId,
+      from: from ? new Date(from) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+      to: to ? new Date(to) : new Date(),
+      granularity: (granularity as 'day' | 'week' | 'month') || 'day',
+    });
+  }
+
+  @Get('funnel/user/:userId')
+  @ApiOperation({ summary: 'Get user journey timeline' })
+  async getUserJourney(@Param('userId') userId: string) {
+    return this.funnelService.getUserJourney(userId);
+  }
+
+  @Get('funnel/abandoned')
+  @ApiOperation({ summary: 'Get abandoned checkouts' })
+  async getAbandonedCheckouts(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.funnelService.getAbandonedCheckouts({
+      page: page ? parseInt(page, 10) : undefined,
+      limit: limit ? parseInt(limit, 10) : undefined,
+    });
   }
 
   // ─── Stats ─────────────────────────────────────────────────

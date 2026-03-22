@@ -551,3 +551,31 @@ model PromoCodeUsage {
   @@schema("billing")
 }
 
+model FunnelEvent {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  sessionId   String?  @map("session_id") @db.VarChar(100)
+  eventType   String   @map("event_type") @db.VarChar(50)
+  // eventType values: catalog_view, checkout_started, payment_pending,
+  //   payment_failed, payment_completed, subscription_created,
+  //   subscription_renewed, subscription_canceled, subscription_churned,
+  //   checkout_abandoned
+  stage       String   @db.VarChar(30)
+  // stage values: awareness, checkout, payment, conversion, retention, churned
+  orderId     String?  @map("order_id") @db.Uuid
+  productId   String?  @map("product_id") @db.Uuid
+  serviceId   String?  @map("service_id") @db.Uuid
+  amount      Decimal? @db.Decimal(19, 4)
+  currency    String?  @db.VarChar(10)
+  properties  Json?    @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([userId, createdAt])
+  @@index([eventType, createdAt])
+  @@index([stage, createdAt])
+  @@index([orderId])
+  @@index([serviceId, createdAt])
+  @@map("funnel_events")
+  @@schema("billing")
+}
+

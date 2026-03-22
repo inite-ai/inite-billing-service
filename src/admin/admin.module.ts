@@ -5,9 +5,10 @@ import { PrismaService } from '../common/services/prisma.service';
 import { ReferralLevelsService } from '../affiliates/referral-levels.service';
 import { PaymentOrchestratorModule } from '../payment-orchestrator/payment-orchestrator.module';
 import { PromoCodesModule } from '../promo-codes/promo-codes.module';
+import { FunnelModule } from '../funnel/funnel.module';
 
 @Module({
-  imports: [PaymentOrchestratorModule, PromoCodesModule],
+  imports: [PaymentOrchestratorModule, PromoCodesModule, FunnelModule],
   controllers: [AdminController],
   providers: [AdminService, PrismaService, ReferralLevelsService],
 })

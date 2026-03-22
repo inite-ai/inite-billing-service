@@ -9,6 +9,7 @@ import { CatalogService } from '../catalog/catalog.service';
 import { PaymentOrchestratorService } from '../payment-orchestrator/payment-orchestrator.service';
 import { AffiliatesService } from '../affiliates/affiliates.service';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
+import { FunnelService } from '../funnel/funnel.service';
 import { CreateCheckoutSessionDto, CheckoutSessionResponseDto } from '../common/dto/checkout.dto';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -23,6 +24,7 @@ export class CheckoutService {
     private readonly paymentOrchestrator: PaymentOrchestratorService,
     private readonly affiliatesService: AffiliatesService,
     private readonly promoCodesService: PromoCodesService,
+    private readonly funnelService: FunnelService,
   ) {}
 
   async createCheckoutSession(
@@ -154,6 +156,24 @@ export class CheckoutService {
         promoValidation.finalAmount,
       );
     }
+
+    // Track funnel event: checkout_started
+    this.funnelService.track({
+      userId,
+      eventType: 'checkout_started',
+      stage: 'checkout',
+      orderId: order.id,
+      productId: price.productId,
+      serviceId: product.serviceId ?? undefined,
+      amount: Number(order.amount),
+      currency: order.currency,
+      properties: {
+        priceCode: dto.priceCode,
+        rail,
+        promoCode: dto.promoCode,
+        referralCode: dto.referralCode,
+      },
+    });
 
     // Get adapter
     const adapter = this.paymentOrchestrator.getAdapter(rail);

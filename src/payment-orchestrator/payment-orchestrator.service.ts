@@ -8,17 +8,23 @@ import {
 } from '../common/types/payment-state.types';
 import { OutboxService } from '../outbox/outbox.service';
 import { AffiliatesService } from '../affiliates/affiliates.service';
+import { FunnelService } from '../funnel/funnel.service';
 
 @Injectable()
 export class PaymentOrchestratorService {
   private readonly logger = new Logger(PaymentOrchestratorService.name);
   private adapters: Map<string, PaymentRailAdapter> = new Map();
   private affiliatesService: AffiliatesService;
+  private funnelService: FunnelService;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly outboxService: OutboxService,
   ) {}
+
+  setFunnelService(funnelService: FunnelService) {
+    this.funnelService = funnelService;
+  }
 
   setAffiliatesService(affiliatesService: AffiliatesService) {
     this.affiliatesService = affiliatesService;
@@ -112,6 +118,39 @@ export class PaymentOrchestratorService {
         status: newStatus,
         previous_status: intent.status,
       }, undefined, tx);
+
+      // Track funnel events based on status transitions
+      if (this.funnelService) {
+        const product = intent.order.price?.product;
+        const funnelBase = {
+          userId: intent.order.userId,
+          orderId: intent.orderId,
+          productId: product?.id,
+          serviceId: product?.serviceId ?? undefined,
+          amount: Number(intent.order.amount),
+          currency: intent.order.currency,
+        };
+
+        if (newStatus === 'opened') {
+          this.funnelService.track({
+            ...funnelBase,
+            eventType: 'payment_pending',
+            stage: 'payment',
+          });
+        } else if (newStatus === 'paid') {
+          this.funnelService.track({
+            ...funnelBase,
+            eventType: 'payment_completed',
+            stage: 'conversion',
+          });
+        } else if (newStatus === 'failed' || newStatus === 'expired') {
+          this.funnelService.track({
+            ...funnelBase,
+            eventType: 'payment_failed',
+            stage: 'churned',
+          });
+        }
+      }
     });
   }
 
@@ -276,6 +315,8 @@ export class PaymentOrchestratorService {
       },
     });
 
+    const isRenewal = !!subscription;
+
     if (subscription) {
       // Update existing subscription
       await tx.subscription.update({
@@ -302,6 +343,22 @@ export class PaymentOrchestratorService {
           currentPeriodEnd: periodEnd,
           cancelAtPeriodEnd: false,
         },
+      });
+    }
+
+    // Track funnel event for subscription
+    if (this.funnelService) {
+      const product = order.price.product;
+      this.funnelService.track({
+        userId: order.userId,
+        eventType: isRenewal ? 'subscription_renewed' : 'subscription_created',
+        stage: 'retention',
+        orderId: order.id,
+        productId: product?.id,
+        serviceId: product?.serviceId ?? undefined,
+        amount: Number(order.amount),
+        currency: order.currency,
+        properties: { subscriptionId: subscription?.id },
       });
     }
 

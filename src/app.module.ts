@@ -20,6 +20,7 @@ import { AffiliatesModule } from './affiliates/affiliates.module';
 import { AdminModule } from './admin/admin.module';
 import { PromoCodesModule } from './promo-codes/promo-codes.module';
 import { HealthModule } from './health/health.module';
+import { FunnelModule } from './funnel/funnel.module';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { HealthModule } from './health/health.module';
     AdminModule,
     PromoCodesModule,
     HealthModule,
+    FunnelModule,
   ],
   providers: [
     {
