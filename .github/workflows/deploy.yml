@@ -116,8 +116,6 @@ jobs:
           {
             echo "DATABASE_URL=postgresql://${{ secrets.ORCH_POSTGRES_USER }}:${{ secrets.ORCH_POSTGRES_PASSWORD }}@postgres:5432/inite_billing?schema=billing"
             echo "REDIS_URL=redis://redis:6379"
-            echo "JWT_SECRET=${{ secrets.JWT_SECRET }}"
-            echo "JWT_PUBLIC_KEY=\"$(printf '%s' '${{ secrets.JWT_PUBLIC_KEY }}' | sed ':a;N;$!ba;s/\n/\\n/g')\""
             echo "OAUTH_CLIENT_SECRET=${{ secrets.BILLING_OAUTH_CLIENT_SECRET }}"
             echo "DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}"
           } > .env
@@ -191,8 +189,6 @@ jobs:
         {
           echo "DATABASE_URL=postgresql://${{ secrets.ORCH_POSTGRES_USER }}:${{ secrets.ORCH_POSTGRES_PASSWORD }}@postgres:5432/inite_billing?schema=billing"
           echo "REDIS_URL=redis://redis:6379"
-          echo "JWT_SECRET=${{ secrets.JWT_SECRET }}"
-          echo "JWT_PUBLIC_KEY=\"$(printf '%s' '${{ secrets.JWT_PUBLIC_KEY }}' | sed ':a;N;$!ba;s/\n/\\n/g')\""
           echo "OAUTH_CLIENT_SECRET=${{ secrets.BILLING_OAUTH_CLIENT_SECRET }}"
           echo "DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}"
         } > .env
@@ -220,8 +216,6 @@ jobs:
               - FRONTEND_URL=https://${{ env.DOMAIN }}
               - DATABASE_URL=\${DATABASE_URL}
               - REDIS_URL=\${REDIS_URL}
-              - JWT_SECRET=\${JWT_SECRET}
-              - JWT_PUBLIC_KEY=\${JWT_PUBLIC_KEY}
               - AUTH_SERVICE_URL=https://auth.inite.ai
               - CORS_ORIGINS=https://${{ env.DOMAIN }}
             networks:
