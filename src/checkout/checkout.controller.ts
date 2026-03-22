@@ -1,6 +1,7 @@
 import {
   Controller,
   Post,
+  Get,
   Body,
   Headers,
   UseGuards,
@@ -13,6 +14,7 @@ import { User, RequestUser } from '../auth/decorators/user.decorator';
 import { CheckoutService } from './checkout.service';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
 import { CatalogService } from '../catalog/catalog.service';
+import { PrismaService } from '../common/services/prisma.service';
 import {
   CreateCheckoutSessionDto,
   CheckoutSessionResponseDto,
@@ -26,7 +28,18 @@ export class CheckoutController {
     private readonly checkoutService: CheckoutService,
     private readonly promoCodesService: PromoCodesService,
     private readonly catalogService: CatalogService,
+    private readonly prisma: PrismaService,
   ) {}
+
+  @Get('payment-methods')
+  @ApiOperation({ summary: 'List active payment providers for checkout' })
+  async getPaymentMethods() {
+    const providers = await this.prisma.paymentProvider.findMany({
+      where: { isActive: true },
+      select: { code: true, name: true, supportedModes: true, currencies: true },
+    });
+    return providers;
+  }
 
   @Post('session')
   @HttpCode(HttpStatus.CREATED)

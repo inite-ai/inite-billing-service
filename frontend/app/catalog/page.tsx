@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
 import { Tabs } from '@/components/ui/Tabs'
-import { ShoppingBag, Loader2, Zap, Tag, Check, X, Sparkles } from 'lucide-react'
+import { ShoppingBag, Loader2, Zap, Tag, Check, X, Sparkles, CreditCard } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import type { Product, Service, Price } from '@/lib/types'
@@ -23,6 +23,13 @@ interface PromoValidation {
   discountAmount: string
   finalAmount: string
   currency: string
+}
+
+interface PaymentMethod {
+  code: string
+  name: string
+  supportedModes: string[]
+  currencies: string[]
 }
 
 type BillingInterval = 'month' | 'year'
@@ -93,6 +100,11 @@ export default function CatalogPage() {
   const [promoResult, setPromoResult] = useState<PromoValidation | null>(null)
   const [checkoutLoading, setCheckoutLoading] = useState(false)
 
+  // Payment method state
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
+  const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(false)
+  const [selectedRail, setSelectedRail] = useState<string>('')
+
   useEffect(() => {
     async function load() {
       try {
@@ -137,11 +149,25 @@ export default function CatalogPage() {
     return tabs
   }, [services, t])
 
-  const openCheckout = (product: Product, price: Price) => {
+  const openCheckout = async (product: Product, price: Price) => {
     setCheckoutProduct(product)
     setCheckoutPrice(price)
     setPromoCode('')
     setPromoResult(null)
+    setSelectedRail('')
+    setPaymentMethodsLoading(true)
+    try {
+      const res = await api.get('/v1/checkout/payment-methods')
+      const methods: PaymentMethod[] = res.data
+      setPaymentMethods(methods)
+      if (methods.length > 0) {
+        setSelectedRail(methods[0].code)
+      }
+    } catch {
+      setPaymentMethods([])
+    } finally {
+      setPaymentMethodsLoading(false)
+    }
   }
 
   const closeCheckout = () => {
@@ -149,6 +175,8 @@ export default function CatalogPage() {
     setCheckoutPrice(null)
     setPromoCode('')
     setPromoResult(null)
+    setPaymentMethods([])
+    setSelectedRail('')
   }
 
   const handleApplyPromo = async () => {
@@ -175,10 +203,16 @@ export default function CatalogPage() {
   }
 
   const handleProceedToPayment = async () => {
-    if (!checkoutPrice) return
+    if (!checkoutPrice || !checkoutProduct || !selectedRail) return
     setCheckoutLoading(true)
     try {
-      const payload: Record<string, unknown> = { priceId: checkoutPrice.id }
+      const payload: Record<string, unknown> = {
+        priceCode: checkoutPrice.code,
+        mode: checkoutProduct.type === 'subscription' ? 'SUBSCRIPTION' : 'PAYMENT',
+        rail: selectedRail,
+        successUrl: window.location.origin + '/orders',
+        errorUrl: window.location.origin + '/catalog',
+      }
       if (promoResult?.valid && promoCode.trim()) {
         payload.promoCode = promoCode.trim()
       }
@@ -411,11 +445,63 @@ export default function CatalogPage() {
               </motion.div>
             )}
 
+            {/* Payment method selector */}
+            <div>
+              <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">
+                <CreditCard className="w-3.5 h-3.5 inline mr-1" />
+                {t('paymentMethod')}
+              </label>
+              {paymentMethodsLoading ? (
+                <div className="flex items-center gap-2 text-slate-400 text-sm py-3">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  {t('selectPaymentMethod')}
+                </div>
+              ) : paymentMethods.length === 0 ? (
+                <p className="text-sm text-red-500 py-2">{t('noPaymentMethods')}</p>
+              ) : (
+                <div className="space-y-2">
+                  {paymentMethods.map((method) => (
+                    <button
+                      key={method.code}
+                      type="button"
+                      onClick={() => setSelectedRail(method.code)}
+                      className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all text-left ${
+                        selectedRail === method.code
+                          ? 'border-violet-500 ring-2 ring-violet-500/20 bg-violet-50 dark:bg-violet-900/20'
+                          : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 hover:border-slate-300 dark:hover:border-slate-600'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                            selectedRail === method.code
+                              ? 'border-violet-500'
+                              : 'border-slate-300 dark:border-slate-600'
+                          }`}
+                        >
+                          {selectedRail === method.code && (
+                            <div className="w-2 h-2 rounded-full bg-violet-500" />
+                          )}
+                        </div>
+                        <span className="text-sm font-medium text-slate-900 dark:text-white">
+                          {method.name}
+                        </span>
+                      </div>
+                      <span className="text-xs text-slate-400">
+                        {method.currencies.join(', ')}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <Button
               className="w-full"
               size="lg"
               onClick={handleProceedToPayment}
               loading={checkoutLoading}
+              disabled={!selectedRail || paymentMethodsLoading}
               icon={<Zap className="w-4 h-4" />}
             >
               {t('proceedToPayment')}

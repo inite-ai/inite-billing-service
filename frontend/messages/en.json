@@ -322,7 +322,11 @@
     "discount": "Discount",
     "finalPrice": "Final price",
     "proceedToPayment": "Proceed to Payment",
-    "failedToLoad": "Failed to load catalog"
+    "failedToLoad": "Failed to load catalog",
+    "paymentMethod": "Payment Method",
+    "selectPaymentMethod": "Select payment method",
+    "noPaymentMethods": "No payment methods available",
+    "currencies": "Currencies"
   },
   "referrals": {
     "title": "Referral Program",

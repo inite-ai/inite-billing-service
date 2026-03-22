@@ -67,7 +67,18 @@ export class CheckoutService {
     }
 
     // Determine rail
-    const rail = dto.rail || 'ONE';
+    let rail: string;
+    if (!dto.rail) {
+      const activeProvider = await this.prisma.paymentProvider.findFirst({
+        where: { isActive: true },
+      });
+      if (!activeProvider) {
+        throw new BadRequestException('No payment providers are configured. Please contact support.');
+      }
+      rail = activeProvider.code;
+    } else {
+      rail = dto.rail;
+    }
 
     // Validate promo code if provided
     let promoValidation: any = null;
@@ -176,7 +187,12 @@ export class CheckoutService {
     });
 
     // Get adapter
-    const adapter = this.paymentOrchestrator.getAdapter(rail);
+    let adapter;
+    try {
+      adapter = this.paymentOrchestrator.getAdapter(rail);
+    } catch {
+      throw new BadRequestException(`Payment provider ${rail} is not available. Please select another payment method.`);
+    }
 
     // Create payment intent with adapter (use discounted amount)
     const intentResult = await adapter.createPaymentIntent({

@@ -322,7 +322,11 @@
     "discount": "Скидка",
     "finalPrice": "Итоговая цена",
     "proceedToPayment": "Перейти к оплате",
-    "failedToLoad": "Не удалось загрузить каталог"
+    "failedToLoad": "Не удалось загрузить каталог",
+    "paymentMethod": "Способ оплаты",
+    "selectPaymentMethod": "Выберите способ оплаты",
+    "noPaymentMethods": "Нет доступных способов оплаты",
+    "currencies": "Валюты"
   },
   "referrals": {
     "title": "Реферальная программа",
