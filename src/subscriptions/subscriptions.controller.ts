@@ -3,12 +3,16 @@ import {
   Post,
   Body,
   Get,
+  Param,
+  Query,
+  Req,
   UseGuards,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtOrServiceGuard } from '../auth/guards/jwt-or-service.guard';
 import { User, RequestUser } from '../auth/decorators/user.decorator';
 import { SubscriptionsService } from './subscriptions.service';
 import { SubscriptionResponseDto } from '../common/dto/subscription.dto';
@@ -51,5 +55,19 @@ export class SubscriptionsController {
     @User() user: RequestUser,
   ): Promise<SubscriptionResponseDto[]> {
     return this.subscriptionsService.getUserSubscriptions(user.userId);
+  }
+
+  @Get('user/:userId')
+  @UseGuards(JwtOrServiceGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get subscriptions for a user (service-scoped)' })
+  @ApiResponse({ status: 200, type: [SubscriptionResponseDto] })
+  async getUserSubscriptions(
+    @Param('userId') userId: string,
+    @Req() req: any,
+  ): Promise<SubscriptionResponseDto[]> {
+    // Service API key → filter by that service's ID
+    const serviceId = req.user?.isService ? req.user.serviceId : undefined;
+    return this.subscriptionsService.getUserSubscriptions(userId, serviceId);
   }
 }

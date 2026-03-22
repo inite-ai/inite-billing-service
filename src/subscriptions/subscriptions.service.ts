@@ -48,9 +48,15 @@ export class SubscriptionsService {
     });
   }
 
-  async getUserSubscriptions(userId: string): Promise<SubscriptionResponseDto[]> {
+  async getUserSubscriptions(userId: string, serviceId?: string): Promise<SubscriptionResponseDto[]> {
+    const where: any = { userId };
+    if (serviceId) {
+      where.price = { product: { serviceId } };
+    }
+
     const subscriptions = await this.prisma.subscription.findMany({
-      where: { userId },
+      where,
+      include: { price: { include: { product: true } } },
       orderBy: { createdAt: 'desc' },
     });
 
