@@ -123,11 +123,22 @@ export default function CheckoutPage() {
         setPromoResult(res.data)
         toast.success(t('promoApplied'))
       } else {
-        toast.error(t('promoInvalid'))
+        const errorCode = res.data.errorCode || res.data.error
+        const errorMessages: Record<string, string> = {
+          not_found: t('promoNotFound'),
+          inactive: t('promoInactive'),
+          expired: t('promoExpired'),
+          not_yet_valid: t('promoNotYetValid'),
+          usage_limit_reached: t('promoUsageLimitReached'),
+          per_user_limit_reached: t('promoPerUserLimitReached'),
+          wrong_service: t('promoWrongService'),
+          min_purchase_not_met: t('promoMinPurchase'),
+        }
+        toast.error(errorMessages[errorCode] || t('promoInvalid'))
         setPromoResult(null)
       }
-    } catch {
-      toast.error(t('promoInvalid'))
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || t('promoInvalid'))
       setPromoResult(null)
     } finally {
       setPromoLoading(false)

@@ -22,9 +22,11 @@ export class PromoCodesService {
   ): Promise<{
     isValid: boolean;
     error?: string;
+    errorCode?: string;
     promoCode?: any;
     discountAmount?: number;
     finalAmount?: number;
+    minPurchaseAmount?: number;
     originalAmount?: number;
   }> {
     // Find the promo code
@@ -33,20 +35,20 @@ export class PromoCodesService {
     });
 
     if (!promoCode) {
-      return { isValid: false, error: 'Promo code not found' };
+      return { isValid: false, error: 'not_found', errorCode: 'not_found' };
     }
 
     if (!promoCode.isActive) {
-      return { isValid: false, error: 'Promo code is not active' };
+      return { isValid: false, error: 'inactive', errorCode: 'inactive' };
     }
 
     // Check date range
     const now = new Date();
     if (now < promoCode.validFrom) {
-      return { isValid: false, error: 'Promo code is not yet valid' };
+      return { isValid: false, error: 'not_yet_valid', errorCode: 'not_yet_valid' };
     }
     if (promoCode.validUntil && now > promoCode.validUntil) {
-      return { isValid: false, error: 'Promo code has expired' };
+      return { isValid: false, error: 'expired', errorCode: 'expired' };
     }
 
     // Check global usage limit
@@ -54,7 +56,7 @@ export class PromoCodesService {
       promoCode.maxUsageCount !== null &&
       promoCode.currentUsageCount >= promoCode.maxUsageCount
     ) {
-      return { isValid: false, error: 'Promo code usage limit reached' };
+      return { isValid: false, error: 'usage_limit_reached', errorCode: 'usage_limit_reached' };
     }
 
     // Check per-user usage limit
@@ -68,7 +70,8 @@ export class PromoCodesService {
       if (userUsageCount >= promoCode.maxUsagePerUser) {
         return {
           isValid: false,
-          error: 'You have already used this promo code the maximum number of times',
+          error: 'per_user_limit_reached',
+          errorCode: 'per_user_limit_reached',
         };
       }
     }
@@ -80,7 +83,7 @@ export class PromoCodesService {
     });
 
     if (!price) {
-      return { isValid: false, error: 'Price not found' };
+      return { isValid: false, error: 'not_found', errorCode: 'not_found' };
     }
 
     // Check service scope
@@ -88,7 +91,8 @@ export class PromoCodesService {
       if (price.product.serviceId !== promoCode.serviceId) {
         return {
           isValid: false,
-          error: 'Promo code is not valid for this service',
+          error: 'wrong_service',
+          errorCode: 'wrong_service',
         };
       }
     }
@@ -102,7 +106,9 @@ export class PromoCodesService {
     ) {
       return {
         isValid: false,
-        error: `Minimum purchase amount is ${Number(promoCode.minPurchaseAmount)}`,
+        error: 'min_purchase_not_met',
+        errorCode: 'min_purchase_not_met',
+        minPurchaseAmount: Number(promoCode.minPurchaseAmount),
       };
     }
 
