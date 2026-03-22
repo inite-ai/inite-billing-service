@@ -398,6 +398,217 @@ export class FunnelService {
   }
 
   /**
+   * Get pipeline data for admin kanban view.
+   * Groups users by their latest funnel stage.
+   */
+  async getPipelineData(serviceId?: string): Promise<{
+    stages: Array<{
+      stage: string;
+      items: Array<{
+        id: string;
+        userId: string;
+        orderId?: string;
+        productName?: string;
+        serviceName?: string;
+        amount?: number;
+        currency?: string;
+        eventType: string;
+        stage: string;
+        createdAt: string;
+        properties?: any;
+        hasFollowUp?: boolean;
+      }>;
+    }>;
+    stats: {
+      total: number;
+      conversionRate: number;
+      abandonedCount: number;
+      activeSubscriptions: number;
+      churningCount: number;
+      totalValue: number;
+    };
+  }> {
+    const pipelineStages = [
+      'checkout',
+      'payment',
+      'conversion',
+      'retention',
+      'churning',
+      'churned',
+    ];
+
+    const where: any = {};
+    if (serviceId) where.serviceId = serviceId;
+
+    // Get all funnel events, ordered by user + time
+    const allEvents = await this.prisma.funnelEvent.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // For each user, find their LATEST event to determine current stage
+    const userLatestMap = new Map<
+      string,
+      (typeof allEvents)[0]
+    >();
+    const userFollowUpMap = new Map<string, boolean>();
+
+    for (const event of allEvents) {
+      if (event.eventType === 'follow_up_sent') {
+        userFollowUpMap.set(event.userId, true);
+      }
+      if (!userLatestMap.has(event.userId)) {
+        userLatestMap.set(event.userId, event);
+      }
+    }
+
+    // Map legacy stage names to pipeline stages
+    const stageMapping: Record<string, string> = {
+      awareness: 'checkout',
+      checkout: 'checkout',
+      payment: 'payment',
+      conversion: 'conversion',
+      retention: 'retention',
+      churning: 'churning',
+      churned: 'churned',
+    };
+
+    // Also map event types to determine more specific stages
+    const eventToStage: Record<string, string> = {
+      checkout_started: 'checkout',
+      payment_pending: 'payment',
+      payment_completed: 'conversion',
+      subscription_created: 'retention',
+      subscription_renewed: 'retention',
+      subscription_churning: 'churning',
+      subscription_canceled: 'churned',
+      checkout_abandoned: 'churned',
+      subscription_churned: 'churned',
+    };
+
+    // Group users by their current stage
+    const stageGroups = new Map<string, Array<typeof allEvents[0] & { hasFollowUp?: boolean }>>();
+    for (const stage of pipelineStages) {
+      stageGroups.set(stage, []);
+    }
+
+    for (const [userId, event] of userLatestMap.entries()) {
+      const resolvedStage =
+        eventToStage[event.eventType] ||
+        stageMapping[event.stage] ||
+        'checkout';
+      const group = stageGroups.get(resolvedStage) || stageGroups.get('checkout')!;
+      group.push({
+        ...event,
+        hasFollowUp: userFollowUpMap.get(userId) || false,
+      });
+    }
+
+    // Enrich items with order/product data
+    const enrichedStages = await Promise.all(
+      pipelineStages.map(async (stage) => {
+        const items = stageGroups.get(stage) || [];
+        const enrichedItems = await Promise.all(
+          items.slice(0, 50).map(async (event) => {
+            let productName: string | undefined;
+            let serviceName: string | undefined;
+            let amount: number | undefined = event.amount
+              ? Number(event.amount)
+              : undefined;
+            let currency: string | undefined = event.currency ?? undefined;
+
+            if (event.orderId) {
+              try {
+                const order = await this.prisma.order.findUnique({
+                  where: { id: event.orderId },
+                  include: {
+                    price: {
+                      include: {
+                        product: {
+                          include: { service: true },
+                        },
+                      },
+                    },
+                  },
+                });
+                if (order) {
+                  productName = order.price?.product?.name;
+                  serviceName = order.price?.product?.service?.name;
+                  if (!amount) amount = Number(order.amount);
+                  if (!currency) currency = order.currency;
+                }
+              } catch {
+                // ignore lookup failures
+              }
+            } else if (event.productId) {
+              try {
+                const product = await this.prisma.product.findUnique({
+                  where: { id: event.productId },
+                  include: { service: true },
+                });
+                if (product) {
+                  productName = product.name;
+                  serviceName = product.service?.name;
+                }
+              } catch {
+                // ignore
+              }
+            }
+
+            return {
+              id: event.id,
+              userId: event.userId,
+              orderId: event.orderId ?? undefined,
+              productName,
+              serviceName,
+              amount,
+              currency,
+              eventType: event.eventType,
+              stage,
+              createdAt: event.createdAt.toISOString(),
+              properties: event.properties ?? undefined,
+              hasFollowUp: (event as any).hasFollowUp || false,
+            };
+          }),
+        );
+        return { stage, items: enrichedItems };
+      }),
+    );
+
+    // Calculate stats
+    const total = userLatestMap.size;
+    const checkoutCount = allEvents.filter(
+      (e) => e.eventType === 'checkout_started',
+    ).length;
+    const paidCount = allEvents.filter(
+      (e) => e.eventType === 'payment_completed',
+    ).length;
+    const conversionRate =
+      checkoutCount > 0
+        ? Math.round((paidCount / checkoutCount) * 100 * 100) / 100
+        : 0;
+    const abandonedCount = (stageGroups.get('churned') || []).length;
+    const activeSubscriptions = (stageGroups.get('retention') || []).length;
+    const churningCount = (stageGroups.get('churning') || []).length;
+    const totalValue = Array.from(userLatestMap.values()).reduce(
+      (sum, e) => sum + (e.amount ? Number(e.amount) : 0),
+      0,
+    );
+
+    return {
+      stages: enrichedStages,
+      stats: {
+        total,
+        conversionRate,
+        abandonedCount,
+        activeSubscriptions,
+        churningCount,
+        totalValue: Math.round(totalValue * 100) / 100,
+      },
+    };
+  }
+
+  /**
    * Get abandoned checkout orders with funnel event data (for admin listing)
    */
   async getAbandonedCheckouts(params: { page?: number; limit?: number }) {

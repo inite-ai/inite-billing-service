@@ -529,6 +529,14 @@ export class AdminController {
 
   // ─── Funnel / CJM ────────────────────────────────────────────
 
+  @Get('funnel/pipeline')
+  @ApiOperation({ summary: 'Get funnel pipeline data for kanban view' })
+  async getFunnelPipeline(
+    @Query('serviceId') serviceId?: string,
+  ) {
+    return this.funnelService.getPipelineData(serviceId);
+  }
+
   @Get('funnel/metrics')
   @ApiOperation({ summary: 'Get funnel metrics' })
   async getFunnelMetrics(
