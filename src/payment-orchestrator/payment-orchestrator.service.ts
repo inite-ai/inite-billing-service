@@ -394,13 +394,8 @@ export class PaymentOrchestratorService {
     // Determine serviceId from product
     const serviceId = order.price?.product?.serviceId || undefined;
 
-    // Use originalAmount from metadata if a promo code was applied,
-    // otherwise fall back to order.amount (the actual charged amount).
-    const metadata = (order.metadata || {}) as Record<string, any>;
-    const commissionBasisAmount =
-      metadata.originalAmount != null
-        ? Number(metadata.originalAmount)
-        : Number(order.amount);
+    // Commissions are calculated on the amount the user actually paid (after discount)
+    const commissionBasisAmount = Number(order.amount);
 
     try {
       await this.affiliatesService.processMultiLevelCommissions(
