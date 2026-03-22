@@ -382,7 +382,8 @@ export class PaymentOrchestratorService {
   }
 
   /**
-   * Handle affiliate commission using multi-level referral system
+   * Handle affiliate commission using multi-level referral system.
+   * Commissions are calculated on the original amount (before promo code discount).
    */
   private async handleAffiliateCommission(order: any, tx: any): Promise<void> {
     if (!this.affiliatesService) {
@@ -393,11 +394,19 @@ export class PaymentOrchestratorService {
     // Determine serviceId from product
     const serviceId = order.price?.product?.serviceId || undefined;
 
+    // Use originalAmount from metadata if a promo code was applied,
+    // otherwise fall back to order.amount (the actual charged amount).
+    const metadata = (order.metadata || {}) as Record<string, any>;
+    const commissionBasisAmount =
+      metadata.originalAmount != null
+        ? Number(metadata.originalAmount)
+        : Number(order.amount);
+
     try {
       await this.affiliatesService.processMultiLevelCommissions(
         order.id,
         order.userId,
-        Number(order.amount),
+        commissionBasisAmount,
         order.currency,
         serviceId,
         tx,

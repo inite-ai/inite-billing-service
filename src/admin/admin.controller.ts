@@ -17,6 +17,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { AdminService } from './admin.service';
 import { ReferralLevelsService } from '../affiliates/referral-levels.service';
+import { PromoCodesService } from '../promo-codes/promo-codes.service';
 
 @ApiTags('Admin')
 @Controller('v1/admin')
@@ -26,6 +27,7 @@ export class AdminController {
   constructor(
     private readonly adminService: AdminService,
     private readonly referralLevelsService: ReferralLevelsService,
+    private readonly promoCodesService: PromoCodesService,
   ) {}
 
   // ─── Services ──────────────────────────────────────────────
@@ -438,6 +440,83 @@ export class AdminController {
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
     });
+  }
+
+  // ─── Promo Codes ──────────────────────────────────────────
+
+  @Get('promo-codes')
+  @ApiOperation({ summary: 'List all promo codes' })
+  async getPromoCodes(
+    @Query('serviceId') serviceId?: string,
+    @Query('isActive') isActive?: string,
+  ) {
+    return this.promoCodesService.findAll({
+      serviceId,
+      isActive: isActive !== undefined ? isActive === 'true' : undefined,
+    });
+  }
+
+  @Post('promo-codes')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a promo code' })
+  async createPromoCode(
+    @Body()
+    body: {
+      code: string;
+      name: string;
+      description?: string;
+      discountType: string;
+      discountValue: number;
+      serviceId?: string;
+      minPurchaseAmount?: number;
+      maxDiscountAmount?: number;
+      validFrom: string;
+      validUntil?: string;
+      isActive?: boolean;
+      maxUsageCount?: number;
+      maxUsagePerUser?: number;
+      stackWithReferral?: boolean;
+      metadata?: any;
+    },
+  ) {
+    return this.promoCodesService.create(body);
+  }
+
+  @Put('promo-codes/:id')
+  @ApiOperation({ summary: 'Update a promo code' })
+  async updatePromoCode(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      name?: string;
+      description?: string;
+      discountType?: string;
+      discountValue?: number;
+      serviceId?: string;
+      minPurchaseAmount?: number;
+      maxDiscountAmount?: number;
+      validFrom?: string;
+      validUntil?: string;
+      isActive?: boolean;
+      maxUsageCount?: number;
+      maxUsagePerUser?: number;
+      stackWithReferral?: boolean;
+      metadata?: any;
+    },
+  ) {
+    return this.promoCodesService.update(id, body);
+  }
+
+  @Delete('promo-codes/:id')
+  @ApiOperation({ summary: 'Delete a promo code' })
+  async deletePromoCode(@Param('id') id: string) {
+    return this.promoCodesService.delete(id);
+  }
+
+  @Get('promo-codes/:id/usage')
+  @ApiOperation({ summary: 'Get promo code usage stats' })
+  async getPromoCodeUsage(@Param('id') id: string) {
+    return this.promoCodesService.getUsageStats(id);
   }
 
   // ─── Stats ─────────────────────────────────────────────────

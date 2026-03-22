@@ -164,6 +164,28 @@ export interface AffiliateTreeNode extends Affiliate {
   children: AffiliateTreeNode[]
 }
 
+export interface PromoCode {
+  id: string
+  code: string
+  name: string
+  description?: string
+  discountType: 'percentage' | 'fixed_amount'
+  discountValue: string
+  serviceId?: string
+  minPurchaseAmount?: string
+  maxDiscountAmount?: string
+  validFrom: string
+  validUntil?: string
+  isActive: boolean
+  maxUsageCount?: number
+  currentUsageCount: number
+  maxUsagePerUser?: number
+  stackWithReferral: boolean
+  metadata?: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}
+
 export interface PaginatedResponse<T> {
   items: T[]
   total: number

@@ -7,11 +7,23 @@ import { ClientLayout } from '@/components/layout/ClientLayout'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
+import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
-import { ShoppingBag, Loader2, Zap } from 'lucide-react'
+import { Modal } from '@/components/ui/Modal'
+import { ShoppingBag, Loader2, Zap, Tag, Check, X } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
-import type { Product, Service } from '@/lib/types'
+import type { Product, Service, Price } from '@/lib/types'
+
+interface PromoValidation {
+  valid: boolean
+  discountType: 'percentage' | 'fixed_amount'
+  discountValue: string
+  originalAmount: string
+  discountAmount: string
+  finalAmount: string
+  currency: string
+}
 
 export default function CatalogPage() {
   const t = useTranslations('catalog')
@@ -20,6 +32,14 @@ export default function CatalogPage() {
   const [services, setServices] = useState<Service[]>([])
   const [selectedService, setSelectedService] = useState('')
   const [loading, setLoading] = useState(true)
+
+  // Checkout modal state
+  const [checkoutPrice, setCheckoutPrice] = useState<Price | null>(null)
+  const [checkoutProduct, setCheckoutProduct] = useState<Product | null>(null)
+  const [promoCode, setPromoCode] = useState('')
+  const [promoLoading, setPromoLoading] = useState(false)
+  const [promoResult, setPromoResult] = useState<PromoValidation | null>(null)
+  const [checkoutLoading, setCheckoutLoading] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -42,6 +62,67 @@ export default function CatalogPage() {
   const filteredProducts = selectedService
     ? products.filter((p) => p.serviceId === selectedService)
     : products
+
+  const openCheckout = (product: Product, price: Price) => {
+    setCheckoutProduct(product)
+    setCheckoutPrice(price)
+    setPromoCode('')
+    setPromoResult(null)
+  }
+
+  const closeCheckout = () => {
+    setCheckoutProduct(null)
+    setCheckoutPrice(null)
+    setPromoCode('')
+    setPromoResult(null)
+  }
+
+  const handleApplyPromo = async () => {
+    if (!promoCode.trim() || !checkoutPrice) return
+    setPromoLoading(true)
+    try {
+      const res = await api.post('/v1/checkout/validate-promo', {
+        promoCode: promoCode.trim(),
+        priceCode: checkoutPrice.code,
+      })
+      setPromoResult(res.data)
+      if (res.data.valid) {
+        toast.success(t('promoApplied'))
+      } else {
+        toast.error(t('promoInvalid'))
+        setPromoResult(null)
+      }
+    } catch {
+      toast.error(t('promoInvalid'))
+      setPromoResult(null)
+    } finally {
+      setPromoLoading(false)
+    }
+  }
+
+  const handleProceedToPayment = async () => {
+    if (!checkoutPrice) return
+    setCheckoutLoading(true)
+    try {
+      const payload: Record<string, unknown> = { priceId: checkoutPrice.id }
+      if (promoResult?.valid && promoCode.trim()) {
+        payload.promoCode = promoCode.trim()
+      }
+      const res = await api.post('/v1/checkout/sessions', payload)
+      if (res.data.checkoutUrl) {
+        window.location.href = res.data.checkoutUrl
+      }
+    } catch {
+      toast.error(tc('errors.generic'))
+    } finally {
+      setCheckoutLoading(false)
+    }
+  }
+
+  const clearPromo = () => {
+    setPromoCode('')
+    setPromoResult(null)
+  }
 
   return (
     <ClientLayout>
@@ -105,7 +186,13 @@ export default function CatalogPage() {
                             <span className="text-sm text-slate-400 ml-0.5">/{price.interval}</span>
                           )}
                         </div>
-                        <Button size="sm" icon={<Zap className="w-3.5 h-3.5" />}>{tc('buy')}</Button>
+                        <Button
+                          size="sm"
+                          icon={<Zap className="w-3.5 h-3.5" />}
+                          onClick={() => openCheckout(product, price)}
+                        >
+                          {tc('buy')}
+                        </Button>
                       </div>
                     ))}
                   </div>
@@ -115,6 +202,95 @@ export default function CatalogPage() {
           ))}
         </div>
       )}
+
+      <Modal
+        isOpen={!!checkoutPrice && !!checkoutProduct}
+        onClose={closeCheckout}
+        title={checkoutProduct?.name || ''}
+      >
+        {checkoutPrice && checkoutProduct && (
+          <div className="space-y-5">
+            <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-500">{checkoutProduct.name}</span>
+                <span className="text-lg font-bold text-slate-900 dark:text-white">
+                  {checkoutPrice.amount} {checkoutPrice.currency}
+                  {checkoutPrice.interval && (
+                    <span className="text-sm font-normal text-slate-400">/{checkoutPrice.interval}</span>
+                  )}
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">
+                <Tag className="w-3.5 h-3.5 inline mr-1" />
+                {t('promoCode')}
+              </label>
+              <div className="flex gap-2">
+                <div className="flex-1 relative">
+                  <Input
+                    value={promoCode}
+                    onChange={(e) => {
+                      setPromoCode(e.target.value.toUpperCase())
+                      if (promoResult) setPromoResult(null)
+                    }}
+                    placeholder="SUMMER2024"
+                    disabled={!!promoResult?.valid}
+                  />
+                  {promoResult?.valid && (
+                    <button
+                      onClick={clearPromo}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+                <Button
+                  variant={promoResult?.valid ? 'secondary' : 'outline'}
+                  onClick={handleApplyPromo}
+                  loading={promoLoading}
+                  disabled={!promoCode.trim() || !!promoResult?.valid}
+                >
+                  {promoResult?.valid ? <Check className="w-4 h-4" /> : t('applyPromo')}
+                </Button>
+              </div>
+            </div>
+
+            {promoResult?.valid && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                className="p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800 space-y-2"
+              >
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500">{t('originalPrice')}</span>
+                  <span className="text-slate-700 dark:text-slate-300">{promoResult.originalAmount} {promoResult.currency}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-green-600">{t('discount')}</span>
+                  <span className="text-green-600 font-medium">-{promoResult.discountAmount} {promoResult.currency}</span>
+                </div>
+                <div className="border-t border-green-200 dark:border-green-800 pt-2 flex justify-between">
+                  <span className="font-medium text-slate-700 dark:text-slate-200">{t('finalPrice')}</span>
+                  <span className="font-bold text-lg text-slate-900 dark:text-white">{promoResult.finalAmount} {promoResult.currency}</span>
+                </div>
+              </motion.div>
+            )}
+
+            <Button
+              className="w-full"
+              size="lg"
+              onClick={handleProceedToPayment}
+              loading={checkoutLoading}
+              icon={<Zap className="w-4 h-4" />}
+            >
+              {t('proceedToPayment')}
+            </Button>
+          </div>
+        )}
+      </Modal>
     </ClientLayout>
   )
 }

@@ -45,6 +45,11 @@ export class CreateCheckoutSessionDto {
   @IsString()
   @IsOptional()
   referralCode?: string;
+
+  @ApiPropertyOptional({ description: 'Promo code for discount' })
+  @IsString()
+  @IsOptional()
+  promoCode?: string;
 }
 
 export class CheckoutSessionResponseDto {

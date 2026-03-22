@@ -118,6 +118,7 @@ model Service {
   referralLevels ReferralLevel[]
   affiliates     Affiliate[]
   referrals      Referral[]
+  promoCodes     PromoCode[]
 
   @@map("services")
   @@schema("billing")
@@ -212,6 +213,7 @@ model Order {
   paymentIntents PaymentIntent[]
   invoices      Invoice[]
   affiliateCommissions AffiliateCommission[]
+  promoCodeUsages PromoCodeUsage[]
 
   @@index([userId, status, createdAt(sort: Desc)])
   @@index([externalId])
@@ -497,6 +499,55 @@ model PaymentProvider {
   updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@map("payment_providers")
+  @@schema("billing")
+}
+
+model PromoCode {
+  id                String   @id @default(uuid()) @db.Uuid
+  code              String   @unique @db.VarChar(50)
+  name              String   @db.VarChar(255)
+  description       String?  @db.Text
+  discountType      String   @map("discount_type") @db.VarChar(20) // percentage | fixed_amount
+  discountValue     Decimal  @map("discount_value") @db.Decimal(19, 4)
+  serviceId         String?  @map("service_id") @db.Uuid
+  minPurchaseAmount Decimal? @map("min_purchase_amount") @db.Decimal(19, 4)
+  maxDiscountAmount Decimal? @map("max_discount_amount") @db.Decimal(19, 4)
+  validFrom         DateTime @map("valid_from") @db.Timestamptz(6)
+  validUntil        DateTime? @map("valid_until") @db.Timestamptz(6)
+  isActive          Boolean  @default(true) @map("is_active")
+  maxUsageCount     Int?     @map("max_usage_count")
+  currentUsageCount Int      @default(0) @map("current_usage_count")
+  maxUsagePerUser   Int?     @default(1) @map("max_usage_per_user")
+  stackWithReferral Boolean  @default(false) @map("stack_with_referral")
+  metadata          Json?    @default("{}")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  service  Service? @relation(fields: [serviceId], references: [id])
+  usages   PromoCodeUsage[]
+
+  @@index([isActive, validFrom, validUntil])
+  @@index([serviceId])
+  @@map("promo_codes")
+  @@schema("billing")
+}
+
+model PromoCodeUsage {
+  id              String   @id @default(uuid()) @db.Uuid
+  promoCodeId     String   @map("promo_code_id") @db.Uuid
+  orderId         String   @map("order_id") @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  discountApplied Decimal  @map("discount_applied") @db.Decimal(19, 4)
+  originalAmount  Decimal  @map("original_amount") @db.Decimal(19, 4)
+  finalAmount     Decimal  @map("final_amount") @db.Decimal(19, 4)
+  appliedAt       DateTime @default(now()) @map("applied_at") @db.Timestamptz(6)
+
+  promoCode PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+  order     Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([promoCodeId, userId])
+  @@index([orderId])
+  @@map("promo_code_usages")
   @@schema("billing")
 }
 

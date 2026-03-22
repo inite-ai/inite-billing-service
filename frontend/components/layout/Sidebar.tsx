@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Server, Package, DollarSign, Receipt,
-  CreditCard, Key, Users, GitBranch, Wallet, Webhook, ArrowLeft, Plug, ChevronRight
+  CreditCard, Key, Users, GitBranch, Wallet, Webhook, ArrowLeft, Plug, ChevronRight, Tag
 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 
@@ -18,6 +18,7 @@ export function Sidebar() {
     { href: '/admin/services', label: ta('services.title'), icon: Server },
     { href: '/admin/products', label: ta('products.title'), icon: Package },
     { href: '/admin/prices', label: ta('prices.title'), icon: DollarSign },
+    { href: '/admin/promo-codes', label: ta('promoCodes.title'), icon: Tag },
     { href: '/admin/orders', label: ta('orders.title'), icon: Receipt },
     { href: '/admin/subscriptions', label: ta('subscriptions.title'), icon: CreditCard },
     { href: '/admin/entitlements', label: ta('entitlements.title'), icon: Key },

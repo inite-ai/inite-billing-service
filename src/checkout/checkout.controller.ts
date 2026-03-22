@@ -11,6 +11,8 @@ import { ApiTags, ApiOperation, ApiResponse, ApiHeader } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { User, RequestUser } from '../auth/decorators/user.decorator';
 import { CheckoutService } from './checkout.service';
+import { PromoCodesService } from '../promo-codes/promo-codes.service';
+import { CatalogService } from '../catalog/catalog.service';
 import {
   CreateCheckoutSessionDto,
   CheckoutSessionResponseDto,
@@ -20,7 +22,11 @@ import {
 @Controller('v1/checkout')
 @UseGuards(JwtAuthGuard)
 export class CheckoutController {
-  constructor(private readonly checkoutService: CheckoutService) {}
+  constructor(
+    private readonly checkoutService: CheckoutService,
+    private readonly promoCodesService: PromoCodesService,
+    private readonly catalogService: CatalogService,
+  ) {}
 
   @Post('session')
   @HttpCode(HttpStatus.CREATED)
@@ -41,6 +47,30 @@ export class CheckoutController {
       dto,
       idempotencyKey,
     );
+  }
+
+  @Post('validate-promo')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Validate a promo code before checkout' })
+  async validatePromoCode(
+    @User() user: RequestUser,
+    @Body() body: { promoCode: string; priceCode: string },
+  ) {
+    const price = await this.catalogService.getPriceByCode(body.priceCode);
+    const result = await this.promoCodesService.validatePromoCode(
+      body.promoCode,
+      price.id,
+      user.userId,
+    );
+
+    return {
+      isValid: result.isValid,
+      error: result.error,
+      originalAmount: result.originalAmount,
+      discountAmount: result.discountAmount,
+      finalAmount: result.finalAmount,
+      promoCodeName: result.promoCode?.name,
+    };
   }
 }
 

@@ -18,6 +18,7 @@ import { OutboxModule } from './outbox/outbox.module';
 import { WorkersModule } from './workers/workers.module';
 import { AffiliatesModule } from './affiliates/affiliates.module';
 import { AdminModule } from './admin/admin.module';
+import { PromoCodesModule } from './promo-codes/promo-codes.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { AdminModule } from './admin/admin.module';
     WorkersModule,
     AffiliatesModule,
     AdminModule,
+    PromoCodesModule,
   ],
   providers: [
     {

@@ -4,9 +4,10 @@ import { CheckoutService } from './checkout.service';
 import { CatalogModule } from '../catalog/catalog.module';
 import { PaymentOrchestratorModule } from '../payment-orchestrator/payment-orchestrator.module';
 import { AffiliatesModule } from '../affiliates/affiliates.module';
+import { PromoCodesModule } from '../promo-codes/promo-codes.module';
 
 @Module({
-  imports: [CatalogModule, PaymentOrchestratorModule, AffiliatesModule],
+  imports: [CatalogModule, PaymentOrchestratorModule, AffiliatesModule, PromoCodesModule],
   controllers: [CheckoutController],
   providers: [CheckoutService],
   exports: [CheckoutService],

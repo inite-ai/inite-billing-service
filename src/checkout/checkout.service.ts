@@ -8,6 +8,7 @@ import { PrismaService } from '../common/services/prisma.service';
 import { CatalogService } from '../catalog/catalog.service';
 import { PaymentOrchestratorService } from '../payment-orchestrator/payment-orchestrator.service';
 import { AffiliatesService } from '../affiliates/affiliates.service';
+import { PromoCodesService } from '../promo-codes/promo-codes.service';
 import { CreateCheckoutSessionDto, CheckoutSessionResponseDto } from '../common/dto/checkout.dto';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -21,6 +22,7 @@ export class CheckoutService {
     private readonly catalogService: CatalogService,
     private readonly paymentOrchestrator: PaymentOrchestratorService,
     private readonly affiliatesService: AffiliatesService,
+    private readonly promoCodesService: PromoCodesService,
   ) {}
 
   async createCheckoutSession(
@@ -65,6 +67,34 @@ export class CheckoutService {
     // Determine rail
     const rail = dto.rail || 'ONE';
 
+    // Validate promo code if provided
+    let promoValidation: any = null;
+    let orderAmount = price.amount;
+    let originalAmount = Number(price.amount);
+
+    if (dto.promoCode) {
+      promoValidation = await this.promoCodesService.validatePromoCode(
+        dto.promoCode,
+        price.id,
+        userId,
+      );
+
+      if (!promoValidation.isValid) {
+        throw new BadRequestException(
+          `Invalid promo code: ${promoValidation.error}`,
+        );
+      }
+
+      // Check stackWithReferral
+      if (!promoValidation.promoCode.stackWithReferral && dto.referralCode) {
+        throw new BadRequestException(
+          'This promo code cannot be combined with a referral code',
+        );
+      }
+
+      orderAmount = promoValidation.finalAmount;
+    }
+
     // Handle referral code if provided
     if (dto.referralCode) {
       const affiliate = await this.affiliatesService.getAffiliateByCode(dto.referralCode);
@@ -88,30 +118,50 @@ export class CheckoutService {
       }
     }
 
-    // Create order
+    // Create order (amount is the discounted amount the user pays)
     const order = await this.prisma.order.create({
       data: {
         userId,
         priceId: price.id,
         mode: dto.mode,
         status: 'created',
-        amount: price.amount,
+        amount: orderAmount,
         currency: price.currency,
         externalId: `order_${uuidv4()}`,
         metadata: {
           ...dto.metadata,
           referralCode: dto.referralCode,
+          ...(promoValidation
+            ? {
+                promoCode: dto.promoCode,
+                promoCodeId: promoValidation.promoCode.id,
+                originalAmount,
+                discountAmount: promoValidation.discountAmount,
+              }
+            : {}),
         },
       },
     });
 
+    // Record promo code usage after order creation
+    if (promoValidation) {
+      await this.promoCodesService.applyPromoCode(
+        promoValidation.promoCode.id,
+        order.id,
+        userId,
+        originalAmount,
+        promoValidation.discountAmount,
+        promoValidation.finalAmount,
+      );
+    }
+
     // Get adapter
     const adapter = this.paymentOrchestrator.getAdapter(rail);
 
-    // Create payment intent with adapter
+    // Create payment intent with adapter (use discounted amount)
     const intentResult = await adapter.createPaymentIntent({
       orderId: order.externalId!,
-      amount: Number(price.amount),
+      amount: Number(orderAmount),
       currency: price.currency,
       mode: dto.mode,
       successUrl: dto.successUrl,
