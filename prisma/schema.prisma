@@ -139,6 +139,7 @@ model ReferralLevel {
   //   minDirectReferrals?: number,     // min direct referrals to qualify
   //   minActiveReferrals?: number,     // min referrals with firstOrderPaid
   //   minPersonalOrders?: number,      // min personal orders (affiliate bought something)
+  //   minDownlineOrders?: number,      // min paid orders across entire downline structure
   //   minMonthlyVolume?: number,       // min monthly sales volume from downline ($)
   //   personalPurchaseRequired?: bool, // affiliate must have own active subscription
   // }

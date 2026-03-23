@@ -26,6 +26,7 @@ export function ReferralLevelConfig({ services, nextLevel, onSubmit, onCancel }:
   const [minDirectReferrals, setMinDirectReferrals] = useState('')
   const [minActiveReferrals, setMinActiveReferrals] = useState('')
   const [minPersonalOrders, setMinPersonalOrders] = useState('')
+  const [minDownlineOrders, setMinDownlineOrders] = useState('')
   const [minMonthlyVolume, setMinMonthlyVolume] = useState('')
   const [personalPurchaseRequired, setPersonalPurchaseRequired] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -38,6 +39,7 @@ export function ReferralLevelConfig({ services, nextLevel, onSubmit, onCancel }:
       if (minDirectReferrals) criteria.minDirectReferrals = parseInt(minDirectReferrals)
       if (minActiveReferrals) criteria.minActiveReferrals = parseInt(minActiveReferrals)
       if (minPersonalOrders) criteria.minPersonalOrders = parseInt(minPersonalOrders)
+      if (minDownlineOrders) criteria.minDownlineOrders = parseInt(minDownlineOrders)
       if (minMonthlyVolume) criteria.minMonthlyVolume = parseFloat(minMonthlyVolume)
       if (personalPurchaseRequired) criteria.personalPurchaseRequired = true
 
@@ -74,6 +76,7 @@ export function ReferralLevelConfig({ services, nextLevel, onSubmit, onCancel }:
           <Input label="Min Direct Referrals" type="number" value={minDirectReferrals} onChange={(e) => setMinDirectReferrals(e.target.value)} placeholder="0" />
           <Input label="Min Active Referrals" type="number" value={minActiveReferrals} onChange={(e) => setMinActiveReferrals(e.target.value)} placeholder="0" />
           <Input label="Min Personal Orders" type="number" value={minPersonalOrders} onChange={(e) => setMinPersonalOrders(e.target.value)} placeholder="0" />
+          <Input label="Min Downline Orders" type="number" value={minDownlineOrders} onChange={(e) => setMinDownlineOrders(e.target.value)} placeholder="0" />
           <Input label="Min Monthly Volume ($)" type="number" value={minMonthlyVolume} onChange={(e) => setMinMonthlyVolume(e.target.value)} placeholder="0" />
         </div>
         <label className="flex items-center gap-2 mt-3 cursor-pointer">

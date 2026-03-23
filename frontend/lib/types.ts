@@ -144,6 +144,7 @@ export interface QualificationCriteria {
   minDirectReferrals?: number
   minActiveReferrals?: number
   minPersonalOrders?: number
+  minDownlineOrders?: number
   minMonthlyVolume?: number
   personalPurchaseRequired?: boolean
 }

@@ -656,6 +656,7 @@
       "qualRefs": "{count} реф.",
       "qualActive": "{count} актив.",
       "qualOrders": "{count} заказов",
+      "qualDownlineOrders": "{count} продаж в структуре",
       "qualVolume": "${amount}/мес.",
       "qualOwnPurchase": "личная покупка",
       "createTitle": "Создание реферального уровня",

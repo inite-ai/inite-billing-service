@@ -302,6 +302,32 @@ export class AffiliatesService {
    * Check if affiliate qualifies for a commission level
    * based on qualificationCriteria from ReferralLevel
    */
+  private async getDownlineUserIds(affiliateId: string, db: any): Promise<string[]> {
+    const userIds: string[] = [];
+    const queue = [affiliateId];
+
+    while (queue.length > 0) {
+      const currentId = queue.shift()!;
+      const referrals = await db.referral.findMany({
+        where: { affiliateId: currentId },
+        select: { referredUserId: true },
+      });
+      for (const r of referrals) {
+        userIds.push(r.referredUserId);
+        // Find if referred user is also an affiliate (for deeper levels)
+        const childAffiliate = await db.affiliate.findFirst({
+          where: { userId: r.referredUserId },
+          select: { id: true },
+        });
+        if (childAffiliate) {
+          queue.push(childAffiliate.id);
+        }
+      }
+    }
+
+    return userIds;
+  }
+
   private async checkQualification(
     affiliate: any,
     criteria: any,
@@ -365,6 +391,23 @@ export class AffiliatesService {
       if (!hasOrder && !hasSub) {
         this.logger.debug(
           `Affiliate ${affiliate.id} failed personalPurchaseRequired`,
+        );
+        return false;
+      }
+    }
+
+    // minDownlineOrders — minimum paid orders across entire downline structure
+    if (criteria.minDownlineOrders) {
+      const downlineUserIds = await this.getDownlineUserIds(affiliate.id, db);
+      const count = await db.order.count({
+        where: {
+          userId: { in: downlineUserIds },
+          status: 'paid',
+        },
+      });
+      if (count < criteria.minDownlineOrders) {
+        this.logger.debug(
+          `Affiliate ${affiliate.id} failed minDownlineOrders: ${count} < ${criteria.minDownlineOrders}`,
         );
         return false;
       }

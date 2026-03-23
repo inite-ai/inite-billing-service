@@ -252,6 +252,7 @@ export default function AdminReferralConfigPage() {
                       if (c.minDirectReferrals) parts.push(t('referralConfig.qualRefs', { count: c.minDirectReferrals }))
                       if (c.minActiveReferrals) parts.push(t('referralConfig.qualActive', { count: c.minActiveReferrals }))
                       if (c.minPersonalOrders) parts.push(t('referralConfig.qualOrders', { count: c.minPersonalOrders }))
+                      if (c.minDownlineOrders) parts.push(t('referralConfig.qualDownlineOrders', { count: c.minDownlineOrders }))
                       if (c.minMonthlyVolume) parts.push(t('referralConfig.qualVolume', { amount: c.minMonthlyVolume }))
                       if (c.personalPurchaseRequired) parts.push(t('referralConfig.qualOwnPurchase'))
                       return <span className="text-xs text-orange-600 dark:text-orange-400">{parts.join(', ')}</span>

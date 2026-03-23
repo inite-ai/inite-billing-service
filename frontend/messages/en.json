@@ -656,6 +656,7 @@
       "qualRefs": "{count} refs",
       "qualActive": "{count} active",
       "qualOrders": "{count} orders",
+      "qualDownlineOrders": "{count} downline orders",
       "qualVolume": "${amount}/mo",
       "qualOwnPurchase": "own purchase",
       "createTitle": "Create Referral Level",
