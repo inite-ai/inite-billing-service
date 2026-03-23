@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../common/services/prisma.service';
 import { ProductResponseDto, PriceResponseDto } from '../common/dto/catalog.dto';
+import { ProductType } from '@prisma/client';
 
 @Injectable()
 export class CatalogService {
@@ -86,5 +87,122 @@ export class CatalogService {
     }
 
     return price;
+  }
+
+  // ─── Service-scoped CRUD ─────────────────────────────────
+
+  async getServiceProducts(serviceId: string) {
+    return this.prisma.product.findMany({
+      where: { serviceId },
+      include: { prices: true },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async createServiceProduct(
+    serviceId: string,
+    data: {
+      code: string;
+      name: string;
+      type: ProductType;
+      moduleScope?: string;
+      metadata?: any;
+    },
+  ) {
+    const existing = await this.prisma.product.findFirst({
+      where: { code: data.code, serviceId },
+    });
+    if (existing) {
+      throw new BadRequestException(`Product with code '${data.code}' already exists`);
+    }
+    return this.prisma.product.create({
+      data: {
+        ...data,
+        moduleScope: data.moduleScope || 'default',
+        serviceId,
+      },
+    });
+  }
+
+  async updateServiceProduct(
+    serviceId: string,
+    productId: string,
+    data: { name?: string; isActive?: boolean; metadata?: any },
+  ) {
+    const product = await this.prisma.product.findFirst({
+      where: { id: productId, serviceId },
+    });
+    if (!product) throw new NotFoundException('Product not found');
+    return this.prisma.product.update({ where: { id: productId }, data });
+  }
+
+  async deleteServiceProduct(serviceId: string, productId: string) {
+    const product = await this.prisma.product.findFirst({
+      where: { id: productId, serviceId },
+    });
+    if (!product) throw new NotFoundException('Product not found');
+    return this.prisma.product.delete({ where: { id: productId } });
+  }
+
+  async getServicePrices(serviceId: string) {
+    return this.prisma.price.findMany({
+      where: { product: { serviceId } },
+      include: { product: true },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async createServicePrice(
+    serviceId: string,
+    data: {
+      code: string;
+      productId: string;
+      amount: number;
+      currency: string;
+      interval?: string;
+      trialDays?: number;
+      graceDays?: number;
+      metadata?: any;
+    },
+  ) {
+    const product = await this.prisma.product.findFirst({
+      where: { id: data.productId, serviceId },
+    });
+    if (!product) {
+      throw new BadRequestException('Product not found or does not belong to this service');
+    }
+    return this.prisma.price.create({
+      data: {
+        code: data.code,
+        productId: data.productId,
+        amount: data.amount,
+        currency: data.currency,
+        interval: data.interval,
+        trialDays: data.trialDays,
+        graceDays: data.graceDays,
+        metadata: data.metadata,
+        isActive: true,
+      },
+    });
+  }
+
+  async updateServicePrice(
+    serviceId: string,
+    priceId: string,
+    data: { amount?: number; isActive?: boolean; metadata?: any },
+  ) {
+    const price = await this.prisma.price.findFirst({
+      where: { id: priceId, product: { serviceId } },
+    });
+    if (!price) throw new NotFoundException('Price not found');
+    return this.prisma.price.update({ where: { id: priceId }, data });
+  }
+
+  async deleteServicePrice(serviceId: string, priceId: string) {
+    const price = await this.prisma.price.findFirst({
+      where: { id: priceId, product: { serviceId } },
+    });
+    if (!price) throw new NotFoundException('Price not found');
+    return this.prisma.price.delete({ where: { id: priceId } });
   }
 }

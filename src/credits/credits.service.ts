@@ -9,26 +9,38 @@ export class CreditsService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Get or create balance for user+service
+   * Find or create a CreditBalance record for a user+service pair.
+   * Accepts either PrismaService or a transaction client as the first argument.
    */
-  async getBalance(userId: string, serviceId?: string): Promise<CreditBalance> {
-    const existing = await this.prisma.creditBalance.findUnique({
+  private async findOrCreateBalance(
+    db: any,
+    userId: string,
+    serviceId?: string,
+  ): Promise<CreditBalance> {
+    let balance = await db.creditBalance.findUnique({
       where: {
         userId_serviceId: { userId, serviceId: (serviceId ?? null) as any },
       },
     });
+    if (!balance) {
+      balance = await db.creditBalance.create({
+        data: {
+          userId,
+          serviceId: (serviceId ?? null) as any,
+          balance: 0,
+          totalGranted: 0,
+          totalUsed: 0,
+        },
+      });
+    }
+    return balance;
+  }
 
-    if (existing) return existing;
-
-    return this.prisma.creditBalance.create({
-      data: {
-        userId,
-        serviceId: (serviceId ?? null) as any,
-        balance: 0,
-        totalGranted: 0,
-        totalUsed: 0,
-      },
-    });
+  /**
+   * Get or create balance for user+service
+   */
+  async getBalance(userId: string, serviceId?: string): Promise<CreditBalance> {
+    return this.findOrCreateBalance(this.prisma, userId, serviceId);
   }
 
   /**
@@ -53,27 +65,7 @@ export class CreditsService {
     resetsAt?: Date;
   }): Promise<CreditBalance> {
     return this.prisma.$transaction(async (tx) => {
-      // Find or create CreditBalance
-      let balance = await tx.creditBalance.findUnique({
-        where: {
-          userId_serviceId: {
-            userId: data.userId,
-            serviceId: (data.serviceId ?? null) as any,
-          },
-        },
-      });
-
-      if (!balance) {
-        balance = await tx.creditBalance.create({
-          data: {
-            userId: data.userId,
-            serviceId: (data.serviceId ?? null) as any,
-            balance: 0,
-            totalGranted: 0,
-            totalUsed: 0,
-          },
-        });
-      }
+      const balance = await this.findOrCreateBalance(tx, data.userId, data.serviceId);
 
       // Increment balance and totalGranted
       const updated = await tx.creditBalance.update({
@@ -183,27 +175,7 @@ export class CreditsService {
     resetsAt: Date;
   }): Promise<CreditBalance> {
     return this.prisma.$transaction(async (tx) => {
-      // Find or create CreditBalance
-      let balance = await tx.creditBalance.findUnique({
-        where: {
-          userId_serviceId: {
-            userId: data.userId,
-            serviceId: (data.serviceId ?? null) as any,
-          },
-        },
-      });
-
-      if (!balance) {
-        balance = await tx.creditBalance.create({
-          data: {
-            userId: data.userId,
-            serviceId: (data.serviceId ?? null) as any,
-            balance: 0,
-            totalGranted: 0,
-            totalUsed: 0,
-          },
-        });
-      }
+      const balance = await this.findOrCreateBalance(tx, data.userId, data.serviceId);
 
       // If current balance > 0, log old balance as reset
       if (balance.balance > 0) {
@@ -257,26 +229,7 @@ export class CreditsService {
     description: string;
   }): Promise<CreditBalance> {
     return this.prisma.$transaction(async (tx) => {
-      let balance = await tx.creditBalance.findUnique({
-        where: {
-          userId_serviceId: {
-            userId: data.userId,
-            serviceId: (data.serviceId ?? null) as any,
-          },
-        },
-      });
-
-      if (!balance) {
-        balance = await tx.creditBalance.create({
-          data: {
-            userId: data.userId,
-            serviceId: (data.serviceId ?? null) as any,
-            balance: 0,
-            totalGranted: 0,
-            totalUsed: 0,
-          },
-        });
-      }
+      const balance = await this.findOrCreateBalance(tx, data.userId, data.serviceId);
 
       // M5 fix: Check that negative adjustment doesn't result in balance < 0
       if (data.amount < 0 && balance.balance < Math.abs(data.amount)) {
@@ -367,26 +320,7 @@ export class CreditsService {
     orderId: string;
   }): Promise<CreditBalance> {
     return this.prisma.$transaction(async (tx) => {
-      let balance = await tx.creditBalance.findUnique({
-        where: {
-          userId_serviceId: {
-            userId: data.userId,
-            serviceId: (data.serviceId ?? null) as any,
-          },
-        },
-      });
-
-      if (!balance) {
-        balance = await tx.creditBalance.create({
-          data: {
-            userId: data.userId,
-            serviceId: (data.serviceId ?? null) as any,
-            balance: 0,
-            totalGranted: 0,
-            totalUsed: 0,
-          },
-        });
-      }
+      const balance = await this.findOrCreateBalance(tx, data.userId, data.serviceId);
 
       const updated = await tx.creditBalance.update({
         where: { id: balance.id },

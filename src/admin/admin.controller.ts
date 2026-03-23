@@ -15,7 +15,12 @@ import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { AdminService } from './admin.service';
+import { AdminCatalogService } from './services/admin-catalog.service';
+import { AdminOrdersService } from './services/admin-orders.service';
+import { AdminUsersService } from './services/admin-users.service';
+import { AdminAffiliatesService } from './services/admin-affiliates.service';
+import { AdminProvidersService } from './services/admin-providers.service';
+import { AdminStatsService } from './services/admin-stats.service';
 import { ReferralLevelsService } from '../affiliates/referral-levels.service';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
 import { FunnelService } from '../funnel/funnel.service';
@@ -27,7 +32,12 @@ import { CreditsService } from '../credits/credits.service';
 @Roles('admin')
 export class AdminController {
   constructor(
-    private readonly adminService: AdminService,
+    private readonly catalogService: AdminCatalogService,
+    private readonly ordersService: AdminOrdersService,
+    private readonly usersService: AdminUsersService,
+    private readonly affiliatesService: AdminAffiliatesService,
+    private readonly providersService: AdminProvidersService,
+    private readonly statsService: AdminStatsService,
     private readonly referralLevelsService: ReferralLevelsService,
     private readonly promoCodesService: PromoCodesService,
     private readonly funnelService: FunnelService,
@@ -39,7 +49,7 @@ export class AdminController {
   @Get('services')
   @ApiOperation({ summary: 'List all services' })
   async getServices() {
-    return this.adminService.getServices();
+    return this.catalogService.getServices();
   }
 
   @Post('services')
@@ -48,7 +58,7 @@ export class AdminController {
   async createService(
     @Body() body: { code: string; name: string; metadata?: any },
   ) {
-    return this.adminService.createService(body);
+    return this.catalogService.createService(body);
   }
 
   @Put('services/:id')
@@ -57,26 +67,26 @@ export class AdminController {
     @Param('id') id: string,
     @Body() body: { name?: string; isActive?: boolean; metadata?: any },
   ) {
-    return this.adminService.updateService(id, body);
+    return this.catalogService.updateService(id, body);
   }
 
   @Get('services/:id/reveal-key')
   @ApiOperation({ summary: 'Get full (unmasked) API key for a service' })
   async revealServiceApiKey(@Param('id') id: string) {
-    return this.adminService.revealServiceApiKey(id);
+    return this.catalogService.revealServiceApiKey(id);
   }
 
   @Post('services/:id/regenerate-key')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Regenerate API key for a service' })
   async regenerateServiceApiKey(@Param('id') id: string) {
-    return this.adminService.regenerateServiceApiKey(id);
+    return this.catalogService.regenerateServiceApiKey(id);
   }
 
   @Delete('services/:id')
   @ApiOperation({ summary: 'Delete a service' })
   async deleteService(@Param('id') id: string) {
-    return this.adminService.deleteService(id);
+    return this.catalogService.deleteService(id);
   }
 
   // ─── Products ──────────────────────────────────────────────
@@ -84,7 +94,7 @@ export class AdminController {
   @Get('products')
   @ApiOperation({ summary: 'List all products' })
   async getProducts(@Query('serviceId') serviceId?: string) {
-    return this.adminService.getProducts(serviceId);
+    return this.catalogService.getProducts(serviceId);
   }
 
   @Post('products')
@@ -101,7 +111,7 @@ export class AdminController {
       metadata?: any;
     },
   ) {
-    return this.adminService.createProduct(body);
+    return this.catalogService.createProduct(body);
   }
 
   @Put('products/:id')
@@ -117,13 +127,13 @@ export class AdminController {
       metadata?: any;
     },
   ) {
-    return this.adminService.updateProduct(id, body);
+    return this.catalogService.updateProduct(id, body);
   }
 
   @Delete('products/:id')
   @ApiOperation({ summary: 'Delete a product' })
   async deleteProduct(@Param('id') id: string) {
-    return this.adminService.deleteProduct(id);
+    return this.catalogService.deleteProduct(id);
   }
 
   // ─── Prices ────────────────────────────────────────────────
@@ -131,7 +141,7 @@ export class AdminController {
   @Get('prices')
   @ApiOperation({ summary: 'List all prices' })
   async getPrices(@Query('productId') productId?: string) {
-    return this.adminService.getPrices(productId);
+    return this.catalogService.getPrices(productId);
   }
 
   @Post('prices')
@@ -150,7 +160,7 @@ export class AdminController {
       metadata?: any;
     },
   ) {
-    return this.adminService.createPrice(body);
+    return this.catalogService.createPrice(body);
   }
 
   @Put('prices/:id')
@@ -166,13 +176,13 @@ export class AdminController {
       metadata?: any;
     },
   ) {
-    return this.adminService.updatePrice(id, body);
+    return this.catalogService.updatePrice(id, body);
   }
 
   @Delete('prices/:id')
   @ApiOperation({ summary: 'Delete a price' })
   async deletePrice(@Param('id') id: string) {
-    return this.adminService.deletePrice(id);
+    return this.catalogService.deletePrice(id);
   }
 
   // ─── Customers ────────────────────────────────────────────
@@ -184,7 +194,7 @@ export class AdminController {
     @Query('limit') limit?: string,
     @Query('search') search?: string,
   ) {
-    return this.adminService.getCustomers({
+    return this.usersService.getCustomers({
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
       search: search || undefined,
@@ -194,7 +204,7 @@ export class AdminController {
   @Get('customers/:userId')
   @ApiOperation({ summary: 'Get customer detail' })
   async getCustomerDetail(@Param('userId') userId: string) {
-    return this.adminService.getCustomerDetail(userId);
+    return this.usersService.getCustomerDetail(userId);
   }
 
   // ─── Orders ────────────────────────────────────────────────
@@ -207,7 +217,7 @@ export class AdminController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
-    return this.adminService.getOrders({
+    return this.ordersService.getOrders({
       status,
       userId,
       page: page ? parseInt(page, 10) : undefined,
@@ -218,14 +228,14 @@ export class AdminController {
   @Get('orders/:id')
   @ApiOperation({ summary: 'Get order details' })
   async getOrderById(@Param('id') id: string) {
-    return this.adminService.getOrderById(id);
+    return this.ordersService.getOrderById(id);
   }
 
   @Post('orders/:id/refund')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refund an order' })
   async refundOrder(@Param('id') id: string) {
-    return this.adminService.refundOrder(id);
+    return this.ordersService.refundOrder(id);
   }
 
   // ─── Subscriptions ────────────────────────────────────────
@@ -238,7 +248,7 @@ export class AdminController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
-    return this.adminService.getSubscriptions({
+    return this.ordersService.getSubscriptions({
       status,
       userId,
       page: page ? parseInt(page, 10) : undefined,
@@ -250,7 +260,7 @@ export class AdminController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Force cancel a subscription' })
   async cancelSubscription(@Param('id') id: string) {
-    return this.adminService.cancelSubscription(id);
+    return this.ordersService.cancelSubscription(id);
   }
 
   // ─── Entitlements ──────────────────────────────────────────
@@ -263,7 +273,7 @@ export class AdminController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
-    return this.adminService.getEntitlements({
+    return this.usersService.getEntitlements({
       userId,
       status,
       page: page ? parseInt(page, 10) : undefined,
@@ -277,7 +287,7 @@ export class AdminController {
   async createEntitlement(
     @Body() body: { userId: string; key: string; value?: any; expiresAt?: string },
   ) {
-    return this.adminService.createEntitlement(body);
+    return this.usersService.createEntitlement(body);
   }
 
   @Put('entitlements/:id')
@@ -286,14 +296,14 @@ export class AdminController {
     @Param('id') id: string,
     @Body() body: { key?: string; value?: any; expiresAt?: string },
   ) {
-    return this.adminService.updateEntitlement(id, body);
+    return this.usersService.updateEntitlement(id, body);
   }
 
   @Post('entitlements/:id/revoke')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Revoke an entitlement' })
   async revokeEntitlement(@Param('id') id: string) {
-    return this.adminService.revokeEntitlement(id);
+    return this.usersService.revokeEntitlement(id);
   }
 
   // ─── Affiliates ────────────────────────────────────────────
@@ -306,7 +316,7 @@ export class AdminController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
-    return this.adminService.getAffiliates({
+    return this.affiliatesService.getAffiliates({
       status,
       serviceId,
       page: page ? parseInt(page, 10) : undefined,
@@ -320,7 +330,7 @@ export class AdminController {
     @Param('id') id: string,
     @Body() body: { status?: string; commissionRate?: number },
   ) {
-    return this.adminService.updateAffiliate(id, body);
+    return this.affiliatesService.updateAffiliate(id, body);
   }
 
   // ─── Referral Levels ───────────────────────────────────────
@@ -385,7 +395,7 @@ export class AdminController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
-    return this.adminService.getPayouts({
+    return this.affiliatesService.getPayouts({
       status,
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
@@ -396,7 +406,7 @@ export class AdminController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Process a payout' })
   async processPayout(@Param('id') id: string) {
-    return this.adminService.processPayout(id);
+    return this.affiliatesService.processPayout(id);
   }
 
   @Post('payouts/:id/fail')
@@ -406,7 +416,7 @@ export class AdminController {
     @Param('id') id: string,
     @Body() body: { reason?: string },
   ) {
-    return this.adminService.failPayout(id, body?.reason);
+    return this.affiliatesService.failPayout(id, body?.reason);
   }
 
   // ─── Payout Providers ──────────────────────────────────────
@@ -414,7 +424,7 @@ export class AdminController {
   @Get('payout-providers')
   @ApiOperation({ summary: 'List all payout providers' })
   async getPayoutProviders() {
-    return this.adminService.getPayoutProviders();
+    return this.providersService.getPayoutProviders();
   }
 
   @Post('payout-providers')
@@ -423,7 +433,7 @@ export class AdminController {
   async createPayoutProvider(
     @Body() body: { code: string; name: string; currencies?: string[]; minAmount?: number; maxAmount?: number; feePercent?: number; feeFixed?: number; config?: any; metadata?: any },
   ) {
-    return this.adminService.createPayoutProvider(body);
+    return this.providersService.createPayoutProvider(body);
   }
 
   @Put('payout-providers/:id')
@@ -432,13 +442,13 @@ export class AdminController {
     @Param('id') id: string,
     @Body() body: { name?: string; isActive?: boolean; currencies?: string[]; minAmount?: number; maxAmount?: number; feePercent?: number; feeFixed?: number; config?: any; metadata?: any },
   ) {
-    return this.adminService.updatePayoutProvider(id, body);
+    return this.providersService.updatePayoutProvider(id, body);
   }
 
   @Delete('payout-providers/:id')
   @ApiOperation({ summary: 'Delete a payout provider' })
   async deletePayoutProvider(@Param('id') id: string) {
-    return this.adminService.deletePayoutProvider(id);
+    return this.providersService.deletePayoutProvider(id);
   }
 
   // ─── Payment Providers ──────────────────────────────────────
@@ -446,7 +456,7 @@ export class AdminController {
   @Get('payment-providers')
   @ApiOperation({ summary: 'List all payment providers' })
   async getPaymentProviders() {
-    return this.adminService.getPaymentProviders();
+    return this.providersService.getPaymentProviders();
   }
 
   @Post('payment-providers')
@@ -465,7 +475,7 @@ export class AdminController {
       metadata?: any;
     },
   ) {
-    return this.adminService.createPaymentProvider(body);
+    return this.providersService.createPaymentProvider(body);
   }
 
   @Put('payment-providers/:id')
@@ -483,13 +493,13 @@ export class AdminController {
       metadata?: any;
     },
   ) {
-    return this.adminService.updatePaymentProvider(id, body);
+    return this.providersService.updatePaymentProvider(id, body);
   }
 
   @Delete('payment-providers/:id')
   @ApiOperation({ summary: 'Delete a payment provider' })
   async deletePaymentProvider(@Param('id') id: string) {
-    return this.adminService.deletePaymentProvider(id);
+    return this.providersService.deletePaymentProvider(id);
   }
 
   // ─── Webhooks ──────────────────────────────────────────────
@@ -500,7 +510,7 @@ export class AdminController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
-    return this.adminService.getWebhooks({
+    return this.statsService.getWebhooks({
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
     });
@@ -694,6 +704,6 @@ export class AdminController {
   @Get('stats')
   @ApiOperation({ summary: 'Get overall statistics' })
   async getStats() {
-    return this.adminService.getStats();
+    return this.statsService.getStats();
   }
 }

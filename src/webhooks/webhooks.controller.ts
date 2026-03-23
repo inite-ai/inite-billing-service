@@ -13,7 +13,6 @@ import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { SkipThrottle } from '@nestjs/throttler';
 import * as crypto from 'crypto';
 import { WebhooksService } from './webhooks.service';
-import { PrismaService } from '../common/services/prisma.service';
 import { OneAdapter } from '../adapters/one/one.adapter';
 import { LavaAdapter } from '../adapters/lava/lava.adapter';
 
@@ -37,7 +36,6 @@ export class WebhooksController {
 
   constructor(
     private readonly webhooksService: WebhooksService,
-    private readonly prisma: PrismaService,
     private readonly oneAdapter: OneAdapter,
     private readonly lavaAdapter: LavaAdapter,
   ) {}
@@ -50,13 +48,7 @@ export class WebhooksController {
     @Body() payload: any,
     @Headers('x-signature') signature: string,
   ): Promise<{ received: boolean }> {
-    const provider = await this.prisma.paymentProvider.findUnique({
-      where: { code: 'ONE' },
-    });
-    if (!provider) {
-      throw new ForbiddenException('ONE provider not configured');
-    }
-    const config = (provider.config as Record<string, any>) || {};
+    const config = await this.webhooksService.getProviderConfig('ONE');
     const apiSecret = config.apiSecret || '';
 
     const rawBody = JSON.stringify(payload);
@@ -100,13 +92,7 @@ export class WebhooksController {
     @Body() payload: any,
     @Headers('x-api-key') apiKeyHeader: string,
   ): Promise<{ received: boolean }> {
-    const provider = await this.prisma.paymentProvider.findUnique({
-      where: { code: 'LAVA' },
-    });
-    if (!provider) {
-      throw new ForbiddenException('LAVA provider not configured');
-    }
-    const config = (provider.config as Record<string, any>) || {};
+    const config = await this.webhooksService.getProviderConfig('LAVA');
     const apiKey = config.apiKey || '';
 
     if (!apiKeyHeader || !safeTimingSafeEqual(apiKey, apiKeyHeader)) {

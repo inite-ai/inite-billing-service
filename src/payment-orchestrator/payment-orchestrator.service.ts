@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../common/services/prisma.service';
 import { PaymentRailAdapter } from '../common/interfaces/payment-rail-adapter.interface';
 import {
@@ -15,26 +15,17 @@ import { CreditsService } from '../credits/credits.service';
 export class PaymentOrchestratorService {
   private readonly logger = new Logger(PaymentOrchestratorService.name);
   private adapters: Map<string, PaymentRailAdapter> = new Map();
-  private affiliatesService: AffiliatesService;
-  private funnelService: FunnelService;
-  private creditsService: CreditsService;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly outboxService: OutboxService,
+    @Inject(forwardRef(() => AffiliatesService))
+    private readonly affiliatesService: AffiliatesService,
+    @Inject(forwardRef(() => FunnelService))
+    private readonly funnelService: FunnelService,
+    @Inject(forwardRef(() => CreditsService))
+    private readonly creditsService: CreditsService,
   ) {}
-
-  setFunnelService(funnelService: FunnelService) {
-    this.funnelService = funnelService;
-  }
-
-  setAffiliatesService(affiliatesService: AffiliatesService) {
-    this.affiliatesService = affiliatesService;
-  }
-
-  setCreditsService(creditsService: CreditsService) {
-    this.creditsService = creditsService;
-  }
 
   registerAdapter(adapter: PaymentRailAdapter) {
     this.adapters.set(adapter.rail(), adapter);
@@ -126,36 +117,34 @@ export class PaymentOrchestratorService {
       }, undefined, tx);
 
       // Track funnel events based on status transitions
-      if (this.funnelService) {
-        const product = intent.order.price?.product;
-        const funnelBase = {
-          userId: intent.order.userId,
-          orderId: intent.orderId,
-          productId: product?.id,
-          serviceId: product?.serviceId ?? undefined,
-          amount: Number(intent.order.amount),
-          currency: intent.order.currency,
-        };
+      const product = intent.order.price?.product;
+      const funnelBase = {
+        userId: intent.order.userId,
+        orderId: intent.orderId,
+        productId: product?.id,
+        serviceId: product?.serviceId ?? undefined,
+        amount: Number(intent.order.amount),
+        currency: intent.order.currency,
+      };
 
-        if (newStatus === 'opened') {
-          this.funnelService.track({
-            ...funnelBase,
-            eventType: 'payment_pending',
-            stage: 'payment',
-          });
-        } else if (newStatus === 'paid') {
-          this.funnelService.track({
-            ...funnelBase,
-            eventType: 'payment_completed',
-            stage: 'conversion',
-          });
-        } else if (newStatus === 'failed' || newStatus === 'expired') {
-          this.funnelService.track({
-            ...funnelBase,
-            eventType: 'payment_failed',
-            stage: 'churned',
-          });
-        }
+      if (newStatus === 'opened') {
+        this.funnelService.track({
+          ...funnelBase,
+          eventType: 'payment_pending',
+          stage: 'payment',
+        });
+      } else if (newStatus === 'paid') {
+        this.funnelService.track({
+          ...funnelBase,
+          eventType: 'payment_completed',
+          stage: 'conversion',
+        });
+      } else if (newStatus === 'failed' || newStatus === 'expired') {
+        this.funnelService.track({
+          ...funnelBase,
+          eventType: 'payment_failed',
+          stage: 'churned',
+        });
       }
     });
   }
@@ -359,23 +348,20 @@ export class PaymentOrchestratorService {
     }
 
     // Track funnel event for subscription
-    if (this.funnelService) {
-      const product = order.price.product;
-      this.funnelService.track({
-        userId: order.userId,
-        eventType: isRenewal ? 'subscription_renewed' : 'subscription_created',
-        stage: 'retention',
-        orderId: order.id,
-        productId: product?.id,
-        serviceId: product?.serviceId ?? undefined,
-        amount: Number(order.amount),
-        currency: order.currency,
-        properties: { subscriptionId: subscription?.id },
-      });
-    }
+    const product = order.price.product;
+    this.funnelService.track({
+      userId: order.userId,
+      eventType: isRenewal ? 'subscription_renewed' : 'subscription_created',
+      stage: 'retention',
+      orderId: order.id,
+      productId: product?.id,
+      serviceId: product?.serviceId ?? undefined,
+      amount: Number(order.amount),
+      currency: order.currency,
+      properties: { subscriptionId: subscription?.id },
+    });
 
     // Grant/update entitlements
-    const product = order.price.product;
     const entitlementKeys = this.extractEntitlementKeys(product);
 
     for (const key of entitlementKeys) {
@@ -454,10 +440,6 @@ export class PaymentOrchestratorService {
    * Grant credits if product metadata defines creditsPerPeriod or credits
    */
   private async handleCreditsGrant(order: any, tx: any): Promise<void> {
-    if (!this.creditsService) {
-      return;
-    }
-
     const product = order.price?.product;
     if (!product) return;
 
@@ -508,10 +490,6 @@ export class PaymentOrchestratorService {
    * Refund credits that were granted for an order
    */
   private async handleCreditsRefund(order: any, tx: any): Promise<void> {
-    if (!this.creditsService) {
-      return;
-    }
-
     // Look up credit usages tied to this order
     const creditUsages = await tx.creditUsage.findMany({
       where: {
@@ -543,11 +521,6 @@ export class PaymentOrchestratorService {
    * Commissions are calculated on the original amount (before promo code discount).
    */
   private async handleAffiliateCommission(order: any, tx: any): Promise<void> {
-    if (!this.affiliatesService) {
-      this.logger.warn('AffiliatesService not set, skipping commission processing');
-      return;
-    }
-
     // Determine serviceId from product
     const serviceId = order.price?.product?.serviceId || undefined;
 
@@ -571,4 +544,3 @@ export class PaymentOrchestratorService {
     }
   }
 }
-

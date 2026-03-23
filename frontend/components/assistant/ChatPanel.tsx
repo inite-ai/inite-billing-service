@@ -3,8 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { MessageCircle, X, Send, Loader2, Bot, User, Wrench } from 'lucide-react'
 import { useTranslations } from 'next-intl'
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
+import { API_URL } from '@/lib/config'
 
 interface ChatMessage {
   id: string

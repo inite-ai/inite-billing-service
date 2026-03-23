@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../common/services/prisma.service';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
@@ -11,6 +11,18 @@ export class WebhooksService {
     private readonly prisma: PrismaService,
     @InjectQueue('webhooks') private readonly webhooksQueue: Queue,
   ) {}
+
+  /**
+   * Retrieve provider config (apiKey / apiSecret) for a given provider code.
+   * Throws ForbiddenException if provider is not found or inactive.
+   */
+  async getProviderConfig(code: string): Promise<{ apiKey?: string; apiSecret?: string }> {
+    const provider = await this.prisma.paymentProvider.findUnique({ where: { code } });
+    if (!provider || !provider.isActive) {
+      throw new ForbiddenException(`${code} provider not configured`);
+    }
+    return (provider.config as Record<string, any>) || {};
+  }
 
   /**
    * Store webhook event idempotently and enqueue processing

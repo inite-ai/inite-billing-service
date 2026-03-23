@@ -2,6 +2,9 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../src/common/services/prisma.service';
 import { PaymentOrchestratorService } from '../src/payment-orchestrator/payment-orchestrator.service';
 import { OutboxService } from '../src/outbox/outbox.service';
+import { AffiliatesService } from '../src/affiliates/affiliates.service';
+import { FunnelService } from '../src/funnel/funnel.service';
+import { CreditsService } from '../src/credits/credits.service';
 
 describe('State Transitions', () => {
   let orchestrator: PaymentOrchestratorService;
@@ -48,6 +51,18 @@ describe('State Transitions', () => {
         {
           provide: OutboxService,
           useValue: mockOutbox,
+        },
+        {
+          provide: AffiliatesService,
+          useValue: { processMultiLevelCommissions: jest.fn() },
+        },
+        {
+          provide: FunnelService,
+          useValue: { track: jest.fn() },
+        },
+        {
+          provide: CreditsService,
+          useValue: { grant: jest.fn(), resetForPeriod: jest.fn(), refund: jest.fn() },
         },
       ],
     }).compile();

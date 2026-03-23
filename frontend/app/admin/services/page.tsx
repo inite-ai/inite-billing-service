@@ -1,17 +1,20 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
 import { ServiceForm } from '@/components/admin/ServiceForm'
 import { Plus, Pencil, Trash2, Eye, EyeOff, Server, Loader2, Copy, RefreshCw, Check, Power, PowerOff } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
+import { useApiQuery } from '@/hooks/useApiQuery'
+import { useConfirmDialog } from '@/hooks/useConfirmDialog'
+import { getErrorMessage } from '@/lib/api-error'
 import type { Service } from '@/lib/types'
 
 function ApiKeyCell({ service, onRegenerate, showLabel, hideLabel }: { service: Service; onRegenerate: () => void; showLabel: string; hideLabel: string }) {
@@ -82,38 +85,17 @@ function ApiKeyCell({ service, onRegenerate, showLabel, hideLabel }: { service: 
 export default function AdminServicesPage() {
   const t = useTranslations('admin')
   const tc = useTranslations('common')
+  const { confirm, DialogElement } = useConfirmDialog()
+  const { data: services, loading, refetch } = useApiQuery<Service[]>('/v1/admin/services')
 
-  const [services, setServices] = useState<Service[]>([])
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState<Service | undefined>()
-  const [loading, setLoading] = useState(true)
-  const [confirmState, setConfirmState] = useState<{
-    isOpen: boolean
-    title: string
-    message: string
-    onConfirm: () => Promise<void>
-    variant?: 'danger' | 'default'
-  } | null>(null)
-
-  const load = async () => {
-    try {
-      const res = await api.get('/v1/admin/services')
-      setServices(res.data)
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { message?: string } } }
-      toast.error(err.response?.data?.message || 'Failed to load services')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => { load() }, [])
 
   const handleCreate = async (data: { code: string; name: string }) => {
     await api.post('/v1/admin/services', data)
     toast.success(t('services.created'))
     setShowModal(false)
-    load()
+    refetch()
   }
 
   const handleUpdate = async (data: { code: string; name: string }) => {
@@ -122,58 +104,41 @@ export default function AdminServicesPage() {
     toast.success(t('services.updated'))
     setShowModal(false)
     setEditing(undefined)
-    load()
+    refetch()
   }
 
   const handleToggleActive = async (id: string, isActive: boolean) => {
     try {
       await api.put(`/v1/admin/services/${id}`, { isActive: !isActive })
       toast.success(isActive ? t('services.deactivated') : t('services.activated'))
-      load()
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { message?: string } } }
-      toast.error(err.response?.data?.message || 'Failed to toggle service status')
+      refetch()
+    } catch (e) {
+      toast.error(getErrorMessage(e, 'Failed to toggle service status'))
     }
   }
 
-  const handleRegenerateKey = (id: string) => {
-    setConfirmState({
-      isOpen: true,
-      title: t('services.regenerateConfirm'),
-      message: t('services.regenerateConfirm'),
-      variant: 'danger',
-      onConfirm: async () => {
-        try {
-          await api.post(`/v1/admin/services/${id}/regenerate-key`)
-          toast.success(t('services.keyRegenerated'))
-          load()
-        } catch (e: unknown) {
-          const err = e as { response?: { data?: { message?: string } } }
-          toast.error(err.response?.data?.message || 'Failed to regenerate key')
-          throw e
-        }
-      },
-    })
+  const handleRegenerateKey = async (id: string) => {
+    const ok = await confirm({ title: t('services.regenerateConfirm'), message: t('services.regenerateConfirm'), variant: 'danger' })
+    if (!ok) return
+    try {
+      await api.post(`/v1/admin/services/${id}/regenerate-key`)
+      toast.success(t('services.keyRegenerated'))
+      refetch()
+    } catch (e) {
+      toast.error(getErrorMessage(e, 'Failed to regenerate key'))
+    }
   }
 
-  const handleDelete = (id: string) => {
-    setConfirmState({
-      isOpen: true,
-      title: t('services.deleteConfirm'),
-      message: t('services.deleteConfirm'),
-      variant: 'danger',
-      onConfirm: async () => {
-        try {
-          await api.delete(`/v1/admin/services/${id}`)
-          toast.success(t('services.deleted'))
-          load()
-        } catch (e: unknown) {
-          const err = e as { response?: { data?: { message?: string } } }
-          toast.error(err.response?.data?.message || t('services.deleteError'))
-          throw e
-        }
-      },
-    })
+  const handleDelete = async (id: string) => {
+    const ok = await confirm({ title: t('services.deleteConfirm'), message: t('services.deleteConfirm'), variant: 'danger' })
+    if (!ok) return
+    try {
+      await api.delete(`/v1/admin/services/${id}`)
+      toast.success(t('services.deleted'))
+      refetch()
+    } catch (e) {
+      toast.error(getErrorMessage(e, t('services.deleteError')))
+    }
   }
 
   return (
@@ -191,12 +156,8 @@ export default function AdminServicesPage() {
       <Card>
         {loading ? (
           <div className="flex items-center gap-2 text-gray-500 py-4"><Loader2 className="w-5 h-5 animate-spin" /> {tc('loading')}</div>
-        ) : services.length === 0 ? (
-          <div className="text-center py-8">
-            <Server className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-            <p className="text-gray-500 mb-2">{t('services.noServices')}</p>
-            <p className="text-sm text-gray-400">{t('services.noServicesHint')}</p>
-          </div>
+        ) : !services || services.length === 0 ? (
+          <EmptyState icon={Server} title={t('services.noServices')} subtitle={t('services.noServicesHint')} />
         ) : (
           <Table>
             <Thead>
@@ -234,16 +195,7 @@ export default function AdminServicesPage() {
         <ServiceForm initial={editing} onSubmit={editing ? handleUpdate : handleCreate} onCancel={() => { setShowModal(false); setEditing(undefined) }} />
       </Modal>
 
-      {confirmState && (
-        <ConfirmDialog
-          isOpen={confirmState.isOpen}
-          onClose={() => setConfirmState(null)}
-          onConfirm={confirmState.onConfirm}
-          title={confirmState.title}
-          message={confirmState.message}
-          variant={confirmState.variant}
-        />
-      )}
+      {DialogElement}
     </div>
   )
 }

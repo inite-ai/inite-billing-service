@@ -1,105 +1,78 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { Select } from '@/components/ui/Select'
 import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
 import { ProductForm } from '@/components/admin/ProductForm'
-import { Plus, Trash2, Pencil, Eye, EyeOff, Package, Loader2 } from 'lucide-react'
+import { Plus, Trash2, Eye, EyeOff, Package, Loader2 } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
+import { useApiQuery } from '@/hooks/useApiQuery'
+import { useConfirmDialog } from '@/hooks/useConfirmDialog'
+import { getErrorMessage } from '@/lib/api-error'
 import type { Product, Service } from '@/lib/types'
 
 export default function AdminProductsPage() {
   const t = useTranslations('admin')
   const tc = useTranslations('common')
+  const { confirm, DialogElement } = useConfirmDialog()
 
-  const [products, setProducts] = useState<Product[]>([])
-  const [services, setServices] = useState<Service[]>([])
   const [filterService, setFilterService] = useState('')
   const [showModal, setShowModal] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [confirmState, setConfirmState] = useState<{
-    isOpen: boolean
-    title: string
-    message: string
-    onConfirm: () => Promise<void>
-    variant?: 'danger' | 'default'
-  } | null>(null)
 
-  const load = async () => {
-    try {
-      const params: Record<string, string> = {}
-      if (filterService) params.serviceId = filterService
-      const [prodRes, svcRes] = await Promise.all([
-        api.get('/v1/admin/products', { params }),
-        api.get('/v1/admin/services').catch(() => ({ data: [] })),
-      ])
-      setProducts(prodRes.data)
-      setServices(svcRes.data)
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { message?: string } } }
-      toast.error(err.response?.data?.message || 'Failed to load products')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => { load() }, [filterService])
+  const productsUrl = filterService
+    ? `/v1/admin/products?serviceId=${filterService}`
+    : '/v1/admin/products'
+  const { data: products, loading, refetch } = useApiQuery<Product[]>(productsUrl)
+  const { data: services } = useApiQuery<Service[]>('/v1/admin/services')
 
   const handleCreate = async (data: any) => {
     await api.post('/v1/admin/products', data)
     toast.success(t('products.created'))
     setShowModal(false)
-    load()
+    refetch()
   }
 
   const handleToggleActive = async (id: string, isActive: boolean) => {
     try {
       await api.put(`/v1/admin/products/${id}`, { isActive: !isActive })
       toast.success(isActive ? t('products.deactivated') : t('products.activated'))
-      load()
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { message?: string } } }
-      toast.error(err.response?.data?.message || 'Failed to toggle product status')
+      refetch()
+    } catch (e) {
+      toast.error(getErrorMessage(e, 'Failed to toggle product status'))
     }
   }
 
-  const handleDelete = (id: string) => {
-    setConfirmState({
-      isOpen: true,
-      title: t('products.deleteConfirm'),
-      message: t('products.deleteConfirm'),
-      variant: 'danger',
-      onConfirm: async () => {
-        try {
-          await api.delete(`/v1/admin/products/${id}`)
-          toast.success(t('products.deleted'))
-          load()
-        } catch (e: unknown) {
-          const err = e as { response?: { data?: { message?: string } } }
-          toast.error(err.response?.data?.message || t('products.deleteError'))
-          throw e
-        }
-      },
-    })
+  const handleDelete = async (id: string) => {
+    const ok = await confirm({ title: t('products.deleteConfirm'), message: t('products.deleteConfirm'), variant: 'danger' })
+    if (!ok) return
+    try {
+      await api.delete(`/v1/admin/products/${id}`)
+      toast.success(t('products.deleted'))
+      refetch()
+    } catch (e) {
+      toast.error(getErrorMessage(e, t('products.deleteError')))
+    }
   }
+
+  const servicesList = services || []
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('products.title')}</h1>
         <div className="flex gap-3">
-          {services.length > 0 && (
+          {servicesList.length > 0 && (
             <div className="w-48">
               <Select value={filterService} onChange={(e) => setFilterService(e.target.value)} options={[
                 { value: '', label: t('products.allServices') },
-                ...services.map((s) => ({ value: s.id, label: s.name })),
+                ...servicesList.map((s) => ({ value: s.id, label: s.name })),
               ]} />
             </div>
           )}
@@ -110,11 +83,8 @@ export default function AdminProductsPage() {
       <Card>
         {loading ? (
           <div className="flex items-center gap-2 text-gray-500 py-4"><Loader2 className="w-5 h-5 animate-spin" /> {tc('loading')}</div>
-        ) : products.length === 0 ? (
-          <div className="text-center py-8">
-            <Package className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-            <p className="text-gray-500">{t('products.noProducts')}</p>
-          </div>
+        ) : !products || products.length === 0 ? (
+          <EmptyState icon={Package} title={t('products.noProducts')} />
         ) : (
           <>
             <p className="text-sm text-gray-500 mb-3">{t('products.productCount', { count: products.length })}</p>
@@ -152,19 +122,10 @@ export default function AdminProductsPage() {
       </Card>
 
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={t('products.createTitle')}>
-        <ProductForm services={services} onSubmit={handleCreate} onCancel={() => setShowModal(false)} />
+        <ProductForm services={servicesList} onSubmit={handleCreate} onCancel={() => setShowModal(false)} />
       </Modal>
 
-      {confirmState && (
-        <ConfirmDialog
-          isOpen={confirmState.isOpen}
-          onClose={() => setConfirmState(null)}
-          onConfirm={confirmState.onConfirm}
-          title={confirmState.title}
-          message={confirmState.message}
-          variant={confirmState.variant}
-        />
-      )}
+      {DialogElement}
     </div>
   )
 }

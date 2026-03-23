@@ -5,9 +5,6 @@ import helmet from 'helmet';
 import * as cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { PaymentOrchestratorService } from './payment-orchestrator/payment-orchestrator.service';
-import { AffiliatesService } from './affiliates/affiliates.service';
-import { FunnelService } from './funnel/funnel.service';
-import { CreditsService } from './credits/credits.service';
 import { OneAdapter } from './adapters/one/one.adapter';
 import { CryptoAdapter } from './adapters/crypto/crypto.adapter';
 import { LavaAdapter } from './adapters/lava/lava.adapter';
@@ -51,24 +48,11 @@ async function bootstrap() {
   const orchestrator = app.get(PaymentOrchestratorService);
   const oneAdapter = app.get(OneAdapter);
   const cryptoAdapter = app.get(CryptoAdapter);
-
   const lavaAdapter = app.get(LavaAdapter);
 
   orchestrator.registerAdapter(oneAdapter);
   orchestrator.registerAdapter(cryptoAdapter);
   orchestrator.registerAdapter(lavaAdapter);
-
-  // Wire up affiliates service for multi-level commissions
-  const affiliatesService = app.get(AffiliatesService);
-  orchestrator.setAffiliatesService(affiliatesService);
-
-  // Wire up funnel service for CJM tracking
-  const funnelService = app.get(FunnelService);
-  orchestrator.setFunnelService(funnelService);
-
-  // Wire up credits service for usage/credits system
-  const creditsService = app.get(CreditsService);
-  orchestrator.setCreditsService(creditsService);
 
   const port = process.env.PORT || 3000;
   await app.listen(port);
@@ -78,4 +62,3 @@ async function bootstrap() {
 }
 
 bootstrap();
-

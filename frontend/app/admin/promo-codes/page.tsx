@@ -1,18 +1,21 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
 import { Plus, Pencil, Trash2, EyeOff, Eye, Tag, Loader2 } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
+import { useApiQuery } from '@/hooks/useApiQuery'
+import { useConfirmDialog } from '@/hooks/useConfirmDialog'
+import { getErrorMessage } from '@/lib/api-error'
 import type { PromoCode, Service } from '@/lib/types'
 
 interface PromoCodeFormData {
@@ -205,37 +208,15 @@ export default function AdminPromoCodesPage() {
   const t = useTranslations('admin')
   const tc = useTranslations('common')
   const tf = useTranslations('forms')
+  const { confirm, DialogElement } = useConfirmDialog()
 
-  const [promoCodes, setPromoCodes] = useState<PromoCode[]>([])
-  const [services, setServices] = useState<Service[]>([])
+  const { data: promoCodes, loading, refetch } = useApiQuery<PromoCode[]>('/v1/admin/promo-codes')
+  const { data: services } = useApiQuery<Service[]>('/v1/admin/services')
+
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState<PromoCode | undefined>()
-  const [loading, setLoading] = useState(true)
-  const [confirmState, setConfirmState] = useState<{
-    isOpen: boolean
-    title: string
-    message: string
-    onConfirm: () => Promise<void>
-    variant?: 'danger' | 'default'
-  } | null>(null)
 
-  const load = async () => {
-    try {
-      const [promoRes, servicesRes] = await Promise.all([
-        api.get('/v1/admin/promo-codes'),
-        api.get('/v1/admin/services').catch(() => ({ data: [] })),
-      ])
-      setPromoCodes(promoRes.data)
-      setServices(servicesRes.data)
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { message?: string } } }
-      toast.error(err.response?.data?.message || 'Failed to load promo codes')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => { load() }, [])
+  const servicesList = services || []
 
   const handleCreate = async (data: PromoCodeFormData) => {
     const payload: Record<string, unknown> = {
@@ -255,7 +236,7 @@ export default function AdminPromoCodesPage() {
     await api.post('/v1/admin/promo-codes', payload)
     toast.success(t('promoCodes.created'))
     setShowModal(false)
-    load()
+    refetch()
   }
 
   const handleUpdate = async (data: PromoCodeFormData) => {
@@ -283,39 +264,32 @@ export default function AdminPromoCodesPage() {
     toast.success(t('promoCodes.updated'))
     setShowModal(false)
     setEditing(undefined)
-    load()
+    refetch()
   }
 
   const handleToggleActive = async (id: string, isActive: boolean) => {
     try {
       await api.put(`/v1/admin/promo-codes/${id}`, { isActive: !isActive })
       toast.success(isActive ? t('promoCodes.deactivated') : t('promoCodes.activated'))
-      load()
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { message?: string } } }
-      toast.error(err.response?.data?.message || 'Failed to toggle promo code status')
+      refetch()
+    } catch (e) {
+      toast.error(getErrorMessage(e, 'Failed to toggle promo code status'))
     }
   }
 
-  const handleDelete = (id: string) => {
-    setConfirmState({
-      isOpen: true,
-      title: t('promoCodes.deleteConfirm'),
-      message: t('promoCodes.deleteConfirm'),
-      variant: 'danger',
-      onConfirm: async () => {
-        try {
-          await api.delete(`/v1/admin/promo-codes/${id}`)
-          toast.success(t('promoCodes.deleted'))
-          load()
-        } catch (e: unknown) {
-          const err = e as { response?: { data?: { message?: string } } }
-          toast.error(err.response?.data?.message || t('promoCodes.deleteError'))
-          throw e
-        }
-      },
-    })
+  const handleDelete = async (id: string) => {
+    const ok = await confirm({ title: t('promoCodes.deleteConfirm'), message: t('promoCodes.deleteConfirm'), variant: 'danger' })
+    if (!ok) return
+    try {
+      await api.delete(`/v1/admin/promo-codes/${id}`)
+      toast.success(t('promoCodes.deleted'))
+      refetch()
+    } catch (e) {
+      toast.error(getErrorMessage(e, t('promoCodes.deleteError')))
+    }
   }
+
+  const promoList = promoCodes || []
 
   const formatDiscount = (promo: PromoCode) => {
     if (promo.discountType === 'percentage') {
@@ -326,7 +300,7 @@ export default function AdminPromoCodesPage() {
 
   const getServiceName = (serviceId?: string) => {
     if (!serviceId) return t('promoCodes.allServices')
-    const service = services.find((s) => s.id === serviceId)
+    const service = servicesList.find((s) => s.id === serviceId)
     return service?.name || serviceId
   }
 
@@ -357,12 +331,8 @@ export default function AdminPromoCodesPage() {
       <Card>
         {loading ? (
           <div className="flex items-center gap-2 text-gray-500 py-4"><Loader2 className="w-5 h-5 animate-spin" /> {tc('loading')}</div>
-        ) : promoCodes.length === 0 ? (
-          <div className="text-center py-8">
-            <Tag className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-            <p className="text-gray-500 mb-2">{t('promoCodes.noPromoCodes')}</p>
-            <p className="text-sm text-gray-400">{t('promoCodes.noPromoCodesHint')}</p>
-          </div>
+        ) : promoList.length === 0 ? (
+          <EmptyState icon={Tag} title={t('promoCodes.noPromoCodes')} subtitle={t('promoCodes.noPromoCodesHint')} />
         ) : (
           <Table>
             <Thead>
@@ -378,7 +348,7 @@ export default function AdminPromoCodesPage() {
               </tr>
             </Thead>
             <Tbody>
-              {promoCodes.map((promo) => (
+              {promoList.map((promo) => (
                 <tr key={promo.id}>
                   <Td className="font-mono font-semibold">{promo.code}</Td>
                   <Td>{promo.name}</Td>
@@ -428,7 +398,7 @@ export default function AdminPromoCodesPage() {
       >
         <PromoCodeForm
           initial={editing}
-          services={services}
+          services={servicesList}
           onSubmit={editing ? handleUpdate : handleCreate}
           onCancel={() => { setShowModal(false); setEditing(undefined) }}
           t={t}
@@ -437,16 +407,7 @@ export default function AdminPromoCodesPage() {
         />
       </Modal>
 
-      {confirmState && (
-        <ConfirmDialog
-          isOpen={confirmState.isOpen}
-          onClose={() => setConfirmState(null)}
-          onConfirm={confirmState.onConfirm}
-          title={confirmState.title}
-          message={confirmState.message}
-          variant={confirmState.variant}
-        />
-      )}
+      {DialogElement}
     </div>
   )
 }

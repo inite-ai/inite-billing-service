@@ -36,6 +36,16 @@ export class CheckoutService {
   ) {}
 
   /**
+   * List active payment providers for checkout.
+   */
+  async getPaymentMethods() {
+    return this.prisma.paymentProvider.findMany({
+      where: { isActive: true },
+      select: { code: true, name: true, supportedModes: true, currencies: true },
+    });
+  }
+
+  /**
    * Phase 1: Create checkout session.
    * Creates an order with status 'created' but does NOT create a PaymentIntent.
    * Returns { sessionId, checkoutUrl } pointing to the billing frontend checkout page.
