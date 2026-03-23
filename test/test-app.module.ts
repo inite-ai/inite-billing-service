@@ -17,7 +17,7 @@ import { AffiliatesModule } from '../src/affiliates/affiliates.module';
 import { AdminModule } from '../src/admin/admin.module';
 import { MockOneAdapter } from './mocks/one-adapter.mock';
 import { PaymentOrchestratorService } from '../src/payment-orchestrator/payment-orchestrator.service';
-import { AffiliatesService } from '../src/affiliates/affiliates.service';
+
 import { CryptoAdapter } from '../src/adapters/crypto/crypto.adapter';
 import { OneAdapter } from '../src/adapters/one/one.adapter';
 
@@ -68,18 +68,12 @@ export class TestAppModule implements OnModuleInit {
     private readonly orchestrator: PaymentOrchestratorService,
     private readonly mockOneAdapter: MockOneAdapter,
     private readonly cryptoAdapter: CryptoAdapter,
-    private readonly affiliatesService: AffiliatesService,
   ) {}
 
   async onModuleInit() {
-    // Wait a bit for modules to initialize
     await new Promise((resolve) => setTimeout(resolve, 100));
 
-    // Register mock adapter instead of real ONE adapter
     this.orchestrator.registerAdapter(this.mockOneAdapter);
     this.orchestrator.registerAdapter(this.cryptoAdapter);
-
-    // Wire up affiliates service for multi-level commissions
-    this.orchestrator.setAffiliatesService(this.affiliatesService);
   }
 }
