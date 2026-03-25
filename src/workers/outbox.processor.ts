@@ -51,11 +51,14 @@ export class OutboxProcessor extends WorkerHost {
     const events = await this.outboxService.getPendingEvents(100);
     if (events.length === 0) return;
 
-    // Get all services with webhook URLs
-    const services = await this.prisma.service.findMany({
-      where: { isActive: true, webhookUrl: { not: null } },
-      select: { id: true, code: true, webhookUrl: true, apiKey: true },
+    // Get all active services — filter by webhookUrl in JS (field may not be in Prisma types on CI)
+    const allServices = await this.prisma.service.findMany({
+      where: { isActive: true },
     });
+
+    const services = allServices.filter(
+      (s: any) => s.webhookUrl != null,
+    );
 
     if (services.length === 0) {
       // No webhook consumers — mark all as sent
@@ -69,17 +72,18 @@ export class OutboxProcessor extends WorkerHost {
       let allDelivered = true;
 
       for (const service of services) {
-        if (!service.webhookUrl) continue;
+        const webhookUrl = (service as any).webhookUrl as string;
+        if (!webhookUrl) continue;
 
-        if (!isPublicUrl(service.webhookUrl)) {
+        if (!isPublicUrl(webhookUrl)) {
           this.logger.warn(
-            `Rejecting private/invalid webhook URL for service ${service.code}: ${service.webhookUrl}`,
+            `Rejecting private/invalid webhook URL for service ${service.code}: ${webhookUrl}`,
           );
           continue;
         }
 
         try {
-          const res = await fetch(service.webhookUrl, {
+          const res = await fetch(webhookUrl, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
