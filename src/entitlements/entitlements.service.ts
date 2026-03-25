@@ -11,6 +11,10 @@ export class EntitlementsService {
       where: {
         userId,
         status: 'active',
+        OR: [
+          { expiresAt: null },
+          { expiresAt: { gt: new Date() } },
+        ],
       },
       orderBy: {
         createdAt: 'desc',

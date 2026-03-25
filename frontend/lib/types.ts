@@ -74,7 +74,11 @@ export interface Subscription {
   cancelAtPeriodEnd: boolean
   createdAt: string
   updatedAt: string
-  price?: Price
+  price?: Price & {
+    product?: Product & {
+      service?: { id: string; code: string; name: string }
+    }
+  }
 }
 
 export interface Entitlement {

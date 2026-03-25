@@ -291,9 +291,22 @@ export class CheckoutService {
 
       orderAmount = promoValidation.finalAmount;
 
-      // Atomic transaction: increment usage count + create usage record + update order
+      // Atomic transaction: re-check per-user limit + increment usage + create record + update order
       await this.prisma.$transaction(async (tx) => {
-        // Atomically increment usage count with WHERE condition to prevent race
+        // Re-check per-user limit INSIDE transaction to prevent TOCTOU race
+        if (promoValidation.promoCode.maxUsagePerUser !== null) {
+          const userUsageCount = await tx.promoCodeUsage.count({
+            where: {
+              promoCodeId: promoValidation.promoCode.id,
+              userId,
+            },
+          });
+          if (userUsageCount >= promoValidation.promoCode.maxUsagePerUser) {
+            throw new BadRequestException('Promo code per-user limit reached');
+          }
+        }
+
+        // Atomically increment global usage count with WHERE condition to prevent race
         const updated = await tx.promoCode.updateMany({
           where: {
             id: promoValidation.promoCode.id,
@@ -307,7 +320,7 @@ export class CheckoutService {
           throw new BadRequestException('Promo code usage limit reached');
         }
 
-        // Create usage record (pass tx to skip the non-atomic increment in applyPromoCode)
+        // Create usage record
         await tx.promoCodeUsage.create({
           data: {
             promoCodeId: promoValidation.promoCode.id,

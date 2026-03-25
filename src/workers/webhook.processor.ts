@@ -46,11 +46,29 @@ export class WebhookProcessor extends WorkerHost {
       return;
     }
 
-    // Mark as processing
-    await this.prisma.webhookEvent.update({
-      where: { id: webhookEvent.id },
+    // Recovery: if stuck in 'processing' for >5 min, allow retry
+    if (webhookEvent.status === 'processing') {
+      const stuckThreshold = 5 * 60 * 1000; // 5 minutes
+      const lastActivity = new Date(webhookEvent.processedAt || webhookEvent.receivedAt).getTime();
+      if (Date.now() - lastActivity < stuckThreshold) {
+        this.logger.debug(`Webhook still processing: ${rail}/${webhookId}`);
+        return;
+      }
+      this.logger.warn(`Recovering stuck webhook: ${rail}/${webhookId}`);
+    }
+
+    // Atomic: only claim if still in received/failed/stuck-processing state
+    const claimed = await this.prisma.webhookEvent.updateMany({
+      where: {
+        id: webhookEvent.id,
+        status: { in: ['received', 'failed', 'processing'] },
+      },
       data: { status: 'processing' },
     });
+    if (claimed.count === 0) {
+      this.logger.debug(`Webhook already claimed: ${rail}/${webhookId}`);
+      return;
+    }
 
     try {
       // Get adapter

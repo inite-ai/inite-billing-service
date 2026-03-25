@@ -15,14 +15,20 @@ import * as crypto from 'crypto';
 import { WebhooksService } from './webhooks.service';
 import { OneAdapter } from '../adapters/one/one.adapter';
 import { LavaAdapter } from '../adapters/lava/lava.adapter';
+import { StripeAdapter } from '../adapters/stripe/stripe.adapter';
+import { AppleIAPAdapter } from '../adapters/apple-iap/apple-iap.adapter';
+import { GooglePlayAdapter } from '../adapters/google-play/google-play.adapter';
+import { CryptoAdapter } from '../adapters/crypto/crypto.adapter';
 
 function safeTimingSafeEqual(a: string, b: string): boolean {
   const bufA = Buffer.from(a, 'utf8');
   const bufB = Buffer.from(b, 'utf8');
   if (bufA.length !== bufB.length) {
-    const padded = Buffer.alloc(bufA.length);
-    bufB.copy(padded);
-    crypto.timingSafeEqual(bufA, padded);
+    // Constant-time comparison even when lengths differ:
+    // hash both to fixed-length digests to avoid timing leaks
+    const hashA = crypto.createHash('sha256').update(bufA).digest();
+    const hashB = crypto.createHash('sha256').update(bufB).digest();
+    crypto.timingSafeEqual(hashA, hashB);
     return false;
   }
   return crypto.timingSafeEqual(bufA, bufB);
@@ -38,6 +44,10 @@ export class WebhooksController {
     private readonly webhooksService: WebhooksService,
     private readonly oneAdapter: OneAdapter,
     private readonly lavaAdapter: LavaAdapter,
+    private readonly stripeAdapter: StripeAdapter,
+    private readonly appleIAPAdapter: AppleIAPAdapter,
+    private readonly googlePlayAdapter: GooglePlayAdapter,
+    private readonly cryptoAdapter: CryptoAdapter,
   ) {}
 
   @Post('one')
@@ -113,12 +123,132 @@ export class WebhooksController {
     return { received: true };
   }
 
+  @Post('stripe')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Stripe payment webhook endpoint' })
+  @ApiResponse({ status: 200 })
+  async handleStripeWebhook(
+    @Body() payload: any,
+    @Headers('stripe-signature') signature: string,
+  ): Promise<{ received: boolean }> {
+    if (!signature) {
+      this.logger.warn('Stripe webhook missing signature');
+      throw new ForbiddenException('Missing Stripe-Signature header');
+    }
+
+    // Verify signature
+    const isValid = await this.stripeAdapter.verifyWebhookSignature(
+      JSON.stringify(payload),
+      signature,
+    );
+    if (!isValid) {
+      this.logger.warn('Stripe webhook signature verification failed');
+      throw new ForbiddenException('Invalid webhook signature');
+    }
+
+    const parsed = await this.stripeAdapter.handleWebhook(payload);
+
+    await this.webhooksService.storeWebhookEvent(
+      'STRIPE',
+      parsed.webhookId || parsed.entityId,
+      parsed.eventType,
+      parsed.entityId,
+      payload,
+    );
+
+    return { received: true };
+  }
+
+  @Post('apple')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Apple App Store Server Notification V2' })
+  @ApiResponse({ status: 200 })
+  async handleAppleWebhook(
+    @Body() payload: any,
+  ): Promise<{ received: boolean }> {
+    // Apple sends signedPayload — the adapter decodes and validates the JWS
+    if (!payload?.signedPayload && !payload?.notificationType) {
+      this.logger.warn('Apple webhook missing signedPayload');
+      throw new ForbiddenException('Invalid Apple notification format');
+    }
+
+    const parsed = await this.appleIAPAdapter.handleWebhook(payload);
+
+    await this.webhooksService.storeWebhookEvent(
+      'APPLE_IAP',
+      parsed.webhookId || parsed.entityId,
+      parsed.eventType,
+      parsed.entityId,
+      payload,
+    );
+
+    return { received: true };
+  }
+
+  @Post('google')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Google Play RTDN webhook endpoint' })
+  @ApiResponse({ status: 200 })
+  async handleGooglePlayWebhook(
+    @Body() payload: any,
+    @Headers('authorization') authHeader: string,
+  ): Promise<{ received: boolean }> {
+    // Google Pub/Sub uses OAuth Bearer token for push authentication
+    // Verify the token matches our configured secret
+    const config = await this.webhooksService.getProviderConfig('GOOGLE_PLAY');
+    const expectedToken = (config as any).pubsubToken;
+
+    if (expectedToken) {
+      const token = authHeader?.replace('Bearer ', '');
+      if (!token || !safeTimingSafeEqual(expectedToken, token)) {
+        this.logger.warn('Google Play webhook auth verification failed');
+        throw new ForbiddenException('Invalid webhook authorization');
+      }
+    }
+
+    const parsed = await this.googlePlayAdapter.handleWebhook(payload);
+
+    await this.webhooksService.storeWebhookEvent(
+      'GOOGLE_PLAY',
+      parsed.webhookId || parsed.entityId,
+      parsed.eventType,
+      parsed.entityId,
+      typeof payload.message?.data === 'string' ? JSON.parse(Buffer.from(payload.message.data, 'base64').toString()) : payload,
+    );
+
+    return { received: true };
+  }
+
   @Post('crypto')
-  @HttpCode(HttpStatus.NOT_FOUND)
-  @ApiOperation({ summary: 'Crypto payment webhook endpoint (disabled)' })
-  @ApiResponse({ status: 404 })
-  async handleCryptoWebhook(): Promise<{ message: string }> {
-    throw new NotFoundException('Crypto webhooks not implemented');
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Crypto blockchain indexer webhook' })
+  @ApiResponse({ status: 200 })
+  async handleCryptoWebhook(
+    @Body() payload: any,
+    @Headers('x-webhook-secret') webhookSecret: string,
+  ): Promise<{ received: boolean }> {
+    // Verify secret from indexer
+    const config = await this.webhooksService.getProviderConfig('CRYPTO');
+    const expectedSecret = (config as any).webhookSecret;
+
+    if (expectedSecret) {
+      if (!webhookSecret || !safeTimingSafeEqual(expectedSecret, webhookSecret)) {
+        this.logger.warn('Crypto webhook secret verification failed');
+        throw new ForbiddenException('Invalid webhook secret');
+      }
+    }
+
+    const parsed = await this.cryptoAdapter.handleWebhook(payload);
+
+    await this.webhooksService.storeWebhookEvent(
+      'CRYPTO',
+      parsed.webhookId || parsed.entityId,
+      parsed.eventType,
+      parsed.entityId,
+      payload,
+    );
+
+    return { received: true };
   }
 }
 

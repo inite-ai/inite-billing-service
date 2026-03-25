@@ -12,6 +12,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiHeader } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { JwtOrServiceGuard } from '../auth/guards/jwt-or-service.guard';
 import { User, RequestUser } from '../auth/decorators/user.decorator';
@@ -43,6 +44,7 @@ export class CheckoutController {
 
   @Post('sessions')
   @HttpCode(HttpStatus.CREATED)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @UseGuards(JwtOrServiceGuard)
   @ApiOperation({ summary: 'Create checkout session' })
   @ApiHeader({
@@ -84,6 +86,7 @@ export class CheckoutController {
 
   @Post('sessions/:id/pay')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Initiate payment for a checkout session' })
   @ApiResponse({ status: 200, type: PaySessionResponseDto })

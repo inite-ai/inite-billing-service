@@ -13,11 +13,9 @@ export class RolesGuard implements CanActivate {
     ]);
 
     if (!requiredRoles || requiredRoles.length === 0) {
-      // Allow access when no @Roles() decorator is present. This guard is only
-      // applied explicitly via @UseGuards on admin routes — every such route
-      // MUST also have a @Roles() decorator. Audit controllers if adding new
-      // admin endpoints to ensure deny-by-default is maintained.
-      return true;
+      // Deny by default when @Roles() decorator is missing.
+      // Every endpoint using RolesGuard MUST have a @Roles() decorator.
+      return false;
     }
 
     const { user } = context.switchToHttp().getRequest();

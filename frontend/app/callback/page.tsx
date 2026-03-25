@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { OAuthClient } from '@/lib/oauth-client';
-import { storeIdToken } from '@/lib/auth-helper';
+import { storeIdToken, clearTokens } from '@/lib/auth-helper';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTranslations } from 'next-intl';
 
@@ -37,6 +37,10 @@ function CallbackContent() {
         if (!code || !state) {
           throw new Error('Missing authorization code or state');
         }
+
+        // Clear any existing session before storing new tokens
+        clearTokens();
+        await fetch('/api/auth/logout', { method: 'POST' });
 
         const tokens = await OAuthClient.handleCallback(code, state);
         if (tokens.id_token) {

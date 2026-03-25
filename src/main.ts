@@ -8,6 +8,9 @@ import { PaymentOrchestratorService } from './payment-orchestrator/payment-orche
 import { OneAdapter } from './adapters/one/one.adapter';
 import { CryptoAdapter } from './adapters/crypto/crypto.adapter';
 import { LavaAdapter } from './adapters/lava/lava.adapter';
+import { StripeAdapter } from './adapters/stripe/stripe.adapter';
+import { AppleIAPAdapter } from './adapters/apple-iap/apple-iap.adapter';
+import { GooglePlayAdapter } from './adapters/google-play/google-play.adapter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -49,10 +52,16 @@ async function bootstrap() {
   const oneAdapter = app.get(OneAdapter);
   const cryptoAdapter = app.get(CryptoAdapter);
   const lavaAdapter = app.get(LavaAdapter);
+  const stripeAdapter = app.get(StripeAdapter);
+  const appleIAPAdapter = app.get(AppleIAPAdapter);
+  const googlePlayAdapter = app.get(GooglePlayAdapter);
 
   orchestrator.registerAdapter(oneAdapter);
   orchestrator.registerAdapter(cryptoAdapter);
   orchestrator.registerAdapter(lavaAdapter);
+  orchestrator.registerAdapter(stripeAdapter);
+  orchestrator.registerAdapter(appleIAPAdapter);
+  orchestrator.registerAdapter(googlePlayAdapter);
 
   const port = process.env.PORT || 3000;
   await app.listen(port);

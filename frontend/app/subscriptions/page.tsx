@@ -151,9 +151,16 @@ export default function SubscriptionsPage() {
                       <h3 className="font-semibold text-slate-900 dark:text-white">
                         {sub.price?.product?.name || 'Subscription'}
                       </h3>
-                      {sub.price?.product?.code && (
-                        <p className="text-xs text-slate-400 font-mono">{sub.price.product.code}</p>
-                      )}
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {sub.price?.product?.service && (
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 font-medium">
+                            {sub.price.product.service.name}
+                          </span>
+                        )}
+                        {sub.price?.product?.code && (
+                          <span className="text-xs text-slate-400 font-mono">{sub.price.product.code}</span>
+                        )}
+                      </div>
                     </div>
                     <Badge>{sub.status}</Badge>
                   </div>
@@ -223,13 +230,26 @@ export default function SubscriptionsPage() {
         {selectedSub && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h4 className="font-semibold text-slate-900 dark:text-white">
-                {selectedSub.price?.product?.name || 'Subscription'}
-              </h4>
+              <div>
+                <h4 className="font-semibold text-slate-900 dark:text-white">
+                  {selectedSub.price?.product?.name || 'Subscription'}
+                </h4>
+                {selectedSub.price?.product?.service && (
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 font-medium">
+                    {selectedSub.price.product.service.name}
+                  </span>
+                )}
+              </div>
               <Badge>{selectedSub.status}</Badge>
             </div>
 
             <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 space-y-3 text-sm">
+              {selectedSub.price?.product?.service && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500">{t('detailService') || 'Service'}</span>
+                  <span className="font-semibold text-slate-900 dark:text-white">{selectedSub.price.product.service.name}</span>
+                </div>
+              )}
               {selectedSub.price && (
                 <div className="flex justify-between">
                   <span className="text-slate-500">{t('detailPrice')}</span>

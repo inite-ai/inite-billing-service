@@ -10,8 +10,10 @@ import {
   HttpCode,
   HttpStatus,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { JwtOrServiceGuard } from '../auth/guards/jwt-or-service.guard';
 import { User, RequestUser } from '../auth/decorators/user.decorator';
@@ -56,6 +58,27 @@ export class SubscriptionsController {
     @User() user: RequestUser,
   ): Promise<SubscriptionResponseDto[]> {
     return this.subscriptionsService.getUserSubscriptions(user.userId);
+  }
+
+  @Post('trial')
+  @HttpCode(HttpStatus.CREATED)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @UseGuards(JwtOrServiceGuard)
+  @ApiOperation({ summary: 'Start a trial subscription (no payment required)' })
+  @ApiResponse({ status: 201, type: SubscriptionResponseDto })
+  async startTrial(
+    @Req() req: any,
+    @Body() body: { priceCode: string; userId?: string },
+  ): Promise<SubscriptionResponseDto> {
+    if (!body.priceCode) {
+      throw new BadRequestException('priceCode is required');
+    }
+    const userId = req.user?.isService ? body.userId : req.user?.userId;
+    if (!userId) {
+      throw new BadRequestException('userId is required (pass in body for service API key calls)');
+    }
+    const callerServiceId = req.user?.isService ? req.user.serviceId : undefined;
+    return this.subscriptionsService.startTrial(userId, body.priceCode, callerServiceId);
   }
 
   @Get('user/:userId')

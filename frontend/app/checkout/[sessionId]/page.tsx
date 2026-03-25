@@ -37,6 +37,16 @@ interface PaymentMethod {
   currencies: string[]
 }
 
+function isSafeRedirect(url: string): boolean {
+  if (url.startsWith('/')) return true
+  try {
+    const parsed = new URL(url)
+    return parsed.origin === window.location.origin
+  } catch {
+    return false
+  }
+}
+
 interface PromoResult {
   isValid: boolean
   error?: string
@@ -176,7 +186,8 @@ export default function CheckoutPage() {
       } else {
         // Free order fulfilled — go to orders
         toast.success(t('promoApplied'))
-        window.location.href = session.successUrl || '/orders'
+        const successTarget = session.successUrl && isSafeRedirect(session.successUrl) ? session.successUrl : '/orders'
+        window.location.href = successTarget
       }
     } catch (e: any) {
       toast.error(e.response?.data?.message || 'Payment failed')
@@ -224,7 +235,7 @@ export default function CheckoutPage() {
             <X className="w-7 h-7 text-red-400" />
           </div>
           <h2 className="text-xl font-semibold text-white mb-2">{t(error as any)}</h2>
-          {session?.errorUrl && (
+          {session?.errorUrl && isSafeRedirect(session.errorUrl) && (
             <button
               onClick={() => window.location.href = session.errorUrl!}
               className="mt-4 text-sm text-violet-400 hover:text-violet-300 underline"

@@ -19,63 +19,99 @@ function escapeHtml(text: string): string {
     .replace(/"/g, '&quot;')
 }
 
-function applyInlineMarkdown(line: string): string {
-  // Bold
-  line = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-  // Links (block javascript: URLs)
-  line = line.replace(
-    /\[([^\]]+)\]\(([^)]+)\)/g,
-    (_, label: string, url: string) => {
-      if (url.toLowerCase().startsWith('javascript:')) return label
-      return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-violet-400 underline hover:text-violet-300">${label}</a>`
+/**
+ * Parse inline markdown into React elements (no dangerouslySetInnerHTML).
+ * Only supports: **bold**, `code`, [link](url)
+ */
+function parseInline(text: string, keyPrefix: string): React.ReactNode[] {
+  const nodes: React.ReactNode[] = []
+  // Regex: bold, inline code, markdown links
+  const pattern = /(\*\*(.+?)\*\*)|(`([^`]+)`)|(\[([^\]]+)\]\(([^)]+)\))/g
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+  let idx = 0
+
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      nodes.push(text.slice(lastIndex, match.index))
     }
-  )
-  // Inline code
-  line = line.replace(/`([^`]+)`/g, '<code class="bg-gray-700/50 px-1 py-0.5 rounded text-sm">$1</code>')
-  return line
+    if (match[2]) {
+      // Bold
+      nodes.push(<strong key={`${keyPrefix}-b${idx++}`}>{match[2]}</strong>)
+    } else if (match[4]) {
+      // Inline code
+      nodes.push(
+        <code key={`${keyPrefix}-c${idx++}`} className="bg-gray-700/50 px-1 py-0.5 rounded text-sm">
+          {match[4]}
+        </code>
+      )
+    } else if (match[6] && match[7]) {
+      // Link — block javascript: and data: URLs
+      const url = match[7]
+      const label = match[6]
+      if (/^(https?:\/\/)/i.test(url)) {
+        nodes.push(
+          <a
+            key={`${keyPrefix}-a${idx++}`}
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-violet-400 underline hover:text-violet-300"
+          >
+            {label}
+          </a>
+        )
+      } else {
+        nodes.push(label)
+      }
+    }
+    lastIndex = match.index + match[0].length
+  }
+
+  if (lastIndex < text.length) {
+    nodes.push(text.slice(lastIndex))
+  }
+
+  return nodes.length > 0 ? nodes : [text]
 }
 
 function renderMarkdown(text: string) {
-  // Escape HTML entities first, then apply markdown transformations
-  const escaped = escapeHtml(text)
-  const lines = escaped.split('\n')
+  const lines = text.split('\n')
   const elements: React.ReactNode[] = []
 
   for (let i = 0; i < lines.length; i++) {
-    let line = applyInlineMarkdown(lines[i])
+    const line = lines[i]
 
     // Unordered list items
-    if (/^[-*]\s/.test(line)) {
+    const ulMatch = line.match(/^[-*]\s(.*)/)
+    if (ulMatch) {
       elements.push(
-        <li
-          key={i}
-          className="ml-4 list-disc"
-          dangerouslySetInnerHTML={{ __html: line.replace(/^[-*]\s/, '') }}
-        />
+        <li key={i} className="ml-4 list-disc">
+          {parseInline(ulMatch[1], `li${i}`)}
+        </li>
       )
       continue
     }
 
     // Ordered list items
-    if (/^\d+\.\s/.test(line)) {
+    const olMatch = line.match(/^\d+\.\s(.*)/)
+    if (olMatch) {
       elements.push(
-        <li
-          key={i}
-          className="ml-4 list-decimal"
-          dangerouslySetInnerHTML={{ __html: line.replace(/^\d+\.\s/, '') }}
-        />
+        <li key={i} className="ml-4 list-decimal">
+          {parseInline(olMatch[1], `ol${i}`)}
+        </li>
       )
       continue
     }
 
-    // Empty line = paragraph break
+    // Empty line
     if (line.trim() === '') {
       elements.push(<br key={i} />)
       continue
     }
 
     elements.push(
-      <p key={i} dangerouslySetInnerHTML={{ __html: line }} />
+      <p key={i}>{parseInline(line, `p${i}`)}</p>
     )
   }
 

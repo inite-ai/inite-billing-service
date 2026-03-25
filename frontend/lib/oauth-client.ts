@@ -4,6 +4,7 @@
  */
 
 import { generateCodeVerifier, generateCodeChallenge, generateState } from './pkce';
+import { clearTokens } from './auth-helper';
 
 const AUTH_DOMAIN = process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || 'https://auth.inite.ai';
 const CLIENT_ID = process.env.NEXT_PUBLIC_OAUTH_CLIENT_ID || 'inite-billing';
@@ -15,6 +16,14 @@ export interface TokenResponse {
 
 export class OAuthClient {
   static async login(): Promise<void> {
+    // Always clear existing session before starting new login
+    clearTokens();
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch {
+      // ignore — clearing old cookies is best-effort
+    }
+
     const codeVerifier = generateCodeVerifier();
     const codeChallenge = await generateCodeChallenge(codeVerifier);
     const state = generateState();

@@ -41,16 +41,17 @@ export class CommissionSettlementScheduler {
       });
 
       for (const commission of pendingCommissions) {
-        await this.prisma.$transaction([
-          this.prisma.affiliateCommission.update({
-            where: { id: commission.id },
-            data: { status: 'earned', earnedAt: new Date() },
-          }),
-          this.prisma.affiliate.update({
-            where: { id: commission.affiliateId },
-            data: { totalEarned: { increment: Number(commission.amount) } },
-          }),
-        ]);
+        // Atomic: only settle if still pending (prevents race with refund→voided)
+        const updated = await this.prisma.affiliateCommission.updateMany({
+          where: { id: commission.id, status: 'pending' },
+          data: { status: 'earned', earnedAt: new Date() },
+        });
+        if (updated.count === 0) continue; // Already voided or settled
+
+        await this.prisma.affiliate.update({
+          where: { id: commission.affiliateId },
+          data: { totalEarned: { increment: Number(commission.amount) } },
+        });
         totalSettled++;
       }
     }
@@ -69,16 +70,16 @@ export class CommissionSettlementScheduler {
     });
 
     for (const commission of globalPending) {
-      await this.prisma.$transaction([
-        this.prisma.affiliateCommission.update({
-          where: { id: commission.id },
-          data: { status: 'earned', earnedAt: new Date() },
-        }),
-        this.prisma.affiliate.update({
-          where: { id: commission.affiliateId },
-          data: { totalEarned: { increment: Number(commission.amount) } },
-        }),
-      ]);
+      const updated = await this.prisma.affiliateCommission.updateMany({
+        where: { id: commission.id, status: 'pending' },
+        data: { status: 'earned', earnedAt: new Date() },
+      });
+      if (updated.count === 0) continue;
+
+      await this.prisma.affiliate.update({
+        where: { id: commission.affiliateId },
+        data: { totalEarned: { increment: Number(commission.amount) } },
+      });
       totalSettled++;
     }
 

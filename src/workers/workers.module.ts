@@ -5,6 +5,7 @@ import { OutboxProcessor } from './outbox.processor';
 import { AffiliatePayoutProcessor } from '../affiliates/affiliate-payout.processor';
 import { PaymentOrchestratorModule } from '../payment-orchestrator/payment-orchestrator.module';
 import { OutboxModule } from '../outbox/outbox.module';
+import { PrismaService } from '../common/services/prisma.service';
 
 @Module({
   imports: [
@@ -41,7 +42,7 @@ import { OutboxModule } from '../outbox/outbox.module';
       },
     }),
   ],
-  providers: [WebhookProcessor, OutboxProcessor],
+  providers: [WebhookProcessor, OutboxProcessor, PrismaService],
 })
 export class WorkersModule {}
 
