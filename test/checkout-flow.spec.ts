@@ -79,6 +79,7 @@ describe('CheckoutService', () => {
       },
       promoCodeUsage: {
         create: jest.fn(),
+        count: jest.fn().mockResolvedValue(0),
       },
     };
 
