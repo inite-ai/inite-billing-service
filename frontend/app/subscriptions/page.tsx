@@ -12,7 +12,7 @@ import { Modal } from '@/components/ui/Modal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Tabs } from '@/components/ui/Tabs'
 import { useAuth } from '@/contexts/AuthContext'
-import { CreditCard, Calendar, Clock, DollarSign, AlertTriangle, Loader2 } from 'lucide-react'
+import { CreditCard, Calendar, Clock, DollarSign, AlertTriangle, Loader2, Package, Zap, Check } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import type { Subscription } from '@/lib/types'
@@ -137,6 +137,10 @@ export default function SubscriptionsPage() {
             const days = daysUntil(sub.currentPeriodEnd)
             const progress = periodProgress(sub.currentPeriodStart, sub.currentPeriodEnd)
             const isExpiringSoon = days <= 3 && (sub.status === 'active' || sub.status === 'trialing')
+            const metadata = (sub.price?.product?.metadata || {}) as Record<string, any>
+            const features = (metadata.features || []) as string[]
+            const creditsPerPeriod = metadata.creditsPerPeriod || metadata.credits
+            const description = metadata.description as string | undefined
 
             return (
               <motion.div
@@ -147,23 +151,32 @@ export default function SubscriptionsPage() {
               >
                 <Card hover onClick={() => setSelectedSub(sub)}>
                   <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <h3 className="font-semibold text-slate-900 dark:text-white">
-                        {sub.price?.product?.name || 'Subscription'}
-                      </h3>
-                      <div className="flex items-center gap-2 mt-0.5">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <Package className="w-5 h-5 text-violet-500 shrink-0" />
+                        <h3 className="font-semibold text-slate-900 dark:text-white truncate">
+                          {sub.price?.product?.name || sub.price?.code || 'Subscription'}
+                        </h3>
+                      </div>
+                      <div className="flex items-center gap-2 mt-1 ml-7">
                         {sub.price?.product?.service && (
                           <span className="text-xs px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 font-medium">
                             {sub.price.product.service.name}
                           </span>
                         )}
-                        {sub.price?.product?.code && (
-                          <span className="text-xs text-slate-400 font-mono">{sub.price.product.code}</span>
+                        {sub.price?.product?.type && (
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                            {sub.price.product.type === 'subscription' ? 'Subscription' : sub.price.product.type}
+                          </span>
                         )}
                       </div>
                     </div>
                     <Badge>{sub.status}</Badge>
                   </div>
+
+                  {description && (
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 line-clamp-2">{description}</p>
+                  )}
 
                   <div className="space-y-2.5 text-sm">
                     {sub.price && (
@@ -171,6 +184,26 @@ export default function SubscriptionsPage() {
                         <DollarSign className="w-4 h-4 text-emerald-500 shrink-0" />
                         <span className="font-semibold">{sub.price.amount} {sub.price.currency}</span>
                         <span className="text-slate-400">/ {sub.price.interval || 'month'}</span>
+                      </div>
+                    )}
+
+                    {creditsPerPeriod && (
+                      <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
+                        <Zap className="w-4 h-4 text-amber-500 shrink-0" />
+                        <span>{creditsPerPeriod} {t('creditsPerPeriod') || 'credits / period'}</span>
+                      </div>
+                    )}
+
+                    {features.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {features.slice(0, 3).map((f, fi) => (
+                          <span key={fi} className="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+                            <Check className="w-3 h-3 text-emerald-500" />{f}
+                          </span>
+                        ))}
+                        {features.length > 3 && (
+                          <span className="text-xs text-slate-400">+{features.length - 3}</span>
+                        )}
                       </div>
                     )}
 
@@ -227,21 +260,58 @@ export default function SubscriptionsPage() {
         onClose={() => setSelectedSub(null)}
         title={t('detailTitle')}
       >
-        {selectedSub && (
+        {selectedSub && (() => {
+          const meta = (selectedSub.price?.product?.metadata || {}) as Record<string, any>
+          const detailFeatures = (meta.features || []) as string[]
+          const detailCredits = meta.creditsPerPeriod || meta.credits
+          const detailDesc = meta.description as string | undefined
+
+          return (
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-start justify-between">
               <div>
-                <h4 className="font-semibold text-slate-900 dark:text-white">
-                  {selectedSub.price?.product?.name || 'Subscription'}
+                <h4 className="text-lg font-semibold text-slate-900 dark:text-white">
+                  {selectedSub.price?.product?.name || selectedSub.price?.code || 'Subscription'}
                 </h4>
-                {selectedSub.price?.product?.service && (
-                  <span className="text-xs px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 font-medium">
-                    {selectedSub.price.product.service.name}
-                  </span>
+                <div className="flex items-center gap-2 mt-1">
+                  {selectedSub.price?.product?.service && (
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 font-medium">
+                      {selectedSub.price.product.service.name}
+                    </span>
+                  )}
+                  {selectedSub.price?.product?.code && (
+                    <span className="text-xs font-mono text-slate-400">{selectedSub.price.product.code}</span>
+                  )}
+                </div>
+                {detailDesc && (
+                  <p className="text-sm text-slate-500 mt-2">{detailDesc}</p>
                 )}
               </div>
               <Badge>{selectedSub.status}</Badge>
             </div>
+
+            {/* What's included */}
+            {(detailFeatures.length > 0 || detailCredits) && (
+              <div className="bg-violet-50 dark:bg-violet-900/10 border border-violet-200 dark:border-violet-800/30 rounded-xl p-4">
+                <h5 className="text-xs font-semibold text-violet-600 dark:text-violet-400 uppercase tracking-wide mb-2">
+                  {t('detailIncludes') || "What's included"}
+                </h5>
+                <div className="space-y-1.5">
+                  {detailCredits && (
+                    <div className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                      <Zap className="w-4 h-4 text-amber-500 shrink-0" />
+                      <span className="font-medium">{detailCredits} {t('creditsPerPeriod') || 'credits / period'}</span>
+                    </div>
+                  )}
+                  {detailFeatures.map((f, fi) => (
+                    <div key={fi} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                      <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                      <span>{f}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 space-y-3 text-sm">
               {selectedSub.price?.product?.service && (
@@ -284,7 +354,8 @@ export default function SubscriptionsPage() {
               </Button>
             )}
           </div>
-        )}
+          )
+        })()}
       </Modal>
 
       {confirmState && (

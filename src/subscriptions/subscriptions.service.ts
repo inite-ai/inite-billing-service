@@ -108,6 +108,7 @@ export class SubscriptionsService {
                     code: product.code,
                     name: product.name,
                     type: product.type,
+                    metadata: product.metadata || undefined,
                     service: service
                       ? { id: service.id, code: service.code, name: service.name }
                       : undefined,

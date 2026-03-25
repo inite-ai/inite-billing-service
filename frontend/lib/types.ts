@@ -76,6 +76,7 @@ export interface Subscription {
   updatedAt: string
   price?: Price & {
     product?: Product & {
+      metadata?: Record<string, unknown>
       service?: { id: string; code: string; name: string }
     }
   }
