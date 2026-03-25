@@ -82,6 +82,7 @@ export class SubscriptionsService {
       const price = s.price as any;
       const product = price?.product;
       const service = product?.service;
+      const metadata = (product?.metadata || {}) as Record<string, any>;
 
       return {
         id: s.id,
@@ -94,28 +95,20 @@ export class SubscriptionsService {
         providerSubscriptionId: s.providerSubscriptionId || undefined,
         createdAt: s.createdAt,
         updatedAt: s.updatedAt,
-        price: price
-          ? {
-              id: price.id,
-              code: price.code,
-              amount: price.amount.toString(),
-              currency: price.currency,
-              interval: price.interval || undefined,
-              trialDays: price.trialDays || undefined,
-              product: product
-                ? {
-                    id: product.id,
-                    code: product.code,
-                    name: product.name,
-                    type: product.type,
-                    metadata: product.metadata || undefined,
-                    service: service
-                      ? { id: service.id, code: service.code, name: service.name }
-                      : undefined,
-                  }
-                : undefined,
-            }
-          : undefined,
+        // Flat top-level fields so frontend doesn't dig through nested objects
+        productName: product?.name || null,
+        productCode: product?.code || null,
+        productType: product?.type || null,
+        productDescription: metadata.description || null,
+        productFeatures: metadata.features || [],
+        creditsPerPeriod: metadata.creditsPerPeriod || metadata.credits || null,
+        serviceName: service?.name || null,
+        serviceCode: service?.code || null,
+        // Pricing
+        amount: price ? price.amount.toString() : null,
+        currency: price?.currency || null,
+        interval: price?.interval || null,
+        trialDays: price?.trialDays || null,
       };
     });
   }

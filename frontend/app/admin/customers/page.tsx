@@ -308,7 +308,7 @@ export default function AdminCustomersPage() {
                     <Tbody>
                       {selected.subscriptions.map((sub) => (
                         <tr key={sub.id}>
-                          <Td>{sub.price?.product?.name || '-'}</Td>
+                          <Td>{(sub as any).productName || (sub as any).productCode || '-'}</Td>
                           <Td><Badge>{sub.status}</Badge></Td>
                           <Td>{new Date(sub.currentPeriodEnd).toLocaleDateString()}</Td>
                         </tr>

@@ -74,12 +74,20 @@ export interface Subscription {
   cancelAtPeriodEnd: boolean
   createdAt: string
   updatedAt: string
-  price?: Price & {
-    product?: Product & {
-      metadata?: Record<string, unknown>
-      service?: { id: string; code: string; name: string }
-    }
-  }
+  // Flat product/service info
+  productName: string | null
+  productCode: string | null
+  productType: string | null
+  productDescription: string | null
+  productFeatures: string[]
+  creditsPerPeriod: number | null
+  serviceName: string | null
+  serviceCode: string | null
+  // Pricing
+  amount: string | null
+  currency: string | null
+  interval: string | null
+  trialDays: number | null
 }
 
 export interface Entitlement {

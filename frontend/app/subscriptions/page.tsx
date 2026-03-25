@@ -137,10 +137,6 @@ export default function SubscriptionsPage() {
             const days = daysUntil(sub.currentPeriodEnd)
             const progress = periodProgress(sub.currentPeriodStart, sub.currentPeriodEnd)
             const isExpiringSoon = days <= 3 && (sub.status === 'active' || sub.status === 'trialing')
-            const metadata = (sub.price?.product?.metadata || {}) as Record<string, any>
-            const features = (metadata.features || []) as string[]
-            const creditsPerPeriod = metadata.creditsPerPeriod || metadata.credits
-            const description = metadata.description as string | undefined
 
             return (
               <motion.div
@@ -155,54 +151,52 @@ export default function SubscriptionsPage() {
                       <div className="flex items-center gap-2">
                         <Package className="w-5 h-5 text-violet-500 shrink-0" />
                         <h3 className="font-semibold text-slate-900 dark:text-white truncate">
-                          {sub.price?.product?.name || sub.price?.code || 'Subscription'}
+                          {sub.productName || sub.productCode || 'Subscription'}
                         </h3>
                       </div>
                       <div className="flex items-center gap-2 mt-1 ml-7">
-                        {sub.price?.product?.service && (
+                        {sub.serviceName && (
                           <span className="text-xs px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 font-medium">
-                            {sub.price.product.service.name}
+                            {sub.serviceName}
                           </span>
                         )}
-                        {sub.price?.product?.type && (
-                          <span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
-                            {sub.price.product.type === 'subscription' ? 'Subscription' : sub.price.product.type}
-                          </span>
+                        {sub.productCode && (
+                          <span className="text-xs font-mono text-slate-400">{sub.productCode}</span>
                         )}
                       </div>
                     </div>
                     <Badge>{sub.status}</Badge>
                   </div>
 
-                  {description && (
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 line-clamp-2">{description}</p>
+                  {sub.productDescription && (
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 line-clamp-2">{sub.productDescription}</p>
                   )}
 
                   <div className="space-y-2.5 text-sm">
-                    {sub.price && (
+                    {sub.amount && (
                       <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
                         <DollarSign className="w-4 h-4 text-emerald-500 shrink-0" />
-                        <span className="font-semibold">{sub.price.amount} {sub.price.currency}</span>
-                        <span className="text-slate-400">/ {sub.price.interval || 'month'}</span>
+                        <span className="font-semibold">{sub.amount} {sub.currency}</span>
+                        <span className="text-slate-400">/ {sub.interval || 'month'}</span>
                       </div>
                     )}
 
-                    {creditsPerPeriod && (
+                    {sub.creditsPerPeriod && (
                       <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
                         <Zap className="w-4 h-4 text-amber-500 shrink-0" />
-                        <span>{creditsPerPeriod} {t('creditsPerPeriod') || 'credits / period'}</span>
+                        <span>{sub.creditsPerPeriod} {t('creditsPerPeriod') || 'credits / period'}</span>
                       </div>
                     )}
 
-                    {features.length > 0 && (
+                    {sub.productFeatures.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 pt-1">
-                        {features.slice(0, 3).map((f, fi) => (
+                        {sub.productFeatures.slice(0, 3).map((f: string, fi: number) => (
                           <span key={fi} className="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
                             <Check className="w-3 h-3 text-emerald-500" />{f}
                           </span>
                         ))}
-                        {features.length > 3 && (
-                          <span className="text-xs text-slate-400">+{features.length - 3}</span>
+                        {sub.productFeatures.length > 3 && (
+                          <span className="text-xs text-slate-400">+{sub.productFeatures.length - 3}</span>
                         )}
                       </div>
                     )}
@@ -220,7 +214,6 @@ export default function SubscriptionsPage() {
                       </span>
                     </div>
 
-                    {/* Period Progress Bar */}
                     {(sub.status === 'active' || sub.status === 'trialing') && (
                       <div className="pt-1">
                         <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
@@ -232,10 +225,10 @@ export default function SubscriptionsPage() {
                       </div>
                     )}
 
-                    {sub.price?.trialDays && sub.status === 'trialing' && (
+                    {sub.trialDays && sub.status === 'trialing' && (
                       <div className="flex items-center gap-2 text-blue-500">
                         <AlertTriangle className="w-4 h-4 shrink-0" />
-                        <span>{t('trialPeriod', { days: sub.price.trialDays })}</span>
+                        <span>{t('trialPeriod', { days: sub.trialDays })}</span>
                       </div>
                     )}
                   </div>
@@ -260,50 +253,44 @@ export default function SubscriptionsPage() {
         onClose={() => setSelectedSub(null)}
         title={t('detailTitle')}
       >
-        {selectedSub && (() => {
-          const meta = (selectedSub.price?.product?.metadata || {}) as Record<string, any>
-          const detailFeatures = (meta.features || []) as string[]
-          const detailCredits = meta.creditsPerPeriod || meta.credits
-          const detailDesc = meta.description as string | undefined
-
-          return (
+        {selectedSub && (
           <div className="space-y-4">
             <div className="flex items-start justify-between">
               <div>
                 <h4 className="text-lg font-semibold text-slate-900 dark:text-white">
-                  {selectedSub.price?.product?.name || selectedSub.price?.code || 'Subscription'}
+                  {selectedSub.productName || selectedSub.productCode || 'Subscription'}
                 </h4>
                 <div className="flex items-center gap-2 mt-1">
-                  {selectedSub.price?.product?.service && (
+                  {selectedSub.serviceName && (
                     <span className="text-xs px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 font-medium">
-                      {selectedSub.price.product.service.name}
+                      {selectedSub.serviceName}
                     </span>
                   )}
-                  {selectedSub.price?.product?.code && (
-                    <span className="text-xs font-mono text-slate-400">{selectedSub.price.product.code}</span>
+                  {selectedSub.productCode && (
+                    <span className="text-xs font-mono text-slate-400">{selectedSub.productCode}</span>
                   )}
                 </div>
-                {detailDesc && (
-                  <p className="text-sm text-slate-500 mt-2">{detailDesc}</p>
+                {selectedSub.productDescription && (
+                  <p className="text-sm text-slate-500 mt-2">{selectedSub.productDescription}</p>
                 )}
               </div>
               <Badge>{selectedSub.status}</Badge>
             </div>
 
             {/* What's included */}
-            {(detailFeatures.length > 0 || detailCredits) && (
+            {(selectedSub.productFeatures.length > 0 || selectedSub.creditsPerPeriod) && (
               <div className="bg-violet-50 dark:bg-violet-900/10 border border-violet-200 dark:border-violet-800/30 rounded-xl p-4">
                 <h5 className="text-xs font-semibold text-violet-600 dark:text-violet-400 uppercase tracking-wide mb-2">
                   {t('detailIncludes') || "What's included"}
                 </h5>
                 <div className="space-y-1.5">
-                  {detailCredits && (
+                  {selectedSub.creditsPerPeriod && (
                     <div className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
                       <Zap className="w-4 h-4 text-amber-500 shrink-0" />
-                      <span className="font-medium">{detailCredits} {t('creditsPerPeriod') || 'credits / period'}</span>
+                      <span className="font-medium">{selectedSub.creditsPerPeriod} {t('creditsPerPeriod') || 'credits / period'}</span>
                     </div>
                   )}
-                  {detailFeatures.map((f, fi) => (
+                  {selectedSub.productFeatures.map((f: string, fi: number) => (
                     <div key={fi} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
                       <Check className="w-4 h-4 text-emerald-500 shrink-0" />
                       <span>{f}</span>
@@ -314,16 +301,22 @@ export default function SubscriptionsPage() {
             )}
 
             <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 space-y-3 text-sm">
-              {selectedSub.price?.product?.service && (
+              {selectedSub.serviceName && (
                 <div className="flex justify-between">
                   <span className="text-slate-500">{t('detailService') || 'Service'}</span>
-                  <span className="font-semibold text-slate-900 dark:text-white">{selectedSub.price.product.service.name}</span>
+                  <span className="font-semibold text-slate-900 dark:text-white">{selectedSub.serviceName}</span>
                 </div>
               )}
-              {selectedSub.price && (
+              {selectedSub.productName && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500">{t('detailProduct') || 'Product'}</span>
+                  <span className="font-semibold text-slate-900 dark:text-white">{selectedSub.productName}</span>
+                </div>
+              )}
+              {selectedSub.amount && (
                 <div className="flex justify-between">
                   <span className="text-slate-500">{t('detailPrice')}</span>
-                  <span className="font-semibold text-slate-900 dark:text-white">{selectedSub.price.amount} {selectedSub.price.currency}/{selectedSub.price.interval || 'month'}</span>
+                  <span className="font-semibold text-slate-900 dark:text-white">{selectedSub.amount} {selectedSub.currency}/{selectedSub.interval || 'month'}</span>
                 </div>
               )}
               <div className="flex justify-between">
@@ -354,8 +347,7 @@ export default function SubscriptionsPage() {
               </Button>
             )}
           </div>
-          )
-        })()}
+        )}
       </Modal>
 
       {confirmState && (

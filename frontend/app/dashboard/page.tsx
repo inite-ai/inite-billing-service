@@ -107,18 +107,23 @@ export default function DashboardPage() {
                       <div key={sub.id} className="border border-slate-100 dark:border-slate-800 rounded-xl p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                         <div className="flex items-center justify-between mb-2">
                           <h4 className="font-medium text-slate-900 dark:text-white text-sm">
-                            {sub.price?.product?.name || 'Subscription'}
+                            {sub.productName || sub.productCode || 'Subscription'}
                           </h4>
                           <Badge>{sub.status}</Badge>
                         </div>
+                        {sub.serviceName && (
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 font-medium mb-2 inline-block">
+                            {sub.serviceName}
+                          </span>
+                        )}
                         <div className="flex items-center justify-between text-xs">
                           <div className="flex items-center gap-1.5 text-slate-500">
                             <Calendar className="w-3.5 h-3.5" />
                             <span>{t('renews', { date: new Date(sub.currentPeriodEnd).toLocaleDateString() })}</span>
                           </div>
-                          {sub.price && (
+                          {sub.amount && (
                             <span className="font-semibold text-slate-700 dark:text-slate-200">
-                              {sub.price.amount} {sub.price.currency}/{sub.price.interval || 'month'}
+                              {sub.amount} {sub.currency}/{sub.interval || 'month'}
                             </span>
                           )}
                         </div>

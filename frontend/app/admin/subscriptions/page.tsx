@@ -118,8 +118,8 @@ export default function AdminSubscriptionsPage() {
                 {data.items.map((sub) => (
                   <tr key={sub.id} className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50" onClick={() => setSelected(sub)}>
                     <Td className="font-mono text-xs">{sub.userId.slice(0, 8)}...</Td>
-                    <Td>{sub.price?.product?.name || '-'}</Td>
-                    <Td>{sub.price ? `${sub.price.amount} ${sub.price.currency}/${sub.price.interval || 'mo'}` : '-'}</Td>
+                    <Td>{sub.productName || sub.productCode || '-'}</Td>
+                    <Td>{sub.amount ? `${sub.amount} ${sub.currency}/${sub.interval || 'mo'}` : '-'}</Td>
                     <Td><Badge>{sub.status}</Badge></Td>
                     <Td>{new Date(sub.currentPeriodEnd).toLocaleDateString()}</Td>
                     <Td>{daysUntil(sub.currentPeriodEnd)}d</Td>
@@ -150,11 +150,12 @@ export default function AdminSubscriptionsPage() {
             <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4 space-y-2 text-sm">
               <div className="flex justify-between"><span className="text-gray-500">{t('subscriptions.detailSubscriptionId')}</span><span className="font-mono text-xs">{selected.id}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">{t('subscriptions.detailUserId')}</span><span className="font-mono text-xs">{selected.userId}</span></div>
-              {selected.price?.product?.name && <div className="flex justify-between"><span className="text-gray-500">{t('subscriptions.detailProduct')}</span><span className="font-semibold">{selected.price.product.name}</span></div>}
-              {selected.price && (
+              {selected.serviceName && <div className="flex justify-between"><span className="text-gray-500">{t('subscriptions.detailService') || 'Service'}</span><span className="font-semibold">{selected.serviceName}</span></div>}
+              {selected.productName && <div className="flex justify-between"><span className="text-gray-500">{t('subscriptions.detailProduct')}</span><span className="font-semibold">{selected.productName}</span></div>}
+              {selected.amount && (
                 <div className="flex justify-between">
                   <span className="text-gray-500">{t('subscriptions.detailPrice')}</span>
-                  <span className="font-semibold">{selected.price.amount} {selected.price.currency}/{selected.price.interval || 'month'}</span>
+                  <span className="font-semibold">{selected.amount} {selected.currency}/{selected.interval || 'month'}</span>
                 </div>
               )}
               <div className="flex justify-between"><span className="text-gray-500">{t('subscriptions.detailPeriodStart')}</span><span>{new Date(selected.currentPeriodStart).toLocaleDateString()}</span></div>
