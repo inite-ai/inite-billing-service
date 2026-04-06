@@ -5,6 +5,8 @@ export interface RequestUser {
   roles: string[];
   email?: string;
   isService?: boolean;
+  serviceId?: string;
+  serviceCode?: string;
 }
 
 export const User = createParamDecorator(

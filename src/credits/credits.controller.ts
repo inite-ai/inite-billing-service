@@ -68,7 +68,30 @@ export class CreditsController {
   ) {
     // C3 fix: Force userId for non-service callers to prevent IDOR
     const userId = user.isService ? body.userId : user.userId;
-    return this.creditsService.consume({ ...body, userId });
+    // Auto-inject serviceId from API key when not explicitly provided
+    const serviceId = body.serviceId ?? (user.isService ? user.serviceId : undefined);
+    return this.creditsService.consume({ ...body, userId, serviceId });
+  }
+
+  @Post('adjust')
+  @UseGuards(JwtOrServiceGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Adjust credits for a user (service-to-service)' })
+  async adjustCredits(
+    @User() user: RequestUser,
+    @Body()
+    body: {
+      userId: string;
+      serviceId?: string;
+      amount: number;
+      description?: string;
+    },
+  ) {
+    if (!user.isService) {
+      throw new ForbiddenException('Only service accounts can adjust credits');
+    }
+    const serviceId = body.serviceId ?? user.serviceId;
+    return this.creditsService.adminAdjust({ ...body, serviceId, description: body.description || 'service-adjust' });
   }
 
   @Get(':userId')
