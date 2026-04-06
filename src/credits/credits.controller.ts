@@ -105,6 +105,10 @@ export class CreditsController {
     if (!user.isService && userId !== user.userId) {
       throw new ForbiddenException('You can only access your own credit balances');
     }
+    // Service callers get only their service-specific balance
+    if (user.isService && user.serviceId) {
+      return this.creditsService.getBalance(userId, user.serviceId);
+    }
     return this.creditsService.getUserBalances(userId);
   }
 }
