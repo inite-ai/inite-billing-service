@@ -74,6 +74,33 @@ export class WebhookProcessor extends WorkerHost {
       // Get adapter
       const adapter = this.paymentOrchestrator.getAdapter(rail);
 
+      // Subscription lifecycle events — renewal / renewal_failed / cancelled —
+      // are anchored to the provider's *subscription* ID, not a PaymentIntent.
+      // Route them through the orchestrator's subscription handler instead of
+      // trying to look up an existing PaymentIntent (which won't match: each
+      // renewal carries a new charge/contract ID).
+      const subLifecycleEvents = new Set([
+        'subscription.renewed',
+        'subscription.renewal_failed',
+        'subscription.cancelled',
+      ]);
+      if (subLifecycleEvents.has(webhookEvent.eventType)) {
+        await this.paymentOrchestrator.handleSubscriptionEvent(
+          rail,
+          webhookEvent.eventType as any,
+          webhookEvent.entityId,
+          (webhookEvent.payload as Record<string, any>) || {},
+        );
+        await this.prisma.webhookEvent.update({
+          where: { id: webhookEvent.id },
+          data: { status: 'processed', processedAt: new Date() },
+        });
+        this.logger.log(
+          `Subscription event processed: ${rail}/${webhookId} (${webhookEvent.eventType})`,
+        );
+        return;
+      }
+
       // For ONE: Always fetch latest status from API
       let statusResult;
       if (rail === 'ONE') {

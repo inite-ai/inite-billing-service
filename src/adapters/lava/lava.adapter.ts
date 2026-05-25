@@ -233,10 +233,23 @@ export class LavaAdapter implements PaymentRailAdapter {
       'subscription.cancelled': 'subscription.cancelled',
     };
 
+    // For recurring events Lava issues a NEW contractId per renewal and
+    // references the original contract via parentContractId. Our
+    // Subscription.providerSubscriptionId stores the original contract ID,
+    // so route the lookup to parentContractId for renewals/cancellations.
+    const subEventTypes = new Set([
+      'subscription.recurring.payment.success',
+      'subscription.recurring.payment.failed',
+      'subscription.cancelled',
+    ]);
+    const entityId = subEventTypes.has(eventType)
+      ? rawPayload.parentContractId || contractId
+      : contractId;
+
     return {
       webhookId: `lava_${contractId}_${eventMap[eventType] || eventType}`,
       eventType: eventMap[eventType] || eventType,
-      entityId: contractId,
+      entityId,
       rail: 'LAVA',
       payload: rawPayload,
     };

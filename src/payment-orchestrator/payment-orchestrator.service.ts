@@ -307,6 +307,15 @@ export class PaymentOrchestratorService {
       ? new Date(periodEnd.getTime() + price.graceDays * 24 * 60 * 60 * 1000)
       : periodEnd;
 
+    // Resolve provider linkage from the latest PaymentIntent on this order.
+    // We need this so renewal webhooks can look up the Subscription later by
+    // (rail, providerSubscriptionId).
+    const latestIntent = await tx.paymentIntent.findFirst({
+      where: { orderId: order.id },
+      orderBy: { updatedAt: 'desc' },
+    });
+    const providerLinkage = this.extractProviderSubscriptionLinkage(latestIntent);
+
     // Find or create subscription
     let subscription = await tx.subscription.findFirst({
       where: {
@@ -319,7 +328,8 @@ export class PaymentOrchestratorService {
     const isRenewal = !!subscription;
 
     if (subscription) {
-      // Update existing subscription
+      // Update existing subscription. Only overwrite provider linkage if it
+      // was missing (e.g. older record predating this fix).
       await tx.subscription.update({
         where: { id: subscription.id },
         data: {
@@ -328,6 +338,10 @@ export class PaymentOrchestratorService {
           currentPeriodEnd: periodEnd,
           cancelAtPeriodEnd: false,
           updatedAt: now,
+          ...(subscription.providerSubscriptionId
+            ? {}
+            : { providerSubscriptionId: providerLinkage.providerSubscriptionId }),
+          ...(subscription.rail ? {} : { rail: providerLinkage.rail }),
         },
       });
       subscription = await tx.subscription.findUnique({
@@ -343,6 +357,8 @@ export class PaymentOrchestratorService {
           currentPeriodStart: now,
           currentPeriodEnd: periodEnd,
           cancelAtPeriodEnd: false,
+          providerSubscriptionId: providerLinkage.providerSubscriptionId,
+          rail: providerLinkage.rail,
         },
       });
     }
@@ -412,6 +428,196 @@ export class PaymentOrchestratorService {
     }, undefined, tx);
   }
 
+  /**
+   * Handle a subscription lifecycle event delivered via provider webhook —
+   * renewal, renewal failure, or cancellation.
+   *
+   * Identifies the Subscription by (rail, providerSubscriptionId). For
+   * renewals, synthesises an Order + PaymentIntent + Invoice so the existing
+   * fulfilment path (handleSubscriptionPayment) advances the period and
+   * regrants entitlements/credits — no parallel codepath to keep in sync.
+   */
+  async handleSubscriptionEvent(
+    rail: string,
+    eventType: 'subscription.renewed' | 'subscription.renewal_failed' | 'subscription.cancelled',
+    providerSubscriptionId: string,
+    providerData: Record<string, any>,
+  ): Promise<void> {
+    return this.prisma.$transaction(async (tx) => {
+      const subscription = await tx.subscription.findFirst({
+        where: { rail, providerSubscriptionId },
+        include: { price: { include: { product: true } } },
+      });
+
+      if (!subscription) {
+        this.logger.warn(
+          `Subscription event ${eventType} for unknown sub: rail=${rail} id=${providerSubscriptionId}`,
+        );
+        return;
+      }
+
+      if (eventType === 'subscription.renewed') {
+        await this.advanceSubscriptionPeriodFromWebhook(subscription, providerData, tx);
+      } else if (eventType === 'subscription.renewal_failed') {
+        await this.markSubscriptionPastDue(subscription, providerData, tx);
+      } else if (eventType === 'subscription.cancelled') {
+        await this.handleProviderCancellation(subscription, tx);
+      }
+    });
+  }
+
+  /**
+   * Renewal — synthesise paid Order + PaymentIntent and run handleOrderPaid
+   * so the existing period-advance / entitlement-regrant / credits / outbox
+   * logic fires unchanged.
+   */
+  private async advanceSubscriptionPeriodFromWebhook(
+    subscription: any,
+    providerData: Record<string, any>,
+    tx: any,
+  ): Promise<void> {
+    const price = subscription.price;
+    const renewalChargeId =
+      providerData?.id ||
+      providerData?.charge ||
+      providerData?.payment_intent ||
+      `renewal_${subscription.id}_${Date.now()}`;
+
+    const order = await tx.order.create({
+      data: {
+        userId: subscription.userId,
+        priceId: price.id,
+        externalId: `renewal_${subscription.id}_${Date.now()}`,
+        status: 'paid',
+        mode: 'SUBSCRIPTION',
+        amount: price.amount,
+        currency: price.currency,
+        metadata: {
+          renewal: true,
+          subscription_id: subscription.id,
+          provider_charge_id: renewalChargeId,
+        },
+      },
+    });
+
+    await tx.paymentIntent.create({
+      data: {
+        orderId: order.id,
+        rail: subscription.rail,
+        status: 'paid',
+        providerIntentId: String(renewalChargeId),
+        amount: price.amount,
+        currency: price.currency,
+        snapshot: providerData,
+      },
+    });
+
+    // Reuse existing fulfilment — creates invoice, advances period, grants
+    // entitlements, resets credits, emits outbox events.
+    await this.handleOrderPaid(order.id, tx);
+  }
+
+  private async markSubscriptionPastDue(
+    subscription: any,
+    providerData: Record<string, any>,
+    tx: any,
+  ): Promise<void> {
+    if (subscription.status === 'past_due') return;
+    await tx.subscription.update({
+      where: { id: subscription.id },
+      data: { status: 'past_due', updatedAt: new Date() },
+    });
+    await this.outboxService.emit('billing.subscription.payment_failed', {
+      subscription_id: subscription.id,
+      user_id: subscription.userId,
+      current_period_end: subscription.currentPeriodEnd.toISOString(),
+      provider_error: providerData?.errorMessage || providerData?.failure_message || null,
+    }, undefined, tx);
+  }
+
+  private async handleProviderCancellation(subscription: any, tx: any): Promise<void> {
+    if (subscription.status === 'canceled' || subscription.status === 'ended') return;
+    // Honor cancelAtPeriodEnd UX: keep access until currentPeriodEnd, then
+    // the expirer cron flips it to 'canceled' + revokes. If period already
+    // passed we cancel immediately.
+    const periodPassed = subscription.currentPeriodEnd <= new Date();
+    if (periodPassed) {
+      await tx.subscription.update({
+        where: { id: subscription.id },
+        data: { status: 'canceled', cancelAtPeriodEnd: true, updatedAt: new Date() },
+      });
+      await this.revokeSubscriptionEntitlements(subscription.id, tx);
+    } else {
+      await tx.subscription.update({
+        where: { id: subscription.id },
+        data: { cancelAtPeriodEnd: true, updatedAt: new Date() },
+      });
+    }
+    await this.outboxService.emit('billing.subscription.cancelled', {
+      subscription_id: subscription.id,
+      user_id: subscription.userId,
+      cancel_at_period_end: !periodPassed,
+    }, undefined, tx);
+  }
+
+  /**
+   * Revoke all active entitlements that were granted by a specific subscription.
+   * Used by the expirer cron and provider-cancellation handler.
+   */
+  async revokeSubscriptionEntitlements(subscriptionId: string, tx: any): Promise<void> {
+    const entitlements = await tx.entitlement.findMany({
+      where: {
+        source: 'subscription',
+        status: 'active',
+      },
+    });
+    const matching = entitlements.filter((e: any) => {
+      const v = e.value as any;
+      return v && v.subscription_id === subscriptionId;
+    });
+    if (matching.length === 0) return;
+    await tx.entitlement.updateMany({
+      where: { id: { in: matching.map((e: any) => e.id) } },
+      data: { status: 'revoked', updatedAt: new Date() },
+    });
+    for (const e of matching) {
+      await this.outboxService.emit('billing.entitlement.revoked', {
+        user_id: e.userId,
+        key: e.key,
+        source: 'subscription',
+        subscription_id: subscriptionId,
+      }, undefined, tx);
+    }
+  }
+
+  /**
+   * Mark a subscription as ended (period over, no more renewals coming) and
+   * revoke its entitlements. Called by the expirer cron.
+   */
+  async endSubscription(
+    subscriptionId: string,
+    reason: 'promo_expired' | 'cancelled_at_period_end' | 'grace_period_exhausted',
+    tx?: any,
+  ): Promise<void> {
+    const run = async (txInner: any) => {
+      const sub = await txInner.subscription.findUnique({ where: { id: subscriptionId } });
+      if (!sub || sub.status === 'ended') return;
+      const newStatus = reason === 'cancelled_at_period_end' ? 'canceled' : 'ended';
+      await txInner.subscription.update({
+        where: { id: subscriptionId },
+        data: { status: newStatus, updatedAt: new Date() },
+      });
+      await this.revokeSubscriptionEntitlements(subscriptionId, txInner);
+      await this.outboxService.emit('billing.subscription.ended', {
+        subscription_id: subscriptionId,
+        user_id: sub.userId,
+        status: newStatus,
+        reason,
+      }, undefined, txInner);
+    };
+    return tx ? run(tx) : this.prisma.$transaction(run);
+  }
+
   private extractEntitlementKeys(product: any): string[] {
     // Extract entitlement keys from product metadata
     // Format: metadata.entitlements = ["key1", "key2"] or metadata.entitlementKey = "key1"
@@ -424,6 +630,53 @@ export class PaymentOrchestratorService {
     }
     // Default: use product code as entitlement key
     return [product.code];
+  }
+
+  /**
+   * Extract provider subscription ID + rail from a PaymentIntent.
+   *
+   * Each rail records the provider's subscription identifier in a slightly
+   * different place — Stripe puts it in the snapshot from the API, Lava
+   * reuses the contract ID, Apple uses originalTransactionId, etc. PROMO
+   * has no provider, so the linkage is null.
+   */
+  private extractProviderSubscriptionLinkage(intent: any): {
+    providerSubscriptionId: string | null;
+    rail: string | null;
+  } {
+    if (!intent) return { providerSubscriptionId: null, rail: null };
+    const snapshot = (intent.snapshot as Record<string, any>) || {};
+    const rail = intent.rail || null;
+
+    let providerSubscriptionId: string | null = null;
+    switch (rail) {
+      case 'STRIPE':
+        providerSubscriptionId =
+          snapshot.subscription ||
+          (typeof snapshot.id === 'string' && snapshot.id.startsWith('sub_')
+            ? snapshot.id
+            : null);
+        break;
+      case 'LAVA':
+        // Lava reuses the contract ID as the subscription anchor; later
+        // recurring contracts reference this one via parentContractId.
+        providerSubscriptionId = intent.providerIntentId || null;
+        break;
+      case 'APPLE':
+        providerSubscriptionId =
+          snapshot.originalTransactionId || snapshot.transactionId || null;
+        break;
+      case 'GOOGLE':
+        providerSubscriptionId = snapshot.purchaseToken || null;
+        break;
+      case 'PROMO':
+      case 'CRYPTO':
+      case 'ONE':
+      default:
+        providerSubscriptionId = null;
+    }
+
+    return { providerSubscriptionId, rail };
   }
 
   private calculatePeriodEnd(start: Date, interval: string): Date {

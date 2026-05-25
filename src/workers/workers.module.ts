@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { WebhookProcessor } from './webhook.processor';
 import { OutboxProcessor } from './outbox.processor';
+import { SubscriptionExpirerScheduler } from './subscription-expirer.scheduler';
 import { AffiliatePayoutProcessor } from '../affiliates/affiliate-payout.processor';
 import { PaymentOrchestratorModule } from '../payment-orchestrator/payment-orchestrator.module';
 import { OutboxModule } from '../outbox/outbox.module';
@@ -42,7 +43,12 @@ import { PrismaService } from '../common/services/prisma.service';
       },
     }),
   ],
-  providers: [WebhookProcessor, OutboxProcessor, PrismaService],
+  providers: [
+    WebhookProcessor,
+    OutboxProcessor,
+    SubscriptionExpirerScheduler,
+    PrismaService,
+  ],
 })
 export class WorkersModule {}
 

@@ -349,13 +349,6 @@ export class StripeAdapter implements PaymentRailAdapter {
       throw new Error('Invalid Stripe webhook: missing type or data.object');
     }
 
-    // Extract entity ID based on event type
-    const entityId =
-      obj.payment_intent ||
-      obj.id ||
-      obj.subscription ||
-      '';
-
     // Map Stripe event types to billing events
     const eventMap: Record<string, string> = {
       'checkout.session.completed': 'payment.paid',
@@ -368,6 +361,28 @@ export class StripeAdapter implements PaymentRailAdapter {
       'invoice.payment_succeeded': 'subscription.renewed',
       'invoice.payment_failed': 'subscription.renewal_failed',
     };
+
+    // Extract entity ID per event type. For payment events the entity is the
+    // PaymentIntent (looked up in our PaymentIntent table). For subscription
+    // lifecycle events the entity is the Stripe subscription (sub_xxx), which
+    // we anchor to via Subscription.providerSubscriptionId — Stripe creates a
+    // new payment_intent per renewal invoice, so picking obj.payment_intent
+    // here would always fail the lookup.
+    const subEventTypes = new Set([
+      'customer.subscription.created',
+      'customer.subscription.updated',
+      'customer.subscription.deleted',
+      'invoice.payment_succeeded',
+      'invoice.payment_failed',
+    ]);
+    let entityId = '';
+    if (subEventTypes.has(eventType)) {
+      // For invoice.* obj is the invoice with obj.subscription = sub_xxx.
+      // For customer.subscription.* obj IS the subscription itself.
+      entityId = obj.subscription || (typeof obj.id === 'string' && obj.id.startsWith('sub_') ? obj.id : '') || '';
+    } else {
+      entityId = obj.payment_intent || obj.id || '';
+    }
 
     return {
       webhookId: event.id,

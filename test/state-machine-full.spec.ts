@@ -66,7 +66,7 @@ describe('State Machine — orchestrator side effects', () => {
   beforeEach(async () => {
     mockPrisma = {
       $transaction: jest.fn((cb: any) => cb(mockPrisma)),
-      paymentIntent: { findUnique: jest.fn(), update: jest.fn() },
+      paymentIntent: { findUnique: jest.fn(), update: jest.fn(), findFirst: jest.fn().mockResolvedValue(null) },
       order: { findUnique: jest.fn(), update: jest.fn() },
       invoice: { create: jest.fn(), updateMany: jest.fn() },
       entitlement: { create: jest.fn(), updateMany: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
