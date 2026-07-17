@@ -109,4 +109,36 @@ export class ConversationsController {
   ) {
     return this.conversationsService.resolveConversation(conversationId, user.userId);
   }
+
+  @Post(':id/messages/:messageId/feedback')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Leave feedback on an assistant message' })
+  async setFeedback(
+    @User() user: RequestUser,
+    @Param('id') conversationId: string,
+    @Param('messageId') messageId: string,
+    @Body() body: { rating: 'up' | 'down' | null; comment?: string },
+  ) {
+    // H1 fix: Verify conversation ownership
+    if (!user.isService) {
+      const conversation = await this.conversationsService.getConversationById(conversationId);
+      if (!conversation) {
+        throw new ForbiddenException('Conversation not found');
+      }
+      if (conversation.userId !== user.userId) {
+        throw new ForbiddenException('You do not have access to this conversation');
+      }
+    }
+
+    if (body.rating !== 'up' && body.rating !== 'down' && body.rating !== null) {
+      throw new ForbiddenException('rating must be "up", "down" or null');
+    }
+
+    return this.conversationsService.setFeedback(
+      conversationId,
+      messageId,
+      body.rating,
+      typeof body.comment === 'string' ? body.comment.slice(0, 1000) : undefined,
+    );
+  }
 }

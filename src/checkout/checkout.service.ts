@@ -4,8 +4,10 @@ import {
   BadRequestException,
   ForbiddenException,
   Logger,
+  Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { RiskService } from '../risk/risk.service';
 import { PrismaService } from '../common/services/prisma.service';
 import { CatalogService } from '../catalog/catalog.service';
 import { PaymentOrchestratorService } from '../payment-orchestrator/payment-orchestrator.service';
@@ -33,6 +35,7 @@ export class CheckoutService {
     private readonly promoCodesService: PromoCodesService,
     private readonly funnelService: FunnelService,
     private readonly configService: ConfigService,
+    @Optional() private readonly riskService?: RiskService,
   ) {}
 
   /**
@@ -54,6 +57,7 @@ export class CheckoutService {
     userId: string,
     dto: CreateCheckoutSessionDto,
     idempotencyKey?: string,
+    clientIp?: string,
   ): Promise<CheckoutSessionResponseDto> {
     // Idempotency check
     if (idempotencyKey) {
@@ -136,6 +140,31 @@ export class CheckoutService {
         },
       },
     });
+
+    // Risk assessment (monitor-only unless RISK_BLOCKING_ENABLED)
+    if (this.riskService) {
+      try {
+        const risk = await this.riskService.assessCheckout(order, {
+          ip: clientIp,
+        });
+        if (risk.status === 'blocked') {
+          await this.prisma.order.update({
+            where: { id: order.id },
+            data: {
+              status: 'failed',
+              metadata: { ...(order.metadata as any), riskBlocked: true },
+            },
+          });
+          throw new BadRequestException(
+            'This order cannot be processed. Please contact support.',
+          );
+        }
+      } catch (error: any) {
+        if (error instanceof BadRequestException) throw error;
+        // Risk scoring must never break checkout
+        this.logger.warn(`Risk assessment failed: ${error.message}`);
+      }
+    }
 
     // Track funnel event: checkout_started
     this.funnelService.track({

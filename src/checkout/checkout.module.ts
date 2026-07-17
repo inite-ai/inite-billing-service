@@ -6,9 +6,10 @@ import { PaymentOrchestratorModule } from '../payment-orchestrator/payment-orche
 import { AffiliatesModule } from '../affiliates/affiliates.module';
 import { PromoCodesModule } from '../promo-codes/promo-codes.module';
 import { FunnelModule } from '../funnel/funnel.module';
+import { RiskModule } from '../risk/risk.module';
 
 @Module({
-  imports: [CatalogModule, PaymentOrchestratorModule, AffiliatesModule, PromoCodesModule, FunnelModule],
+  imports: [CatalogModule, PaymentOrchestratorModule, AffiliatesModule, PromoCodesModule, FunnelModule, RiskModule],
   controllers: [CheckoutController],
   providers: [CheckoutService],
   exports: [CheckoutService],

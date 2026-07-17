@@ -2,6 +2,7 @@ import { Module, OnModuleInit } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
 import { ScheduleModule } from '@nestjs/schedule';
+import { AnthropicModule } from '../src/common/anthropic/anthropic.module';
 import { AuthModule } from '../src/auth/auth.module';
 import { PaymentOrchestratorModule } from '../src/payment-orchestrator/payment-orchestrator.module';
 import { AdaptersModule } from '../src/adapters/adapters.module';
@@ -40,6 +41,7 @@ import { OneAdapter } from '../src/adapters/one/one.adapter';
         };
       },
     }),
+    AnthropicModule,
     AuthModule,
     PaymentOrchestratorModule,
     AdaptersModule,

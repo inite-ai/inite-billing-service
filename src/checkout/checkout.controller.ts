@@ -69,6 +69,7 @@ export class CheckoutController {
       userId,
       dto,
       idempotencyKey,
+      req.ip,
     );
   }
 

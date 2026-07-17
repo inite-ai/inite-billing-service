@@ -18,6 +18,8 @@ async function bootstrap() {
   // Security headers & cookie parsing
   app.use(helmet());
   app.use(cookieParser());
+  // Real client IPs behind a reverse proxy (risk velocity checks rely on req.ip)
+  app.getHttpAdapter().getInstance().set('trust proxy', 1);
 
   // Global validation pipe
   app.useGlobalPipes(

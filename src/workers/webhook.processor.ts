@@ -1,8 +1,9 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
-import { Logger } from '@nestjs/common';
+import { Logger, Optional } from '@nestjs/common';
 import { PrismaService } from '../common/services/prisma.service';
 import { PaymentOrchestratorService } from '../payment-orchestrator/payment-orchestrator.service';
+import { RiskService } from '../risk/risk.service';
 
 interface WebhookJobData {
   rail: string;
@@ -18,6 +19,7 @@ export class WebhookProcessor extends WorkerHost {
   constructor(
     private readonly prisma: PrismaService,
     private readonly paymentOrchestrator: PaymentOrchestratorService,
+    @Optional() private readonly riskService?: RiskService,
   ) {
     super();
   }
@@ -171,6 +173,23 @@ export class WebhookProcessor extends WorkerHost {
         finalStatus,
         statusResult.providerData,
       );
+
+      // Risk signals (fire-and-forget — must never fail webhook processing)
+      if (this.riskService && paymentIntent.orderId) {
+        if (finalStatus === 'failed') {
+          void this.riskService
+            .recordPaymentFailure(paymentIntent.orderId)
+            .catch((err: any) =>
+              this.logger.warn(`Risk failure record error: ${err.message}`),
+            );
+        } else if (finalStatus === 'paid') {
+          void this.riskService
+            .recordPaidWhileFlagged(paymentIntent.orderId)
+            .catch((err: any) =>
+              this.logger.warn(`Risk paid-while-flagged error: ${err.message}`),
+            );
+        }
+      }
 
       // Mark as processed
       await this.prisma.webhookEvent.update({

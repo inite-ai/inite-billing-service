@@ -5,6 +5,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard } from '@nestjs/throttler';
+import { AnthropicModule } from './common/anthropic/anthropic.module';
 import { AuthModule } from './auth/auth.module';
 import { PaymentOrchestratorModule } from './payment-orchestrator/payment-orchestrator.module';
 import { AdaptersModule } from './adapters/adapters.module';
@@ -24,6 +25,12 @@ import { FunnelModule } from './funnel/funnel.module';
 import { ConversationsModule } from './conversations/conversations.module';
 import { AssistantModule } from './assistant/assistant.module';
 import { CreditsModule } from './credits/credits.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { OutreachModule } from './outreach/outreach.module';
+import { RagModule } from './rag/rag.module';
+import { RecommendationsModule } from './recommendations/recommendations.module';
+import { RiskModule } from './risk/risk.module';
+import { InsightsModule } from './insights/insights.module';
 
 @Module({
   imports: [
@@ -45,6 +52,7 @@ import { CreditsModule } from './credits/credits.module';
         };
       },
     }),
+    AnthropicModule,
     AuthModule,
     PaymentOrchestratorModule,
     AdaptersModule,
@@ -64,6 +72,12 @@ import { CreditsModule } from './credits/credits.module';
     ConversationsModule,
     AssistantModule,
     CreditsModule,
+    NotificationsModule,
+    OutreachModule,
+    RagModule,
+    RecommendationsModule,
+    RiskModule,
+    InsightsModule,
   ],
   providers: [
     {

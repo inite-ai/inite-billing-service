@@ -3,13 +3,14 @@
 
 generator client {
   provider = "prisma-client-js"
-  previewFeatures = ["multiSchema"]
+  previewFeatures = ["multiSchema", "postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-  schemas  = ["billing", "public"]
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  schemas    = ["billing", "public"]
+  extensions = [vector, pg_trgm]
 }
 
 // Billing schema - payment-rail agnostic billing and subscriptions
@@ -110,17 +111,19 @@ model Service {
   name      String   @db.VarChar(255)
   apiKey    String   @unique @map("api_key") @db.VarChar(64)
   isActive            Boolean  @default(true) @map("is_active")
+  webhookUrl          String?  @map("webhook_url") @db.VarChar(500)
   minWithdrawalAmount Decimal? @map("min_withdrawal_amount") @db.Decimal(19, 4)
   metadata            Json?    @default("{}")
   createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  products       Product[]
-  referralLevels ReferralLevel[]
-  affiliates     Affiliate[]
-  referrals      Referral[]
-  promoCodes     PromoCode[]
-  creditBalances CreditBalance[]
+  products        Product[]
+  referralLevels  ReferralLevel[]
+  affiliates      Affiliate[]
+  referrals       Referral[]
+  promoCodes      PromoCode[]
+  creditBalances  CreditBalance[]
+  meteredFeatures MeteredFeature[]
 
   @@map("services")
   @@schema("billing")
@@ -215,6 +218,7 @@ model Order {
   price         Price            @relation(fields: [priceId], references: [id])
   paymentIntents PaymentIntent[]
   invoices      Invoice[]
+  riskAssessment RiskAssessment?
   affiliateCommissions AffiliateCommission[]
   promoCodeUsages PromoCodeUsage[]
 
@@ -608,6 +612,9 @@ model CreditUsage {
   type            String   @db.VarChar(20)
   description     String?  @db.VarChar(255)
   orderId         String?  @map("order_id") @db.Uuid
+  featureCode     String?  @map("feature_code") @db.VarChar(100)
+  units           Int?
+  modelTier       String?  @map("model_tier") @db.VarChar(50)
   metadata        Json?    @default("{}")
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
@@ -615,7 +622,51 @@ model CreditUsage {
 
   @@index([creditBalanceId, createdAt])
   @@index([userId, createdAt])
+  @@index([userId, featureCode, createdAt])
+  @@index([featureCode, createdAt])
   @@map("credit_usages")
+  @@schema("billing")
+}
+
+model MeteredFeature {
+  id             String   @id @default(uuid()) @db.Uuid
+  code           String   @unique @db.VarChar(100)
+  name           String   @db.VarChar(255)
+  serviceId      String?  @map("service_id") @db.Uuid
+  unit           String   @db.VarChar(30) // tokens | requests | generations | seconds
+  creditsPerUnit Decimal  @default(1) @map("credits_per_unit") @db.Decimal(12, 6)
+  tierRates      Json?    @default("{}") @map("tier_rates") // absolute per-unit overrides by modelTier
+  isActive       Boolean  @default(true) @map("is_active")
+  metadata       Json?    @default("{}")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  service Service?       @relation(fields: [serviceId], references: [id])
+  quotas  FeatureQuota[]
+
+  @@index([serviceId, isActive])
+  @@map("metered_features")
+  @@schema("billing")
+}
+
+model FeatureQuota {
+  id            String   @id @default(uuid()) @db.Uuid
+  featureId     String?  @map("feature_id") @db.Uuid // null = balance-wide quota
+  serviceId     String?  @map("service_id") @db.Uuid
+  userId        String?  @map("user_id") @db.VarChar(255) // null = default for all users; set = per-user override
+  window        String   @db.VarChar(20) // day | week | month | billing_period
+  limitUnits    Int?     @map("limit_units")
+  limitCredits  Int?     @map("limit_credits")
+  softCapPct    Int      @default(80) @map("soft_cap_pct")
+  overagePolicy String   @default("block") @map("overage_policy") @db.VarChar(20) // block | notify_only
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  feature MeteredFeature? @relation(fields: [featureId], references: [id], onDelete: Cascade)
+
+  @@unique([featureId, serviceId, userId, window])
+  @@map("feature_quotas")
   @@schema("billing")
 }
 
@@ -628,6 +679,7 @@ model Conversation {
   updatedAt  DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   messages   ChatMessage[]
+  actions    AssistantAction[]
 
   @@index([userId, updatedAt(sort: Desc)])
   @@map("conversations")
@@ -635,18 +687,233 @@ model Conversation {
 }
 
 model ChatMessage {
-  id              String   @id @default(uuid()) @db.Uuid
-  conversationId  String   @map("conversation_id") @db.Uuid
-  role            String   @db.VarChar(20) // user | assistant | tool
-  content         String   @db.Text
-  toolCalls       Json?    @map("tool_calls")
-  toolResults     Json?    @map("tool_results")
-  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  id              String    @id @default(uuid()) @db.Uuid
+  conversationId  String    @map("conversation_id") @db.Uuid
+  role            String    @db.VarChar(20) // user | assistant | tool
+  content         String    @db.Text
+  toolCalls       Json?     @map("tool_calls")
+  toolResults     Json?     @map("tool_results")
+  feedback        String?   @db.VarChar(10) // up | down
+  feedbackComment String?   @map("feedback_comment") @db.Text
+  feedbackAt      DateTime? @map("feedback_at") @db.Timestamptz(6)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId, createdAt])
   @@map("chat_messages")
+  @@schema("billing")
+}
+
+model AssistantToolCall {
+  id             String   @id @default(uuid()) @db.Uuid
+  conversationId String   @map("conversation_id") @db.Uuid
+  userId         String   @map("user_id") @db.VarChar(255)
+  toolName       String   @map("tool_name") @db.VarChar(64)
+  args           Json?
+  resultPreview  String?  @map("result_preview") @db.Text // truncated to 1000 chars
+  isError        Boolean  @default(false) @map("is_error")
+  durationMs     Int      @map("duration_ms")
+  iteration      Int      @default(0) // tool-use loop step (0-4)
+  model          String?  @db.VarChar(64)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([toolName, createdAt])
+  @@index([conversationId, createdAt])
+  @@map("assistant_tool_calls")
+  @@schema("billing")
+}
+
+model AssistantAction {
+  id             String    @id @default(uuid()) @db.Uuid
+  conversationId String    @map("conversation_id") @db.Uuid
+  userId         String    @map("user_id") @db.VarChar(255) // proposer & only allowed approver
+  toolName       String    @map("tool_name") @db.VarChar(64)
+  toolUseId      String?   @map("tool_use_id") @db.VarChar(64) // Anthropic tool_use block id (audit)
+  params         Json // validated params snapshot
+  summary        String    @db.Text // server-generated human-readable description
+  requiredRole   String?   @map("required_role") @db.VarChar(20) // null = user scope
+  status         String    @default("pending") @db.VarChar(20)
+  // pending | executing | executed | failed | rejected | expired
+  result         Json?
+  error          String?   @db.Text
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz(6)
+  confirmedAt    DateTime? @map("confirmed_at") @db.Timestamptz(6)
+  confirmedBy    String?   @map("confirmed_by") @db.VarChar(255)
+  executedAt     DateTime? @map("executed_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([conversationId, createdAt])
+  @@map("assistant_actions")
+  @@schema("billing")
+}
+
+model ProductEmbedding {
+  id          String                       @id @default(uuid()) @db.Uuid
+  productId   String                       @unique @map("product_id") @db.Uuid
+  content     String                       @db.Text
+  contentHash String                       @map("content_hash") @db.VarChar(64)
+  embedding   Unsupported("vector(1536)")?
+  model       String                       @db.VarChar(100)
+  updatedAt   DateTime                     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("product_embeddings")
+  @@schema("billing")
+}
+
+enum NotificationChannel {
+  in_app
+  email
+
+  @@schema("billing")
+}
+
+enum NotificationStatus {
+  pending
+  sent
+  delivered
+  failed
+  skipped
+  bounced
+
+  @@schema("billing")
+}
+
+model Notification {
+  id                String              @id @default(uuid()) @db.Uuid
+  userId            String              @map("user_id") @db.VarChar(255)
+  type              String              @db.VarChar(50) // dunning | winback | abandoned_checkout | trial_ending | quota_warning | system
+  channel           NotificationChannel
+  title             String              @db.VarChar(500) // email: subject
+  body              String              @db.Text // plain text; email HTML rendered at send time
+  status            NotificationStatus  @default(pending)
+  readAt            DateTime?           @map("read_at") @db.Timestamptz(6) // in_app only
+  emailTo           String?             @map("email_to") @db.VarChar(255)
+  providerMessageId String?             @map("provider_message_id") @db.VarChar(255)
+  attempts          Int                 @default(0)
+  lastError         String?             @map("last_error") @db.Text
+  metadata          Json?               @default("{}") // { outreachId, triggerKey, locale, ctaUrl }
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  sentAt            DateTime?           @map("sent_at") @db.Timestamptz(6)
+
+  @@index([userId, channel, createdAt(sort: Desc)])
+  @@index([userId, channel, readAt])
+  @@index([status, createdAt])
+  @@index([providerMessageId])
+  @@map("notifications")
+  @@schema("billing")
+}
+
+model UserContact {
+  userId           String   @id @map("user_id") @db.VarChar(255)
+  email            String?  @db.VarChar(255)
+  locale           String   @default("en") @db.VarChar(10)
+  emailSuppressed  Boolean  @default(false) @map("email_suppressed") // bounce/complaint
+  unsubscribeToken String   @unique @default(uuid()) @map("unsubscribe_token") @db.VarChar(64)
+  lastSeenAt       DateTime @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("user_contacts")
+  @@schema("billing")
+}
+
+model NotificationPreference {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @map("user_id") @db.VarChar(255)
+  category     String   @db.VarChar(50) // dunning | winback | abandoned_checkout | trial_ending | quota_warning | all
+  emailEnabled Boolean  @default(true) @map("email_enabled")
+  inAppEnabled Boolean  @default(true) @map("in_app_enabled")
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([userId, category])
+  @@map("notification_preferences")
+  @@schema("billing")
+}
+
+model RiskAssessment {
+  id         String    @id @default(uuid()) @db.Uuid
+  orderId    String    @unique @map("order_id") @db.Uuid
+  userId     String    @map("user_id") @db.VarChar(255)
+  ip         String?   @db.VarChar(64)
+  score      Int
+  level      String    @db.VarChar(10) // low | medium | high
+  signals    Json      @default("[]") // [{ code, weight, detail }]
+  status     String    @default("none") @db.VarChar(20) // none | flagged | blocked | reviewed_ok | reviewed_fraud
+  reviewedBy String?   @map("reviewed_by") @db.VarChar(255)
+  reviewNote String?   @map("review_note") @db.VarChar(500)
+  reviewedAt DateTime? @map("reviewed_at") @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([userId, createdAt])
+  @@index([ip, createdAt])
+  @@map("risk_assessments")
+  @@schema("billing")
+}
+
+model AiInsight {
+  id        String   @id @default(uuid()) @db.Uuid
+  kind      String   @db.VarChar(30) // 'funnel' (extensible)
+  scopeKey  String   @map("scope_key") @db.VarChar(200) // sha1 of params
+  locale    String   @default("en") @db.VarChar(5)
+  content   String   @db.Text
+  data      Json? // metrics snapshot fed to the model
+  model     String   @db.VarChar(100)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([kind, scopeKey, locale])
+  @@map("ai_insights")
+  @@schema("billing")
+}
+
+enum OutreachStatus {
+  pending
+  generated
+  sent
+  failed
+  skipped
+
+  @@schema("billing")
+}
+
+model OutreachMessage {
+  id                  String    @id @default(uuid()) @db.Uuid
+  userId              String    @map("user_id") @db.VarChar(255)
+  trigger             String    @db.VarChar(50) // abandoned_checkout | dunning | winback | trial_ending
+  step                Int       @default(0) // dunning: 0|2|5
+  triggerKey          String    @unique @map("trigger_key") @db.VarChar(255) // idempotency across cron re-runs
+  funnelEventId       String?   @map("funnel_event_id") @db.Uuid
+  orderId             String?   @map("order_id") @db.Uuid
+  subscriptionId      String?   @map("subscription_id") @db.Uuid
+  locale              String    @db.VarChar(10)
+  subject             String?   @db.VarChar(500)
+  body                String?   @db.Text
+  source              String?   @db.VarChar(20) // llm | template
+  model               String?   @db.VarChar(100)
+  inputTokens         Int?      @map("input_tokens")
+  outputTokens        Int?      @map("output_tokens")
+  status              OutreachStatus @default(pending)
+  skipReason          String?   @map("skip_reason") @db.VarChar(100) // kill_switch | opted_out | rate_capped | no_email | resolved
+  emailNotificationId String?   @map("email_notification_id") @db.Uuid
+  inAppNotificationId String?   @map("in_app_notification_id") @db.Uuid
+  outcome             String?   @db.VarChar(30) // converted | resolved | churned | none
+  convertedAt         DateTime? @map("converted_at") @db.Timestamptz(6)
+  error               String?   @db.Text
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  sentAt              DateTime? @map("sent_at") @db.Timestamptz(6)
+
+  @@index([userId, sentAt])
+  @@index([trigger, status, createdAt])
+  @@index([outcome, sentAt])
+  @@map("outreach_messages")
   @@schema("billing")
 }
 

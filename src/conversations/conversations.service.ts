@@ -1,4 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../common/services/prisma.service';
 import { Conversation, ChatMessage } from '@prisma/client';
 
@@ -69,6 +73,33 @@ export class ConversationsService {
     return this.prisma.conversation.update({
       where: { id: conversationId, userId },
       data: { status: 'resolved' },
+    });
+  }
+
+  async setFeedback(
+    conversationId: string,
+    messageId: string,
+    rating: 'up' | 'down' | null,
+    comment?: string,
+  ): Promise<ChatMessage> {
+    const message = await this.prisma.chatMessage.findUnique({
+      where: { id: messageId },
+    });
+    if (!message || message.conversationId !== conversationId) {
+      throw new NotFoundException('Message not found in this conversation');
+    }
+    if (message.role !== 'assistant') {
+      throw new BadRequestException(
+        'Feedback can only be left on assistant messages',
+      );
+    }
+    return this.prisma.chatMessage.update({
+      where: { id: messageId },
+      data: {
+        feedback: rating,
+        feedbackComment: rating ? (comment ?? null) : null,
+        feedbackAt: rating ? new Date() : null,
+      },
     });
   }
 }

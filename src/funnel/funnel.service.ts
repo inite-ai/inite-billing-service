@@ -53,7 +53,6 @@ export class FunnelService {
   @Cron('0 */15 * * * *')
   async processAutomatedActions(): Promise<void> {
     await this.detectAbandonedCheckouts();
-    await this.processFollowUpRules();
     await this.detectChurningSubscriptions();
     await this.cleanupStaleOrders();
   }
@@ -129,56 +128,8 @@ export class FunnelService {
     return count;
   }
 
-  /**
-   * Process follow-up rules for abandoned checkouts.
-   * Finds checkout_abandoned events from last 24h that haven't been followed up.
-   */
-  async processFollowUpRules(): Promise<number> {
-    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-
-    const abandonedEvents = await this.prisma.funnelEvent.findMany({
-      where: {
-        eventType: 'checkout_abandoned',
-        createdAt: { gte: twentyFourHoursAgo },
-      },
-    });
-
-    let count = 0;
-
-    for (const event of abandonedEvents) {
-      // Check if follow_up_sent already exists for this order
-      const existing = await this.prisma.funnelEvent.findFirst({
-        where: {
-          orderId: event.orderId,
-          eventType: 'follow_up_sent',
-        },
-      });
-
-      if (existing) continue;
-
-      await this.track({
-        userId: event.userId,
-        eventType: 'follow_up_sent',
-        stage: 'churned',
-        orderId: event.orderId ?? undefined,
-        productId: event.productId ?? undefined,
-        serviceId: event.serviceId ?? undefined,
-        properties: {
-          triggeredBy: 'automated_rule',
-          abandonedAt: event.createdAt.toISOString(),
-          followUpAt: new Date().toISOString(),
-        },
-      });
-
-      count++;
-    }
-
-    if (count > 0) {
-      this.logger.log(`Sent ${count} follow-up actions for abandoned checkouts`);
-    }
-
-    return count;
-  }
+  // Follow-up sending moved to OutreachService (src/outreach): real follow_up_sent
+  // events are now tracked there on actual send, keeping the kanban badge working.
 
   /**
    * Detect churning subscriptions.

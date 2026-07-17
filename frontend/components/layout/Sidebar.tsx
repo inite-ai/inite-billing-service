@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Server, Package, DollarSign, Receipt,
-  CreditCard, Key, Users, GitBranch, Wallet, Webhook, ArrowLeft, Plug, ChevronRight, Tag, TrendingUp, Coins, UserCheck
+  CreditCard, Key, Users, GitBranch, Wallet, Webhook, ArrowLeft, Plug, ChevronRight, Tag, TrendingUp, Coins, UserCheck, Send, Gauge, ShieldAlert
 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 
@@ -31,6 +31,8 @@ export function Sidebar() {
       items: [
         { href: '/admin', label: t('dashboard'), icon: LayoutDashboard, exact: true },
         { href: '/admin/funnel', label: ta('funnel.title'), icon: TrendingUp },
+        { href: '/admin/outreach', label: ta('outreach.title'), icon: Send },
+        { href: '/admin/risk', label: ta('risk.title'), icon: ShieldAlert },
       ],
     },
     {
@@ -64,6 +66,7 @@ export function Sidebar() {
         { href: '/admin/payment-providers', label: ta('providers.title'), icon: Plug },
         { href: '/admin/payout-providers', label: ta('payoutProviders.title'), icon: Receipt },
         { href: '/admin/credits', label: ta('credits.title'), icon: Coins },
+        { href: '/admin/metering', label: ta('metering.title'), icon: Gauge },
         { href: '/admin/entitlements', label: ta('entitlements.title'), icon: Key },
         { href: '/admin/webhooks', label: ta('webhooks.title'), icon: Webhook },
       ],
