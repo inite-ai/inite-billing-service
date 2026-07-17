@@ -1,0 +1,62 @@
+name: "Ops: register consumer service"
+
+# Idempotently registers (or re-keys) a consumer `Service` row so another
+# product can call this billing service with an `x-api-key`. The key is
+# NEVER printed — it rides a repo secret end-to-end. Re-run safe:
+# ON CONFLICT (code) updates the key and re-activates the row.
+#
+# First consumer: `brain` (inite-brain-service marketplace — paid domain
+# packs; entitlement key `domain_pack:<packId>`, billing userId = brain
+# companyId).
+
+on:
+  workflow_dispatch:
+    inputs:
+      code:
+        description: "Service code (billing.services.code)"
+        required: true
+        default: "brain"
+      name:
+        description: "Human-readable service name"
+        required: true
+        default: "INITE Brain"
+      secret_name:
+        description: "Repo secret holding the api key to install"
+        required: true
+        default: "BRAIN_SERVICE_API_KEY"
+
+jobs:
+  register:
+    runs-on: self-hosted
+    steps:
+      - name: Register service row (idempotent upsert)
+        env:
+          SVC_CODE: ${{ github.event.inputs.code }}
+          SVC_NAME: ${{ github.event.inputs.name }}
+          SVC_KEY: ${{ github.event.inputs.secret_name == 'BRAIN_SERVICE_API_KEY' && secrets.BRAIN_SERVICE_API_KEY || '' }}
+          PGUSER: ${{ secrets.ORCH_POSTGRES_USER }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SVC_KEY" ]; then
+            echo "::error::secret ${{ github.event.inputs.secret_name }} is empty or not mapped"
+            exit 1
+          fi
+          docker exec -i postgres psql -U "$PGUSER" -d inite_billing \
+            -v code="$SVC_CODE" -v name="$SVC_NAME" -v key="$SVC_KEY" <<'SQL'
+          INSERT INTO billing.services (id, code, name, api_key, is_active, metadata, created_at, updated_at)
+          VALUES (gen_random_uuid(), :'code', :'name', :'key', true, '{}', now(), now())
+          ON CONFLICT (code) DO UPDATE
+            SET api_key = EXCLUDED.api_key, is_active = true, updated_at = now();
+          SQL
+          docker exec postgres psql -U "$PGUSER" -d inite_billing -tA \
+            -c "SELECT code || ' active=' || is_active || ' key=' || left(api_key, 6) || '…' FROM billing.services WHERE code = '$SVC_CODE'"
+
+      - name: Verify key against the live API
+        env:
+          SVC_KEY: ${{ github.event.inputs.secret_name == 'BRAIN_SERVICE_API_KEY' && secrets.BRAIN_SERVICE_API_KEY || '' }}
+        run: |
+          set -euo pipefail
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "x-api-key: $SVC_KEY" https://billing.inite.ai/v1/service/catalog/products)
+          echo "GET /v1/service/catalog/products -> $CODE"
+          [ "$CODE" = "200" ] || { echo "::error::expected 200, got $CODE"; exit 1; }
