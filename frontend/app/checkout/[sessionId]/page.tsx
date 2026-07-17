@@ -8,6 +8,7 @@ import { Loader2, Tag, Check, X, CreditCard, Lock, ShoppingBag } from 'lucide-re
 import api from '@/lib/api'
 import { OAuthClient } from '@/lib/oauth-client'
 import toast from 'react-hot-toast'
+import RecommendedOffers from '@/components/dashboard/RecommendedOffers'
 
 interface SessionData {
   sessionId: string
@@ -448,6 +449,11 @@ export default function CheckoutPage() {
             <Lock className="w-3 h-3" />
             {t('securePayment')}
           </div>
+
+          {/* Never distract mid-payment */}
+          {!payLoading && (
+            <RecommendedOffers sessionId={String(sessionId)} compact />
+          )}
         </div>
       </motion.div>
     </div>

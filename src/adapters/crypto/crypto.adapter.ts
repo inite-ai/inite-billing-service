@@ -194,22 +194,14 @@ export class CryptoAdapter implements PaymentRailAdapter {
     const token = input.cryptoToken || input.metadata?.cryptoToken;
 
     if (!chain || !token) {
-      throw new Error(
-        'Crypto adapter requires cryptoChain and cryptoToken (e.g. ETH + USDT)',
-      );
+      throw new Error('Crypto adapter requires cryptoChain and cryptoToken (e.g. ETH + USDT)');
     }
 
     const config = await this.getConfig();
-    const { chainConfig, receiverAddress } = this.validateChainToken(
-      chain,
-      token,
-      config,
-    );
+    const { chainConfig, receiverAddress } = this.validateChainToken(chain, token, config);
 
     const tokenConfig = chainConfig.tokens[token];
-    const expiresAt = new Date(
-      Date.now() + config.expiryMinutes * 60 * 1000,
-    );
+    const expiresAt = new Date(Date.now() + config.expiryMinutes * 60 * 1000);
 
     // Amount in token's smallest unit
     const rawAmount = input.amount;
@@ -407,8 +399,7 @@ export class CryptoAdapter implements PaymentRailAdapter {
    * }
    */
   async handleWebhook(rawPayload: any): Promise<WebhookParseResult> {
-    const { chain, txHash, to, token, amount, confirmations, memo } =
-      rawPayload;
+    const { chain, txHash, to, token, amount, confirmations, memo } = rawPayload;
 
     if (!chain || !txHash) {
       throw new Error('Invalid crypto webhook: missing chain or txHash');
@@ -417,8 +408,7 @@ export class CryptoAdapter implements PaymentRailAdapter {
     // Try to find the payment intent by memo or receiver address
     const entityId = memo || txHash;
 
-    const confirmed =
-      confirmations >= (DEFAULT_CHAINS[chain]?.confirmations || 1);
+    const confirmed = confirmations >= (DEFAULT_CHAINS[chain]?.confirmations || 1);
 
     return {
       webhookId: `crypto_${chain}_${txHash}`,

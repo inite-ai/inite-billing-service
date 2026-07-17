@@ -89,6 +89,7 @@ const PROTECTED_ROUTES: Record<string, Array<'USER' | 'ADMIN'>> = {
   '/orders': ['USER', 'ADMIN'],
   '/subscriptions': ['USER', 'ADMIN'],
   '/referrals': ['USER', 'ADMIN'],
+  '/notifications': ['USER', 'ADMIN'],
   '/admin': ['ADMIN'],
 };
 

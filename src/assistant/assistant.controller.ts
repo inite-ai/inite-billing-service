@@ -1,17 +1,16 @@
-import {
-  Controller,
-  Post,
-  Body,
-  Res,
-  UseGuards,
-  Logger,
-} from '@nestjs/common';
+import { Controller, Post, Body, Res, UseGuards, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { User, RequestUser } from '../auth/decorators/user.decorator';
 import { AssistantService } from './assistant.service';
+import {
+  sse,
+  sseDone,
+  UI_MESSAGE_STREAM_HEADER,
+  UI_MESSAGE_STREAM_VERSION,
+} from './stream-protocol';
 
 @ApiTags('Assistant')
 @Controller('v1/assistant')
@@ -48,6 +47,7 @@ export class AssistantController {
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
+    res.setHeader(UI_MESSAGE_STREAM_HEADER, UI_MESSAGE_STREAM_VERSION);
 
     try {
       for await (const chunk of this.assistantService.chat(
@@ -60,9 +60,14 @@ export class AssistantController {
       }
     } catch (error: any) {
       this.logger.error(`Chat error: ${error.message}`, error.stack);
+      // The [DONE] terminator is mandatory even on errors, or useChat hangs
       res.write(
-        `event: error\ndata: ${JSON.stringify({ error: 'An error occurred processing your request.' })}\n\n`,
+        sse({
+          type: 'error',
+          errorText: 'An error occurred processing your request.',
+        }),
       );
+      res.write(sseDone());
     }
 
     res.end();

@@ -13,8 +13,8 @@ describe('Webhooks E2E Tests', () => {
   let prisma: PrismaService;
   let mockOneAdapter: MockOneAdapter;
   let userId: string;
-  let orderId: string;
-  let paymentIntentId: string;
+  let _orderId: string;
+  let _paymentIntentId: string;
   let providerIntentId: string;
 
   beforeAll(async () => {
@@ -45,7 +45,7 @@ describe('Webhooks E2E Tests', () => {
     await cleanupTestData(prisma);
     await app.close();
     await prisma.$disconnect();
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise((resolve) => setTimeout(resolve, 200));
   });
 
   beforeEach(async () => {
@@ -83,7 +83,7 @@ describe('Webhooks E2E Tests', () => {
         externalId: `order_${Date.now()}`,
       },
     });
-    orderId = order.id;
+    _orderId = order.id;
 
     const intentResult = await mockOneAdapter.createPaymentIntent({
       orderId: order.externalId!,
@@ -103,11 +103,10 @@ describe('Webhooks E2E Tests', () => {
         currency: 'USD',
       },
     });
-    paymentIntentId = intent.id;
+    _paymentIntentId = intent.id;
   });
 
-  afterEach(async () => {
-  });
+  afterEach(async () => {});
 
   describe('POST /webhooks/one', () => {
     it('should store webhook event idempotently', async () => {
@@ -153,10 +152,7 @@ describe('Webhooks E2E Tests', () => {
         status: 'OPENED',
       };
 
-      await request(app.getHttpServer())
-        .post('/webhooks/one')
-        .send(webhookPayload)
-        .expect(200);
+      await request(app.getHttpServer()).post('/webhooks/one').send(webhookPayload).expect(200);
 
       const event = await prisma.webhookEvent.findUnique({
         where: {

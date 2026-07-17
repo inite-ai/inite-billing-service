@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { StatsCards } from '@/components/dashboard/StatsCards'
+import RecommendedOffers from '@/components/dashboard/RecommendedOffers'
 import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
 import { useAuth } from '@/contexts/AuthContext'
 import { CreditCard, ArrowRight, Calendar, Loader2, Sparkles, Coins } from 'lucide-react'
@@ -246,6 +247,8 @@ export default function DashboardPage() {
               )}
             </Card>
           </motion.div>
+
+          <RecommendedOffers />
         </div>
       )}
     </ClientLayout>

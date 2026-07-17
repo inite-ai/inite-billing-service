@@ -111,14 +111,12 @@
     "goToDashboard": "Go to Dashboard",
     "learnAboutReferrals": "Explore features",
     "signIn": "Sign In",
-
     "stat1Value": "N-level",
     "stat1Label": "Configurable referral depth",
     "stat2Value": "3+",
     "stat2Label": "Payment rails",
     "stat3Value": "Real-time",
     "stat3Label": "Analytics & payouts",
-
     "howItWorksBadge": "Quick start",
     "howItWorksTitle": "Live in three steps",
     "stepLabel": "Step {step}",
@@ -128,7 +126,6 @@
     "step2Desc": "Define products, prices, and commission rates for as many referral levels as you need — via admin panel or API.",
     "step3Title": "Users pay & earn",
     "step3Desc": "Users purchase subscriptions and earn commissions by referring others. You get a dashboard and analytics out of the box.",
-
     "featuresBadge": "Platform",
     "featuresTitle": "Everything you need to bill and grow",
     "featuresSubtitle": "A complete billing backend with a built-in multi-level referral engine",
@@ -144,7 +141,6 @@
     "featureAccessDesc": "Grant product access the moment payment succeeds. Entitlements are checked via a single API call from your service.",
     "featurePlatformTitle": "Multi-Service Architecture",
     "featurePlatformDesc": "One billing instance serves multiple services. Each service gets its own products, prices, referral levels, and API key.",
-
     "referralBadge": "Referral Program",
     "referralTitle": "Turn every user into a growth channel",
     "referralDescription": "The multi-level referral engine rewards users for every sale in their network. You decide how many levels deep commissions go. Rates are tracked in real time and paid out automatically.",
@@ -154,7 +150,6 @@
     "referralBenefit4": "Real-time network tree & earnings dashboard",
     "viewMyReferrals": "View My Referrals",
     "startEarning": "Start Earning",
-
     "exampleTitle": "Example commission structure",
     "exampleBase": "Subscription",
     "examplePerMonth": "/mo",
@@ -170,7 +165,6 @@
     "scenarioNote": "Depends on your network size and commission rates",
     "you": "You",
     "andDeeper": "and deeper",
-
     "devTitle": "Built for Developers",
     "devSubtitle": "API-first architecture — integrate billing into any stack in minutes",
     "devApi": "REST API with Swagger Docs",
@@ -181,13 +175,11 @@
     "devAuthDesc": "Secure user authentication via INITE Identity Provider. No passwords stored on the billing side.",
     "devKeys": "Service-Level API Keys",
     "devKeysDesc": "Each service gets its own API key for server-to-server calls. Regenerate instantly from the admin panel.",
-
     "pricingTitle": "Simple, Transparent Pricing",
     "pricingSubtitle": "No platform fees. No monthly minimums. You only pay what your payment provider charges.",
     "pricingFree": "Free to Integrate",
     "pricingFreeDesc": "INITE Billing is free for all connected services. We do not take a cut of your revenue. The only costs are the standard processing fees charged by your payment provider (e.g. Stripe at 2.9% + 30c).",
     "pricingNote": "Self-hosted and cloud options available. Contact us for enterprise plans.",
-
     "ctaTitle": "Ready to add billing to your service?",
     "ctaDescription": "Create an account, connect your service, and start accepting payments with a built-in referral program today.",
     "openDashboard": "Open Dashboard",
@@ -232,7 +224,19 @@
     "tableMode": "Mode",
     "tableStatus": "Status",
     "credits": "Credits",
-    "creditsBalance": "Credit Balance"
+    "creditsBalance": "Credit Balance",
+    "recommendations": {
+      "title": "Recommended for you",
+      "compactTitle": "You might also like",
+      "cta": "Get it",
+      "reasons": {
+        "upgrade": "Upgrade",
+        "abandoned": "Saved for you",
+        "cross_sell": "Add-on",
+        "popular_with": "Popular pick",
+        "top_seller": "Top seller"
+      }
+    }
   },
   "orders": {
     "title": "Order History",
@@ -884,7 +888,105 @@
       "createPromoDesc": "Create a personalized promo code for this user",
       "winBackDesc": "Send a win-back campaign email to re-engage this user",
       "noItemSelected": "Select a card from the pipeline to view details",
-      "eventProperties": "Properties"
+      "eventProperties": "Properties",
+      "insights": {
+        "title": "AI Insights",
+        "analyze": "Analyze",
+        "analyzing": "Analyzing metrics…",
+        "cached": "cached",
+        "regenerate": "Regenerate",
+        "justNow": "just now",
+        "hoursAgo": "{hours}h ago",
+        "error": "Failed to generate insights"
+      }
+    },
+    "outreach": {
+      "title": "AI Outreach",
+      "converted": "Converted",
+      "skipped": "Skipped",
+      "fallbackRate": "Template fallback rate",
+      "windowDays": "Last {days} days",
+      "allTriggers": "All triggers",
+      "allStatuses": "All statuses",
+      "template": "Template",
+      "empty": "No outreach messages yet",
+      "triggers": {
+        "abandoned_checkout": "Abandoned checkout",
+        "dunning": "Payment recovery",
+        "winback": "Win-back",
+        "trial_ending": "Trial ending"
+      },
+      "columns": {
+        "trigger": "Trigger",
+        "user": "User",
+        "subject": "Subject",
+        "source": "Source",
+        "status": "Status",
+        "outcome": "Outcome",
+        "sentAt": "Sent at"
+      }
+    },
+    "metering": {
+      "title": "Metering & Quotas",
+      "tabFeatures": "Features",
+      "tabQuotas": "Quotas",
+      "tabUsage": "Usage",
+      "addFeature": "Add feature",
+      "editFeature": "Edit feature",
+      "addQuota": "Add quota",
+      "active": "Active",
+      "inactive": "Inactive",
+      "save": "Save",
+      "allFeatures": "All features (balance-wide)",
+      "allUsers": "All users (default)",
+      "quotaUserHint": "User ID (leave empty for default quota)",
+      "limitCredits": "Credit limit",
+      "limitUnits": "Unit limit",
+      "invalidTierRates": "tierRates must be valid JSON",
+      "confirmDelete": "Delete feature {name}?",
+      "confirmDeleteQuota": "Delete this quota?",
+      "emptyFeatures": "No metered features yet",
+      "emptyQuotas": "No quotas yet",
+      "emptyUsage": "No metered usage in the last 30 days",
+      "usageLast30d": "Usage, last 30 days",
+      "events": "events",
+      "columns": {
+        "code": "Code",
+        "name": "Name",
+        "unit": "Unit",
+        "rate": "Credits per unit",
+        "tierRates": "Tier rates",
+        "status": "Status",
+        "feature": "Feature",
+        "scope": "Scope",
+        "window": "Window",
+        "limits": "Limits",
+        "softCap": "Soft cap",
+        "policy": "Policy"
+      }
+    },
+    "risk": {
+      "title": "Risk Review",
+      "levels": {
+        "high": "High risk",
+        "medium": "Medium risk",
+        "low": "Low risk"
+      },
+      "flaggedOpen": "Awaiting review",
+      "windowDays": "Last {days} days",
+      "openOnly": "Open (flagged + blocked)",
+      "reviewed": "Review saved",
+      "empty": "Nothing to review",
+      "markOk": "Mark OK",
+      "markFraud": "Mark fraud",
+      "markFraudRefund": "Fraud + refund",
+      "columns": {
+        "score": "Score",
+        "order": "Order",
+        "user": "User",
+        "status": "Status",
+        "date": "Date"
+      }
     }
   },
   "forms": {
@@ -946,6 +1048,46 @@
     "placeholder": "Ask about your subscriptions, orders...",
     "thinking": "Thinking...",
     "error": "Something went wrong. Try again.",
-    "welcome": "Hi! I can help you with your subscriptions, orders, referrals, and billing. What would you like to know?"
+    "welcome": "Hi! I can help you with your subscriptions, orders, referrals, and billing. What would you like to know?",
+    "action": {
+      "title": "Action confirmation required",
+      "confirm": "Confirm",
+      "reject": "Decline",
+      "executing": "Executing…",
+      "executed": "Done",
+      "failed": "Failed",
+      "rejected": "Declined",
+      "expired": "Expired"
+    },
+    "feedback": {
+      "up": "Helpful",
+      "down": "Not helpful",
+      "thanks": "Thanks for the feedback!",
+      "commentPlaceholder": "What went wrong? (optional)",
+      "send": "Send"
+    }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "viewAll": "View all",
+    "empty": "No notifications yet",
+    "markAllRead": "Mark all as read",
+    "preferencesTitle": "Notification preferences",
+    "category": "Category",
+    "channelEmail": "Email",
+    "channelInApp": "In-app",
+    "categories": {
+      "abandoned_checkout": "Unfinished checkout reminders",
+      "dunning": "Payment issues",
+      "winback": "Subscription offers",
+      "trial_ending": "Trial ending reminders",
+      "quota_warning": "Usage limit warnings"
+    },
+    "unsubscribe": {
+      "title": "Unsubscribe",
+      "processing": "Processing your request…",
+      "success": "You have been unsubscribed. You can re-enable emails anytime in your notification settings.",
+      "error": "Invalid or expired unsubscribe link."
+    }
   }
 }

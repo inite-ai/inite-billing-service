@@ -44,10 +44,14 @@ export class AdminStatsService {
   async getWebhooks(params: { page?: number; limit?: number }) {
     const { page, limit } = params;
 
-    return paginate(this.prisma.webhookEvent, {}, {
-      page,
-      limit,
-      orderBy: { receivedAt: 'desc' },
-    });
+    return paginate(
+      this.prisma.webhookEvent,
+      {},
+      {
+        page,
+        limit,
+        orderBy: { receivedAt: 'desc' },
+      },
+    );
   }
 }

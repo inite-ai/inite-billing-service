@@ -4,7 +4,7 @@
   "description": "INITE Billing Service - Payment-rail agnostic billing and subscriptions",
   "author": "",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "AGPL-3.0-or-later",
   "scripts": {
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
@@ -20,6 +20,7 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "test:e2e:watch": "jest --config ./test/jest-e2e.json --watch",
+    "eval": "RUN_AI_EVALS=1 jest --config ./test/eval/jest-eval.json --runInBand",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",

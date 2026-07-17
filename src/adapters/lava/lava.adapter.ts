@@ -146,10 +146,7 @@ export class LavaAdapter implements PaymentRailAdapter {
         },
       };
     } catch (error: any) {
-      this.logger.error(
-        `Error creating Lava.top invoice: ${error.message}`,
-        error.stack,
-      );
+      this.logger.error(`Error creating Lava.top invoice: ${error.message}`, error.stack);
       throw error;
     }
   }
@@ -158,12 +155,9 @@ export class LavaAdapter implements PaymentRailAdapter {
     const { apiBaseUrl, apiKey } = await this.getConfig();
 
     try {
-      const response = await fetch(
-        `${apiBaseUrl}/api/v2/invoices/${providerIntentId}`,
-        {
-          headers: { 'X-Api-Key': apiKey },
-        },
-      );
+      const response = await fetch(`${apiBaseUrl}/api/v2/invoices/${providerIntentId}`, {
+        headers: { 'X-Api-Key': apiKey },
+      });
 
       if (!response.ok) {
         throw new Error(`Lava.top API error: ${response.status}`);
@@ -173,11 +167,11 @@ export class LavaAdapter implements PaymentRailAdapter {
 
       // Map Lava contract statuses to unified
       const statusMap: Record<string, IntentStatusResult['status']> = {
-        'new': 'created',
+        new: 'created',
         'in-progress': 'opened',
-        'completed': 'paid',
-        'failed': 'failed',
-        'cancelled': 'failed',
+        completed: 'paid',
+        failed: 'failed',
+        cancelled: 'failed',
         'subscription-active': 'paid',
         'subscription-expired': 'expired',
         'subscription-cancelled': 'failed',
@@ -219,9 +213,7 @@ export class LavaAdapter implements PaymentRailAdapter {
     const contractId = rawPayload.contractId;
 
     if (!eventType || !contractId) {
-      throw new Error(
-        'Invalid Lava.top webhook: missing eventType or contractId',
-      );
+      throw new Error('Invalid Lava.top webhook: missing eventType or contractId');
     }
 
     // Map Lava event types to billing event types

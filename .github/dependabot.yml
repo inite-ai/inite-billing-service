@@ -1,0 +1,53 @@
+version: 2
+updates:
+  # Backend service
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: ["dependencies"]
+    commit-message:
+      prefix: "build"
+      prefix-development: "chore"
+    groups:
+      nestjs:
+        patterns: ["@nestjs/*"]
+      backend-minor:
+        update-types: ["minor", "patch"]
+
+  # Frontend (Next.js user + admin UI)
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "area: frontend"]
+    commit-message:
+      prefix: "build"
+      prefix-development: "chore"
+    groups:
+      frontend-minor:
+        update-types: ["minor", "patch"]
+
+  # Docker base images
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    labels: ["dependencies"]
+    commit-message:
+      prefix: "build"
+
+  # GitHub Actions — bumps the pinned versions
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: ["dependencies"]
+    commit-message:
+      prefix: "ci"
+    groups:
+      actions:
+        update-types: ["minor", "patch"]

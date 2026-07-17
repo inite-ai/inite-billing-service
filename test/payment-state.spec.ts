@@ -34,4 +34,3 @@ describe('Payment State Machine', () => {
     });
   });
 });
-

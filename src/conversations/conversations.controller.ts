@@ -10,7 +10,7 @@ import {
   HttpStatus,
   ForbiddenException,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { JwtOrServiceGuard } from '../auth/guards/jwt-or-service.guard';
 import { User, RequestUser } from '../auth/decorators/user.decorator';
 import { ConversationsService } from './conversations.service';
@@ -24,10 +24,7 @@ export class ConversationsController {
   @Post()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get or create active conversation' })
-  async getOrCreate(
-    @User() user: RequestUser,
-    @Body() body: { mode?: string; userId?: string },
-  ) {
+  async getOrCreate(@User() user: RequestUser, @Body() body: { mode?: string; userId?: string }) {
     const userId = user.isService && body.userId ? body.userId : user.userId;
     const mode = body.mode || 'user';
     return this.conversationsService.getOrCreate(userId, mode);
@@ -36,10 +33,7 @@ export class ConversationsController {
   @Get()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'List user conversations' })
-  async listConversations(
-    @User() user: RequestUser,
-    @Query('userId') queryUserId?: string,
-  ) {
+  async listConversations(@User() user: RequestUser, @Query('userId') queryUserId?: string) {
     const userId = user.isService && queryUserId ? queryUserId : user.userId;
     return this.conversationsService.listConversations(userId);
   }
@@ -103,10 +97,39 @@ export class ConversationsController {
   @Post(':id/resolve')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Resolve (close) a conversation' })
-  async resolveConversation(
+  async resolveConversation(@User() user: RequestUser, @Param('id') conversationId: string) {
+    return this.conversationsService.resolveConversation(conversationId, user.userId);
+  }
+
+  @Post(':id/messages/:messageId/feedback')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Leave feedback on an assistant message' })
+  async setFeedback(
     @User() user: RequestUser,
     @Param('id') conversationId: string,
+    @Param('messageId') messageId: string,
+    @Body() body: { rating: 'up' | 'down' | null; comment?: string },
   ) {
-    return this.conversationsService.resolveConversation(conversationId, user.userId);
+    // H1 fix: Verify conversation ownership
+    if (!user.isService) {
+      const conversation = await this.conversationsService.getConversationById(conversationId);
+      if (!conversation) {
+        throw new ForbiddenException('Conversation not found');
+      }
+      if (conversation.userId !== user.userId) {
+        throw new ForbiddenException('You do not have access to this conversation');
+      }
+    }
+
+    if (body.rating !== 'up' && body.rating !== 'down' && body.rating !== null) {
+      throw new ForbiddenException('rating must be "up", "down" or null');
+    }
+
+    return this.conversationsService.setFeedback(
+      conversationId,
+      messageId,
+      body.rating,
+      typeof body.comment === 'string' ? body.comment.slice(0, 1000) : undefined,
+    );
   }
 }

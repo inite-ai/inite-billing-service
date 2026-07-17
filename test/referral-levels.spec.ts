@@ -35,7 +35,11 @@ describe('ReferralLevelsService', () => {
 
     // Create test service
     const svc = await prisma.service.create({
-      data: { code: `rl-test-${Date.now()}`, name: 'RL Test Service', apiKey: `sk_test_${Date.now()}` },
+      data: {
+        code: `rl-test-${Date.now()}`,
+        name: 'RL Test Service',
+        apiKey: `sk_test_${Date.now()}`,
+      },
     });
     serviceId = svc.id;
   });
@@ -87,9 +91,9 @@ describe('ReferralLevelsService', () => {
   it('should update commission rate', async () => {
     const levels = await service.getLevelsByService(serviceId);
     const updated = await service.updateLevel(levels[0].id, {
-      commissionRate: 0.20,
+      commissionRate: 0.2,
     });
-    expect(Number(updated.commissionRate)).toBeCloseTo(0.20, 4);
+    expect(Number(updated.commissionRate)).toBeCloseTo(0.2, 4);
 
     // Restore
     await service.updateLevel(levels[0].id, { commissionRate: 0.15 });
@@ -101,9 +105,7 @@ describe('ReferralLevelsService', () => {
     const l2 = levels.find((l) => l.level === 2)!;
 
     // Cannot delete level 1 when level 2 exists
-    await expect(service.deleteLevel(l1.id)).rejects.toThrow(
-      'Can only delete the highest level',
-    );
+    await expect(service.deleteLevel(l1.id)).rejects.toThrow('Can only delete the highest level');
 
     // Can delete level 2 (highest)
     await service.deleteLevel(l2.id);

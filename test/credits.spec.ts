@@ -5,7 +5,7 @@ describe('CreditsService', () => {
   let mockPrisma: any;
   let mockTx: any;
 
-  const decimal = (v: number) =>
+  const _decimal = (v: number) =>
     Object.assign(Object.create(null), {
       valueOf: () => v,
       toString: () => String(v),

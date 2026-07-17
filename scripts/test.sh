@@ -30,7 +30,7 @@ docker run -d --name "$POSTGRES_CONTAINER" \
   -e POSTGRES_USER="$DB_USER" \
   -e POSTGRES_PASSWORD="$DB_PASS" \
   -p "${PG_PORT}:5432" \
-  postgres:15-alpine >/dev/null
+  pgvector/pgvector:pg15 >/dev/null
 
 echo "Starting test Redis on port ${REDIS_PORT}..."
 docker rm -f "$REDIS_CONTAINER" 2>/dev/null || true

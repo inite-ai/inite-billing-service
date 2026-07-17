@@ -2,7 +2,6 @@ import {
   Controller,
   Get,
   Param,
-  Req,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -25,9 +24,7 @@ export class EntitlementsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get current user entitlements' })
   @ApiResponse({ status: 200, type: [EntitlementResponseDto] })
-  async getMyEntitlements(
-    @User() user: RequestUser,
-  ): Promise<EntitlementResponseDto[]> {
+  async getMyEntitlements(@User() user: RequestUser): Promise<EntitlementResponseDto[]> {
     return this.entitlementsService.getUserEntitlements(user.userId);
   }
 
@@ -46,4 +43,3 @@ export class EntitlementsController {
     return this.entitlementsService.getUserEntitlementsByUserId(userId);
   }
 }
-

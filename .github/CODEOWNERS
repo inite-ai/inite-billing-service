@@ -1,0 +1,7 @@
+# Default owner — auto-requested for review on every PR.
+* @Mikefluff
+
+# Surfaces
+/src/        @Mikefluff
+/frontend/   @Mikefluff
+/prisma/     @Mikefluff

@@ -55,9 +55,7 @@ export class AdminController {
   @Post('services')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a service' })
-  async createService(
-    @Body() body: { code: string; name: string; metadata?: any },
-  ) {
+  async createService(@Body() body: { code: string; name: string; metadata?: any }) {
     return this.catalogService.createService(body);
   }
 
@@ -380,9 +378,7 @@ export class AdminController {
   @Post('referral-templates/apply')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Apply a referral template to a service' })
-  async applyReferralTemplate(
-    @Body() body: { serviceId: string; templateKey: string },
-  ) {
+  async applyReferralTemplate(@Body() body: { serviceId: string; templateKey: string }) {
     return this.referralLevelsService.applyTemplate(body.serviceId, body.templateKey);
   }
 
@@ -412,10 +408,7 @@ export class AdminController {
   @Post('payouts/:id/fail')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Mark payout as failed' })
-  async failPayout(
-    @Param('id') id: string,
-    @Body() body: { reason?: string },
-  ) {
+  async failPayout(@Param('id') id: string, @Body() body: { reason?: string }) {
     return this.affiliatesService.failPayout(id, body?.reason);
   }
 
@@ -431,7 +424,18 @@ export class AdminController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a payout provider' })
   async createPayoutProvider(
-    @Body() body: { code: string; name: string; currencies?: string[]; minAmount?: number; maxAmount?: number; feePercent?: number; feeFixed?: number; config?: any; metadata?: any },
+    @Body()
+    body: {
+      code: string;
+      name: string;
+      currencies?: string[];
+      minAmount?: number;
+      maxAmount?: number;
+      feePercent?: number;
+      feeFixed?: number;
+      config?: any;
+      metadata?: any;
+    },
   ) {
     return this.providersService.createPayoutProvider(body);
   }
@@ -440,7 +444,18 @@ export class AdminController {
   @ApiOperation({ summary: 'Update a payout provider' })
   async updatePayoutProvider(
     @Param('id') id: string,
-    @Body() body: { name?: string; isActive?: boolean; currencies?: string[]; minAmount?: number; maxAmount?: number; feePercent?: number; feeFixed?: number; config?: any; metadata?: any },
+    @Body()
+    body: {
+      name?: string;
+      isActive?: boolean;
+      currencies?: string[];
+      minAmount?: number;
+      maxAmount?: number;
+      feePercent?: number;
+      feeFixed?: number;
+      config?: any;
+      metadata?: any;
+    },
   ) {
     return this.providersService.updatePayoutProvider(id, body);
   }
@@ -463,7 +478,8 @@ export class AdminController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a payment provider' })
   async createPaymentProvider(
-    @Body() body: {
+    @Body()
+    body: {
       code: string;
       name: string;
       isActive?: boolean;
@@ -482,7 +498,8 @@ export class AdminController {
   @ApiOperation({ summary: 'Update a payment provider' })
   async updatePaymentProvider(
     @Param('id') id: string,
-    @Body() body: {
+    @Body()
+    body: {
       name?: string;
       isActive?: boolean;
       supportedModes?: string[];
@@ -506,10 +523,7 @@ export class AdminController {
 
   @Get('webhooks')
   @ApiOperation({ summary: 'List webhook events' })
-  async getWebhooks(
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-  ) {
+  async getWebhooks(@Query('page') page?: string, @Query('limit') limit?: string) {
     return this.statsService.getWebhooks({
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
@@ -595,9 +609,7 @@ export class AdminController {
 
   @Get('funnel/pipeline')
   @ApiOperation({ summary: 'Get funnel pipeline data for kanban view' })
-  async getFunnelPipeline(
-    @Query('serviceId') serviceId?: string,
-  ) {
+  async getFunnelPipeline(@Query('serviceId') serviceId?: string) {
     return this.funnelService.getPipelineData(serviceId);
   }
 
@@ -639,10 +651,7 @@ export class AdminController {
 
   @Get('funnel/abandoned')
   @ApiOperation({ summary: 'Get abandoned checkouts' })
-  async getAbandonedCheckouts(
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-  ) {
+  async getAbandonedCheckouts(@Query('page') page?: string, @Query('limit') limit?: string) {
     return this.funnelService.getAbandonedCheckouts({
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,

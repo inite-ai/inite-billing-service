@@ -1,4 +1,11 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException, Inject, forwardRef } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { PrismaService } from '../common/services/prisma.service';
 import { SubscriptionResponseDto } from '../common/dto/subscription.dto';
 import { OutboxService } from '../outbox/outbox.service';
@@ -58,7 +65,10 @@ export class SubscriptionsService {
     });
   }
 
-  async getUserSubscriptions(userId: string, serviceId?: string): Promise<SubscriptionResponseDto[]> {
+  async getUserSubscriptions(
+    userId: string,
+    serviceId?: string,
+  ): Promise<SubscriptionResponseDto[]> {
     const where: any = { userId };
     if (serviceId) {
       where.price = { product: { serviceId } };
@@ -113,7 +123,11 @@ export class SubscriptionsService {
     });
   }
 
-  async startTrial(userId: string, priceCode: string, callerServiceId?: string): Promise<SubscriptionResponseDto> {
+  async startTrial(
+    userId: string,
+    priceCode: string,
+    callerServiceId?: string,
+  ): Promise<SubscriptionResponseDto> {
     const price = await this.prisma.price.findUnique({
       where: { code: priceCode },
       include: { product: true },
@@ -142,7 +156,9 @@ export class SubscriptionsService {
     });
 
     if (existingSubscription) {
-      throw new ConflictException('User already has an active subscription or trial for this product');
+      throw new ConflictException(
+        'User already has an active subscription or trial for this product',
+      );
     }
 
     // Check if user already had a trial for this product (prevent trial abuse)
@@ -197,18 +213,23 @@ export class SubscriptionsService {
           },
         });
 
-        await this.outboxService.emit('billing.entitlement.granted', {
-          user_id: userId,
-          key,
-          source: 'subscription',
-          subscription_id: subscription.id,
-          trial: true,
-          expires_at: entitlementExpiry.toISOString(),
-        }, undefined, tx);
+        await this.outboxService.emit(
+          'billing.entitlement.granted',
+          {
+            user_id: userId,
+            key,
+            source: 'subscription',
+            subscription_id: subscription.id,
+            trial: true,
+            expires_at: entitlementExpiry.toISOString(),
+          },
+          undefined,
+          tx,
+        );
       }
 
       // Grant credits if product defines them
-      const metadata = product.metadata as Record<string, any> || {};
+      const metadata = (product.metadata as Record<string, any>) || {};
       const creditsPerPeriod = metadata.creditsPerPeriod || metadata.credits;
       if (creditsPerPeriod) {
         await this.creditsService.grant({
@@ -231,12 +252,17 @@ export class SubscriptionsService {
       });
 
       // Emit outbox event
-      await this.outboxService.emit('billing.subscription.trial_started', {
-        subscription_id: subscription.id,
-        user_id: userId,
-        price_code: priceCode,
-        trial_ends_at: trialEnd.toISOString(),
-      }, undefined, tx);
+      await this.outboxService.emit(
+        'billing.subscription.trial_started',
+        {
+          subscription_id: subscription.id,
+          user_id: userId,
+          price_code: priceCode,
+          trial_ends_at: trialEnd.toISOString(),
+        },
+        undefined,
+        tx,
+      );
 
       return {
         id: subscription.id,
@@ -263,4 +289,3 @@ export class SubscriptionsService {
     return [product.code];
   }
 }
-

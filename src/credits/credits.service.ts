@@ -1,12 +1,16 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, Optional } from '@nestjs/common';
 import { PrismaService } from '../common/services/prisma.service';
-import { CreditBalance, CreditUsage } from '@prisma/client';
+import { CreditBalance, CreditUsage, Prisma } from '@prisma/client';
+import { MeteringService } from './metering.service';
 
 @Injectable()
 export class CreditsService {
   private readonly logger = new Logger(CreditsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly meteringService?: MeteringService,
+  ) {}
 
   /**
    * Find or create a CreditBalance record for a user+service pair.
@@ -98,16 +102,64 @@ export class CreditsService {
   }
 
   /**
-   * Consume credits (called by external services via API)
+   * Consume credits (called by external services via API).
+   *
+   * Two modes, response shape is a strict superset of the legacy contract:
+   * - Legacy flat: { amount } — behavior unchanged.
+   * - Metered:     { featureCode, units, modelTier? } — credits are computed
+   *   from the feature registry, quotas are enforced inside the transaction.
    */
   async consume(data: {
     userId: string;
     serviceId?: string;
-    amount: number;
+    amount?: number;
+    featureCode?: string;
+    units?: number;
+    modelTier?: string;
     description?: string;
     metadata?: Record<string, any>;
-  }): Promise<{ success: boolean; remainingBalance: number; error?: string }> {
-    return this.prisma.$transaction(async (tx) => {
+  }): Promise<{
+    success: boolean;
+    remainingBalance: number;
+    error?: string;
+    creditsCharged?: number;
+    quota?: Record<string, any>;
+  }> {
+    const isMetered = !!data.featureCode;
+    if (isMetered) {
+      if (!this.meteringService) {
+        throw new BadRequestException('Metered consumption is not available');
+      }
+      if (!data.units || data.units < 1) {
+        throw new BadRequestException('units (positive integer) is required with featureCode');
+      }
+    } else if (typeof data.amount !== 'number' || data.amount < 0) {
+      // amount === 0 stays a valid no-op for backwards compatibility
+      throw new BadRequestException('Either amount (>= 0) or featureCode+units is required');
+    }
+
+    // Feature resolution is cached and happens outside the transaction
+    const feature = isMetered
+      ? await this.meteringService!.resolveFeature(data.featureCode!)
+      : null;
+    const chargeAmount = feature
+      ? this.meteringService!.computeCredits(feature, data.units!, data.modelTier)
+      : data.amount!;
+
+    let softCapCrossed: Array<any> = [];
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      if (isMetered) {
+        // Row-lock the balance to serialize concurrent metered consumes
+        // (closes the quota-evaluation race)
+        await tx.$queryRaw(Prisma.sql`
+          SELECT id FROM billing.credit_balances
+          WHERE user_id = ${data.userId}
+            AND service_id IS NOT DISTINCT FROM ${data.serviceId ?? null}::uuid
+          FOR UPDATE
+        `);
+      }
+
       const balance = await tx.creditBalance.findUnique({
         where: {
           userId_serviceId: {
@@ -125,7 +177,7 @@ export class CreditsService {
         };
       }
 
-      if (balance.balance < data.amount) {
+      if (balance.balance < chargeAmount) {
         return {
           success: false,
           remainingBalance: balance.balance,
@@ -133,12 +185,40 @@ export class CreditsService {
         };
       }
 
+      if (isMetered && feature) {
+        const evaluation = await this.meteringService!.evaluateQuotas(tx, {
+          userId: data.userId,
+          serviceId: data.serviceId,
+          balanceId: balance.id,
+          featureCode: feature.code,
+          featureId: feature.id,
+          unitsToAdd: data.units!,
+          creditsToAdd: chargeAmount,
+        });
+        if (evaluation.hardCapHit) {
+          // Same non-throwing contract as insufficient credits: no writes
+          return {
+            success: false,
+            remainingBalance: balance.balance,
+            error: 'Quota exceeded',
+            quota: {
+              window: evaluation.hardCapHit.window,
+              limitUnits: evaluation.hardCapHit.limitUnits,
+              limitCredits: evaluation.hardCapHit.limitCredits,
+              usedUnits: evaluation.hardCapHit.usedUnits,
+              usedCredits: evaluation.hardCapHit.usedCredits,
+            },
+          };
+        }
+        softCapCrossed = evaluation.softCapCrossed;
+      }
+
       // Decrement balance, increment totalUsed
       const updated = await tx.creditBalance.update({
         where: { id: balance.id },
         data: {
-          balance: { decrement: data.amount },
-          totalUsed: { increment: data.amount },
+          balance: { decrement: chargeAmount },
+          totalUsed: { increment: chargeAmount },
         },
       });
 
@@ -147,22 +227,39 @@ export class CreditsService {
         data: {
           creditBalanceId: balance.id,
           userId: data.userId,
-          amount: -data.amount,
+          amount: -chargeAmount,
           type: 'consume',
-          description: data.description ?? 'Credits consumed',
+          description: data.description ?? (feature ? `${feature.name} usage` : 'Credits consumed'),
+          ...(isMetered
+            ? {
+                featureCode: data.featureCode,
+                units: data.units,
+                modelTier: data.modelTier ?? null,
+              }
+            : {}),
           metadata: data.metadata ?? {},
         },
       });
 
       this.logger.log(
-        `Consumed ${data.amount} credits from user ${data.userId} (service: ${data.serviceId ?? 'global'})`,
+        `Consumed ${chargeAmount} credits from user ${data.userId} (service: ${data.serviceId ?? 'global'}${
+          isMetered ? `, feature: ${data.featureCode}, units: ${data.units}` : ''
+        })`,
       );
 
       return {
         success: true,
         remainingBalance: updated.balance,
+        ...(isMetered ? { creditsCharged: chargeAmount } : {}),
       };
     });
+
+    // Post-commit soft-cap warnings (fire-and-forget, Redis-deduped)
+    if (result.success && softCapCrossed.length > 0) {
+      this.meteringService!.emitSoftCapWarnings(data.userId, softCapCrossed);
+    }
+
+    return result;
   }
 
   /**

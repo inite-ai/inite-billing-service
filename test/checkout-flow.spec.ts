@@ -1,9 +1,5 @@
 import { CheckoutService } from '../src/checkout/checkout.service';
-import {
-  NotFoundException,
-  BadRequestException,
-  ForbiddenException,
-} from '@nestjs/common';
+import { NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 
 // Stable UUID mock
 jest.mock('uuid', () => ({ v4: () => 'test-uuid-1234' }));
@@ -67,7 +63,12 @@ describe('CheckoutService', () => {
       },
       paymentProvider: {
         findMany: jest.fn().mockResolvedValue([
-          { code: 'STRIPE', name: 'Stripe', supportedModes: ['SUBSCRIPTION'], currencies: ['USD'] },
+          {
+            code: 'STRIPE',
+            name: 'Stripe',
+            supportedModes: ['SUBSCRIPTION'],
+            currencies: ['USD'],
+          },
         ]),
         findFirst: jest.fn(),
       },
@@ -190,17 +191,13 @@ describe('CheckoutService', () => {
   it('getSession() throws ForbiddenException for wrong user', async () => {
     mockPrisma.order.findUnique.mockResolvedValue(mockOrder);
 
-    await expect(
-      service.getSession('order-1', 'other-user'),
-    ).rejects.toThrow(ForbiddenException);
+    await expect(service.getSession('order-1', 'other-user')).rejects.toThrow(ForbiddenException);
   });
 
   it('getSession() throws NotFoundException for missing session', async () => {
     mockPrisma.order.findUnique.mockResolvedValue(null);
 
-    await expect(
-      service.getSession('missing-id', 'user-1'),
-    ).rejects.toThrow(NotFoundException);
+    await expect(service.getSession('missing-id', 'user-1')).rejects.toThrow(NotFoundException);
   });
 
   // --- paySession() ---
@@ -234,10 +231,7 @@ describe('CheckoutService', () => {
         }),
       }),
     );
-    expect(mockPaymentOrchestrator.applyStateTransition).toHaveBeenCalledWith(
-      'pi-1',
-      'paid',
-    );
+    expect(mockPaymentOrchestrator.applyStateTransition).toHaveBeenCalledWith('pi-1', 'paid');
   });
 
   it('paySession() rejects already-paid order', async () => {
@@ -246,9 +240,7 @@ describe('CheckoutService', () => {
       status: 'paid',
     });
 
-    await expect(
-      service.paySession('order-1', 'user-1', {}),
-    ).rejects.toThrow(BadRequestException);
+    await expect(service.paySession('order-1', 'user-1', {})).rejects.toThrow(BadRequestException);
   });
 
   it('paySession() with invalid promo code throws BadRequestException', async () => {
@@ -258,8 +250,8 @@ describe('CheckoutService', () => {
       error: 'Code expired',
     });
 
-    await expect(
-      service.paySession('order-1', 'user-1', { promoCode: 'EXPIRED' }),
-    ).rejects.toThrow(BadRequestException);
+    await expect(service.paySession('order-1', 'user-1', { promoCode: 'EXPIRED' })).rejects.toThrow(
+      BadRequestException,
+    );
   });
 });

@@ -43,10 +43,7 @@ export class SubscriptionExpirerScheduler {
       try {
         await this.processOne(sub, now);
       } catch (error: any) {
-        this.logger.error(
-          `Failed to sweep subscription ${sub.id}: ${error.message}`,
-          error.stack,
-        );
+        this.logger.error(`Failed to sweep subscription ${sub.id}: ${error.message}`, error.stack);
       }
     }
   }
@@ -54,9 +51,7 @@ export class SubscriptionExpirerScheduler {
   private async processOne(sub: any, now: Date): Promise<void> {
     if (sub.status === 'past_due') {
       const graceDays = sub.price?.graceDays || 0;
-      const graceEnd = new Date(
-        sub.currentPeriodEnd.getTime() + graceDays * 24 * 60 * 60 * 1000,
-      );
+      const graceEnd = new Date(sub.currentPeriodEnd.getTime() + graceDays * 24 * 60 * 60 * 1000);
       if (now >= graceEnd) {
         await this.orchestrator.endSubscription(sub.id, 'grace_period_exhausted');
         this.logger.log(`Sub ${sub.id} ended (grace exhausted)`);

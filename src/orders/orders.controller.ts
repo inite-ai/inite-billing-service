@@ -1,12 +1,4 @@
-import {
-  Controller,
-  Get,
-  Param,
-  Query,
-  UseGuards,
-  HttpCode,
-  HttpStatus,
-} from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { User, RequestUser } from '../auth/decorators/user.decorator';
@@ -51,11 +43,7 @@ export class OrdersController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get order by ID' })
   @ApiResponse({ status: 200, type: OrderResponseDto })
-  async getOrder(
-    @User() user: RequestUser,
-    @Param('id') id: string,
-  ): Promise<OrderResponseDto> {
+  async getOrder(@User() user: RequestUser, @Param('id') id: string): Promise<OrderResponseDto> {
     return this.ordersService.getOrderById(id, user.userId);
   }
 }
-

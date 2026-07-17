@@ -4,8 +4,10 @@ import {
   BadRequestException,
   ForbiddenException,
   Logger,
+  Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { RiskService } from '../risk/risk.service';
 import { PrismaService } from '../common/services/prisma.service';
 import { CatalogService } from '../catalog/catalog.service';
 import { PaymentOrchestratorService } from '../payment-orchestrator/payment-orchestrator.service';
@@ -22,8 +24,7 @@ import { v4 as uuidv4 } from 'uuid';
 @Injectable()
 export class CheckoutService {
   private readonly logger = new Logger(CheckoutService.name);
-  private readonly idempotencyStore: Map<string, CheckoutSessionResponseDto> =
-    new Map();
+  private readonly idempotencyStore: Map<string, CheckoutSessionResponseDto> = new Map();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -33,6 +34,7 @@ export class CheckoutService {
     private readonly promoCodesService: PromoCodesService,
     private readonly funnelService: FunnelService,
     private readonly configService: ConfigService,
+    @Optional() private readonly riskService?: RiskService,
   ) {}
 
   /**
@@ -54,12 +56,11 @@ export class CheckoutService {
     userId: string,
     dto: CreateCheckoutSessionDto,
     idempotencyKey?: string,
+    clientIp?: string,
   ): Promise<CheckoutSessionResponseDto> {
     // Idempotency check
     if (idempotencyKey) {
-      const existing = this.idempotencyStore.get(
-        `${userId}:${idempotencyKey}`,
-      );
+      const existing = this.idempotencyStore.get(`${userId}:${idempotencyKey}`);
       if (existing) {
         this.logger.debug(
           `Returning existing checkout session for idempotency key: ${idempotencyKey}`,
@@ -73,9 +74,7 @@ export class CheckoutService {
     const product = price.product;
 
     if (!product) {
-      throw new NotFoundException(
-        `Product not found for price: ${dto.priceCode}`,
-      );
+      throw new NotFoundException(`Product not found for price: ${dto.priceCode}`);
     }
 
     // Reject checkout if the product is inactive
@@ -85,9 +84,7 @@ export class CheckoutService {
 
     // Validate mode matches product type
     if (dto.mode === 'SUBSCRIPTION' && product.type !== 'subscription') {
-      throw new BadRequestException(
-        `Product ${product.code} is not a subscription product`,
-      );
+      throw new BadRequestException(`Product ${product.code} is not a subscription product`);
     }
     if (dto.mode === 'PAYMENT' && product.type === 'subscription') {
       throw new BadRequestException(
@@ -97,20 +94,14 @@ export class CheckoutService {
 
     // Handle referral code if provided
     if (dto.referralCode) {
-      const affiliate = await this.affiliatesService.getAffiliateByCode(
-        dto.referralCode,
-      );
+      const affiliate = await this.affiliatesService.getAffiliateByCode(dto.referralCode);
       if (affiliate) {
         // Self-referral prevention
         if (affiliate.userId === userId) {
           this.logger.debug(`Self-referral blocked for user ${userId}`);
         } else {
           try {
-            await this.affiliatesService.trackReferral(
-              affiliate.id,
-              userId,
-              dto.referralCode,
-            );
+            await this.affiliatesService.trackReferral(affiliate.id, userId, dto.referralCode);
           } catch (error: any) {
             this.logger.debug(`Referral tracking: ${error.message}`);
           }
@@ -137,6 +128,29 @@ export class CheckoutService {
       },
     });
 
+    // Risk assessment (monitor-only unless RISK_BLOCKING_ENABLED)
+    if (this.riskService) {
+      try {
+        const risk = await this.riskService.assessCheckout(order, {
+          ip: clientIp,
+        });
+        if (risk.status === 'blocked') {
+          await this.prisma.order.update({
+            where: { id: order.id },
+            data: {
+              status: 'failed',
+              metadata: { ...(order.metadata as any), riskBlocked: true },
+            },
+          });
+          throw new BadRequestException('This order cannot be processed. Please contact support.');
+        }
+      } catch (error: any) {
+        if (error instanceof BadRequestException) throw error;
+        // Risk scoring must never break checkout
+        this.logger.warn(`Risk assessment failed: ${error.message}`);
+      }
+    }
+
     // Track funnel event: checkout_started
     this.funnelService.track({
       userId,
@@ -153,8 +167,7 @@ export class CheckoutService {
       },
     });
 
-    const frontendUrl =
-      this.configService.get('FRONTEND_URL') || 'https://billing.inite.ai';
+    const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://billing.inite.ai';
     const response: CheckoutSessionResponseDto = {
       sessionId: order.id,
       checkoutUrl: `${frontendUrl}/checkout/${order.id}`,
@@ -216,9 +229,7 @@ export class CheckoutService {
         name: order.price.product.name,
         code: order.price.product.code,
         type: order.price.product.type,
-        description:
-          (order.price.product.metadata as Record<string, any>)?.description ||
-          null,
+        description: (order.price.product.metadata as Record<string, any>)?.description || null,
       },
       price: {
         code: order.price.code,
@@ -263,9 +274,7 @@ export class CheckoutService {
     }
 
     if (order.status !== 'created') {
-      throw new BadRequestException(
-        `Order is in '${order.status}' status and cannot be paid`,
-      );
+      throw new BadRequestException(`Order is in '${order.status}' status and cannot be paid`);
     }
 
     const price = order.price;
@@ -284,9 +293,7 @@ export class CheckoutService {
       );
 
       if (!promoValidation.isValid) {
-        throw new BadRequestException(
-          `Invalid promo code: ${promoValidation.error}`,
-        );
+        throw new BadRequestException(`Invalid promo code: ${promoValidation.error}`);
       }
 
       orderAmount = promoValidation.finalAmount;
@@ -367,10 +374,7 @@ export class CheckoutService {
       });
 
       // Transition created → paid triggers full fulfillment (order status, entitlements, etc.)
-      await this.paymentOrchestrator.applyStateTransition(
-        paymentIntent.id,
-        'paid',
-      );
+      await this.paymentOrchestrator.applyStateTransition(paymentIntent.id, 'paid');
 
       return {
         checkoutUrl: successUrl,

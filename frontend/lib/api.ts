@@ -11,6 +11,15 @@ const api = axios.create({
   withCredentials: true,
 })
 
+// Backend captures this into UserContact for localized emails/notifications
+api.interceptors.request.use((config) => {
+  if (typeof document !== 'undefined') {
+    const locale = document.cookie.match(/(?:^|;\s*)locale=(\w+)/)?.[1]
+    if (locale) config.headers['X-User-Locale'] = locale
+  }
+  return config
+})
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {

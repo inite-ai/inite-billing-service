@@ -11,6 +11,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import { useTranslations } from 'next-intl'
 import LanguageSwitcher from '@/components/ui/LanguageSwitcher'
+import NotificationBell from '@/components/notifications/NotificationBell'
 
 const navItems = [
   { href: '/dashboard', key: 'dashboard', icon: LayoutDashboard },
@@ -88,6 +89,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         <div className="border-t border-slate-800 pt-4 space-y-3">
           <div className="flex items-center justify-between px-3">
             <LanguageSwitcher />
+            <NotificationBell />
           </div>
           {user && (
             <div className="flex items-center gap-3 px-3">
@@ -139,6 +141,9 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
           <span className="font-bold text-lg gradient-text">INITE</span>
           <span className="text-slate-400 text-sm ml-1">Billing</span>
         </Link>
+        <div className="ml-auto">
+          <NotificationBell direction="down" />
+        </div>
       </div>
 
       {/* Mobile drawer */}

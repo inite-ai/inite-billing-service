@@ -1,23 +1,14 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
-import { MessageCircle, X, Send, Loader2, Bot, User, Wrench } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { useChat } from '@ai-sdk/react'
+import { DefaultChatTransport } from 'ai'
+import type { UIMessage } from 'ai'
+import { MessageCircle, X, Send, Loader2, Bot, User, Wrench, ThumbsUp, ThumbsDown } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { API_URL } from '@/lib/config'
-
-interface ChatMessage {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-}
-
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-}
+import api from '@/lib/api'
+import ActionConfirmCard, { ActionData } from './ActionConfirmCard'
 
 /**
  * Parse inline markdown into React elements (no dangerouslySetInnerHTML).
@@ -118,120 +109,203 @@ function renderMarkdown(text: string) {
   return <div className="space-y-1">{elements}</div>
 }
 
+function messageText(message: UIMessage): string {
+  return message.parts
+    .filter((p): p is Extract<typeof p, { type: 'text' }> => p.type === 'text')
+    .map((p) => p.text)
+    .join('')
+}
+
+interface ToolPartView {
+  key: string
+  toolName: string
+  running: boolean
+}
+
+function actionParts(message: UIMessage): ActionData[] {
+  return message.parts
+    .filter((p): p is Extract<typeof p, { type: `data-${string}` }> =>
+      p.type === 'data-action',
+    )
+    .map((p) => (p as { data: ActionData }).data)
+    .filter((d): d is ActionData => Boolean(d?.id))
+}
+
+function savedMessageId(message: UIMessage): string | null {
+  const part = message.parts.find((p) => p.type === 'data-message-saved') as
+    | { data?: { messageId?: string } }
+    | undefined
+  return part?.data?.messageId ?? null
+}
+
+function FeedbackRow({
+  conversationId,
+  messageId,
+}: {
+  conversationId: string
+  messageId: string
+}) {
+  const t = useTranslations('assistant.feedback')
+  const [rating, setRating] = useState<'up' | 'down' | null>(null)
+  const [showComment, setShowComment] = useState(false)
+  const [comment, setComment] = useState('')
+  const [thanked, setThanked] = useState(false)
+
+  const send = async (r: 'up' | 'down', c?: string) => {
+    setRating(r)
+    try {
+      await api.post(
+        `/v1/conversations/${conversationId}/messages/${messageId}/feedback`,
+        { rating: r, comment: c || undefined },
+      )
+      setThanked(true)
+    } catch {
+      // non-critical
+    }
+  }
+
+  if (thanked && !showComment) {
+    return <p className="text-[10px] text-slate-400 mt-1">{t('thanks')}</p>
+  }
+
+  return (
+    <div className="mt-1">
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => send('up')}
+          className={`p-1 rounded transition-colors ${
+            rating === 'up'
+              ? 'text-green-500'
+              : 'text-slate-400 hover:text-green-500'
+          }`}
+          aria-label={t('up')}
+        >
+          <ThumbsUp className="w-3 h-3" />
+        </button>
+        <button
+          onClick={() => {
+            setRating('down')
+            setShowComment(true)
+          }}
+          className={`p-1 rounded transition-colors ${
+            rating === 'down'
+              ? 'text-red-500'
+              : 'text-slate-400 hover:text-red-500'
+          }`}
+          aria-label={t('down')}
+        >
+          <ThumbsDown className="w-3 h-3" />
+        </button>
+      </div>
+      {showComment && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            setShowComment(false)
+            send('down', comment)
+          }}
+          className="flex items-center gap-1 mt-1"
+        >
+          <input
+            type="text"
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            placeholder={t('commentPlaceholder')}
+            className="flex-1 px-2 py-1 text-xs rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-violet-500"
+            maxLength={1000}
+          />
+          <button
+            type="submit"
+            className="text-xs text-violet-500 hover:text-violet-400 font-medium"
+          >
+            {t('send')}
+          </button>
+        </form>
+      )}
+    </div>
+  )
+}
+
+function toolParts(message: UIMessage): ToolPartView[] {
+  const views: ToolPartView[] = []
+  for (const part of message.parts) {
+    if (part.type === 'dynamic-tool') {
+      views.push({
+        key: part.toolCallId,
+        toolName: part.toolName,
+        running: part.state !== 'output-available' && part.state !== 'output-error',
+      })
+    } else if (part.type.startsWith('tool-')) {
+      const p = part as { type: string; toolCallId: string; state: string }
+      views.push({
+        key: p.toolCallId,
+        toolName: part.type.slice('tool-'.length),
+        running: p.state !== 'output-available' && p.state !== 'output-error',
+      })
+    }
+  }
+  return views
+}
+
 export default function ChatPanel() {
   const [isOpen, setIsOpen] = useState(false)
   const [input, setInput] = useState('')
-  const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [conversationId, setConversationId] = useState<string | null>(null)
-  const [toolIndicator, setToolIndicator] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const conversationIdRef = useRef<string | null>(null)
   const t = useTranslations('assistant')
+
+  const [transport] = useState(
+    () =>
+      new DefaultChatTransport<UIMessage>({
+        api: `${API_URL}/v1/assistant/chat`,
+        credentials: 'include',
+        prepareSendMessagesRequest: ({ messages }) => {
+          const last = messages[messages.length - 1]
+          const text = last
+            ? last.parts
+                .filter((p): p is Extract<typeof p, { type: 'text' }> => p.type === 'text')
+                .map((p) => p.text)
+                .join('')
+            : ''
+          return {
+            body: {
+              message: text,
+              conversationId: conversationIdRef.current ?? undefined,
+            },
+          }
+        },
+      })
+  )
+
+  const { messages, sendMessage, status, error } = useChat<UIMessage>({
+    transport,
+    onData: (dataPart) => {
+      if (dataPart.type === 'data-conversation') {
+        const data = dataPart.data as { conversationId?: string }
+        if (data?.conversationId) conversationIdRef.current = data.conversationId
+      }
+    },
+  })
+
+  const isLoading = status === 'submitted' || status === 'streaming'
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isLoading])
-
-  const sendMessage = useCallback(async (message: string) => {
-    const userMsg: ChatMessage = {
-      id: `user-${Date.now()}`,
-      role: 'user',
-      content: message,
-    }
-    setMessages(prev => [...prev, userMsg])
-    setIsLoading(true)
-    setError(null)
-    setToolIndicator(null)
-
-    try {
-      const res = await fetch(`${API_URL}/v1/assistant/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          message,
-          conversationId: conversationId || undefined,
-        }),
-      })
-
-      if (!res.ok) {
-        throw new Error(`Request failed: ${res.status}`)
-      }
-
-      const reader = res.body?.getReader()
-      if (!reader) throw new Error('No response body')
-
-      const decoder = new TextDecoder()
-      let assistantText = ''
-      let buffer = ''
-      const assistantMsgId = `assistant-${Date.now()}`
-
-      // Add placeholder assistant message
-      setMessages(prev => [
-        ...prev,
-        { id: assistantMsgId, role: 'assistant', content: '' },
-      ])
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-        const blocks = buffer.split('\n\n')
-        buffer = blocks.pop() || ''
-
-        for (const block of blocks) {
-          if (!block.trim()) continue
-          const eventMatch = block.match(/^event: (\w+)\ndata: (.+)$/s)
-          if (!eventMatch) continue
-          const [, eventType, data] = eventMatch
-
-          try {
-            const parsed = JSON.parse(data)
-
-            if (eventType === 'text_delta') {
-              assistantText += parsed.text
-              setMessages(prev =>
-                prev.map(m =>
-                  m.id === assistantMsgId
-                    ? { ...m, content: assistantText }
-                    : m
-                )
-              )
-              setToolIndicator(null)
-            } else if (eventType === 'tool_call') {
-              setToolIndicator(parsed.toolName)
-            } else if (eventType === 'conversation') {
-              setConversationId(parsed.conversationId)
-            } else if (eventType === 'done') {
-              setToolIndicator(null)
-            }
-          } catch {
-            // ignore parse errors
-          }
-        }
-      }
-
-      // If assistant didn't produce any text, remove the placeholder
-      if (!assistantText) {
-        setMessages(prev => prev.filter(m => m.id !== assistantMsgId))
-      }
-    } catch (err: any) {
-      setError(err.message || 'An error occurred')
-    } finally {
-      setIsLoading(false)
-      setToolIndicator(null)
-    }
-  }, [conversationId])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!input.trim() || isLoading) return
     const text = input
     setInput('')
-    await sendMessage(text)
+    await sendMessage({ text })
   }
+
+  const lastMessage = messages[messages.length - 1]
+  const runningTool =
+    lastMessage?.role === 'assistant'
+      ? toolParts(lastMessage).find((tp) => tp.running)
+      : undefined
 
   return (
     <>
@@ -281,7 +355,13 @@ export default function ChatPanel() {
             )}
 
             {messages.map((message) => {
-              if (!message.content && message.role === 'assistant') return null
+              const content = messageText(message)
+              const actions =
+                message.role === 'assistant' ? actionParts(message) : []
+              if (!content && actions.length === 0 && message.role === 'assistant')
+                return null
+              const dbMessageId =
+                message.role === 'assistant' ? savedMessageId(message) : null
 
               return (
                 <div
@@ -295,17 +375,30 @@ export default function ChatPanel() {
                       <Bot className="w-4 h-4 text-white" />
                     </div>
                   )}
-                  <div
-                    className={`rounded-2xl px-3 py-2 max-w-[85%] text-sm ${
-                      message.role === 'user'
-                        ? 'bg-violet-500 text-white rounded-tr-sm'
-                        : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-tl-sm'
-                    }`}
-                  >
-                    {message.role === 'assistant' ? (
-                      renderMarkdown(message.content)
-                    ) : (
-                      <p className="whitespace-pre-wrap">{message.content}</p>
+                  <div className="max-w-[85%] min-w-0">
+                    {(content || message.role === 'user') && (
+                      <div
+                        className={`rounded-2xl px-3 py-2 text-sm ${
+                          message.role === 'user'
+                            ? 'bg-violet-500 text-white rounded-tr-sm'
+                            : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-tl-sm'
+                        }`}
+                      >
+                        {message.role === 'assistant' ? (
+                          renderMarkdown(content)
+                        ) : (
+                          <p className="whitespace-pre-wrap">{content}</p>
+                        )}
+                      </div>
+                    )}
+                    {actions.map((action) => (
+                      <ActionConfirmCard key={action.id} action={action} />
+                    ))}
+                    {dbMessageId && conversationIdRef.current && !isLoading && (
+                      <FeedbackRow
+                        conversationId={conversationIdRef.current}
+                        messageId={dbMessageId}
+                      />
                     )}
                   </div>
                   {message.role === 'user' && (
@@ -318,7 +411,7 @@ export default function ChatPanel() {
             })}
 
             {/* Tool indicator */}
-            {toolIndicator && (
+            {runningTool && (
               <div className="flex gap-2">
                 <div className="flex-shrink-0 w-7 h-7 rounded-full bg-gradient-to-r from-violet-600 to-purple-600 flex items-center justify-center">
                   <Bot className="w-4 h-4 text-white" />
@@ -326,14 +419,14 @@ export default function ChatPanel() {
                 <div className="bg-gray-100 dark:bg-gray-800 rounded-2xl rounded-tl-sm px-3 py-2">
                   <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
                     <Wrench className="w-3 h-3" />
-                    {toolIndicator.replace(/_/g, ' ')}
+                    {runningTool.toolName.replace(/_/g, ' ')}
                   </div>
                 </div>
               </div>
             )}
 
             {/* Loading indicator */}
-            {isLoading && !toolIndicator && (
+            {isLoading && !runningTool && (
               <div className="flex gap-2">
                 <div className="flex-shrink-0 w-7 h-7 rounded-full bg-gradient-to-r from-violet-600 to-purple-600 flex items-center justify-center">
                   <Bot className="w-4 h-4 text-white" />

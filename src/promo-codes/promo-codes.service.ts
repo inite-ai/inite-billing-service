@@ -1,11 +1,5 @@
-import {
-  Injectable,
-  Logger,
-  NotFoundException,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../common/services/prisma.service';
-import { Decimal } from '@prisma/client/runtime/library';
 
 @Injectable()
 export class PromoCodesService {
@@ -200,9 +194,7 @@ export class PromoCodesService {
     metadata?: any;
   }) {
     if (!['percentage', 'fixed_amount'].includes(data.discountType)) {
-      throw new BadRequestException(
-        'discountType must be "percentage" or "fixed_amount"',
-      );
+      throw new BadRequestException('discountType must be "percentage" or "fixed_amount"');
     }
 
     // M4 fix: Validate discountValue > 0 for all discount types
@@ -211,9 +203,7 @@ export class PromoCodesService {
     }
 
     if (data.discountType === 'percentage' && data.discountValue > 100) {
-      throw new BadRequestException(
-        'Percentage discount must be between 0 and 100',
-      );
+      throw new BadRequestException('Percentage discount must be between 0 and 100');
     }
 
     return this.prisma.promoCode.create({
@@ -236,10 +226,7 @@ export class PromoCodesService {
     });
   }
 
-  async findAll(params: {
-    serviceId?: string;
-    isActive?: boolean;
-  }) {
+  async findAll(params: { serviceId?: string; isActive?: boolean }) {
     const where: any = {};
     if (params.serviceId) where.serviceId = params.serviceId;
     if (params.isActive !== undefined) where.isActive = params.isActive;
@@ -291,13 +278,8 @@ export class PromoCodesService {
       throw new NotFoundException(`Promo code not found: ${id}`);
     }
 
-    if (
-      data.discountType &&
-      !['percentage', 'fixed_amount'].includes(data.discountType)
-    ) {
-      throw new BadRequestException(
-        'discountType must be "percentage" or "fixed_amount"',
-      );
+    if (data.discountType && !['percentage', 'fixed_amount'].includes(data.discountType)) {
+      throw new BadRequestException('discountType must be "percentage" or "fixed_amount"');
     }
 
     const updateData: any = { ...data };
@@ -331,10 +313,7 @@ export class PromoCodesService {
       orderBy: { appliedAt: 'desc' },
     });
 
-    const totalDiscount = usages.reduce(
-      (sum, u) => sum + Number(u.discountApplied),
-      0,
-    );
+    const totalDiscount = usages.reduce((sum, u) => sum + Number(u.discountApplied), 0);
 
     return {
       promoCode,

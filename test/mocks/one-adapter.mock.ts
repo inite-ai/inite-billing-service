@@ -15,9 +15,7 @@ export class MockOneAdapter implements PaymentRailAdapter {
     return 'ONE';
   }
 
-  async createPaymentIntent(
-    input: CreateIntentInput,
-  ): Promise<CreateIntentResult> {
+  async createPaymentIntent(input: CreateIntentInput): Promise<CreateIntentResult> {
     const intentId = `one_intent_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const checkoutId = `one_checkout_${Date.now()}`;
 
@@ -56,7 +54,10 @@ export class MockOneAdapter implements PaymentRailAdapter {
     }
 
     // Map ONE status to unified status
-    const statusMap: Record<string, 'created' | 'opened' | 'paid' | 'failed' | 'expired' | 'refunded'> = {
+    const statusMap: Record<
+      string,
+      'created' | 'opened' | 'paid' | 'failed' | 'expired' | 'refunded'
+    > = {
       OPENED: 'opened',
       CLOSED: 'paid',
       EXPIRED: 'expired',

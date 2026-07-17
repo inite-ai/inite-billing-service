@@ -5,7 +5,6 @@ import {
   Body,
   Param,
   Query,
-  Req,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -16,11 +15,15 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { JwtOrServiceGuard } from '../auth/guards/jwt-or-service.guard';
 import { User, RequestUser } from '../auth/decorators/user.decorator';
 import { CreditsService } from './credits.service';
+import { MeteringService } from './metering.service';
 
 @ApiTags('Credits')
 @Controller('v1/credits')
 export class CreditsController {
-  constructor(private readonly creditsService: CreditsService) {}
+  constructor(
+    private readonly creditsService: CreditsService,
+    private readonly meteringService: MeteringService,
+  ) {}
 
   // ─── User endpoints (JWT auth) ────────────────────────────
 
@@ -49,19 +52,48 @@ export class CreditsController {
     });
   }
 
+  @Get('me/usage/breakdown')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Get my usage breakdown by feature/day' })
+  async getMyUsageBreakdown(
+    @User() user: RequestUser,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('groupBy') groupBy?: string,
+    @Query('featureCode') featureCode?: string,
+  ) {
+    return this.meteringService.getUsageBreakdown({
+      userId: user.userId,
+      from: from ? new Date(from) : undefined,
+      to: to ? new Date(to) : undefined,
+      groupBy: groupBy === 'day' ? 'day' : 'feature',
+      featureCode,
+    });
+  }
+
   // ─── Service endpoints (JWT or Service API key) ───────────
+
+  @Get('features')
+  @UseGuards(JwtOrServiceGuard)
+  @ApiOperation({ summary: 'List active metered features (codes and rates)' })
+  async listFeatures() {
+    return this.meteringService.listFeatures();
+  }
 
   @Post('consume')
   @UseGuards(JwtOrServiceGuard)
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Consume credits for a user' })
+  @ApiOperation({ summary: 'Consume credits for a user (flat or metered)' })
   async consumeCredits(
     @User() user: RequestUser,
     @Body()
     body: {
       userId: string;
       serviceId?: string;
-      amount: number;
+      amount?: number;
+      featureCode?: string;
+      units?: number;
+      modelTier?: string;
       description?: string;
       metadata?: Record<string, any>;
     },
@@ -91,16 +123,17 @@ export class CreditsController {
       throw new ForbiddenException('Only service accounts can adjust credits');
     }
     const serviceId = body.serviceId ?? user.serviceId;
-    return this.creditsService.adminAdjust({ ...body, serviceId, description: body.description || 'service-adjust' });
+    return this.creditsService.adminAdjust({
+      ...body,
+      serviceId,
+      description: body.description || 'service-adjust',
+    });
   }
 
   @Get(':userId')
   @UseGuards(JwtOrServiceGuard)
   @ApiOperation({ summary: 'Get user balances (service-to-service)' })
-  async getUserBalances(
-    @User() user: RequestUser,
-    @Param('userId') userId: string,
-  ) {
+  async getUserBalances(@User() user: RequestUser, @Param('userId') userId: string) {
     // C4 fix: Non-service callers can only access their own balances
     if (!user.isService && userId !== user.userId) {
       throw new ForbiddenException('You can only access your own credit balances');

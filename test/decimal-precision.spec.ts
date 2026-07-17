@@ -138,7 +138,7 @@ describe('Decimal Precision — Promo Code Calculations', () => {
   });
 
   it('discount + final always equals original (no money lost)', async () => {
-    const amounts = [1.99, 9.99, 49.95, 99.99, 199.50, 999.99, 1000.01];
+    const amounts = [1.99, 9.99, 49.95, 99.99, 199.5, 999.99, 1000.01];
     const rates = [5, 10, 15, 20, 25, 33.33, 50, 75, 99.99];
 
     for (const amount of amounts) {

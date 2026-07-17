@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import api from '@/lib/api'
 import type { Service } from '@/lib/types'
+import AiInsightsCard from '@/components/admin/AiInsightsCard'
 
 /* ---------- types ---------- */
 interface PipelineItem {
@@ -224,6 +225,9 @@ export default function AdminFunnelPage() {
           <Select value={serviceId} onChange={e => setServiceId(e.target.value)} options={serviceOptions} />
         </div>
       </div>
+
+      {/* AI insights */}
+      <AiInsightsCard serviceId={serviceId || undefined} />
 
       {/* Stats bar */}
       {pipeline && <StatsBar stats={pipeline.stats} />}

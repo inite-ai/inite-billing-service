@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AdminController } from './admin.controller';
+import { MeteringAdminController } from './metering-admin.controller';
 import { AdminService } from './admin.service';
 import { AdminCatalogService } from './services/admin-catalog.service';
 import { AdminOrdersService } from './services/admin-orders.service';
@@ -13,10 +14,11 @@ import { PaymentOrchestratorModule } from '../payment-orchestrator/payment-orche
 import { PromoCodesModule } from '../promo-codes/promo-codes.module';
 import { FunnelModule } from '../funnel/funnel.module';
 import { CreditsModule } from '../credits/credits.module';
+import { RagModule } from '../rag/rag.module';
 
 @Module({
-  imports: [PaymentOrchestratorModule, PromoCodesModule, FunnelModule, CreditsModule],
-  controllers: [AdminController],
+  imports: [PaymentOrchestratorModule, PromoCodesModule, FunnelModule, CreditsModule, RagModule],
+  controllers: [AdminController, MeteringAdminController],
   providers: [
     AdminService,
     AdminCatalogService,
@@ -28,5 +30,6 @@ import { CreditsModule } from '../credits/credits.module';
     PrismaService,
     ReferralLevelsService,
   ],
+  exports: [AdminOrdersService],
 })
 export class AdminModule {}

@@ -36,11 +36,7 @@ export class AffiliatesController {
     @Body() dto: CreateAffiliateDto,
     @Query('serviceId') serviceId?: string,
   ): Promise<AffiliateResponseDto> {
-    return this.affiliatesService.createOrGetAffiliate(
-      user.userId,
-      dto.referralCode,
-      serviceId,
-    );
+    return this.affiliatesService.createOrGetAffiliate(user.userId, dto.referralCode, serviceId);
   }
 
   @Get('me')
@@ -112,10 +108,7 @@ export class AffiliatesController {
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get available balance for withdrawal' })
-  async getMyBalance(
-    @User() user: RequestUser,
-    @Query('serviceId') serviceId?: string,
-  ) {
+  async getMyBalance(@User() user: RequestUser, @Query('serviceId') serviceId?: string) {
     const affiliate = await this.affiliatesService.getAffiliateByUserId(user.userId, serviceId);
     return this.affiliatesService.getBalance(affiliate.id);
   }
@@ -137,10 +130,7 @@ export class AffiliatesController {
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get my referral tree' })
-  async getMyTree(
-    @User() user: RequestUser,
-    @Query('serviceId') serviceId?: string,
-  ) {
+  async getMyTree(@User() user: RequestUser, @Query('serviceId') serviceId?: string) {
     const affiliate = await this.affiliatesService.getAffiliateByUserId(user.userId, serviceId);
     return this.affiliatesService.getAffiliateTree(affiliate.id);
   }

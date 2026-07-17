@@ -1,13 +1,26 @@
-import {
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { randomBytes } from 'crypto';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { PrismaService } from '../../common/services/prisma.service';
 
 @Injectable()
 export class AdminCatalogService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(AdminCatalogService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional()
+    @InjectQueue('embeddings')
+    private readonly embeddingsQueue?: Queue,
+  ) {}
+
+  /** Fire-and-forget: product CRUD must never fail because of embeddings. */
+  private enqueueEmbedding(productId: string): void {
+    void this.embeddingsQueue
+      ?.add('embed-product', { productId })
+      .catch((error: any) => this.logger.warn(`Embedding enqueue failed: ${error.message}`));
+  }
 
   private generateApiKey(): string {
     return `sk_${randomBytes(24).toString('hex')}`;
@@ -39,10 +52,7 @@ export class AdminCatalogService {
     });
   }
 
-  async updateService(
-    id: string,
-    data: { name?: string; isActive?: boolean; metadata?: any },
-  ) {
+  async updateService(id: string, data: { name?: string; isActive?: boolean; metadata?: any }) {
     const service = await this.prisma.service.findUnique({ where: { id } });
     if (!service) throw new NotFoundException(`Service not found: ${id}`);
     return this.prisma.service.update({ where: { id }, data });
@@ -90,7 +100,9 @@ export class AdminCatalogService {
     type: any;
     metadata?: any;
   }) {
-    return this.prisma.product.create({ data });
+    const created = await this.prisma.product.create({ data });
+    this.enqueueEmbedding(created.id);
+    return created;
   }
 
   async updateProduct(
@@ -105,7 +117,9 @@ export class AdminCatalogService {
   ) {
     const product = await this.prisma.product.findUnique({ where: { id } });
     if (!product) throw new NotFoundException(`Product not found: ${id}`);
-    return this.prisma.product.update({ where: { id }, data });
+    const updated = await this.prisma.product.update({ where: { id }, data });
+    this.enqueueEmbedding(id);
+    return updated;
   }
 
   async deleteProduct(id: string) {

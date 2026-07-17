@@ -1,4 +1,4 @@
-import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsOptional } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export enum OrderStatusFilter {
@@ -86,4 +86,3 @@ export class PaymentIntentResponseDto {
   @ApiProperty()
   updatedAt: Date;
 }
-

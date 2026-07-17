@@ -16,7 +16,7 @@ describe('Orders E2E Tests', () => {
   let mockOneAdapter: MockOneAdapter;
   let authToken: string;
   let userId: string;
-  let productId: string;
+  let _productId: string;
   let priceId: string;
   let orderId: string;
   let paymentIntentId: string;
@@ -56,7 +56,7 @@ describe('Orders E2E Tests', () => {
         isActive: true,
       },
     });
-    productId = product.id;
+    _productId = product.id;
 
     const price = await prisma.price.create({
       data: {
@@ -74,7 +74,7 @@ describe('Orders E2E Tests', () => {
     await cleanupTestData(prisma);
     await app.close();
     await prisma.$disconnect();
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise((resolve) => setTimeout(resolve, 200));
   });
 
   beforeEach(async () => {
@@ -90,7 +90,7 @@ describe('Orders E2E Tests', () => {
         isActive: true,
       },
     });
-    productId = product.id;
+    _productId = product.id;
 
     const price = await prisma.price.create({
       data: {
@@ -162,7 +162,7 @@ describe('Orders E2E Tests', () => {
         'OPENED',
       );
       await orchestrator.applyStateTransition(paymentIntentId, 'opened');
-      
+
       // Then transition to paid
       mockOneAdapter.setIntentStatus(
         (await prisma.paymentIntent.findUnique({ where: { id: paymentIntentId } }))

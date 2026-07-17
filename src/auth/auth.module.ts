@@ -15,7 +15,14 @@ import { RolesGuard } from './guards/roles.guard';
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({}),
   ],
-  providers: [PrismaService, JwtStrategy, JwtAuthGuard, ServiceAuthGuard, JwtOrServiceGuard, RolesGuard],
+  providers: [
+    PrismaService,
+    JwtStrategy,
+    JwtAuthGuard,
+    ServiceAuthGuard,
+    JwtOrServiceGuard,
+    RolesGuard,
+  ],
   exports: [JwtAuthGuard, ServiceAuthGuard, JwtOrServiceGuard, RolesGuard],
 })
 export class AuthModule {}

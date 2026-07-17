@@ -19,9 +19,7 @@ export class MockStripeAdapter implements PaymentRailAdapter {
     return 'STRIPE';
   }
 
-  async createPaymentIntent(
-    input: CreateIntentInput,
-  ): Promise<CreateIntentResult> {
+  async createPaymentIntent(input: CreateIntentInput): Promise<CreateIntentResult> {
     const intentId = `pi_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const sessionId = `cs_${Date.now()}`;
 
@@ -59,7 +57,10 @@ export class MockStripeAdapter implements PaymentRailAdapter {
     }
 
     // Map Stripe status to unified status
-    const statusMap: Record<string, 'created' | 'opened' | 'paid' | 'failed' | 'expired' | 'refunded'> = {
+    const statusMap: Record<
+      string,
+      'created' | 'opened' | 'paid' | 'failed' | 'expired' | 'refunded'
+    > = {
       requires_payment_method: 'opened',
       requires_confirmation: 'opened',
       requires_action: 'opened',

@@ -1,12 +1,7 @@
 import { CheckoutService } from '../src/checkout/checkout.service';
 import { SubscriptionsService } from '../src/subscriptions/subscriptions.service';
 import { CreditsService } from '../src/credits/credits.service';
-import {
-  ForbiddenException,
-  NotFoundException,
-  BadRequestException,
-  ConflictException,
-} from '@nestjs/common';
+import { ForbiddenException, BadRequestException, ConflictException } from '@nestjs/common';
 
 jest.mock('uuid', () => ({ v4: () => 'test-uuid' }));
 
@@ -70,9 +65,7 @@ describe('IDOR — Checkout Session Access', () => {
       metadata: {},
     });
 
-    await expect(
-      service.paySession('order-1', 'user-A', {}),
-    ).rejects.toThrow(ForbiddenException);
+    await expect(service.paySession('order-1', 'user-A', {})).rejects.toThrow(ForbiddenException);
   });
 
   it('getSession() — undefined userId (service caller) bypasses ownership check', async () => {
@@ -82,7 +75,14 @@ describe('IDOR — Checkout Session Access', () => {
       status: 'created',
       amount: decimal(100),
       currency: 'USD',
-      price: { id: 'p1', code: 'plan', amount: decimal(100), currency: 'USD', interval: 'month', product: { id: 'prod', code: 'plan', name: 'Plan', type: 'subscription', serviceId: 's1' } },
+      price: {
+        id: 'p1',
+        code: 'plan',
+        amount: decimal(100),
+        currency: 'USD',
+        interval: 'month',
+        product: { id: 'prod', code: 'plan', name: 'Plan', type: 'subscription', serviceId: 's1' },
+      },
       metadata: {},
     });
     mockPrisma.paymentProvider.findMany.mockResolvedValue([]);
@@ -130,9 +130,9 @@ describe('IDOR — Subscription Trial', () => {
     });
 
     // Service B tries to create trial for service A's product
-    await expect(
-      service.startTrial('user-1', 'plan-monthly', 'service-B'),
-    ).rejects.toThrow(BadRequestException);
+    await expect(service.startTrial('user-1', 'plan-monthly', 'service-B')).rejects.toThrow(
+      BadRequestException,
+    );
   });
 
   it('prevents duplicate trial for same product', async () => {
@@ -144,12 +144,9 @@ describe('IDOR — Subscription Trial', () => {
       productId: 'prod-1',
       product: { id: 'prod-1', code: 'plan', name: 'Plan', serviceId: null, metadata: {} },
     });
-    mockPrisma.subscription.findFirst
-      .mockResolvedValueOnce({ id: 'sub-existing' }); // active sub exists
+    mockPrisma.subscription.findFirst.mockResolvedValueOnce({ id: 'sub-existing' }); // active sub exists
 
-    await expect(
-      service.startTrial('user-1', 'plan-monthly'),
-    ).rejects.toThrow(ConflictException);
+    await expect(service.startTrial('user-1', 'plan-monthly')).rejects.toThrow(ConflictException);
   });
 
   it('prevents re-trial after cancelled subscription', async () => {
@@ -165,9 +162,7 @@ describe('IDOR — Subscription Trial', () => {
       .mockResolvedValueOnce(null) // no active sub
       .mockResolvedValueOnce({ id: 'sub-past', status: 'canceled' }); // past trial exists
 
-    await expect(
-      service.startTrial('user-1', 'plan-monthly'),
-    ).rejects.toThrow(ConflictException);
+    await expect(service.startTrial('user-1', 'plan-monthly')).rejects.toThrow(ConflictException);
   });
 
   it('rejects price without trial days', async () => {
@@ -180,9 +175,7 @@ describe('IDOR — Subscription Trial', () => {
       product: { id: 'prod-1', code: 'plan', name: 'Plan', serviceId: null, metadata: {} },
     });
 
-    await expect(
-      service.startTrial('user-1', 'no-trial'),
-    ).rejects.toThrow(BadRequestException);
+    await expect(service.startTrial('user-1', 'no-trial')).rejects.toThrow(BadRequestException);
   });
 });
 

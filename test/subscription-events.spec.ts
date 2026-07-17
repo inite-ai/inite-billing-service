@@ -51,9 +51,11 @@ describe('handleSubscriptionEvent', () => {
         create: jest.fn(),
       },
       order: {
-        create: jest.fn().mockImplementation(({ data }: any) =>
-          Promise.resolve({ id: 'renewal-order-1', ...data }),
-        ),
+        create: jest
+          .fn()
+          .mockImplementation(({ data }: any) =>
+            Promise.resolve({ id: 'renewal-order-1', ...data }),
+          ),
         findUnique: jest.fn(),
         update: jest.fn(),
       },
@@ -77,7 +79,10 @@ describe('handleSubscriptionEvent', () => {
         { provide: OutboxService, useValue: outbox },
         { provide: AffiliatesService, useValue: { processMultiLevelCommissions: jest.fn() } },
         { provide: FunnelService, useValue: { track: jest.fn() } },
-        { provide: CreditsService, useValue: { grant: jest.fn(), resetForPeriod: jest.fn(), refund: jest.fn() } },
+        {
+          provide: CreditsService,
+          useValue: { grant: jest.fn(), resetForPeriod: jest.fn(), refund: jest.fn() },
+        },
       ],
     }).compile();
 
@@ -234,7 +239,12 @@ describe('handleSubscriptionEvent', () => {
       });
       prisma.subscription.findFirst.mockResolvedValue(sub);
       prisma.entitlement.findMany.mockResolvedValue([
-        { id: 'ent-1', userId: 'user-1', key: 'visibility.starter', value: { subscription_id: 'sub-1' } },
+        {
+          id: 'ent-1',
+          userId: 'user-1',
+          key: 'visibility.starter',
+          value: { subscription_id: 'sub-1' },
+        },
       ]);
 
       await orchestrator.handleSubscriptionEvent(
@@ -280,7 +290,10 @@ describe('revokeSubscriptionEntitlements', () => {
         { provide: OutboxService, useValue: outbox },
         { provide: AffiliatesService, useValue: { processMultiLevelCommissions: jest.fn() } },
         { provide: FunnelService, useValue: { track: jest.fn() } },
-        { provide: CreditsService, useValue: { grant: jest.fn(), resetForPeriod: jest.fn(), refund: jest.fn() } },
+        {
+          provide: CreditsService,
+          useValue: { grant: jest.fn(), resetForPeriod: jest.fn(), refund: jest.fn() },
+        },
       ],
     }).compile();
     orchestrator = module.get(PaymentOrchestratorService);

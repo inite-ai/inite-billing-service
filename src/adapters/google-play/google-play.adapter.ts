@@ -154,9 +154,7 @@ export class GooglePlayAdapter implements PaymentRailAdapter {
       );
     }
 
-    this.logger.log(
-      `Recording Google Play purchase for order ${input.orderId}`,
-    );
+    this.logger.log(`Recording Google Play purchase for order ${input.orderId}`);
 
     // Verify the purchase immediately
     const config = await this.getConfig();
@@ -176,9 +174,7 @@ export class GooglePlayAdapter implements PaymentRailAdapter {
       }
       verified = true;
     } catch (error: any) {
-      this.logger.warn(
-        `Could not verify Google Play purchase immediately: ${error.message}`,
-      );
+      this.logger.warn(`Could not verify Google Play purchase immediately: ${error.message}`);
     }
 
     return {
@@ -231,9 +227,7 @@ export class GooglePlayAdapter implements PaymentRailAdapter {
       // Not a subscription, try one-time product
       // For one-time products, we need the productId which is in the metadata
       // stored when creating the intent. Fall back to basic status.
-      this.logger.warn(
-        `Could not fetch subscription status for token, may be a one-time product`,
-      );
+      this.logger.warn(`Could not fetch subscription status for token, may be a one-time product`);
 
       return {
         status: 'paid', // If token exists and was valid at creation, assume paid
@@ -340,7 +334,8 @@ export class GooglePlayAdapter implements PaymentRailAdapter {
 
       return {
         webhookId: `gplay_sub_${subNotif.purchaseToken}_${subNotif.notificationType}`,
-        eventType: typeMap[subNotif.notificationType] || `subscription.type_${subNotif.notificationType}`,
+        eventType:
+          typeMap[subNotif.notificationType] || `subscription.type_${subNotif.notificationType}`,
         entityId: subNotif.purchaseToken,
         rail: 'GOOGLE_PLAY',
         payload: {

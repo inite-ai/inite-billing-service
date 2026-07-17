@@ -4,7 +4,6 @@ import {
   Body,
   Get,
   Param,
-  Query,
   Req,
   UseGuards,
   HttpCode,
@@ -54,9 +53,7 @@ export class SubscriptionsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get current user subscriptions' })
   @ApiResponse({ status: 200, type: [SubscriptionResponseDto] })
-  async getMySubscriptions(
-    @User() user: RequestUser,
-  ): Promise<SubscriptionResponseDto[]> {
+  async getMySubscriptions(@User() user: RequestUser): Promise<SubscriptionResponseDto[]> {
     return this.subscriptionsService.getUserSubscriptions(user.userId);
   }
 
