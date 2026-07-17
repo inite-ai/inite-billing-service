@@ -5,7 +5,8 @@ describe('PromoCodesService — validation logic', () => {
   let mockPrisma: any;
 
   // Prisma Decimal — Number() calls valueOf()
-  const decimal = (v: number) => Object.assign(Object.create(null), { valueOf: () => v, toString: () => String(v) });
+  const decimal = (v: number) =>
+    Object.assign(Object.create(null), { valueOf: () => v, toString: () => String(v) });
 
   const mockPrice = {
     id: 'price-1',

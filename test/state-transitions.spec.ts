@@ -9,7 +9,7 @@ import { CreditsService } from '../src/credits/credits.service';
 describe('State Transitions', () => {
   let orchestrator: PaymentOrchestratorService;
   let prisma: PrismaService;
-  let outbox: OutboxService;
+  let _outbox: OutboxService;
 
   beforeEach(async () => {
     const mockPrisma: any = {
@@ -69,7 +69,7 @@ describe('State Transitions', () => {
 
     orchestrator = module.get<PaymentOrchestratorService>(PaymentOrchestratorService);
     prisma = module.get<PrismaService>(PrismaService);
-    outbox = module.get<OutboxService>(OutboxService);
+    _outbox = module.get<OutboxService>(OutboxService);
   });
 
   it('should apply state transition from opened to paid', async () => {
@@ -140,4 +140,3 @@ describe('State Transitions', () => {
     expect(prisma.paymentIntent.update).not.toHaveBeenCalled();
   });
 });
-

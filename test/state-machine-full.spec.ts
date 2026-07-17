@@ -13,7 +13,12 @@ import {
 
 describe('State Machine — exhaustive transitions', () => {
   const ALL_STATUSES: IntentStatus[] = [
-    'created', 'opened', 'paid', 'failed', 'expired', 'refunded',
+    'created',
+    'opened',
+    'paid',
+    'failed',
+    'expired',
+    'refunded',
   ];
 
   it('every valid transition is in the map', () => {
@@ -66,10 +71,18 @@ describe('State Machine — orchestrator side effects', () => {
   beforeEach(async () => {
     mockPrisma = {
       $transaction: jest.fn((cb: any) => cb(mockPrisma)),
-      paymentIntent: { findUnique: jest.fn(), update: jest.fn(), findFirst: jest.fn().mockResolvedValue(null) },
+      paymentIntent: {
+        findUnique: jest.fn(),
+        update: jest.fn(),
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
       order: { findUnique: jest.fn(), update: jest.fn() },
       invoice: { create: jest.fn(), updateMany: jest.fn() },
-      entitlement: { create: jest.fn(), updateMany: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
+      entitlement: {
+        create: jest.fn(),
+        updateMany: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       subscription: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
       affiliateCommission: { updateMany: jest.fn() },
       creditUsage: { findMany: jest.fn().mockResolvedValue([]) },
@@ -187,7 +200,12 @@ describe('State Machine — orchestrator side effects', () => {
     await orchestrator.applyStateTransition('intent-1', 'paid', {});
 
     expect(mockAffiliates.processMultiLevelCommissions).toHaveBeenCalledWith(
-      'order-1', 'user-1', 100, 'USD', 'svc-1', expect.anything(),
+      'order-1',
+      'user-1',
+      100,
+      'USD',
+      'svc-1',
+      expect.anything(),
     );
   });
 
@@ -264,16 +282,12 @@ describe('State Machine — orchestrator side effects', () => {
     mockPrisma.paymentIntent.findUnique.mockResolvedValue(intent);
 
     // Should throw or silently skip
-    await expect(
-      orchestrator.applyStateTransition('intent-1', 'paid', {}),
-    ).rejects.toThrow();
+    await expect(orchestrator.applyStateTransition('intent-1', 'paid', {})).rejects.toThrow();
   });
 
   it('throws for non-existent intent', async () => {
     mockPrisma.paymentIntent.findUnique.mockResolvedValue(null);
 
-    await expect(
-      orchestrator.applyStateTransition('nonexistent', 'paid', {}),
-    ).rejects.toThrow();
+    await expect(orchestrator.applyStateTransition('nonexistent', 'paid', {})).rejects.toThrow();
   });
 });

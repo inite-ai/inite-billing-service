@@ -171,15 +171,15 @@ describe('Settlement & Withdrawal', () => {
   });
 
   it('should reject withdrawal below minimum', async () => {
-    await expect(
-      affiliatesService.requestWithdrawal(affiliateId, 2, 'USD'),
-    ).rejects.toThrow('Minimum withdrawal amount');
+    await expect(affiliatesService.requestWithdrawal(affiliateId, 2, 'USD')).rejects.toThrow(
+      'Minimum withdrawal amount',
+    );
   });
 
   it('should reject withdrawal exceeding balance', async () => {
-    await expect(
-      affiliatesService.requestWithdrawal(affiliateId, 1000, 'USD'),
-    ).rejects.toThrow('Insufficient balance');
+    await expect(affiliatesService.requestWithdrawal(affiliateId, 1000, 'USD')).rejects.toThrow(
+      'Insufficient balance',
+    );
   });
 
   it('should process withdrawal request', async () => {
@@ -194,9 +194,9 @@ describe('Settlement & Withdrawal', () => {
   });
 
   it('should reject duplicate pending withdrawal', async () => {
-    await expect(
-      affiliatesService.requestWithdrawal(affiliateId, 5, 'USD'),
-    ).rejects.toThrow('already have a pending withdrawal');
+    await expect(affiliatesService.requestWithdrawal(affiliateId, 5, 'USD')).rejects.toThrow(
+      'already have a pending withdrawal',
+    );
   });
 
   it('should not settle already earned commissions', async () => {

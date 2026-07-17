@@ -11,12 +11,9 @@ import { ActionRegistryService } from '../../src/assistant/actions/action-regist
 import { AssistantActionsService } from '../../src/assistant/actions/assistant-actions.service';
 import { AnthropicConfigService } from '../../src/common/anthropic/anthropic-config.service';
 
-const goldenDialogs = JSON.parse(
-  readFileSync(join(__dirname, 'golden', 'dialogs.json'), 'utf8'),
-);
+const goldenDialogs = JSON.parse(readFileSync(join(__dirname, 'golden', 'dialogs.json'), 'utf8'));
 
-const runEvals =
-  process.env.RUN_AI_EVALS === '1' && !!process.env.ANTHROPIC_API_KEY;
+const runEvals = process.env.RUN_AI_EVALS === '1' && !!process.env.ANTHROPIC_API_KEY;
 const describeEval = runEvals ? describe : describe.skip;
 
 // ─── Fixtures ─────────────────────────────────────────────────
@@ -35,7 +32,15 @@ const product = {
   metadata: { description: 'Monthly AI credits for power users', creditsPerPeriod: 1000 },
   service: { id: 'bbbb1111-0000-4000-8000-000000000001', code: 'studio', name: 'INITE Studio' },
   prices: [
-    { id: PRICE_ID, code: 'pro-monthly', amount: 29, currency: 'USD', interval: 'month', isActive: true, productId: 'aaaa1111-0000-4000-8000-000000000001' },
+    {
+      id: PRICE_ID,
+      code: 'pro-monthly',
+      amount: 29,
+      currency: 'USD',
+      interval: 'month',
+      isActive: true,
+      productId: 'aaaa1111-0000-4000-8000-000000000001',
+    },
   ],
 };
 
@@ -165,9 +170,7 @@ async function runTurn(
       .filter((p) => p.type === 'text-delta')
       .map((p) => p.delta)
       .join(''),
-    toolNames: parts
-      .filter((p) => p.type === 'tool-input-available')
-      .map((p) => p.toolName),
+    toolNames: parts.filter((p) => p.type === 'tool-input-available').map((p) => p.toolName),
     actionParts: parts.filter((p) => p.type === 'data-action').map((p) => p.data),
   };
 }
@@ -191,12 +194,16 @@ describeEval('Assistant golden-dialog evals', () => {
         getAbandonedCheckouts: jest.fn().mockResolvedValue({ items: [paidOrder], total: 1 }),
       } as any;
       const promoCodesService = {
-        validatePromoCode: jest.fn().mockResolvedValue({ isValid: false, reason: 'Promo code not found' }),
+        validatePromoCode: jest
+          .fn()
+          .mockResolvedValue({ isValid: false, reason: 'Promo code not found' }),
         create: jest.fn(),
       } as any;
       const productSearchService = {
         semanticSearchProducts: jest.fn().mockResolvedValue([{ ...product, score: 0.91 }]),
-        fuzzySearchOrders: jest.fn().mockResolvedValue({ items: [paidOrder], total: 1, page: 1, limit: 20 }),
+        fuzzySearchOrders: jest
+          .fn()
+          .mockResolvedValue({ items: [paidOrder], total: 1, page: 1, limit: 20 }),
       } as any;
       const recommendationsService = {
         getNextBestOffers: jest.fn().mockResolvedValue([
@@ -214,7 +221,10 @@ describeEval('Assistant golden-dialog evals', () => {
           },
         ]),
       } as any;
-      const subscriptionsService = { cancelSubscription: jest.fn(), resumeSubscription: jest.fn() } as any;
+      const subscriptionsService = {
+        cancelSubscription: jest.fn(),
+        resumeSubscription: jest.fn(),
+      } as any;
       const creditsService = { adminAdjust: jest.fn() } as any;
       const adminOrdersService = { refundOrder: jest.fn() } as any;
 
@@ -246,12 +256,7 @@ describeEval('Assistant golden-dialog evals', () => {
       );
 
       for (const turn of dialog.turns) {
-        const result = await runTurn(
-          service,
-          'eval-user',
-          turn.user,
-          dialog.roles ?? [],
-        );
+        const result = await runTurn(service, 'eval-user', turn.user, dialog.roles ?? []);
         const expectSpec = turn.expect ?? {};
 
         for (const tool of expectSpec.toolsCalledIncludes ?? []) {
@@ -259,9 +264,7 @@ describeEval('Assistant golden-dialog evals', () => {
         }
         if (expectSpec.toolsCalledAnyOf) {
           expect(
-            result.toolNames.some((name: string) =>
-              expectSpec.toolsCalledAnyOf.includes(name),
-            ),
+            result.toolNames.some((name: string) => expectSpec.toolsCalledAnyOf.includes(name)),
           ).toBe(true);
         }
         for (const tool of expectSpec.toolsCalledExcludes ?? []) {

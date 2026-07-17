@@ -3,7 +3,9 @@
 
 // Set test environment variables
 process.env.NODE_ENV = 'test';
-process.env.DATABASE_URL = process.env.TEST_DATABASE_URL || 'postgresql://postgres:postgres@localhost:5433/inite_billing_test?schema=billing';
+process.env.DATABASE_URL =
+  process.env.TEST_DATABASE_URL ||
+  'postgresql://postgres:postgres@localhost:5433/inite_billing_test?schema=billing';
 process.env.REDIS_URL = process.env.TEST_REDIS_URL || 'redis://localhost:6381';
 process.env.JWT_SECRET = 'test-jwt-secret';
 process.env.FRONTEND_URL = 'https://app.inite.ai';

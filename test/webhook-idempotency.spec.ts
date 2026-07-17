@@ -43,13 +43,9 @@ describe('Webhook Idempotency', () => {
       webhookId: 'webhook-123',
     });
 
-    await service.storeWebhookEvent(
-      'ONE',
-      'webhook-123',
-      'payment.order.updated',
-      'order-id',
-      { status: 'paid' },
-    );
+    await service.storeWebhookEvent('ONE', 'webhook-123', 'payment.order.updated', 'order-id', {
+      status: 'paid',
+    });
 
     expect(mockCreate).toHaveBeenCalledWith({
       data: {
@@ -71,14 +67,9 @@ describe('Webhook Idempotency', () => {
 
     // Should not throw - idempotent behavior
     await expect(
-      service.storeWebhookEvent(
-        'ONE',
-        'webhook-123',
-        'payment.order.updated',
-        'order-id',
-        { status: 'paid' },
-      ),
+      service.storeWebhookEvent('ONE', 'webhook-123', 'payment.order.updated', 'order-id', {
+        status: 'paid',
+      }),
     ).resolves.not.toThrow();
   });
 });
-

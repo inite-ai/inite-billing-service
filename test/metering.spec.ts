@@ -53,9 +53,7 @@ describe('MeteringService', () => {
 
     it('throws for unknown feature codes', async () => {
       mockPrisma.meteredFeature.findFirst.mockResolvedValue(null);
-      await expect(service.resolveFeature('nope')).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(service.resolveFeature('nope')).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -159,9 +157,7 @@ describe('MeteringService', () => {
 
     it('notify_only policy never blocks', async () => {
       const tx = makeTx(95, 0);
-      tx.featureQuota.findMany.mockResolvedValue([
-        quota({ overagePolicy: 'notify_only' }),
-      ]);
+      tx.featureQuota.findMany.mockResolvedValue([quota({ overagePolicy: 'notify_only' })]);
       const result = await service.evaluateQuotas(tx, input);
       expect(result.hardCapHit).toBeUndefined();
     });
@@ -179,9 +175,7 @@ describe('MeteringService', () => {
 
     it('unit limits are enforced independently', async () => {
       const tx = makeTx(0, 950);
-      tx.featureQuota.findMany.mockResolvedValue([
-        quota({ limitCredits: null, limitUnits: 1000 }),
-      ]);
+      tx.featureQuota.findMany.mockResolvedValue([quota({ limitCredits: null, limitUnits: 1000 })]);
       const result = await service.evaluateQuotas(tx, input);
       expect(result.hardCapHit).toBeDefined();
       expect(result.hardCapHit!.limitUnits).toBe(1000);
@@ -283,9 +277,7 @@ describe('CreditsService metered consume', () => {
   });
 
   it('rejects a request with neither amount nor featureCode', async () => {
-    await expect(service.consume({ userId: 'user-1' })).rejects.toThrow(
-      BadRequestException,
-    );
+    await expect(service.consume({ userId: 'user-1' })).rejects.toThrow(BadRequestException);
   });
 
   it('rejects featureCode without units', async () => {
@@ -309,8 +301,6 @@ describe('CreditsService metered consume', () => {
       featureCode: 'ai.chat.tokens',
       units: 100,
     });
-    expect(mockMetering.emitSoftCapWarnings).toHaveBeenCalledWith('user-1', [
-      warning,
-    ]);
+    expect(mockMetering.emitSoftCapWarnings).toHaveBeenCalledWith('user-1', [warning]);
   });
 });

@@ -18,7 +18,7 @@ describe('Affiliates E2E Tests', () => {
   let userId: string;
   let affiliateId: string;
   let referralCode: string;
-  let productId: string;
+  let _productId: string;
   let priceId: string;
 
   beforeAll(async () => {
@@ -56,7 +56,7 @@ describe('Affiliates E2E Tests', () => {
         isActive: true,
       },
     });
-    productId = product.id;
+    _productId = product.id;
 
     const price = await prisma.price.create({
       data: {
@@ -74,7 +74,7 @@ describe('Affiliates E2E Tests', () => {
     await cleanupTestData(prisma);
     await app.close();
     await prisma.$disconnect();
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise((resolve) => setTimeout(resolve, 200));
   });
 
   afterEach(async () => {
@@ -92,7 +92,7 @@ describe('Affiliates E2E Tests', () => {
         isActive: true,
       },
     });
-    productId = product.id;
+    _productId = product.id;
 
     const price = await prisma.price.create({
       data: {
@@ -147,7 +147,7 @@ describe('Affiliates E2E Tests', () => {
     beforeEach(async () => {
       // Delete any existing affiliate for this user
       await prisma.affiliate.deleteMany({ where: { userId } });
-      
+
       // Create affiliate
       const affiliate = await prisma.affiliate.create({
         data: {
@@ -176,7 +176,7 @@ describe('Affiliates E2E Tests', () => {
     beforeEach(async () => {
       // Delete any existing affiliate for this user
       await prisma.affiliate.deleteMany({ where: { userId } });
-      
+
       const affiliate = await prisma.affiliate.create({
         data: {
           userId,
@@ -208,7 +208,7 @@ describe('Affiliates E2E Tests', () => {
     beforeEach(async () => {
       // Delete any existing affiliate for this user
       await prisma.affiliate.deleteMany({ where: { userId } });
-      
+
       // Create affiliate
       const affiliate = await prisma.affiliate.create({
         data: {
@@ -272,7 +272,7 @@ describe('Affiliates E2E Tests', () => {
       // Transition to opened then paid
       mockOneAdapter.setIntentStatus(intentResult.providerIntentId, 'OPENED');
       await orchestrator.applyStateTransition(intent.id, 'opened');
-      
+
       mockOneAdapter.setIntentStatus(intentResult.providerIntentId, 'CLOSED');
       await orchestrator.applyStateTransition(intent.id, 'paid');
 
@@ -337,7 +337,7 @@ describe('Affiliates E2E Tests', () => {
 
       mockOneAdapter.setIntentStatus(intent1Result.providerIntentId, 'OPENED');
       await orchestrator.applyStateTransition(intent1.id, 'opened');
-      
+
       mockOneAdapter.setIntentStatus(intent1Result.providerIntentId, 'CLOSED');
       await orchestrator.applyStateTransition(intent1.id, 'paid');
 
@@ -375,7 +375,7 @@ describe('Affiliates E2E Tests', () => {
 
       mockOneAdapter.setIntentStatus(intent2Result.providerIntentId, 'OPENED');
       await orchestrator.applyStateTransition(intent2.id, 'opened');
-      
+
       mockOneAdapter.setIntentStatus(intent2Result.providerIntentId, 'CLOSED');
       await orchestrator.applyStateTransition(intent2.id, 'paid');
 

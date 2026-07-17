@@ -1,6 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
-import * as request from 'supertest';
 import { TestAppModule } from './test-app.module';
 import { PrismaService } from '../src/common/services/prisma.service';
 import { PaymentOrchestratorService } from '../src/payment-orchestrator/payment-orchestrator.service';
@@ -14,9 +13,9 @@ describe('Payment Flow E2E Tests', () => {
   let prisma: PrismaService;
   let orchestrator: PaymentOrchestratorService;
   let mockOneAdapter: MockOneAdapter;
-  let authToken: string;
+  let _authToken: string;
   let userId: string;
-  let productId: string;
+  let _productId: string;
   let priceId: string;
   let orderId: string;
   let paymentIntentId: string;
@@ -45,7 +44,7 @@ describe('Payment Flow E2E Tests', () => {
     mockOneAdapter = app.get<MockOneAdapter>(MockOneAdapter);
 
     userId = MockJwtAuthGuard.testUserId;
-    authToken = `Bearer mock-token-${userId}`;
+    _authToken = `Bearer mock-token-${userId}`;
 
     // Create test product and price
     const product = await prisma.product.create({
@@ -60,7 +59,7 @@ describe('Payment Flow E2E Tests', () => {
         },
       },
     });
-    productId = product.id;
+    _productId = product.id;
 
     const price = await prisma.price.create({
       data: {
@@ -78,7 +77,7 @@ describe('Payment Flow E2E Tests', () => {
     await cleanupTestData(prisma);
     await app.close();
     await prisma.$disconnect();
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise((resolve) => setTimeout(resolve, 200));
   });
 
   beforeEach(async () => {
@@ -192,7 +191,7 @@ describe('Payment Flow E2E Tests', () => {
     });
 
     it('should be idempotent - skip if already in target state', async () => {
-      // Set to opened first  
+      // Set to opened first
       mockOneAdapter.setIntentStatus(providerIntentId, 'OPENED');
       await orchestrator.applyStateTransition(paymentIntentId, 'opened');
 

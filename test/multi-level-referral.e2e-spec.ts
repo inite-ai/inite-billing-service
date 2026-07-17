@@ -39,7 +39,7 @@ describe('Multi-Level Referral System (7 levels, 30% total)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let orchestrator: PaymentOrchestratorService;
-  let affiliatesService: AffiliatesService;
+  let _affiliatesService: AffiliatesService;
   let referralLevelsService: ReferralLevelsService;
   let mockOneAdapter: MockOneAdapter;
 
@@ -48,8 +48,9 @@ describe('Multi-Level Referral System (7 levels, 30% total)', () => {
   let priceId: string;
 
   // 8 users: user1..user7 are affiliates, user8 is the buyer
-  const userIds = Array.from({ length: 8 }, (_, i) =>
-    `00000000-0000-0000-0000-00000000000${i + 1}`,
+  const userIds = Array.from(
+    { length: 8 },
+    (_, i) => `00000000-0000-0000-0000-00000000000${i + 1}`,
   );
   const affiliateIds: string[] = [];
 
@@ -88,7 +89,7 @@ describe('Multi-Level Referral System (7 levels, 30% total)', () => {
     await app.init();
     prisma = app.get<PrismaService>(PrismaService);
     orchestrator = app.get<PaymentOrchestratorService>(PaymentOrchestratorService);
-    affiliatesService = app.get<AffiliatesService>(AffiliatesService);
+    _affiliatesService = app.get<AffiliatesService>(AffiliatesService);
     referralLevelsService = app.get<ReferralLevelsService>(ReferralLevelsService);
     mockOneAdapter = app.get<MockOneAdapter>(MockOneAdapter);
   });
@@ -132,10 +133,7 @@ describe('Multi-Level Referral System (7 levels, 30% total)', () => {
       expect(allLevels).toHaveLength(7);
 
       // Verify total = 30%
-      const totalRate = allLevels.reduce(
-        (sum, l) => sum + Number(l.commissionRate),
-        0,
-      );
+      const totalRate = allLevels.reduce((sum, l) => sum + Number(l.commissionRate), 0);
       expect(totalRate).toBeCloseTo(0.3, 4);
     });
 
@@ -285,13 +283,13 @@ describe('Multi-Level Referral System (7 levels, 30% total)', () => {
 
       // Expected amounts: $1000 * rate
       const expected = [
-        { level: 1, affiliateId: affiliateIds[6], amount: 150 },  // Aff7 (direct) = 15%
-        { level: 2, affiliateId: affiliateIds[5], amount: 10 },   // Aff6 = 1%
-        { level: 3, affiliateId: affiliateIds[4], amount: 15 },   // Aff5 = 1.5%
-        { level: 4, affiliateId: affiliateIds[3], amount: 20 },   // Aff4 = 2%
-        { level: 5, affiliateId: affiliateIds[2], amount: 30 },   // Aff3 = 3%
-        { level: 6, affiliateId: affiliateIds[1], amount: 35 },   // Aff2 = 3.5%
-        { level: 7, affiliateId: affiliateIds[0], amount: 40 },   // Aff1 (root) = 4%
+        { level: 1, affiliateId: affiliateIds[6], amount: 150 }, // Aff7 (direct) = 15%
+        { level: 2, affiliateId: affiliateIds[5], amount: 10 }, // Aff6 = 1%
+        { level: 3, affiliateId: affiliateIds[4], amount: 15 }, // Aff5 = 1.5%
+        { level: 4, affiliateId: affiliateIds[3], amount: 20 }, // Aff4 = 2%
+        { level: 5, affiliateId: affiliateIds[2], amount: 30 }, // Aff3 = 3%
+        { level: 6, affiliateId: affiliateIds[1], amount: 35 }, // Aff2 = 3.5%
+        { level: 7, affiliateId: affiliateIds[0], amount: 40 }, // Aff1 (root) = 4%
       ];
 
       for (let i = 0; i < expected.length; i++) {
@@ -303,10 +301,7 @@ describe('Multi-Level Referral System (7 levels, 30% total)', () => {
       }
 
       // Verify total commission = 30% of $1000 = $300
-      const totalCommission = commissions.reduce(
-        (sum, c) => sum + Number(c.amount),
-        0,
-      );
+      const totalCommission = commissions.reduce((sum, c) => sum + Number(c.amount), 0);
       expect(totalCommission).toBeCloseTo(300, 2);
     });
 

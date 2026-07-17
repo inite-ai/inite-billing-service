@@ -14,8 +14,8 @@ describe('Checkout E2E Tests', () => {
   let mockOneAdapter: MockOneAdapter;
   let authToken: string;
   let userId: string;
-  let productId: string;
-  let priceId: string;
+  let _productId: string;
+  let _priceId: string;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -51,7 +51,7 @@ describe('Checkout E2E Tests', () => {
         isActive: true,
       },
     });
-    productId = product.id;
+    _productId = product.id;
 
     const price = await prisma.price.create({
       data: {
@@ -62,7 +62,7 @@ describe('Checkout E2E Tests', () => {
         isActive: true,
       },
     });
-    priceId = price.id;
+    _priceId = price.id;
   });
 
   afterAll(async () => {
@@ -70,7 +70,7 @@ describe('Checkout E2E Tests', () => {
     await prisma.$disconnect();
     await app.close();
     // Force exit after cleanup
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
   });
 
   afterEach(async () => {
@@ -124,7 +124,7 @@ describe('Checkout E2E Tests', () => {
         },
       });
 
-      const subPrice = await prisma.price.create({
+      const _subPrice = await prisma.price.create({
         data: {
           productId: subProduct.id,
           code: 'test-sub-price',
@@ -150,7 +150,7 @@ describe('Checkout E2E Tests', () => {
 
     it('should support referral code in checkout', async () => {
       // Create affiliate
-      const affiliate = await prisma.affiliate.create({
+      const _affiliate = await prisma.affiliate.create({
         data: {
           userId: '00000000-0000-0000-0000-000000000002', // Different user
           referralCode: 'TESTREF123',

@@ -10,9 +10,9 @@ import { MockJwtAuthGuard } from './mocks/auth.mock';
 describe('Catalog E2E Tests', () => {
   let app: INestApplication;
   let prisma: PrismaService;
-  let authToken: string;
+  let _authToken: string;
   let productId: string;
-  let priceId: string;
+  let _priceId: string;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -34,7 +34,7 @@ describe('Catalog E2E Tests', () => {
     await app.init();
     prisma = app.get<PrismaService>(PrismaService);
 
-    authToken = `Bearer mock-token-${MockJwtAuthGuard.testUserId}`;
+    _authToken = `Bearer mock-token-${MockJwtAuthGuard.testUserId}`;
 
     // Create test products and prices
     const product1 = await prisma.product.create({
@@ -67,7 +67,7 @@ describe('Catalog E2E Tests', () => {
         isActive: true,
       },
     });
-    priceId = price1.id;
+    _priceId = price1.id;
 
     await prisma.price.create({
       data: {
@@ -95,14 +95,12 @@ describe('Catalog E2E Tests', () => {
     await cleanupTestData(prisma);
     await app.close();
     await prisma.$disconnect();
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise((resolve) => setTimeout(resolve, 200));
   });
 
   describe('GET /v1/products', () => {
     it('should return all active products', async () => {
-      const response = await request(app.getHttpServer())
-        .get('/v1/products')
-        .expect(200);
+      const response = await request(app.getHttpServer()).get('/v1/products').expect(200);
 
       expect(Array.isArray(response.body)).toBe(true);
       expect(response.body.length).toBeGreaterThan(0);
@@ -125,9 +123,7 @@ describe('Catalog E2E Tests', () => {
         },
       });
 
-      const response = await request(app.getHttpServer())
-        .get('/v1/products')
-        .expect(200);
+      const response = await request(app.getHttpServer()).get('/v1/products').expect(200);
 
       const inactive = response.body.find((p: any) => p.code === 'inactive-product');
       expect(inactive).toBeUndefined();
@@ -139,9 +135,7 @@ describe('Catalog E2E Tests', () => {
 
   describe('GET /v1/products/prices', () => {
     it('should return all prices', async () => {
-      const response = await request(app.getHttpServer())
-        .get('/v1/products/prices')
-        .expect(200);
+      const response = await request(app.getHttpServer()).get('/v1/products/prices').expect(200);
 
       expect(Array.isArray(response.body)).toBe(true);
       expect(response.body.length).toBeGreaterThan(0);
