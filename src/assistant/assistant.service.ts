@@ -60,9 +60,7 @@ export class AssistantService {
       .create({
         data: { ...data, model: this.anthropicConfig.model },
       })
-      .catch((error: any) =>
-        this.logger.warn(`Tool-call log failed: ${error.message}`),
-      );
+      .catch((error: any) => this.logger.warn(`Tool-call log failed: ${error.message}`));
   }
 
   async *chat(
@@ -85,10 +83,7 @@ export class AssistantService {
       });
     }
     if (!conversation) {
-      conversation = await this.conversationsService.getOrCreate(
-        userId,
-        'assistant',
-      );
+      conversation = await this.conversationsService.getOrCreate(userId, 'assistant');
     }
 
     yield sse({ type: 'start', messageId: randomUUID() });
@@ -98,17 +93,10 @@ export class AssistantService {
     });
 
     // 2. Save user message
-    await this.conversationsService.addMessage(
-      conversation.id,
-      'user',
-      message,
-    );
+    await this.conversationsService.addMessage(conversation.id, 'user', message);
 
     // 3. Load last 20 messages for context
-    const history = await this.conversationsService.getMessages(
-      conversation.id,
-      20,
-    );
+    const history = await this.conversationsService.getMessages(conversation.id, 20);
 
     // 4. Build tools based on roles
     const tools = this.buildTools(roles);
@@ -142,23 +130,16 @@ export class AssistantService {
       });
 
       const toolUses: Array<{ id: string; name: string; input: any }> = [];
-      let currentToolUse: { id: string; name: string; input: string } | null =
-        null;
+      let currentToolUse: { id: string; name: string; input: string } | null = null;
       let currentTextId: string | null = null;
 
       for await (const event of stream) {
-        if (
-          event.type === 'content_block_start' &&
-          event.content_block.type === 'text'
-        ) {
+        if (event.type === 'content_block_start' && event.content_block.type === 'text') {
           currentTextId = `t${step}-${event.index}`;
           yield sse({ type: 'text-start', id: currentTextId });
         }
 
-        if (
-          event.type === 'content_block_delta' &&
-          event.delta.type === 'text_delta'
-        ) {
+        if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
           fullText += event.delta.text;
           yield sse({
             type: 'text-delta',
@@ -167,10 +148,7 @@ export class AssistantService {
           });
         }
 
-        if (
-          event.type === 'content_block_start' &&
-          event.content_block.type === 'tool_use'
-        ) {
+        if (event.type === 'content_block_start' && event.content_block.type === 'tool_use') {
           currentToolUse = {
             id: event.content_block.id,
             name: event.content_block.name,
@@ -183,10 +161,7 @@ export class AssistantService {
           });
         }
 
-        if (
-          event.type === 'content_block_delta' &&
-          event.delta.type === 'input_json_delta'
-        ) {
+        if (event.type === 'content_block_delta' && event.delta.type === 'input_json_delta') {
           if (currentToolUse) {
             currentToolUse.input += event.delta.partial_json;
             yield sse({
@@ -244,13 +219,10 @@ export class AssistantService {
         const toolStartedAt = Date.now();
 
         try {
-          const result = await this.executeTool(
-            toolUse.name,
-            toolUse.input,
-            userId,
-            roles,
-            { conversationId: conversation.id, toolUseId: toolUse.id },
-          );
+          const result = await this.executeTool(toolUse.name, toolUse.input, userId, roles, {
+            conversationId: conversation.id,
+            toolUseId: toolUse.id,
+          });
           const serialized = JSON.stringify(result);
           toolResults.push({
             type: 'tool_result' as const,
@@ -286,10 +258,7 @@ export class AssistantService {
             output: serialized.slice(0, 500),
           });
         } catch (error: any) {
-          this.logger.error(
-            `Tool ${toolUse.name} failed: ${error.message}`,
-            error.stack,
-          );
+          this.logger.error(`Tool ${toolUse.name} failed: ${error.message}`, error.stack);
           toolResults.push({
             type: 'tool_result' as const,
             tool_use_id: toolUse.id,
@@ -387,8 +356,7 @@ Example: ["Unlimited API calls", "Priority support", "Advanced analytics"]`,
       ],
     });
 
-    const text =
-      response.content[0].type === 'text' ? response.content[0].text : '';
+    const text = response.content[0].type === 'text' ? response.content[0].text : '';
     const match = text.match(/\[[\s\S]*\]/);
     if (match) {
       return JSON.parse(match[0]);
@@ -414,8 +382,7 @@ Example: ["Unlimited API calls", "Priority support", "Advanced analytics"]`,
             : null;
       if (!role) continue;
 
-      const content =
-        msg.role === 'tool' ? `[action update] ${msg.content}` : msg.content;
+      const content = msg.role === 'tool' ? `[action update] ${msg.content}` : msg.content;
 
       // Merge consecutive same-role messages instead of dropping them
       if (messages.length > 0 && messages[messages.length - 1].role === role) {
@@ -435,10 +402,7 @@ Example: ["Unlimited API calls", "Priority support", "Advanced analytics"]`,
       messages[messages.length - 1].role !== 'user' ||
       messages[messages.length - 1].content !== currentMessage
     ) {
-      if (
-        messages.length > 0 &&
-        messages[messages.length - 1].role === 'user'
-      ) {
+      if (messages.length > 0 && messages[messages.length - 1].role === 'user') {
         // Replace last user message with current one to avoid consecutive user messages
         messages[messages.length - 1] = {
           role: 'user',
@@ -484,8 +448,7 @@ Example: ["Unlimited API calls", "Priority support", "Advanced analytics"]`,
       },
       {
         name: 'get_my_subscriptions',
-        description:
-          'Get the current user active subscriptions with product and price details.',
+        description: 'Get the current user active subscriptions with product and price details.',
         input_schema: {
           type: 'object' as const,
           properties: {},
@@ -494,8 +457,7 @@ Example: ["Unlimited API calls", "Priority support", "Advanced analytics"]`,
       },
       {
         name: 'get_my_entitlements',
-        description:
-          'Get the current user active entitlements (what they have access to).',
+        description: 'Get the current user active entitlements (what they have access to).',
         input_schema: {
           type: 'object' as const,
           properties: {},
@@ -640,8 +602,7 @@ Example: ["Unlimited API calls", "Priority support", "Advanced analytics"]`,
       },
       {
         name: 'get_abandoned_checkouts',
-        description:
-          'Get list of abandoned checkout orders with details for follow-up.',
+        description: 'Get list of abandoned checkout orders with details for follow-up.',
         input_schema: {
           type: 'object' as const,
           properties: {
@@ -718,11 +679,7 @@ Example: ["Unlimited API calls", "Priority support", "Advanced analytics"]`,
 
     switch (name) {
       case 'validate_promo_code': {
-        return this.promoCodesService.validatePromoCode(
-          args.code,
-          args.priceId,
-          userId,
-        );
+        return this.promoCodesService.validatePromoCode(args.code, args.priceId, userId);
       }
       case 'get_my_orders': {
         const where: any = { userId };
@@ -782,12 +739,7 @@ Example: ["Unlimited API calls", "Priority support", "Advanced analytics"]`,
       // Admin tools
       case 'get_admin_stats': {
         if (!isAdmin) throw new Error('Admin access required');
-        const [
-          totalOrders,
-          revenue,
-          activeSubscriptions,
-          totalAffiliates,
-        ] = await Promise.all([
+        const [totalOrders, revenue, activeSubscriptions, totalAffiliates] = await Promise.all([
           this.prisma.order.count(),
           this.prisma.order.aggregate({
             where: { status: 'paid' },

@@ -22,7 +22,10 @@ export interface RenderedEmail {
   text: string;
 }
 
-type TemplateFn = (locale: TemplateLocale, params: TemplateParams) => {
+type TemplateFn = (
+  locale: TemplateLocale,
+  params: TemplateParams,
+) => {
   subject: string;
   body: string;
   ctaLabel: string;

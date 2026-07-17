@@ -55,9 +55,7 @@ export class ProductSearchService {
           }
         }
       } catch (error: any) {
-        this.logger.warn(
-          `Semantic search failed, falling back to ILIKE: ${error.message}`,
-        );
+        this.logger.warn(`Semantic search failed, falling back to ILIKE: ${error.message}`);
       }
     }
 
@@ -84,10 +82,7 @@ export class ProductSearchService {
    * Fuzzy admin order search via pg_trgm (userId / externalId / product name).
    * Embeddings for orders are deliberately not used — IDs don't embed usefully.
    */
-  async fuzzySearchOrders(
-    query: string,
-    options: { page?: number; limit?: number } = {},
-  ) {
+  async fuzzySearchOrders(query: string, options: { page?: number; limit?: number } = {}) {
     const page = Math.max(options.page ?? 1, 1);
     const limit = Math.min(Math.max(options.limit ?? 20, 1), 100);
 

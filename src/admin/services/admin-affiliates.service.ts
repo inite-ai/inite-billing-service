@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../common/services/prisma.service';
 import { paginate } from '../../common/helpers/paginate';
 
@@ -31,21 +27,15 @@ export class AdminAffiliatesService {
     });
   }
 
-  async updateAffiliate(
-    id: string,
-    data: { status?: string; commissionRate?: number },
-  ) {
+  async updateAffiliate(id: string, data: { status?: string; commissionRate?: number }) {
     const affiliate = await this.prisma.affiliate.findUnique({
       where: { id },
     });
-    if (!affiliate)
-      throw new NotFoundException(`Affiliate not found: ${id}`);
+    if (!affiliate) throw new NotFoundException(`Affiliate not found: ${id}`);
 
     // Validate commission rate bounds (C5)
     if (data.commissionRate !== undefined && (data.commissionRate < 0 || data.commissionRate > 1)) {
-      throw new BadRequestException(
-        'commissionRate must be between 0 and 1 (inclusive)',
-      );
+      throw new BadRequestException('commissionRate must be between 0 and 1 (inclusive)');
     }
 
     return this.prisma.affiliate.update({
@@ -54,11 +44,7 @@ export class AdminAffiliatesService {
     });
   }
 
-  async getPayouts(params: {
-    status?: string;
-    page?: number;
-    limit?: number;
-  }) {
+  async getPayouts(params: { status?: string; page?: number; limit?: number }) {
     const { status, page, limit } = params;
     const where: any = {};
     if (status) where.status = status;

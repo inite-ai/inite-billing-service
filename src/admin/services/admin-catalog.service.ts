@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  NotFoundException,
-  Optional,
-} from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
@@ -24,9 +19,7 @@ export class AdminCatalogService {
   private enqueueEmbedding(productId: string): void {
     void this.embeddingsQueue
       ?.add('embed-product', { productId })
-      .catch((error: any) =>
-        this.logger.warn(`Embedding enqueue failed: ${error.message}`),
-      );
+      .catch((error: any) => this.logger.warn(`Embedding enqueue failed: ${error.message}`));
   }
 
   private generateApiKey(): string {
@@ -59,10 +52,7 @@ export class AdminCatalogService {
     });
   }
 
-  async updateService(
-    id: string,
-    data: { name?: string; isActive?: boolean; metadata?: any },
-  ) {
+  async updateService(id: string, data: { name?: string; isActive?: boolean; metadata?: any }) {
     const service = await this.prisma.service.findUnique({ where: { id } });
     if (!service) throw new NotFoundException(`Service not found: ${id}`);
     return this.prisma.service.update({ where: { id }, data });

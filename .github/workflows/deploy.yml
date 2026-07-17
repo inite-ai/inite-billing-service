@@ -17,7 +17,7 @@ env:
 jobs:
   # ── Tests (required) ───────────────────────────────────────
   tests:
-    uses: ./.github/workflows/test.yml
+    uses: ./.github/workflows/ci.yml
 
   # ── Detect what changed ────────────────────────────────────
   changes:

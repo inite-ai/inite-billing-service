@@ -2,28 +2,11 @@
  * Unified payment intent status state machine
  * All payment rails map to these statuses
  */
-export type IntentStatus =
-  | 'created'
-  | 'opened'
-  | 'paid'
-  | 'failed'
-  | 'expired'
-  | 'refunded';
+export type IntentStatus = 'created' | 'opened' | 'paid' | 'failed' | 'expired' | 'refunded';
 
-export type OrderStatus =
-  | 'created'
-  | 'open'
-  | 'paid'
-  | 'failed'
-  | 'refunded'
-  | 'expired';
+export type OrderStatus = 'created' | 'open' | 'paid' | 'failed' | 'refunded' | 'expired';
 
-export type SubscriptionStatus =
-  | 'trialing'
-  | 'active'
-  | 'past_due'
-  | 'canceled'
-  | 'ended';
+export type SubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'canceled' | 'ended';
 
 export type EntitlementStatus = 'active' | 'revoked' | 'expired';
 
@@ -44,10 +27,7 @@ export const VALID_INTENT_TRANSITIONS: Record<IntentStatus, IntentStatus[]> = {
 /**
  * Check if a state transition is valid
  */
-export function isValidTransition(
-  from: IntentStatus,
-  to: IntentStatus,
-): boolean {
+export function isValidTransition(from: IntentStatus, to: IntentStatus): boolean {
   return VALID_INTENT_TRANSITIONS[from]?.includes(to) ?? false;
 }
 
@@ -65,4 +45,3 @@ export function mapIntentToOrderStatus(intentStatus: IntentStatus): OrderStatus 
   };
   return mapping[intentStatus];
 }
-

@@ -8,16 +8,11 @@ export class EmbeddingsService {
   constructor(private readonly config: ConfigService) {}
 
   get enabled(): boolean {
-    return (
-      this.config.get('EMBEDDINGS_ENABLED') === 'true' &&
-      !!this.config.get('OPENAI_API_KEY')
-    );
+    return this.config.get('EMBEDDINGS_ENABLED') === 'true' && !!this.config.get('OPENAI_API_KEY');
   }
 
   get model(): string {
-    return (
-      this.config.get<string>('EMBEDDINGS_MODEL') || 'text-embedding-3-small'
-    );
+    return this.config.get<string>('EMBEDDINGS_MODEL') || 'text-embedding-3-small';
   }
 
   /**
@@ -49,8 +44,6 @@ export class EmbeddingsService {
     const data = (await res.json()) as {
       data: Array<{ index: number; embedding: number[] }>;
     };
-    return data.data
-      .sort((a, b) => a.index - b.index)
-      .map((item) => item.embedding);
+    return data.data.sort((a, b) => a.index - b.index).map((item) => item.embedding);
   }
 }

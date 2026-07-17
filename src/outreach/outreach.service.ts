@@ -4,21 +4,11 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { PrismaService } from '../common/services/prisma.service';
-import {
-  NotificationsService,
-  NotificationCategory,
-} from '../notifications/notifications.service';
+import { NotificationsService, NotificationCategory } from '../notifications/notifications.service';
 import { UserContactService } from '../notifications/user-contact.service';
 import { FunnelService } from '../funnel/funnel.service';
-import {
-  renderTemplate,
-  TemplateLocale,
-  TemplateParams,
-} from '../notifications/templates';
-import {
-  OutreachGeneratorService,
-  OutreachContext,
-} from './outreach-generator.service';
+import { renderTemplate, TemplateLocale, TemplateParams } from '../notifications/templates';
+import { OutreachGeneratorService, OutreachContext } from './outreach-generator.service';
 
 const OUTCOME_WINDOW_DAYS = 14;
 
@@ -46,9 +36,10 @@ export class OutreachService {
   }
 
   private frontendUrl(): string {
-    return (
-      this.config.get<string>('FRONTEND_URL') || 'https://billing.inite.ai'
-    ).replace(/\/$/, '');
+    return (this.config.get<string>('FRONTEND_URL') || 'https://billing.inite.ai').replace(
+      /\/$/,
+      '',
+    );
   }
 
   /**
@@ -85,11 +76,7 @@ export class OutreachService {
       throw error;
     }
 
-    await this.outreachQueue.add(
-      'process',
-      { outreachId },
-      { jobId: input.triggerKey },
-    );
+    await this.outreachQueue.add('process', { outreachId }, { jobId: input.triggerKey });
     return true;
   }
 
@@ -160,11 +147,7 @@ export class OutreachService {
       this.logger.warn(
         `LLM generation failed for ${outreach.triggerKey}, using template: ${error.message}`,
       );
-      const rendered = renderTemplate(
-        outreach.trigger,
-        locale,
-        context.templateParams,
-      );
+      const rendered = renderTemplate(outreach.trigger, locale, context.templateParams);
       subject = rendered.subject;
       body = rendered.text;
       source = 'template';
@@ -261,9 +244,7 @@ export class OutreachService {
         const sub = await this.prisma.subscription.findUnique({
           where: { id: outreach.subscriptionId },
         });
-        return (
-          !!sub && sub.cancelAtPeriodEnd && !['ended', 'canceled'].includes(sub.status)
-        );
+        return !!sub && sub.cancelAtPeriodEnd && !['ended', 'canceled'].includes(sub.status);
       }
       case 'trial_ending': {
         if (!outreach.subscriptionId) return false;
@@ -332,9 +313,7 @@ export class OutreachService {
         if (outreach.trigger === 'dunning') {
           daysOverdue = Math.max(
             0,
-            Math.floor(
-              (Date.now() - sub.currentPeriodEnd.getTime()) / 86_400_000,
-            ),
+            Math.floor((Date.now() - sub.currentPeriodEnd.getTime()) / 86_400_000),
           );
         }
       }
@@ -419,9 +398,7 @@ export class OutreachService {
     });
 
     if (updated > 0 || expired.count > 0) {
-      this.logger.log(
-        `Outcome sweep: ${updated} attributed, ${expired.count} closed as none`,
-      );
+      this.logger.log(`Outcome sweep: ${updated} attributed, ${expired.count} closed as none`);
     }
     return updated;
   }

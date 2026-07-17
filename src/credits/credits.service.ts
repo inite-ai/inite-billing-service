@@ -131,15 +131,11 @@ export class CreditsService {
         throw new BadRequestException('Metered consumption is not available');
       }
       if (!data.units || data.units < 1) {
-        throw new BadRequestException(
-          'units (positive integer) is required with featureCode',
-        );
+        throw new BadRequestException('units (positive integer) is required with featureCode');
       }
     } else if (typeof data.amount !== 'number' || data.amount < 0) {
       // amount === 0 stays a valid no-op for backwards compatibility
-      throw new BadRequestException(
-        'Either amount (>= 0) or featureCode+units is required',
-      );
+      throw new BadRequestException('Either amount (>= 0) or featureCode+units is required');
     }
 
     // Feature resolution is cached and happens outside the transaction
@@ -233,9 +229,7 @@ export class CreditsService {
           userId: data.userId,
           amount: -chargeAmount,
           type: 'consume',
-          description:
-            data.description ??
-            (feature ? `${feature.name} usage` : 'Credits consumed'),
+          description: data.description ?? (feature ? `${feature.name} usage` : 'Credits consumed'),
           ...(isMetered
             ? {
                 featureCode: data.featureCode,

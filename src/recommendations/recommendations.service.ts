@@ -67,38 +67,37 @@ export class RecommendationsService {
   ): Promise<Offer[]> {
     const limit = Math.min(Math.max(options.limit ?? 3, 1), 10);
 
-    const [paidOrders, subscriptions, entitlements, recentEvents, catalog] =
-      await Promise.all([
-        this.prisma.order.findMany({
-          where: { userId, status: 'paid' },
-          include: { price: { include: { product: true } } },
-          orderBy: { createdAt: 'desc' },
-          take: 50,
-        }),
-        this.prisma.subscription.findMany({
-          where: { userId, status: { in: ['active', 'trialing'] } },
-          include: { price: { include: { product: true } } },
-        }),
-        this.prisma.entitlement.findMany({
-          where: { userId, status: 'active' },
-        }),
-        this.prisma.funnelEvent.findMany({
-          where: {
-            userId,
-            eventType: { in: ['catalog_view', 'checkout_abandoned'] },
-            createdAt: { gte: new Date(Date.now() - 30 * 86_400_000) },
-          },
-          orderBy: { createdAt: 'desc' },
-          take: 50,
-        }),
-        this.prisma.product.findMany({
-          where: { isActive: true },
-          include: {
-            prices: { where: { isActive: true } },
-            service: { select: { id: true, name: true } },
-          },
-        }),
-      ]);
+    const [paidOrders, subscriptions, entitlements, recentEvents, catalog] = await Promise.all([
+      this.prisma.order.findMany({
+        where: { userId, status: 'paid' },
+        include: { price: { include: { product: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      }),
+      this.prisma.subscription.findMany({
+        where: { userId, status: { in: ['active', 'trialing'] } },
+        include: { price: { include: { product: true } } },
+      }),
+      this.prisma.entitlement.findMany({
+        where: { userId, status: 'active' },
+      }),
+      this.prisma.funnelEvent.findMany({
+        where: {
+          userId,
+          eventType: { in: ['catalog_view', 'checkout_abandoned'] },
+          createdAt: { gte: new Date(Date.now() - 30 * 86_400_000) },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      }),
+      this.prisma.product.findMany({
+        where: { isActive: true },
+        include: {
+          prices: { where: { isActive: true } },
+          service: { select: { id: true, name: true } },
+        },
+      }),
+    ]);
 
     const ownedProductIds = new Set<string>();
     for (const order of paidOrders) {
@@ -111,11 +110,7 @@ export class RecommendationsService {
     if (options.sessionProductId) ownedProductIds.add(options.sessionProductId);
 
     const candidates: Offer[] = [];
-    const push = (
-      product: (typeof catalog)[number],
-      reason: Offer['reason'],
-      extraScore = 0,
-    ) => {
+    const push = (product: (typeof catalog)[number], reason: Offer['reason'], extraScore = 0) => {
       if (ownedProductIds.has(product.id)) return;
       const price = product.prices[0] ?? null;
       candidates.push({
@@ -192,9 +187,7 @@ export class RecommendationsService {
     }
 
     // Popularity boost + dedupe keeping the best-scored reason
-    const popularity = await this.getPopularityMap(
-      candidates.map((c) => c.productId),
-    );
+    const popularity = await this.getPopularityMap(candidates.map((c) => c.productId));
     const byProduct = new Map<string, Offer>();
     for (const candidate of candidates) {
       candidate.score += Math.log1p(popularity.get(candidate.productId) ?? 0);
@@ -204,9 +197,7 @@ export class RecommendationsService {
       }
     }
 
-    const offers = [...byProduct.values()]
-      .sort((a, b) => b.score - a.score)
-      .slice(0, limit);
+    const offers = [...byProduct.values()].sort((a, b) => b.score - a.score).slice(0, limit);
 
     if (options.explain && this.config.get('RECS_LLM_EXPLAIN') === 'true') {
       await this.attachExplanations(userId, offers, options.locale ?? 'en');
@@ -267,13 +258,9 @@ export class RecommendationsService {
     return rows.map((r) => r.product_id);
   }
 
-  private async getPopularityMap(
-    productIds: string[],
-  ): Promise<Map<string, number>> {
+  private async getPopularityMap(productIds: string[]): Promise<Map<string, number>> {
     if (productIds.length === 0) return new Map();
-    const rows = await this.prisma.$queryRaw<
-      Array<{ product_id: string; cnt: bigint }>
-    >(Prisma.sql`
+    const rows = await this.prisma.$queryRaw<Array<{ product_id: string; cnt: bigint }>>(Prisma.sql`
       SELECT pr.product_id, COUNT(*)::bigint AS cnt
       FROM billing.orders o
       JOIN billing.prices pr ON pr.id = o.price_id
@@ -285,11 +272,7 @@ export class RecommendationsService {
   }
 
   /** Optional one-shot localized "why this fits" lines, Redis-cached 24h. */
-  private async attachExplanations(
-    userId: string,
-    offers: Offer[],
-    locale: string,
-  ): Promise<void> {
+  private async attachExplanations(userId: string, offers: Offer[], locale: string): Promise<void> {
     if (!this.anthropic || offers.length === 0) return;
     const redis = this.getRedis();
 
@@ -334,8 +317,7 @@ export class RecommendationsService {
         },
         { signal: AbortSignal.timeout(15_000), maxRetries: 0 },
       );
-      const text =
-        response.content[0]?.type === 'text' ? response.content[0].text : '';
+      const text = response.content[0]?.type === 'text' ? response.content[0].text : '';
       const match = text.match(/\{[\s\S]*\}/);
       if (!match) return;
       const parsed = JSON.parse(match[0]) as {

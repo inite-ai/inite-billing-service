@@ -14,8 +14,7 @@ export class UserContactService {
 
   async touch(userId: string, email?: string, locale?: string): Promise<void> {
     try {
-      const normalizedLocale =
-        locale === 'ru' ? 'ru' : locale === 'en' ? 'en' : undefined;
+      const normalizedLocale = locale === 'ru' ? 'ru' : locale === 'en' ? 'en' : undefined;
       const hash = createHash('sha1')
         .update(`${email ?? ''}|${normalizedLocale ?? ''}`)
         .digest('hex');

@@ -1,11 +1,4 @@
-import {
-  IsArray,
-  IsBoolean,
-  IsIn,
-  IsOptional,
-  IsString,
-  IsUUID,
-} from 'class-validator';
+import { IsArray, IsBoolean, IsIn, IsOptional, IsString, IsUUID } from 'class-validator';
 import { NOTIFICATION_CATEGORIES } from '../notifications.service';
 
 const PREFERENCE_CATEGORIES = [...NOTIFICATION_CATEGORIES, 'all'];

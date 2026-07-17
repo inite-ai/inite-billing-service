@@ -1,0 +1,29 @@
+# gitleaks config for inite-billing-service
+# Extends the default ruleset; adds an allowlist for known false positives so
+# CI stays green. Every entry below must be a documentation example, public
+# identifier, or test fixture — NOT a real secret.
+#
+# Run locally:  gitleaks detect --source . --redact -v
+# Before adding a new allowlist entry, prove the finding is a non-secret.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Audited false positives — billing service"
+
+paths = [
+  # Test fixtures use throwaway values like `test-jwt-secret`
+  '''test/''',
+  # Lockfiles trip entropy rules on integrity hashes
+  '''package-lock\.json''',
+  '''frontend/package-lock\.json''',
+]
+
+regexes = [
+  # Documented placeholder in env.example / README
+  '''your-jwt-secret-key-here''',
+  # Service API key PREFIX shown in docs and generated at runtime (sk_ + hex);
+  # the docs only ever show masked examples like sk_****abcd
+  '''sk_\*{4}''',
+]

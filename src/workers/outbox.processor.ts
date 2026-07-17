@@ -47,7 +47,7 @@ export class OutboxProcessor extends WorkerHost {
     super();
   }
 
-  async process(job: Job): Promise<void> {
+  async process(_job: Job): Promise<void> {
     const events = await this.outboxService.getPendingEvents(100);
     if (events.length === 0) return;
 
@@ -56,9 +56,7 @@ export class OutboxProcessor extends WorkerHost {
       where: { isActive: true },
     });
 
-    const services = allServices.filter(
-      (s: any) => s.webhookUrl != null,
-    );
+    const services = allServices.filter((s: any) => s.webhookUrl != null);
 
     if (services.length === 0) {
       // No webhook consumers — mark all as sent
@@ -108,9 +106,7 @@ export class OutboxProcessor extends WorkerHost {
             allDelivered = false;
           }
         } catch (error: any) {
-          this.logger.error(
-            `Webhook delivery error for ${service.code}: ${error.message}`,
-          );
+          this.logger.error(`Webhook delivery error for ${service.code}: ${error.message}`);
           allDelivered = false;
         }
       }
@@ -118,10 +114,7 @@ export class OutboxProcessor extends WorkerHost {
       if (allDelivered) {
         await this.outboxService.markSent(event.id);
       } else {
-        await this.outboxService.markFailed(
-          event.id,
-          'One or more webhook deliveries failed',
-        );
+        await this.outboxService.markFailed(event.id, 'One or more webhook deliveries failed');
       }
     }
   }

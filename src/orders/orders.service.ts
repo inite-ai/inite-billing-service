@@ -6,10 +6,7 @@ import { OrderResponseDto, PaymentIntentResponseDto } from '../common/dto/order.
 export class OrdersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getUserOrders(
-    userId: string,
-    status?: string,
-  ): Promise<OrderResponseDto[]> {
+  async getUserOrders(userId: string, status?: string): Promise<OrderResponseDto[]> {
     const where: any = { userId };
     if (status) {
       where.status = status;
@@ -101,4 +98,3 @@ export class OrdersService {
     };
   }
 }
-

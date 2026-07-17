@@ -19,4 +19,3 @@ import { AdaptersModule } from '../adapters/adapters.module';
 export class WebhooksModule {
   // OneAdapter and CryptoAdapter are provided by AdaptersModule
 }
-

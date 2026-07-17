@@ -1,9 +1,4 @@
-import {
-  CallHandler,
-  ExecutionContext,
-  Injectable,
-  NestInterceptor,
-} from '@nestjs/common';
+import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { UserContactService } from './user-contact.service';
 
@@ -21,8 +16,7 @@ export class ContactCaptureInterceptor implements NestInterceptor {
       const req = context.switchToHttp().getRequest();
       const user = req?.user;
       if (user?.userId && !user.isService) {
-        const locale =
-          (req.headers?.['x-user-locale'] as string) || req.cookies?.locale;
+        const locale = (req.headers?.['x-user-locale'] as string) || req.cookies?.locale;
         void this.userContactService.touch(user.userId, user.email, locale);
       }
     } catch {

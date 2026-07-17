@@ -27,14 +27,12 @@ export interface GeneratedOutreach {
 }
 
 const TRIGGER_PERSONA: Record<string, string> = {
-  abandoned_checkout:
-    'You write short, friendly reminders about unfinished checkouts.',
+  abandoned_checkout: 'You write short, friendly reminders about unfinished checkouts.',
   dunning:
     'You write short, calm, helpful payment-issue notices. Never threaten; focus on how easy it is to fix.',
   winback:
     'You write short, warm retention notes for users whose subscription is ending. Acknowledge their choice, no guilt-tripping.',
-  trial_ending:
-    'You write short, helpful reminders that a free trial is about to end.',
+  trial_ending: 'You write short, helpful reminders that a free trial is about to end.',
 };
 
 @Injectable()
@@ -48,9 +46,7 @@ export class OutreachGeneratorService {
   ) {}
 
   get model(): string {
-    return (
-      this.config.get<string>('OUTREACH_MODEL') || this.anthropicConfig.model
-    );
+    return this.config.get<string>('OUTREACH_MODEL') || this.anthropicConfig.model;
   }
 
   /**
@@ -60,8 +56,7 @@ export class OutreachGeneratorService {
    */
   async generate(context: OutreachContext): Promise<GeneratedOutreach> {
     const persona =
-      TRIGGER_PERSONA[context.trigger] ??
-      'You write short, friendly billing-related notes.';
+      TRIGGER_PERSONA[context.trigger] ?? 'You write short, friendly billing-related notes.';
 
     const system = `${persona}
 You write on behalf of INITE Billing.
@@ -98,8 +93,7 @@ Rules:
       { signal: AbortSignal.timeout(20_000), maxRetries: 1 },
     );
 
-    const text =
-      response.content[0]?.type === 'text' ? response.content[0].text : '';
+    const text = response.content[0]?.type === 'text' ? response.content[0].text : '';
     const match = text.match(/\{[\s\S]*\}/);
     if (!match) {
       throw new Error('LLM output contained no JSON object');

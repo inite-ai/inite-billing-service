@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  NotFoundException,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../common/services/prisma.service';
 import { PaymentOrchestratorService } from '../../payment-orchestrator/payment-orchestrator.service';
 import { paginate } from '../../common/helpers/paginate';
@@ -17,12 +12,7 @@ export class AdminOrdersService {
     private readonly paymentOrchestrator: PaymentOrchestratorService,
   ) {}
 
-  async getOrders(params: {
-    status?: string;
-    userId?: string;
-    page?: number;
-    limit?: number;
-  }) {
+  async getOrders(params: { status?: string; userId?: string; page?: number; limit?: number }) {
     const { status, userId, page, limit } = params;
     const where: any = {};
     if (status) where.status = status;
@@ -62,19 +52,12 @@ export class AdminOrdersService {
 
     // Find the successful payment intent and transition it to refunded
     // This will revoke entitlements and update invoices via the orchestrator
-    const paidIntent = order.paymentIntents.find(
-      (pi) => pi.status === 'paid',
-    );
+    const paidIntent = order.paymentIntents.find((pi) => pi.status === 'paid');
     if (paidIntent) {
-      await this.paymentOrchestrator.applyStateTransition(
-        paidIntent.id,
-        'refunded',
-      );
+      await this.paymentOrchestrator.applyStateTransition(paidIntent.id, 'refunded');
     } else {
       // Fallback: no paid intent found, just update order status directly
-      this.logger.warn(
-        `No paid payment intent found for order ${id}, updating status directly`,
-      );
+      this.logger.warn(`No paid payment intent found for order ${id}, updating status directly`);
       await this.prisma.order.update({
         where: { id },
         data: { status: 'refunded' },

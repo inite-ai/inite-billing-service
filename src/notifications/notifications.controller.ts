@@ -13,11 +13,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { User, RequestUser } from '../auth/decorators/user.decorator';
 import { NotificationsService } from './notifications.service';
-import {
-  MarkReadDto,
-  SetPreferenceDto,
-  UnsubscribeDto,
-} from './dto/notifications.dto';
+import { MarkReadDto, SetPreferenceDto, UnsubscribeDto } from './dto/notifications.dto';
 
 @ApiTags('Notifications')
 @Controller('v1/notifications')
@@ -65,10 +61,7 @@ export class NotificationsController {
   @Put('me/preferences')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Update a notification preference' })
-  async setPreference(
-    @User() user: RequestUser,
-    @Body() body: SetPreferenceDto,
-  ) {
+  async setPreference(@User() user: RequestUser, @Body() body: SetPreferenceDto) {
     return this.notificationsService.setPreference(user.userId, body);
   }
 

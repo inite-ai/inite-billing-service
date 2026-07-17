@@ -28,9 +28,7 @@ export class EmailService {
 
   async send(input: SendEmailInput): Promise<SendEmailResult> {
     if (!this.enabled) {
-      this.logger.log(
-        `Email disabled (NOTIFICATIONS_EMAIL_ENABLED) — skipping "${input.subject}"`,
-      );
+      this.logger.log(`Email disabled (NOTIFICATIONS_EMAIL_ENABLED) — skipping "${input.subject}"`);
       return { skipped: true };
     }
 
@@ -38,9 +36,7 @@ export class EmailService {
     if (!apiKey) {
       throw new UnrecoverableError('RESEND_API_KEY is not configured');
     }
-    const from =
-      this.config.get<string>('EMAIL_FROM') ||
-      'INITE Billing <billing@mail.inite.ai>';
+    const from = this.config.get<string>('EMAIL_FROM') || 'INITE Billing <billing@mail.inite.ai>';
     const replyTo = this.config.get<string>('EMAIL_REPLY_TO');
 
     const res = await fetch('https://api.resend.com/emails', {
@@ -48,9 +44,7 @@ export class EmailService {
       headers: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
-        ...(input.idempotencyKey
-          ? { 'Idempotency-Key': input.idempotencyKey }
-          : {}),
+        ...(input.idempotencyKey ? { 'Idempotency-Key': input.idempotencyKey } : {}),
       },
       body: JSON.stringify({
         from,

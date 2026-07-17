@@ -58,8 +58,7 @@ export class ResendWebhookController {
       throw new UnauthorizedException('Stale webhook timestamp');
     }
 
-    const rawBody =
-      (req as any).rawBody?.toString?.('utf8') ?? JSON.stringify(body);
+    const rawBody = (req as any).rawBody?.toString?.('utf8') ?? JSON.stringify(body);
     this.verifySignature(secret, svixId, svixTimestamp, rawBody, svixSignature);
 
     const type = body?.type as string | undefined;
@@ -86,9 +85,7 @@ export class ResendWebhookController {
         data: { status: 'bounced', lastError: type },
       });
       await this.userContactService.suppress(notification.userId);
-      this.logger.warn(
-        `Email ${type} for user ${notification.userId} — contact suppressed`,
-      );
+      this.logger.warn(`Email ${type} for user ${notification.userId} — contact suppressed`);
     }
 
     return { received: true };
@@ -107,16 +104,13 @@ export class ResendWebhookController {
       .digest('base64');
 
     // Header may contain multiple space-separated signatures like "v1,<sig>"
-    const candidates = signatureHeader
-      .split(' ')
-      .map((part) => part.split(',')[1] ?? part);
+    const candidates = signatureHeader.split(' ').map((part) => part.split(',')[1] ?? part);
 
     const expectedBuf = Buffer.from(expected);
     const valid = candidates.some((candidate) => {
       const candidateBuf = Buffer.from(candidate ?? '');
       return (
-        candidateBuf.length === expectedBuf.length &&
-        timingSafeEqual(candidateBuf, expectedBuf)
+        candidateBuf.length === expectedBuf.length && timingSafeEqual(candidateBuf, expectedBuf)
       );
     });
     if (!valid) {

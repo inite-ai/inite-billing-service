@@ -1,7 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../common/services/prisma.service';
 import { paginate } from '../../common/helpers/paginate';
 
@@ -27,12 +24,7 @@ export class AdminUsersService {
     });
   }
 
-  async createEntitlement(data: {
-    userId: string;
-    key: string;
-    value?: any;
-    expiresAt?: string;
-  }) {
+  async createEntitlement(data: { userId: string; key: string; value?: any; expiresAt?: string }) {
     return this.prisma.entitlement.create({
       data: {
         userId: data.userId,
@@ -46,10 +38,7 @@ export class AdminUsersService {
     });
   }
 
-  async updateEntitlement(
-    id: string,
-    data: { key?: string; value?: any; expiresAt?: string },
-  ) {
+  async updateEntitlement(id: string, data: { key?: string; value?: any; expiresAt?: string }) {
     const ent = await this.prisma.entitlement.findUnique({ where: { id } });
     if (!ent) throw new NotFoundException(`Entitlement not found: ${id}`);
 
@@ -71,16 +60,10 @@ export class AdminUsersService {
     });
   }
 
-  async getCustomers(params: {
-    page?: number;
-    limit?: number;
-    search?: string;
-  }) {
+  async getCustomers(params: { page?: number; limit?: number; search?: string }) {
     const { page = 1, limit = 20, search } = params;
 
-    const whereClause: any = search
-      ? { userId: { contains: search } }
-      : {};
+    const whereClause: any = search ? { userId: { contains: search } } : {};
 
     const orders = await this.prisma.order.groupBy({
       by: ['userId'],
@@ -100,39 +83,35 @@ export class AdminUsersService {
 
     const userIds = orders.map((o) => o.userId);
 
-    const [subscriptions, entitlements, credits, affiliates] =
-      await Promise.all([
-        this.prisma.subscription.findMany({
-          where: {
-            userId: { in: userIds },
-            status: { in: ['active', 'trialing'] },
-          },
-          select: { userId: true, status: true, priceId: true },
-        }),
-        this.prisma.entitlement.findMany({
-          where: { userId: { in: userIds }, status: 'active' },
-          select: { userId: true, key: true },
-        }),
-        this.prisma.creditBalance.findMany({
-          where: { userId: { in: userIds } },
-          select: { userId: true, balance: true },
-        }),
-        this.prisma.affiliate.findMany({
-          where: { userId: { in: userIds } },
-          select: { userId: true, status: true, referralCode: true },
-        }),
-      ]);
+    const [subscriptions, entitlements, credits, affiliates] = await Promise.all([
+      this.prisma.subscription.findMany({
+        where: {
+          userId: { in: userIds },
+          status: { in: ['active', 'trialing'] },
+        },
+        select: { userId: true, status: true, priceId: true },
+      }),
+      this.prisma.entitlement.findMany({
+        where: { userId: { in: userIds }, status: 'active' },
+        select: { userId: true, key: true },
+      }),
+      this.prisma.creditBalance.findMany({
+        where: { userId: { in: userIds } },
+        select: { userId: true, balance: true },
+      }),
+      this.prisma.affiliate.findMany({
+        where: { userId: { in: userIds } },
+        select: { userId: true, status: true, referralCode: true },
+      }),
+    ]);
 
     const items = orders.map((o) => ({
       userId: o.userId,
       totalOrders: o._count.id,
       totalSpent: o._sum.amount?.toString() || '0',
       lastOrderAt: o._max.createdAt,
-      activeSubscriptions: subscriptions.filter(
-        (s) => s.userId === o.userId,
-      ).length,
-      activeEntitlements: entitlements.filter((e) => e.userId === o.userId)
-        .length,
+      activeSubscriptions: subscriptions.filter((s) => s.userId === o.userId).length,
+      activeEntitlements: entitlements.filter((e) => e.userId === o.userId).length,
       creditBalance: credits
         .filter((c) => c.userId === o.userId)
         .reduce((sum, c) => sum + c.balance, 0),
@@ -149,36 +128,30 @@ export class AdminUsersService {
   }
 
   async getCustomerDetail(userId: string) {
-    const [
-      orders,
-      subscriptions,
-      entitlements,
-      credits,
-      affiliate,
-      funnelEvents,
-    ] = await Promise.all([
-      this.prisma.order.findMany({
-        where: { userId },
-        include: { price: { include: { product: true } } },
-        orderBy: { createdAt: 'desc' },
-        take: 20,
-      }),
-      this.prisma.subscription.findMany({
-        where: { userId },
-        include: { price: { include: { product: true } } },
-      }),
-      this.prisma.entitlement.findMany({ where: { userId } }),
-      this.prisma.creditBalance.findMany({
-        where: { userId },
-        include: { service: true },
-      }),
-      this.prisma.affiliate.findFirst({ where: { userId } }),
-      this.prisma.funnelEvent.findMany({
-        where: { userId },
-        orderBy: { createdAt: 'desc' },
-        take: 50,
-      }),
-    ]);
+    const [orders, subscriptions, entitlements, credits, affiliate, funnelEvents] =
+      await Promise.all([
+        this.prisma.order.findMany({
+          where: { userId },
+          include: { price: { include: { product: true } } },
+          orderBy: { createdAt: 'desc' },
+          take: 20,
+        }),
+        this.prisma.subscription.findMany({
+          where: { userId },
+          include: { price: { include: { product: true } } },
+        }),
+        this.prisma.entitlement.findMany({ where: { userId } }),
+        this.prisma.creditBalance.findMany({
+          where: { userId },
+          include: { service: true },
+        }),
+        this.prisma.affiliate.findFirst({ where: { userId } }),
+        this.prisma.funnelEvent.findMany({
+          where: { userId },
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+        }),
+      ]);
 
     const totalSpent = orders
       .filter((o) => o.status === 'paid')

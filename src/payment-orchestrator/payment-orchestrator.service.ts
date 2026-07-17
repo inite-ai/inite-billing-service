@@ -69,9 +69,7 @@ export class PaymentOrchestratorService {
 
       // Validate transition
       if (!isValidTransition(intent.status as IntentStatus, newStatus)) {
-        throw new Error(
-          `Invalid state transition: ${intent.status} -> ${newStatus}`,
-        );
+        throw new Error(`Invalid state transition: ${intent.status} -> ${newStatus}`);
       }
 
       // Update payment intent
@@ -109,12 +107,17 @@ export class PaymentOrchestratorService {
       }
 
       // Emit outbox events
-      await this.outboxService.emit('billing.payment.status_changed', {
-        payment_intent_id: paymentIntentId,
-        order_id: intent.orderId,
-        status: newStatus,
-        previous_status: intent.status,
-      }, undefined, tx);
+      await this.outboxService.emit(
+        'billing.payment.status_changed',
+        {
+          payment_intent_id: paymentIntentId,
+          order_id: intent.orderId,
+          status: newStatus,
+          previous_status: intent.status,
+        },
+        undefined,
+        tx,
+      );
 
       // Track funnel events based on status transitions
       const product = intent.order.price?.product;
@@ -182,12 +185,17 @@ export class PaymentOrchestratorService {
     await this.handleCreditsGrant(order, tx);
 
     // Emit event
-    await this.outboxService.emit('billing.payment.succeeded', {
-      order_id: order.id,
-      user_id: order.userId,
-      amount: order.amount.toString(),
-      currency: order.currency,
-    }, undefined, tx);
+    await this.outboxService.emit(
+      'billing.payment.succeeded',
+      {
+        order_id: order.id,
+        user_id: order.userId,
+        amount: order.amount.toString(),
+        currency: order.currency,
+      },
+      undefined,
+      tx,
+    );
   }
 
   private async handleOrderRefunded(orderId: string, tx: any): Promise<void> {
@@ -238,16 +246,26 @@ export class PaymentOrchestratorService {
     }
 
     // Emit event
-    await this.outboxService.emit('billing.payment.refunded', {
-      order_id: order.id,
-      user_id: order.userId,
-    }, undefined, tx);
+    await this.outboxService.emit(
+      'billing.payment.refunded',
+      {
+        order_id: order.id,
+        user_id: order.userId,
+      },
+      undefined,
+      tx,
+    );
 
-    await this.outboxService.emit('billing.entitlement.revoked', {
-      user_id: order.userId,
-      source: 'order',
-      order_id: order.id,
-    }, undefined, tx);
+    await this.outboxService.emit(
+      'billing.entitlement.revoked',
+      {
+        user_id: order.userId,
+        source: 'order',
+        order_id: order.id,
+      },
+      undefined,
+      tx,
+    );
   }
 
   private async handleOrderFailed(orderId: string, tx: any): Promise<void> {
@@ -264,10 +282,15 @@ export class PaymentOrchestratorService {
     });
 
     // Emit event
-    await this.outboxService.emit('billing.payment.failed', {
-      order_id: order.id,
-      user_id: order.userId,
-    }, undefined, tx);
+    await this.outboxService.emit(
+      'billing.payment.failed',
+      {
+        order_id: order.id,
+        user_id: order.userId,
+      },
+      undefined,
+      tx,
+    );
   }
 
   private async grantEntitlementsForOrder(order: any, tx: any): Promise<void> {
@@ -290,12 +313,17 @@ export class PaymentOrchestratorService {
         },
       });
 
-      await this.outboxService.emit('billing.entitlement.granted', {
-        user_id: order.userId,
-        key,
-        source: 'order',
-        order_id: order.id,
-      }, undefined, tx);
+      await this.outboxService.emit(
+        'billing.entitlement.granted',
+        {
+          user_id: order.userId,
+          key,
+          source: 'order',
+          order_id: order.id,
+        },
+        undefined,
+        tx,
+      );
     }
   }
 
@@ -411,21 +439,31 @@ export class PaymentOrchestratorService {
         },
       });
 
-      await this.outboxService.emit('billing.entitlement.granted', {
-        user_id: order.userId,
-        key,
-        source: 'subscription',
-        subscription_id: subscription.id,
-        expires_at: expiresAt.toISOString(),
-      }, undefined, tx);
+      await this.outboxService.emit(
+        'billing.entitlement.granted',
+        {
+          user_id: order.userId,
+          key,
+          source: 'subscription',
+          subscription_id: subscription.id,
+          expires_at: expiresAt.toISOString(),
+        },
+        undefined,
+        tx,
+      );
     }
 
-    await this.outboxService.emit('billing.subscription.updated', {
-      subscription_id: subscription.id,
-      user_id: order.userId,
-      status: subscription.status,
-      current_period_end: periodEnd.toISOString(),
-    }, undefined, tx);
+    await this.outboxService.emit(
+      'billing.subscription.updated',
+      {
+        subscription_id: subscription.id,
+        user_id: order.userId,
+        status: subscription.status,
+        current_period_end: periodEnd.toISOString(),
+      },
+      undefined,
+      tx,
+    );
   }
 
   /**
@@ -527,12 +565,17 @@ export class PaymentOrchestratorService {
       where: { id: subscription.id },
       data: { status: 'past_due', updatedAt: new Date() },
     });
-    await this.outboxService.emit('billing.subscription.payment_failed', {
-      subscription_id: subscription.id,
-      user_id: subscription.userId,
-      current_period_end: subscription.currentPeriodEnd.toISOString(),
-      provider_error: providerData?.errorMessage || providerData?.failure_message || null,
-    }, undefined, tx);
+    await this.outboxService.emit(
+      'billing.subscription.payment_failed',
+      {
+        subscription_id: subscription.id,
+        user_id: subscription.userId,
+        current_period_end: subscription.currentPeriodEnd.toISOString(),
+        provider_error: providerData?.errorMessage || providerData?.failure_message || null,
+      },
+      undefined,
+      tx,
+    );
   }
 
   private async handleProviderCancellation(subscription: any, tx: any): Promise<void> {
@@ -553,11 +596,16 @@ export class PaymentOrchestratorService {
         data: { cancelAtPeriodEnd: true, updatedAt: new Date() },
       });
     }
-    await this.outboxService.emit('billing.subscription.cancelled', {
-      subscription_id: subscription.id,
-      user_id: subscription.userId,
-      cancel_at_period_end: !periodPassed,
-    }, undefined, tx);
+    await this.outboxService.emit(
+      'billing.subscription.cancelled',
+      {
+        subscription_id: subscription.id,
+        user_id: subscription.userId,
+        cancel_at_period_end: !periodPassed,
+      },
+      undefined,
+      tx,
+    );
   }
 
   /**
@@ -581,12 +629,17 @@ export class PaymentOrchestratorService {
       data: { status: 'revoked', updatedAt: new Date() },
     });
     for (const e of matching) {
-      await this.outboxService.emit('billing.entitlement.revoked', {
-        user_id: e.userId,
-        key: e.key,
-        source: 'subscription',
-        subscription_id: subscriptionId,
-      }, undefined, tx);
+      await this.outboxService.emit(
+        'billing.entitlement.revoked',
+        {
+          user_id: e.userId,
+          key: e.key,
+          source: 'subscription',
+          subscription_id: subscriptionId,
+        },
+        undefined,
+        tx,
+      );
     }
   }
 
@@ -608,12 +661,17 @@ export class PaymentOrchestratorService {
         data: { status: newStatus, updatedAt: new Date() },
       });
       await this.revokeSubscriptionEntitlements(subscriptionId, txInner);
-      await this.outboxService.emit('billing.subscription.ended', {
-        subscription_id: subscriptionId,
-        user_id: sub.userId,
-        status: newStatus,
-        reason,
-      }, undefined, txInner);
+      await this.outboxService.emit(
+        'billing.subscription.ended',
+        {
+          subscription_id: subscriptionId,
+          user_id: sub.userId,
+          status: newStatus,
+          reason,
+        },
+        undefined,
+        txInner,
+      );
     };
     return tx ? run(tx) : this.prisma.$transaction(run);
   }
@@ -653,9 +711,7 @@ export class PaymentOrchestratorService {
       case 'STRIPE':
         providerSubscriptionId =
           snapshot.subscription ||
-          (typeof snapshot.id === 'string' && snapshot.id.startsWith('sub_')
-            ? snapshot.id
-            : null);
+          (typeof snapshot.id === 'string' && snapshot.id.startsWith('sub_') ? snapshot.id : null);
         break;
       case 'LAVA':
         // Lava reuses the contract ID as the subscription anchor; later
@@ -663,8 +719,7 @@ export class PaymentOrchestratorService {
         providerSubscriptionId = intent.providerIntentId || null;
         break;
       case 'APPLE':
-        providerSubscriptionId =
-          snapshot.originalTransactionId || snapshot.transactionId || null;
+        providerSubscriptionId = snapshot.originalTransactionId || snapshot.transactionId || null;
         break;
       case 'GOOGLE':
         providerSubscriptionId = snapshot.purchaseToken || null;
@@ -714,7 +769,8 @@ export class PaymentOrchestratorService {
           orderBy: { updatedAt: 'desc' },
         });
 
-        const periodEnd = subscription?.currentPeriodEnd || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+        const periodEnd =
+          subscription?.currentPeriodEnd || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
         await this.creditsService.resetForPeriod({
           userId: order.userId,

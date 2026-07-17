@@ -75,9 +75,7 @@ export class OutreachTriggersScheduler {
     });
 
     for (const sub of pastDue) {
-      const daysOverdue = Math.floor(
-        (Date.now() - sub.currentPeriodEnd.getTime()) / 86_400_000,
-      );
+      const daysOverdue = Math.floor((Date.now() - sub.currentPeriodEnd.getTime()) / 86_400_000);
       for (const step of DUNNING_STEPS) {
         if (daysOverdue < step) continue;
         await this.outreachService.enqueue({
@@ -102,9 +100,7 @@ export class OutreachTriggersScheduler {
     });
 
     for (const event of events) {
-      const subscriptionId = (event.properties as any)?.subscriptionId as
-        | string
-        | undefined;
+      const subscriptionId = (event.properties as any)?.subscriptionId as string | undefined;
       if (!subscriptionId) continue;
       const sub = await this.prisma.subscription.findUnique({
         where: { id: subscriptionId },

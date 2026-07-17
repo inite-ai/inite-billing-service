@@ -3,9 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 import { Prisma, MeteredFeature, FeatureQuota } from '@prisma/client';
 import { PrismaService } from '../common/services/prisma.service';
-import {
-  NotificationsService,
-} from '../notifications/notifications.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const FEATURE_CACHE_TTL_MS = 60 * 1000;
 
@@ -31,10 +29,7 @@ export interface QuotaEvaluation {
 @Injectable()
 export class MeteringService {
   private readonly logger = new Logger(MeteringService.name);
-  private readonly featureCache = new Map<
-    string,
-    { feature: MeteredFeature | null; at: number }
-  >();
+  private readonly featureCache = new Map<string, { feature: MeteredFeature | null; at: number }>();
   private redis: Redis | null = null;
 
   constructor(
@@ -78,11 +73,7 @@ export class MeteringService {
     return feature;
   }
 
-  computeCredits(
-    feature: MeteredFeature,
-    units: number,
-    modelTier?: string,
-  ): number {
+  computeCredits(feature: MeteredFeature, units: number, modelTier?: string): number {
     const tierRates = (feature.tierRates ?? {}) as Record<string, number>;
     const rate =
       modelTier && typeof tierRates[modelTier] === 'number'
@@ -101,9 +92,7 @@ export class MeteringService {
     const now = new Date();
     switch (window) {
       case 'day':
-        return new Date(
-          Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
-        );
+        return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
       case 'week': {
         const day = now.getUTCDay() || 7; // Monday-based
         const monday = new Date(
@@ -176,11 +165,7 @@ export class MeteringService {
     const result: QuotaEvaluation = { softCapCrossed: [] };
 
     for (const quota of byScope.values()) {
-      const windowStart = await this.getWindowStart(
-        tx,
-        quota.window,
-        input.balanceId,
-      );
+      const windowStart = await this.getWindowStart(tx, quota.window, input.balanceId);
       const aggregate = await tx.creditUsage.aggregate({
         where: {
           userId: input.userId,
@@ -197,10 +182,8 @@ export class MeteringService {
       const projectedCredits = usedCredits + input.creditsToAdd;
       const projectedUnits = usedUnits + input.unitsToAdd;
 
-      const creditsOver =
-        quota.limitCredits != null && projectedCredits > quota.limitCredits;
-      const unitsOver =
-        quota.limitUnits != null && projectedUnits > quota.limitUnits;
+      const creditsOver = quota.limitCredits != null && projectedCredits > quota.limitCredits;
+      const unitsOver = quota.limitUnits != null && projectedUnits > quota.limitUnits;
 
       if ((creditsOver || unitsOver) && quota.overagePolicy === 'block') {
         result.hardCapHit = {
@@ -218,8 +201,7 @@ export class MeteringService {
       const limit = quota.limitCredits ?? quota.limitUnits;
       if (limit != null && limit > 0) {
         const used = quota.limitCredits != null ? usedCredits : usedUnits;
-        const projected =
-          quota.limitCredits != null ? projectedCredits : projectedUnits;
+        const projected = quota.limitCredits != null ? projectedCredits : projectedUnits;
         const threshold = (limit * quota.softCapPct) / 100;
         if (used < threshold && projected >= threshold) {
           result.softCapCrossed.push({
@@ -241,10 +223,7 @@ export class MeteringService {
    * Post-commit soft-cap warnings, deduped per (user, quota, window) via
    * Redis SETNX with TTL. Fire-and-forget — never blocks the consume path.
    */
-  emitSoftCapWarnings(
-    userId: string,
-    warnings: QuotaEvaluation['softCapCrossed'],
-  ): void {
+  emitSoftCapWarnings(userId: string, warnings: QuotaEvaluation['softCapCrossed']): void {
     if (warnings.length === 0) return;
     void (async () => {
       for (const warning of warnings) {
@@ -353,9 +332,7 @@ export class MeteringService {
     overagePolicy?: string;
   }) {
     if (data.limitUnits == null && data.limitCredits == null) {
-      throw new BadRequestException(
-        'At least one of limitUnits or limitCredits is required',
-      );
+      throw new BadRequestException('At least one of limitUnits or limitCredits is required');
     }
     return this.prisma.featureQuota.create({
       data: {
@@ -441,17 +418,13 @@ export class MeteringService {
         createdAt: { gte: from, lte: to },
         ...(params.userId ? { userId: params.userId } : {}),
         ...(params.featureCode ? { featureCode: params.featureCode } : {}),
-        ...(params.serviceId
-          ? { creditBalance: { serviceId: params.serviceId } }
-          : {}),
+        ...(params.serviceId ? { creditBalance: { serviceId: params.serviceId } } : {}),
       },
       _sum: { amount: true, units: true },
       _count: { _all: true },
     });
 
-    const featureCodes = grouped
-      .map((g) => g.featureCode)
-      .filter(Boolean) as string[];
+    const featureCodes = grouped.map((g) => g.featureCode).filter(Boolean) as string[];
     const features = featureCodes.length
       ? await this.prisma.meteredFeature.findMany({
           where: { code: { in: featureCodes } },

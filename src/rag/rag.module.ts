@@ -18,12 +18,7 @@ import { PrismaService } from '../common/services/prisma.service';
       },
     }),
   ],
-  providers: [
-    EmbeddingsService,
-    ProductEmbeddingProcessor,
-    ProductSearchService,
-    PrismaService,
-  ],
+  providers: [EmbeddingsService, ProductEmbeddingProcessor, ProductSearchService, PrismaService],
   exports: [EmbeddingsService, ProductSearchService, BullModule],
 })
 export class RagModule {}

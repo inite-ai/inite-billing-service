@@ -121,8 +121,7 @@ export class AdminOutreachController {
     }
 
     const totalSent = sources.reduce((sum, s) => sum + s._count._all, 0);
-    const templateSent =
-      sources.find((s) => s.source === 'template')?._count._all ?? 0;
+    const templateSent = sources.find((s) => s.source === 'template')?._count._all ?? 0;
 
     return {
       byTrigger: [...triggers.values()].map((t) => ({
@@ -141,10 +140,9 @@ export class AdminOutreachController {
       where: { id },
     });
     if (!outreach) return null;
-    const notificationIds = [
-      outreach.inAppNotificationId,
-      outreach.emailNotificationId,
-    ].filter(Boolean) as string[];
+    const notificationIds = [outreach.inAppNotificationId, outreach.emailNotificationId].filter(
+      Boolean,
+    ) as string[];
     const notifications = notificationIds.length
       ? await this.prisma.notification.findMany({
           where: { id: { in: notificationIds } },
@@ -157,9 +155,7 @@ export class AdminOutreachController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Send a template-rendered test email (ops smoke test)' })
   async testEmail(@Body() body: TestEmailDto) {
-    const trigger = isKnownTemplate(body.trigger)
-      ? body.trigger
-      : 'abandoned_checkout';
+    const trigger = isKnownTemplate(body.trigger) ? body.trigger : 'abandoned_checkout';
     const rendered = renderTemplate(trigger, body.locale, {
       productName: body.productName || 'Test Product',
       ctaUrl: 'https://billing.inite.ai/dashboard',

@@ -80,8 +80,7 @@ export class ActionRegistryService {
     return {
       name: 'cancel_my_subscription',
       scope: 'user',
-      description:
-        'Cancel the current user subscription at the end of the paid period.',
+      description: 'Cancel the current user subscription at the end of the paid period.',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -93,9 +92,7 @@ export class ActionRegistryService {
         required: ['subscriptionId'],
       },
       validate: async (params, ctx) => {
-        const { subscriptionId } = z
-          .object({ subscriptionId: uuid })
-          .parse(params);
+        const { subscriptionId } = z.object({ subscriptionId: uuid }).parse(params);
         // userId always comes from the JWT context, never from LLM params
         const subscription = await this.prisma.subscription.findFirst({
           where: { id: subscriptionId, userId: ctx.userId },
@@ -110,9 +107,7 @@ export class ActionRegistryService {
           );
         }
         if (subscription.cancelAtPeriodEnd) {
-          throw new BadRequestException(
-            'Subscription is already scheduled for cancellation',
-          );
+          throw new BadRequestException('Subscription is already scheduled for cancellation');
         }
         return {
           subscriptionId,
@@ -122,15 +117,10 @@ export class ActionRegistryService {
       },
       summarize: (p) =>
         `Cancel subscription "${p.productName}" at period end${
-          p.currentPeriodEnd
-            ? ` (${new Date(p.currentPeriodEnd).toISOString().slice(0, 10)})`
-            : ''
+          p.currentPeriodEnd ? ` (${new Date(p.currentPeriodEnd).toISOString().slice(0, 10)})` : ''
         }`,
       execute: async (p, ctx) => {
-        await this.subscriptionsService.cancelSubscription(
-          ctx.userId,
-          p.subscriptionId,
-        );
+        await this.subscriptionsService.cancelSubscription(ctx.userId, p.subscriptionId);
         return { subscriptionId: p.subscriptionId, cancelAtPeriodEnd: true };
       },
     };
@@ -140,8 +130,7 @@ export class ActionRegistryService {
     return {
       name: 'resume_my_subscription',
       scope: 'user',
-      description:
-        'Resume a subscription that was scheduled for cancellation (undo cancel).',
+      description: 'Resume a subscription that was scheduled for cancellation (undo cancel).',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -153,9 +142,7 @@ export class ActionRegistryService {
         required: ['subscriptionId'],
       },
       validate: async (params, ctx) => {
-        const { subscriptionId } = z
-          .object({ subscriptionId: uuid })
-          .parse(params);
+        const { subscriptionId } = z.object({ subscriptionId: uuid }).parse(params);
         const subscription = await this.prisma.subscription.findFirst({
           where: { id: subscriptionId, userId: ctx.userId },
           include: { price: { include: { product: true } } },
@@ -164,9 +151,7 @@ export class ActionRegistryService {
           throw new BadRequestException('Subscription not found');
         }
         if (!subscription.cancelAtPeriodEnd) {
-          throw new BadRequestException(
-            'Subscription is not scheduled for cancellation',
-          );
+          throw new BadRequestException('Subscription is not scheduled for cancellation');
         }
         return {
           subscriptionId,
@@ -175,10 +160,7 @@ export class ActionRegistryService {
       },
       summarize: (p) => `Resume subscription "${p.productName}"`,
       execute: async (p, ctx) => {
-        await this.subscriptionsService.resumeSubscription(
-          ctx.userId,
-          p.subscriptionId,
-        );
+        await this.subscriptionsService.resumeSubscription(ctx.userId, p.subscriptionId);
         return { subscriptionId: p.subscriptionId, cancelAtPeriodEnd: false };
       },
     };
@@ -188,8 +170,7 @@ export class ActionRegistryService {
     return {
       name: 'adjust_credits',
       scope: 'admin',
-      description:
-        "Adjust a user's credit balance by a positive or negative amount (admin).",
+      description: "Adjust a user's credit balance by a positive or negative amount (admin).",
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -293,21 +274,14 @@ export class ActionRegistryService {
             serviceId: uuid.optional(),
           })
           .parse(params);
-        if (
-          parsed.discountType === 'percentage' &&
-          parsed.discountValue > 100
-        ) {
-          throw new BadRequestException(
-            'Percentage discount must be between 0 and 100',
-          );
+        if (parsed.discountType === 'percentage' && parsed.discountValue > 100) {
+          throw new BadRequestException('Percentage discount must be between 0 and 100');
         }
         return parsed;
       },
       summarize: (p) =>
         `Create promo code "${p.code}" — ${
-          p.discountType === 'percentage'
-            ? `${p.discountValue}% off`
-            : `${p.discountValue} off`
+          p.discountType === 'percentage' ? `${p.discountValue}% off` : `${p.discountValue} off`
         }${p.validUntil ? `, valid until ${p.validUntil.slice(0, 10)}` : ''}`,
       execute: async (p) => {
         return this.promoCodesService.create(p as any);

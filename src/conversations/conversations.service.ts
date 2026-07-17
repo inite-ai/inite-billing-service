@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/services/prisma.service';
 import { Conversation, ChatMessage } from '@prisma/client';
 
@@ -89,9 +85,7 @@ export class ConversationsService {
       throw new NotFoundException('Message not found in this conversation');
     }
     if (message.role !== 'assistant') {
-      throw new BadRequestException(
-        'Feedback can only be left on assistant messages',
-      );
+      throw new BadRequestException('Feedback can only be left on assistant messages');
     }
     return this.prisma.chatMessage.update({
       where: { id: messageId },

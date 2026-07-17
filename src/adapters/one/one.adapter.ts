@@ -65,9 +65,7 @@ export class OneAdapter implements PaymentRailAdapter {
     return 'ONE';
   }
 
-  async createPaymentIntent(
-    input: CreateIntentInput,
-  ): Promise<CreateIntentResult> {
+  async createPaymentIntent(input: CreateIntentInput): Promise<CreateIntentResult> {
     const { apiBaseUrl, apiKey, apiSecret } = await this.getConfig();
 
     const preferenceType = input.mode === 'SUBSCRIPTION' ? 'SUBSCRIPTION' : 'PAYMENT';
@@ -141,9 +139,7 @@ export class OneAdapter implements PaymentRailAdapter {
         providerIntentId: order.id,
         providerCheckoutId: preference.id,
         checkoutUrl: preference.checkout_url || order.checkout_url,
-        expiresAt: preference.expires_at
-          ? new Date(preference.expires_at)
-          : undefined,
+        expiresAt: preference.expires_at ? new Date(preference.expires_at) : undefined,
         metadata: {
           preference_id: preference.id,
           order_id: order.id,
@@ -159,16 +155,13 @@ export class OneAdapter implements PaymentRailAdapter {
     const { apiBaseUrl, apiKey, apiSecret } = await this.getConfig();
 
     try {
-      const response = await fetch(
-        `${apiBaseUrl}/v1/payment_orders/${providerIntentId}`,
-        {
-          method: 'GET',
-          headers: {
-            'x-api-key': apiKey,
-            'x-api-secret': apiSecret,
-          },
+      const response = await fetch(`${apiBaseUrl}/v1/payment_orders/${providerIntentId}`, {
+        method: 'GET',
+        headers: {
+          'x-api-key': apiKey,
+          'x-api-secret': apiSecret,
         },
-      );
+      });
 
       if (!response.ok) {
         if (response.status === 404) {
@@ -182,7 +175,10 @@ export class OneAdapter implements PaymentRailAdapter {
       const order: OnePaymentOrder = await response.json();
 
       // Map ONE statuses to unified statuses
-      const statusMap: Record<string, 'created' | 'opened' | 'paid' | 'failed' | 'expired' | 'refunded'> = {
+      const statusMap: Record<
+        string,
+        'created' | 'opened' | 'paid' | 'failed' | 'expired' | 'refunded'
+      > = {
         OPENED: 'opened',
         CLOSED: 'paid',
         EXPIRED: 'expired',
@@ -222,4 +218,3 @@ export class OneAdapter implements PaymentRailAdapter {
     };
   }
 }
-

@@ -71,4 +71,3 @@ export interface PaymentRailAdapter {
    */
   handleWebhook?(rawPayload: any): Promise<WebhookParseResult>;
 }
-

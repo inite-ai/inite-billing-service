@@ -5,7 +5,6 @@ import { OutboxProcessor } from './outbox.processor';
 import { NotificationEmailProcessor } from './notification-email.processor';
 import { OutreachProcessor } from './outreach.processor';
 import { SubscriptionExpirerScheduler } from './subscription-expirer.scheduler';
-import { AffiliatePayoutProcessor } from '../affiliates/affiliate-payout.processor';
 import { PaymentOrchestratorModule } from '../payment-orchestrator/payment-orchestrator.module';
 import { OutboxModule } from '../outbox/outbox.module';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -61,4 +60,3 @@ import { PrismaService } from '../common/services/prisma.service';
   ],
 })
 export class WorkersModule {}
-

@@ -66,9 +66,7 @@ export class NotificationEmailProcessor extends WorkerHost {
           attempts: { increment: 1 },
         },
       });
-      this.logger.error(
-        `Email send failed for notification ${notification.id}: ${error.message}`,
-      );
+      this.logger.error(`Email send failed for notification ${notification.id}: ${error.message}`);
       if (error instanceof UnrecoverableError) throw error;
       throw error; // rethrow so BullMQ retries with backoff
     }

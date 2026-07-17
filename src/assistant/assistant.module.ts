@@ -26,12 +26,7 @@ import { RecommendationsModule } from '../recommendations/recommendations.module
     RecommendationsModule,
   ],
   controllers: [AssistantController, AssistantActionsController],
-  providers: [
-    AssistantService,
-    ActionRegistryService,
-    AssistantActionsService,
-    PrismaService,
-  ],
+  providers: [AssistantService, ActionRegistryService, AssistantActionsService, PrismaService],
   exports: [AssistantService],
 })
 export class AssistantModule {}

@@ -115,8 +115,7 @@ export class InsightsService {
       { signal: AbortSignal.timeout(30_000), maxRetries: 1 },
     );
 
-    const content =
-      response.content[0]?.type === 'text' ? response.content[0].text : '';
+    const content = response.content[0]?.type === 'text' ? response.content[0].text : '';
     if (!content.trim()) {
       throw new Error('Insight generation returned empty content');
     }

@@ -24,9 +24,7 @@ function extractJwt(req: Request): string | null {
 function buildJwtOptions(configService: ConfigService): StrategyOptionsWithoutRequest {
   const logger = new Logger('JwtStrategy');
   const jwtSecret = configService.get<string>('JWT_SECRET');
-  const authServiceUrl =
-    configService.get<string>('AUTH_SERVICE_URL') ||
-    'https://auth.inite.ai';
+  const authServiceUrl = configService.get<string>('AUTH_SERVICE_URL') || 'https://auth.inite.ai';
 
   const base = {
     jwtFromRequest: extractJwt,

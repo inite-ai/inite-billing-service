@@ -116,9 +116,7 @@ export class StripeAdapter implements PaymentRailAdapter {
       } else if (typeof value === 'object') {
         pairs.push(this.encodeFormData(value, fullKey));
       } else {
-        pairs.push(
-          `${encodeURIComponent(fullKey)}=${encodeURIComponent(String(value))}`,
-        );
+        pairs.push(`${encodeURIComponent(fullKey)}=${encodeURIComponent(String(value))}`);
       }
     }
 
@@ -132,10 +130,7 @@ export class StripeAdapter implements PaymentRailAdapter {
       }
       return this.createPaymentCheckout(input);
     } catch (error: any) {
-      this.logger.error(
-        `Error creating Stripe payment intent: ${error.message}`,
-        error.stack,
-      );
+      this.logger.error(`Error creating Stripe payment intent: ${error.message}`, error.stack);
       throw error;
     }
   }
@@ -148,8 +143,7 @@ export class StripeAdapter implements PaymentRailAdapter {
       mode: 'payment',
       'line_items[0][price_data][currency]': input.currency.toLowerCase(),
       'line_items[0][price_data][unit_amount]': amountInCents,
-      'line_items[0][price_data][product_data][name]':
-        input.metadata?.productName || 'Order',
+      'line_items[0][price_data][product_data][name]': input.metadata?.productName || 'Order',
       'line_items[0][quantity]': 1,
       'metadata[order_id]': input.orderId,
       payment_intent_data: {
@@ -187,9 +181,7 @@ export class StripeAdapter implements PaymentRailAdapter {
       providerIntentId: session.payment_intent || session.id,
       providerCheckoutId: session.id,
       checkoutUrl: session.url,
-      expiresAt: session.expires_at
-        ? new Date(session.expires_at * 1000)
-        : undefined,
+      expiresAt: session.expires_at ? new Date(session.expires_at * 1000) : undefined,
       metadata: {
         stripe_session_id: session.id,
         stripe_payment_intent: session.payment_intent,
@@ -230,9 +222,7 @@ export class StripeAdapter implements PaymentRailAdapter {
       providerIntentId: session.subscription || session.id,
       providerCheckoutId: session.id,
       checkoutUrl: session.url,
-      expiresAt: session.expires_at
-        ? new Date(session.expires_at * 1000)
-        : undefined,
+      expiresAt: session.expires_at ? new Date(session.expires_at * 1000) : undefined,
       metadata: {
         stripe_session_id: session.id,
         stripe_subscription: session.subscription,
@@ -245,10 +235,7 @@ export class StripeAdapter implements PaymentRailAdapter {
     try {
       // Try as payment intent first
       if (providerIntentId.startsWith('pi_')) {
-        const pi = await this.stripeRequest(
-          'GET',
-          `/v1/payment_intents/${providerIntentId}`,
-        );
+        const pi = await this.stripeRequest('GET', `/v1/payment_intents/${providerIntentId}`);
 
         const statusMap: Record<string, IntentStatusResult['status']> = {
           requires_payment_method: 'created',
@@ -294,10 +281,7 @@ export class StripeAdapter implements PaymentRailAdapter {
 
       // Try as subscription
       if (providerIntentId.startsWith('sub_')) {
-        const sub = await this.stripeRequest(
-          'GET',
-          `/v1/subscriptions/${providerIntentId}`,
-        );
+        const sub = await this.stripeRequest('GET', `/v1/subscriptions/${providerIntentId}`);
 
         const statusMap: Record<string, IntentStatusResult['status']> = {
           active: 'paid',
@@ -379,7 +363,10 @@ export class StripeAdapter implements PaymentRailAdapter {
     if (subEventTypes.has(eventType)) {
       // For invoice.* obj is the invoice with obj.subscription = sub_xxx.
       // For customer.subscription.* obj IS the subscription itself.
-      entityId = obj.subscription || (typeof obj.id === 'string' && obj.id.startsWith('sub_') ? obj.id : '') || '';
+      entityId =
+        obj.subscription ||
+        (typeof obj.id === 'string' && obj.id.startsWith('sub_') ? obj.id : '') ||
+        '';
     } else {
       entityId = obj.payment_intent || obj.id || '';
     }
@@ -396,20 +383,13 @@ export class StripeAdapter implements PaymentRailAdapter {
   /**
    * Verify Stripe webhook signature
    */
-  async verifyWebhookSignature(
-    payload: string | Buffer,
-    signature: string,
-  ): Promise<boolean> {
+  async verifyWebhookSignature(payload: string | Buffer, signature: string): Promise<boolean> {
     const { webhookSecret } = await this.getConfig();
     if (!webhookSecret) return false;
 
     const parts = signature.split(',');
-    const timestamp = parts
-      .find((p) => p.startsWith('t='))
-      ?.split('=')[1];
-    const v1Signature = parts
-      .find((p) => p.startsWith('v1='))
-      ?.split('=')[1];
+    const timestamp = parts.find((p) => p.startsWith('t='))?.split('=')[1];
+    const v1Signature = parts.find((p) => p.startsWith('v1='))?.split('=')[1];
 
     if (!timestamp || !v1Signature) return false;
 
@@ -418,9 +398,7 @@ export class StripeAdapter implements PaymentRailAdapter {
     if (Math.abs(now - parseInt(timestamp, 10)) > 300) return false;
 
     const signedPayload = `${timestamp}.${typeof payload === 'string' ? payload : payload.toString('utf8')}`;
-    const expected = createHmac('sha256', webhookSecret)
-      .update(signedPayload)
-      .digest('hex');
+    const expected = createHmac('sha256', webhookSecret).update(signedPayload).digest('hex');
 
     return expected === v1Signature;
   }

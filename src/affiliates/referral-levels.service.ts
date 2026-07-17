@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  NotFoundException,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../common/services/prisma.service';
 
 @Injectable()
@@ -47,9 +42,7 @@ export class ReferralLevelsService {
 
     // Validate commission rate bounds (C5)
     if (data.commissionRate < 0 || data.commissionRate > 1) {
-      throw new BadRequestException(
-        'commissionRate must be between 0 and 1 (inclusive)',
-      );
+      throw new BadRequestException('commissionRate must be between 0 and 1 (inclusive)');
     }
 
     // Check that levels are sequential
@@ -58,9 +51,8 @@ export class ReferralLevelsService {
       orderBy: { level: 'asc' },
     });
 
-    const maxLevel = existingLevels.length > 0
-      ? Math.max(...existingLevels.map((l) => l.level))
-      : 0;
+    const maxLevel =
+      existingLevels.length > 0 ? Math.max(...existingLevels.map((l) => l.level)) : 0;
 
     if (data.level !== maxLevel + 1) {
       throw new BadRequestException(
@@ -78,16 +70,19 @@ export class ReferralLevelsService {
       },
     });
 
-    this.logger.log(
-      `Created referral level ${data.level} for service ${data.serviceId}`,
-    );
+    this.logger.log(`Created referral level ${data.level} for service ${data.serviceId}`);
 
     return level;
   }
 
   async updateLevel(
     id: string,
-    data: { commissionRate?: number; name?: string; isActive?: boolean; qualificationCriteria?: Record<string, any> },
+    data: {
+      commissionRate?: number;
+      name?: string;
+      isActive?: boolean;
+      qualificationCriteria?: Record<string, any>;
+    },
   ) {
     const level = await this.prisma.referralLevel.findUnique({
       where: { id },
@@ -98,9 +93,7 @@ export class ReferralLevelsService {
 
     // Validate commission rate bounds (C5)
     if (data.commissionRate !== undefined && (data.commissionRate < 0 || data.commissionRate > 1)) {
-      throw new BadRequestException(
-        'commissionRate must be between 0 and 1 (inclusive)',
-      );
+      throw new BadRequestException('commissionRate must be between 0 and 1 (inclusive)');
     }
 
     return this.prisma.referralLevel.update({
@@ -135,16 +128,19 @@ export class ReferralLevelsService {
   /**
    * Built-in referral level templates
    */
-  static readonly TEMPLATES: Record<string, {
-    name: string;
-    description: string;
-    totalRate: number;
-    levels: { level: number; rate: number; name: string; criteria?: Record<string, any> }[];
-  }> = {
+  static readonly TEMPLATES: Record<
+    string,
+    {
+      name: string;
+      description: string;
+      totalRate: number;
+      levels: { level: number; rate: number; name: string; criteria?: Record<string, any> }[];
+    }
+  > = {
     'inite-7-level-30': {
       name: 'INITE 7-Level (30%)',
       description: '7 levels, 30% total commission. Standard INITE referral program.',
-      totalRate: 0.30,
+      totalRate: 0.3,
       levels: [
         { level: 1, rate: 0.15, name: 'Direct Referral' },
         { level: 2, rate: 0.01, name: 'Level 2' },
@@ -158,21 +154,51 @@ export class ReferralLevelsService {
     'inite-7-level-30-qualified': {
       name: 'INITE 7-Level (30%) + Qualification',
       description: '7 levels, 30% total. L2+ require min referrals + personal purchase.',
-      totalRate: 0.30,
+      totalRate: 0.3,
       levels: [
         { level: 1, rate: 0.15, name: 'Direct Referral' },
-        { level: 2, rate: 0.01, name: 'Level 2', criteria: { minDirectReferrals: 3, personalPurchaseRequired: true } },
-        { level: 3, rate: 0.015, name: 'Level 3', criteria: { minDirectReferrals: 5, minActiveReferrals: 2 } },
-        { level: 4, rate: 0.02, name: 'Level 4', criteria: { minDirectReferrals: 10, minActiveReferrals: 5 } },
-        { level: 5, rate: 0.03, name: 'Level 5', criteria: { minDirectReferrals: 15, minActiveReferrals: 7 } },
-        { level: 6, rate: 0.035, name: 'Level 6', criteria: { minDirectReferrals: 20, minActiveReferrals: 10, minMonthlyVolume: 100 } },
-        { level: 7, rate: 0.04, name: 'Level 7', criteria: { minDirectReferrals: 30, minActiveReferrals: 15, minMonthlyVolume: 500 } },
+        {
+          level: 2,
+          rate: 0.01,
+          name: 'Level 2',
+          criteria: { minDirectReferrals: 3, personalPurchaseRequired: true },
+        },
+        {
+          level: 3,
+          rate: 0.015,
+          name: 'Level 3',
+          criteria: { minDirectReferrals: 5, minActiveReferrals: 2 },
+        },
+        {
+          level: 4,
+          rate: 0.02,
+          name: 'Level 4',
+          criteria: { minDirectReferrals: 10, minActiveReferrals: 5 },
+        },
+        {
+          level: 5,
+          rate: 0.03,
+          name: 'Level 5',
+          criteria: { minDirectReferrals: 15, minActiveReferrals: 7 },
+        },
+        {
+          level: 6,
+          rate: 0.035,
+          name: 'Level 6',
+          criteria: { minDirectReferrals: 20, minActiveReferrals: 10, minMonthlyVolume: 100 },
+        },
+        {
+          level: 7,
+          rate: 0.04,
+          name: 'Level 7',
+          criteria: { minDirectReferrals: 30, minActiveReferrals: 15, minMonthlyVolume: 500 },
+        },
       ],
     },
     'simple-3-level-20': {
       name: 'Simple 3-Level (20%)',
       description: '3 levels, 20% total. Easy entry for new services.',
-      totalRate: 0.20,
+      totalRate: 0.2,
       levels: [
         { level: 1, rate: 0.15, name: 'Direct Referral' },
         { level: 2, rate: 0.03, name: 'Level 2' },
@@ -254,10 +280,7 @@ export class ReferralLevelsService {
     };
   }
 
-  async getCommissionRateForLevel(
-    serviceId: string,
-    level: number,
-  ): Promise<number | null> {
+  async getCommissionRateForLevel(serviceId: string, level: number): Promise<number | null> {
     const referralLevel = await this.prisma.referralLevel.findUnique({
       where: {
         serviceId_level: { serviceId, level },

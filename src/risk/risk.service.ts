@@ -139,8 +139,7 @@ export class RiskService {
       100,
       signals.reduce((sum, s) => sum + s.weight, 0),
     );
-    const level: RiskResult['level'] =
-      score < 30 ? 'low' : score < 60 ? 'medium' : 'high';
+    const level: RiskResult['level'] = score < 30 ? 'low' : score < 60 ? 'medium' : 'high';
 
     const flagThreshold = this.num('RISK_FLAG_THRESHOLD', 60);
     const blockThreshold = this.num('RISK_BLOCK_THRESHOLD', 85);
@@ -229,9 +228,7 @@ export class RiskService {
         signals: signals as unknown as Prisma.InputJsonValue,
         score,
         level: score < 30 ? 'low' : score < 60 ? 'medium' : 'high',
-        ...(assessment.status === 'none' && score >= flagThreshold
-          ? { status: 'flagged' }
-          : {}),
+        ...(assessment.status === 'none' && score >= flagThreshold ? { status: 'flagged' } : {}),
       },
     });
   }
@@ -263,8 +260,6 @@ export class RiskService {
         { orderId, score, status },
         { type: 'risk_assessment', id: orderId },
       )
-      .catch((error: any) =>
-        this.logger.warn(`Risk outbox emit failed: ${error.message}`),
-      );
+      .catch((error: any) => this.logger.warn(`Risk outbox emit failed: ${error.message}`));
   }
 }

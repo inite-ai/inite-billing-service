@@ -6,7 +6,6 @@ import {
   HttpCode,
   HttpStatus,
   ForbiddenException,
-  NotFoundException,
   Logger,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
@@ -62,10 +61,7 @@ export class WebhooksController {
     const apiSecret = config.apiSecret || '';
 
     const rawBody = JSON.stringify(payload);
-    const expected = crypto
-      .createHmac('sha256', apiSecret)
-      .update(rawBody)
-      .digest('hex');
+    const expected = crypto.createHmac('sha256', apiSecret).update(rawBody).digest('hex');
 
     if (!signature || !safeTimingSafeEqual(expected, signature)) {
       this.logger.warn('ONE webhook signature verification failed');
@@ -163,9 +159,7 @@ export class WebhooksController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Apple App Store Server Notification V2' })
   @ApiResponse({ status: 200 })
-  async handleAppleWebhook(
-    @Body() payload: any,
-  ): Promise<{ received: boolean }> {
+  async handleAppleWebhook(@Body() payload: any): Promise<{ received: boolean }> {
     // Apple sends signedPayload — the adapter decodes and validates the JWS
     if (!payload?.signedPayload && !payload?.notificationType) {
       this.logger.warn('Apple webhook missing signedPayload');
@@ -213,7 +207,9 @@ export class WebhooksController {
       parsed.webhookId || parsed.entityId,
       parsed.eventType,
       parsed.entityId,
-      typeof payload.message?.data === 'string' ? JSON.parse(Buffer.from(payload.message.data, 'base64').toString()) : payload,
+      typeof payload.message?.data === 'string'
+        ? JSON.parse(Buffer.from(payload.message.data, 'base64').toString())
+        : payload,
     );
 
     return { received: true };
@@ -251,4 +247,3 @@ export class WebhooksController {
     return { received: true };
   }
 }
-

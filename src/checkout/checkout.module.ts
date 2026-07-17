@@ -9,10 +9,16 @@ import { FunnelModule } from '../funnel/funnel.module';
 import { RiskModule } from '../risk/risk.module';
 
 @Module({
-  imports: [CatalogModule, PaymentOrchestratorModule, AffiliatesModule, PromoCodesModule, FunnelModule, RiskModule],
+  imports: [
+    CatalogModule,
+    PaymentOrchestratorModule,
+    AffiliatesModule,
+    PromoCodesModule,
+    FunnelModule,
+    RiskModule,
+  ],
   controllers: [CheckoutController],
   providers: [CheckoutService],
   exports: [CheckoutService],
 })
 export class CheckoutModule {}
-

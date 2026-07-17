@@ -88,15 +88,11 @@ export class ProductEmbeddingProcessor extends WorkerHost {
     const embeddings = await this.prisma.productEmbedding.findMany({
       select: { productId: true, contentHash: true },
     });
-    const hashByProduct = new Map(
-      embeddings.map((e) => [e.productId, e.contentHash]),
-    );
+    const hashByProduct = new Map(embeddings.map((e) => [e.productId, e.contentHash]));
 
     let enqueued = 0;
     for (const product of products) {
-      const hash = createHash('sha256')
-        .update(buildProductContent(product))
-        .digest('hex');
+      const hash = createHash('sha256').update(buildProductContent(product)).digest('hex');
       if (hashByProduct.get(product.id) === hash) continue;
       await this.embeddingsQueue.add(
         'embed-product',

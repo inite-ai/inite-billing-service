@@ -1,4 +1,13 @@
-import { Controller, Get, Query, Req, HttpCode, HttpStatus, UseGuards, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Query,
+  Req,
+  HttpCode,
+  HttpStatus,
+  UseGuards,
+  BadRequestException,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { CatalogService } from './catalog.service';
 import { ProductSearchService } from '../rag/product-search.service';

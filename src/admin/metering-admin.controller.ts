@@ -1,14 +1,4 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  Post,
-  Put,
-  Query,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   IsBoolean,
@@ -177,10 +167,7 @@ export class MeteringAdminController {
 
   @Get('quotas')
   @ApiOperation({ summary: 'List quotas' })
-  async listQuotas(
-    @Query('featureId') featureId?: string,
-    @Query('userId') userId?: string,
-  ) {
+  async listQuotas(@Query('featureId') featureId?: string, @Query('userId') userId?: string) {
     return this.meteringService.listQuotas({ featureId, userId });
   }
 

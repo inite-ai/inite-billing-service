@@ -4,8 +4,7 @@
  * `x-vercel-ai-ui-message-stream: v1` response header and a final
  * `data: [DONE]` terminator — without it the client hangs in `streaming`.
  */
-export const sse = (part: Record<string, unknown>): string =>
-  `data: ${JSON.stringify(part)}\n\n`;
+export const sse = (part: Record<string, unknown>): string => `data: ${JSON.stringify(part)}\n\n`;
 
 export const sseDone = (): string => 'data: [DONE]\n\n';
 

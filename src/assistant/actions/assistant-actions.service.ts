@@ -42,9 +42,7 @@ export class AssistantActionsService {
     const ctx: ActionContext = { userId: input.userId };
     const params = await def.validate(input.rawParams, ctx);
     const summary = def.summarize(params);
-    const expiresAt = new Date(
-      Date.now() + this.anthropicConfig.actionTtlMinutes * 60 * 1000,
-    );
+    const expiresAt = new Date(Date.now() + this.anthropicConfig.actionTtlMinutes * 60 * 1000);
 
     const action = await this.prisma.assistantAction.create({
       data: {
@@ -175,16 +173,11 @@ export class AssistantActionsService {
     return updated;
   }
 
-  async listForUser(
-    user: RequestUser,
-    filters: { conversationId?: string; status?: string } = {},
-  ) {
+  async listForUser(user: RequestUser, filters: { conversationId?: string; status?: string } = {}) {
     const actions = await this.prisma.assistantAction.findMany({
       where: {
         userId: user.userId,
-        ...(filters.conversationId
-          ? { conversationId: filters.conversationId }
-          : {}),
+        ...(filters.conversationId ? { conversationId: filters.conversationId } : {}),
         ...(filters.status ? { status: filters.status } : {}),
       },
       orderBy: { createdAt: 'desc' },
@@ -195,8 +188,7 @@ export class AssistantActionsService {
     return actions.map((a) =>
       a.status === 'pending' && a.expiresAt.getTime() <= now
         ? { ...a, status: 'expired' }
-        : a.status === 'executing' &&
-            a.updatedAt.getTime() <= now - EXECUTING_STALE_MS
+        : a.status === 'executing' && a.updatedAt.getTime() <= now - EXECUTING_STALE_MS
           ? { ...a, status: 'failed' }
           : a,
     );
@@ -248,9 +240,7 @@ export class AssistantActionsService {
         }),
       );
     } catch (error: any) {
-      this.logger.warn(
-        `Failed to append action outcome to conversation: ${error.message}`,
-      );
+      this.logger.warn(`Failed to append action outcome to conversation: ${error.message}`);
     }
   }
 }

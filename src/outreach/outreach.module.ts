@@ -24,12 +24,7 @@ import { FunnelModule } from '../funnel/funnel.module';
     }),
   ],
   controllers: [AdminOutreachController],
-  providers: [
-    OutreachService,
-    OutreachGeneratorService,
-    OutreachTriggersScheduler,
-    PrismaService,
-  ],
+  providers: [OutreachService, OutreachGeneratorService, OutreachTriggersScheduler, PrismaService],
   exports: [OutreachService, BullModule],
 })
 export class OutreachModule {}

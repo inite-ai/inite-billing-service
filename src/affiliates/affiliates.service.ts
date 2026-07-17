@@ -197,10 +197,7 @@ export class AffiliatesService {
     return referrals.map((r) => this.mapReferralToDto(r));
   }
 
-  async getCommissions(
-    affiliateId: string,
-    status?: string,
-  ): Promise<CommissionResponseDto[]> {
+  async getCommissions(affiliateId: string, status?: string): Promise<CommissionResponseDto[]> {
     const where: any = { affiliateId };
     if (status) {
       where.status = status;
@@ -250,9 +247,7 @@ export class AffiliatesService {
       totalCommissions: affiliate.totalEarned.toString(),
       pendingCommissions: pendingCommissions.toString(),
       paidCommissions: affiliate.totalPaid.toString(),
-      upcomingPayout: affiliate.payouts[0]
-        ? this.mapPayoutToDto(affiliate.payouts[0])
-        : undefined,
+      upcomingPayout: affiliate.payouts[0] ? this.mapPayoutToDto(affiliate.payouts[0]) : undefined,
     };
   }
 
@@ -284,9 +279,7 @@ export class AffiliatesService {
         include: { _count: { select: { referrals: true } } },
       });
 
-      const childTrees = await Promise.all(
-        children.map((child) => buildTree(child, depth + 1)),
-      );
+      const childTrees = await Promise.all(children.map((child) => buildTree(child, depth + 1)));
 
       return {
         ...this.mapAffiliateToDto(aff),
@@ -389,9 +382,7 @@ export class AffiliatesService {
         },
       });
       if (!hasOrder && !hasSub) {
-        this.logger.debug(
-          `Affiliate ${affiliate.id} failed personalPurchaseRequired`,
-        );
+        this.logger.debug(`Affiliate ${affiliate.id} failed personalPurchaseRequired`);
         return false;
       }
     }
@@ -514,7 +505,6 @@ export class AffiliatesService {
     return this.mapPayoutToDto(payout);
   }
 
-
   /**
    * Process multi-level commissions when an order is paid.
    *
@@ -582,9 +572,8 @@ export class AffiliatesService {
       });
     }
 
-    const maxConfiguredLevel = serviceLevels.length > 0
-      ? Math.max(...serviceLevels.map((l: any) => l.level))
-      : 1;
+    const maxConfiguredLevel =
+      serviceLevels.length > 0 ? Math.max(...serviceLevels.map((l: any) => l.level)) : 1;
 
     // Walk up the affiliate chain
     let currentAffiliate = referral.affiliate;
@@ -608,12 +597,7 @@ export class AffiliatesService {
 
       // Check qualification criteria
       const criteria = levelConfig?.qualificationCriteria || {};
-      const isQualified = await this.checkQualification(
-        currentAffiliate,
-        criteria,
-        serviceId,
-        db,
-      );
+      const isQualified = await this.checkQualification(currentAffiliate, criteria, serviceId, db);
 
       if (!isQualified) {
         this.logger.debug(
@@ -638,7 +622,10 @@ export class AffiliatesService {
         break; // No rate for this level
       }
 
-      const commissionAmount = new Decimal(amount).mul(new Decimal(commissionRate)).toDecimalPlaces(4).toNumber();
+      const commissionAmount = new Decimal(amount)
+        .mul(new Decimal(commissionRate))
+        .toDecimalPlaces(4)
+        .toNumber();
 
       if (commissionAmount > 0) {
         // Commission starts as 'pending' — becomes 'earned' after settlement period

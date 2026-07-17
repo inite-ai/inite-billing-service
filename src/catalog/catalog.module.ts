@@ -12,4 +12,3 @@ import { RagModule } from '../rag/rag.module';
   exports: [CatalogService],
 })
 export class CatalogModule {}
-

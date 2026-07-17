@@ -39,7 +39,8 @@ export class ServiceCatalogController {
   @ApiOperation({ summary: 'Create a product for this service' })
   async createProduct(
     @Req() req: any,
-    @Body() body: {
+    @Body()
+    body: {
       code: string;
       name: string;
       type: 'subscription' | 'one_time' | 'usage';
@@ -79,7 +80,8 @@ export class ServiceCatalogController {
   @ApiOperation({ summary: 'Create a price for a product' })
   async createPrice(
     @Req() req: any,
-    @Body() body: {
+    @Body()
+    body: {
       code: string;
       productId: string;
       amount: number;

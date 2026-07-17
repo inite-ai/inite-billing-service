@@ -122,9 +122,7 @@ export class WebhookProcessor extends WorkerHost {
       });
 
       if (!paymentIntent) {
-        this.logger.warn(
-          `Payment intent not found for provider ID: ${webhookEvent.entityId}`,
-        );
+        this.logger.warn(`Payment intent not found for provider ID: ${webhookEvent.entityId}`);
         await this.prisma.webhookEvent.update({
           where: { id: webhookEvent.id },
           data: {
@@ -142,8 +140,8 @@ export class WebhookProcessor extends WorkerHost {
         const order = paymentIntent.order;
         const providerAmount = Number(
           statusResult.providerData.amount ??
-          statusResult.providerData.amountTotal?.amount ??
-          statusResult.providerData.total_amount,
+            statusResult.providerData.amountTotal?.amount ??
+            statusResult.providerData.total_amount,
         );
         const providerCurrency = (
           statusResult.providerData.currency ??
@@ -179,15 +177,11 @@ export class WebhookProcessor extends WorkerHost {
         if (finalStatus === 'failed') {
           void this.riskService
             .recordPaymentFailure(paymentIntent.orderId)
-            .catch((err: any) =>
-              this.logger.warn(`Risk failure record error: ${err.message}`),
-            );
+            .catch((err: any) => this.logger.warn(`Risk failure record error: ${err.message}`));
         } else if (finalStatus === 'paid') {
           void this.riskService
             .recordPaidWhileFlagged(paymentIntent.orderId)
-            .catch((err: any) =>
-              this.logger.warn(`Risk paid-while-flagged error: ${err.message}`),
-            );
+            .catch((err: any) => this.logger.warn(`Risk paid-while-flagged error: ${err.message}`));
         }
       }
 
@@ -220,4 +214,3 @@ export class WebhookProcessor extends WorkerHost {
     }
   }
 }
-

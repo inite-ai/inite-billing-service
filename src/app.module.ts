@@ -91,4 +91,3 @@ export class AppModule implements OnModuleInit {
     // Adapters are registered in main.ts after app initialization
   }
 }
-

@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../common/services/prisma.service';
 
@@ -192,11 +193,7 @@ export class FunnelService {
   /**
    * Get funnel metrics for admin dashboard
    */
-  async getFunnelMetrics(params: {
-    serviceId?: string;
-    from?: Date;
-    to?: Date;
-  }): Promise<{
+  async getFunnelMetrics(params: { serviceId?: string; from?: Date; to?: Date }): Promise<{
     stages: Array<{
       stage: string;
       count: number;
@@ -215,14 +212,7 @@ export class FunnelService {
     }
 
     // Get counts per stage
-    const stageOrder = [
-      'awareness',
-      'checkout',
-      'payment',
-      'conversion',
-      'retention',
-      'churned',
-    ];
+    const stageOrder = ['awareness', 'checkout', 'payment', 'conversion', 'retention', 'churned'];
 
     const stageCounts = await this.prisma.funnelEvent.groupBy({
       by: ['stage'],
@@ -230,16 +220,12 @@ export class FunnelService {
       _count: { id: true },
     });
 
-    const stageMap = new Map(
-      stageCounts.map((s) => [s.stage, s._count.id]),
-    );
+    const stageMap = new Map(stageCounts.map((s) => [s.stage, s._count.id]));
 
     const stages = stageOrder.map((stage, index) => {
       const count = stageMap.get(stage) || 0;
-      const prevCount =
-        index > 0 ? stageMap.get(stageOrder[index - 1]) || 0 : 0;
-      const conversionRate =
-        index === 0 ? 100 : prevCount > 0 ? (count / prevCount) * 100 : 0;
+      const prevCount = index > 0 ? stageMap.get(stageOrder[index - 1]) || 0 : 0;
+      const conversionRate = index === 0 ? 100 : prevCount > 0 ? (count / prevCount) * 100 : 0;
       return { stage, count, conversionRate: Math.round(conversionRate * 100) / 100 };
     });
 
@@ -259,9 +245,7 @@ export class FunnelService {
     });
     const conversionRate =
       checkoutStartedCount > 0
-        ? Math.round(
-            (paymentCompletedCount / checkoutStartedCount) * 100 * 100,
-          ) / 100
+        ? Math.round((paymentCompletedCount / checkoutStartedCount) * 100 * 100) / 100
         : 0;
 
     return { stages, totalEvents, abandonedCheckouts, conversionRate };
@@ -296,14 +280,9 @@ export class FunnelService {
     }>
   > {
     const truncFn =
-      params.granularity === 'day'
-        ? 'day'
-        : params.granularity === 'week'
-          ? 'week'
-          : 'month';
+      params.granularity === 'day' ? 'day' : params.granularity === 'week' ? 'week' : 'month';
 
     // Use Prisma.sql tagged template literals to prevent SQL injection
-    const { Prisma } = require('@prisma/client');
 
     const truncSql =
       truncFn === 'day'
@@ -360,12 +339,9 @@ export class FunnelService {
       const count = Number(row.cnt);
 
       if (row.event_type === 'checkout_started') entry.checkoutStarted = count;
-      else if (row.event_type === 'payment_completed')
-        entry.paymentCompleted = count;
-      else if (row.event_type === 'subscription_created')
-        entry.subscriptionCreated = count;
-      else if (row.event_type === 'checkout_abandoned')
-        entry.abandoned = count;
+      else if (row.event_type === 'payment_completed') entry.paymentCompleted = count;
+      else if (row.event_type === 'subscription_created') entry.subscriptionCreated = count;
+      else if (row.event_type === 'checkout_abandoned') entry.abandoned = count;
     }
 
     return Array.from(periodMap.entries()).map(([period, data]) => ({
@@ -373,9 +349,7 @@ export class FunnelService {
       ...data,
       conversionRate:
         data.checkoutStarted > 0
-          ? Math.round(
-              (data.paymentCompleted / data.checkoutStarted) * 100 * 100,
-            ) / 100
+          ? Math.round((data.paymentCompleted / data.checkoutStarted) * 100 * 100) / 100
           : 0,
     }));
   }
@@ -430,10 +404,7 @@ export class FunnelService {
     });
 
     // For each user, find their LATEST event to determine current stage
-    const userLatestMap = new Map<
-      string,
-      (typeof allEvents)[0]
-    >();
+    const userLatestMap = new Map<string, (typeof allEvents)[0]>();
     const userFollowUpMap = new Map<string, boolean>();
 
     for (const event of allEvents) {
@@ -470,16 +441,14 @@ export class FunnelService {
     };
 
     // Group users by their current stage
-    const stageGroups = new Map<string, Array<typeof allEvents[0] & { hasFollowUp?: boolean }>>();
+    const stageGroups = new Map<string, Array<(typeof allEvents)[0] & { hasFollowUp?: boolean }>>();
     for (const stage of pipelineStages) {
       stageGroups.set(stage, []);
     }
 
     for (const [userId, event] of userLatestMap.entries()) {
       const resolvedStage =
-        eventToStage[event.eventType] ||
-        stageMapping[event.stage] ||
-        'checkout';
+        eventToStage[event.eventType] || stageMapping[event.stage] || 'checkout';
       const group = stageGroups.get(resolvedStage) || stageGroups.get('checkout')!;
       group.push({
         ...event,
@@ -495,9 +464,7 @@ export class FunnelService {
           items.slice(0, 50).map(async (event) => {
             let productName: string | undefined;
             let serviceName: string | undefined;
-            let amount: number | undefined = event.amount
-              ? Number(event.amount)
-              : undefined;
+            let amount: number | undefined = event.amount ? Number(event.amount) : undefined;
             let currency: string | undefined = event.currency ?? undefined;
 
             if (event.orderId) {
@@ -560,16 +527,10 @@ export class FunnelService {
 
     // Calculate stats
     const total = userLatestMap.size;
-    const checkoutCount = allEvents.filter(
-      (e) => e.eventType === 'checkout_started',
-    ).length;
-    const paidCount = allEvents.filter(
-      (e) => e.eventType === 'payment_completed',
-    ).length;
+    const checkoutCount = allEvents.filter((e) => e.eventType === 'checkout_started').length;
+    const paidCount = allEvents.filter((e) => e.eventType === 'payment_completed').length;
     const conversionRate =
-      checkoutCount > 0
-        ? Math.round((paidCount / checkoutCount) * 100 * 100) / 100
-        : 0;
+      checkoutCount > 0 ? Math.round((paidCount / checkoutCount) * 100 * 100) / 100 : 0;
     const abandonedCount = (stageGroups.get('churned') || []).length;
     const activeSubscriptions = (stageGroups.get('retention') || []).length;
     const churningCount = (stageGroups.get('churning') || []).length;
@@ -624,9 +585,7 @@ export class FunnelService {
         return {
           ...event,
           order,
-          timeSinceCreation: order
-            ? Date.now() - new Date(order.createdAt).getTime()
-            : null,
+          timeSinceCreation: order ? Date.now() - new Date(order.createdAt).getTime() : null,
         };
       }),
     );

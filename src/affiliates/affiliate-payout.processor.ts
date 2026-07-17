@@ -22,7 +22,7 @@ export class AffiliatePayoutProcessor extends WorkerHost {
     super();
   }
 
-  async process(job: Job): Promise<void> {
+  async process(_job: Job): Promise<void> {
     this.logger.log('Processing affiliate payouts (NET-15)');
 
     // Calculate period: previous month
@@ -36,9 +36,7 @@ export class AffiliatePayoutProcessor extends WorkerHost {
 
     // Only process if we're past the payout date
     if (now < payoutDate) {
-      this.logger.debug(
-        `Payout date not reached yet. Will process on ${payoutDate.toISOString()}`,
-      );
+      this.logger.debug(`Payout date not reached yet. Will process on ${payoutDate.toISOString()}`);
       return;
     }
 
@@ -83,17 +81,12 @@ export class AffiliatePayoutProcessor extends WorkerHost {
           });
 
           if (commissions.length === 0) {
-            this.logger.debug(
-              `No commissions to payout for affiliate ${affiliate.id}`,
-            );
+            this.logger.debug(`No commissions to payout for affiliate ${affiliate.id}`);
             return;
           }
 
           // Calculate total payout amount
-          const totalAmount = commissions.reduce(
-            (sum, c) => sum + Number(c.amount),
-            0,
-          );
+          const totalAmount = commissions.reduce((sum, c) => sum + Number(c.amount), 0);
 
           if (totalAmount <= 0) {
             return;
@@ -121,9 +114,7 @@ export class AffiliatePayoutProcessor extends WorkerHost {
             });
 
             // Link commissions to payout
-            const currencyCommissions = commissions.filter(
-              (c) => c.currency === currency,
-            );
+            const currencyCommissions = commissions.filter((c) => c.currency === currency);
 
             await tx.affiliateCommission.updateMany({
               where: {

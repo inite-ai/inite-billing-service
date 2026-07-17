@@ -9,10 +9,7 @@ export interface RequestUser {
   serviceCode?: string;
 }
 
-export const User = createParamDecorator(
-  (data: unknown, ctx: ExecutionContext): RequestUser => {
-    const request = ctx.switchToHttp().getRequest();
-    return request.user;
-  },
-);
-
+export const User = createParamDecorator((data: unknown, ctx: ExecutionContext): RequestUser => {
+  const request = ctx.switchToHttp().getRequest();
+  return request.user;
+});

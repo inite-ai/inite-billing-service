@@ -78,10 +78,7 @@ export class NotificationsService {
           locale: input.metadata?.locale ?? contact?.locale ?? 'en',
           ...(contact
             ? {
-                unsubscribeUrl: this.buildUnsubscribeUrl(
-                  contact.unsubscribeToken,
-                  input.type,
-                ),
+                unsubscribeUrl: this.buildUnsubscribeUrl(contact.unsubscribeToken, input.type),
               }
             : {}),
         };
@@ -200,12 +197,8 @@ export class NotificationsService {
         inAppEnabled: input.inAppEnabled ?? true,
       },
       update: {
-        ...(input.emailEnabled !== undefined
-          ? { emailEnabled: input.emailEnabled }
-          : {}),
-        ...(input.inAppEnabled !== undefined
-          ? { inAppEnabled: input.inAppEnabled }
-          : {}),
+        ...(input.emailEnabled !== undefined ? { emailEnabled: input.emailEnabled } : {}),
+        ...(input.inAppEnabled !== undefined ? { inAppEnabled: input.inAppEnabled } : {}),
       },
     });
   }
@@ -219,15 +212,10 @@ export class NotificationsService {
     const rows = await this.prisma.notificationPreference.findMany({
       where: { userId, category: { in: [category, 'all'] } },
     });
-    return rows.some((row) =>
-      channel === 'email' ? !row.emailEnabled : !row.inAppEnabled,
-    );
+    return rows.some((row) => (channel === 'email' ? !row.emailEnabled : !row.inAppEnabled));
   }
 
-  async unsubscribeByToken(
-    token: string,
-    category?: string,
-  ): Promise<{ ok: boolean }> {
+  async unsubscribeByToken(token: string, category?: string): Promise<{ ok: boolean }> {
     const contact = await this.userContactService.resolveUnsubscribeToken(token);
     if (!contact) {
       throw new NotFoundException('Invalid unsubscribe token');
@@ -236,9 +224,7 @@ export class NotificationsService {
       category: category || 'all',
       emailEnabled: false,
     });
-    this.logger.log(
-      `User ${contact.userId} unsubscribed from ${category || 'all'} emails`,
-    );
+    this.logger.log(`User ${contact.userId} unsubscribed from ${category || 'all'} emails`);
     return { ok: true };
   }
 }

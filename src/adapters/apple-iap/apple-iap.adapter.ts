@@ -96,10 +96,7 @@ export class AppleIAPAdapter implements PaymentRailAdapter {
     return `${signingInput}.${signature}`;
   }
 
-  private async appleRequest(
-    method: string,
-    path: string,
-  ): Promise<any> {
+  private async appleRequest(method: string, path: string): Promise<any> {
     const config = await this.getConfig();
     const baseUrl = this.getBaseUrl(config.environment);
     const jwt = this.generateJWT(config);
@@ -161,15 +158,12 @@ export class AppleIAPAdapter implements PaymentRailAdapter {
    */
   async getIntentStatus(providerIntentId: string): Promise<IntentStatusResult> {
     try {
-      const txInfo = await this.appleRequest(
-        'GET',
-        `/inApps/v1/transactions/${providerIntentId}`,
-      );
+      const txInfo = await this.appleRequest('GET', `/inApps/v1/transactions/${providerIntentId}`);
 
       // Decode the signedTransactionInfo JWS (payload is in the second segment)
       const transaction = this.decodeJWSPayload(txInfo.signedTransactionInfo);
 
-      const statusMap: Record<string, IntentStatusResult['status']> = {
+      const _statusMap: Record<string, IntentStatusResult['status']> = {
         // Transaction revocationDate indicates refund
       };
 
@@ -258,10 +252,7 @@ export class AppleIAPAdapter implements PaymentRailAdapter {
       transaction = this.decodeJWSPayload(data.signedTransactionInfo);
     }
 
-    const entityId =
-      transaction.transactionId ||
-      transaction.originalTransactionId ||
-      '';
+    const entityId = transaction.transactionId || transaction.originalTransactionId || '';
 
     // Map Apple notification types to billing events
     const eventMap: Record<string, string> = {
