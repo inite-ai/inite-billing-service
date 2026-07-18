@@ -1,6 +1,6 @@
 {
   "name": "inite-billing-service",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "INITE Billing Service - Payment-rail agnostic billing and subscriptions",
   "author": "",
   "private": true,

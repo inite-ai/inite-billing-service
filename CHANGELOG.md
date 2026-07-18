@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.1](https://github.com/inite-ai/inite-billing-service/compare/inite-billing-service-v1.1.0...inite-billing-service-v1.1.1) (2026-07-18)
+
+
+### Bug Fixes
+
+* **deps:** resolve security advisories via npm audit fix (lockfiles) ([#27](https://github.com/inite-ai/inite-billing-service/issues/27)) ([f517c2f](https://github.com/inite-ai/inite-billing-service/commit/f517c2f9269500f202b4530b399b73b6a7c8ff24))
+* **deps:** upgrade NestJS 10→11 + anthropic-sdk 0.112 (security) ([#33](https://github.com/inite-ai/inite-billing-service/issues/33)) ([33b8fb8](https://github.com/inite-ai/inite-billing-service/commit/33b8fb8688b76d6f28a9d0c5016e0bbb92dec276))
+
 ## [1.1.0](https://github.com/inite-ai/inite-billing-service/compare/inite-billing-service-v1.0.0...inite-billing-service-v1.1.0) (2026-07-18)
 
 
