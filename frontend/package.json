@@ -10,7 +10,7 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.63",
+    "@ai-sdk/anthropic": "^4.0.16",
     "@ai-sdk/react": "^3.0.136",
     "@swc/helpers": "^0.5.23",
     "ai": "^6.0.134",
