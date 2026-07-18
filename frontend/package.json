@@ -13,7 +13,7 @@
     "@ai-sdk/anthropic": "^3.0.63",
     "@ai-sdk/react": "^3.0.136",
     "@swc/helpers": "^0.5.23",
-    "ai": "^6.0.134",
+    "ai": "^7.0.31",
     "axios": "^1.13.2",
     "framer-motion": "^12.42.2",
     "lucide-react": "^0.562.0",
