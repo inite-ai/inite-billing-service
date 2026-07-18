@@ -50,10 +50,16 @@ jobs:
           # `value=` derives the version from the input tag when this runs off
           # a non-tag ref (workflow_call from the main-branch release run);
           # it falls back to the pushed tag name for the push trigger.
+          #
+          # Do NOT tag `:latest` here. `:latest` tracks the rolling main deploy
+          # (deploy.yml build-backend pushes it), and prod's docker-compose pulls
+          # `:latest`. A release is cut from a point-in-time tag that can be BEHIND
+          # main, so tagging `:latest` from a release silently rolls prod's image
+          # backwards. (This is exactly how v1.1.1 — cut before the prisma
+          # migrations fix — clobbered `:latest` and crash-looped the backend.)
           tags: |
             type=semver,pattern=v{{version}},value=${{ inputs.tag || github.ref_name }}
             type=semver,pattern={{major}}.{{minor}},value=${{ inputs.tag || github.ref_name }}
-            type=raw,value=latest
       - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
