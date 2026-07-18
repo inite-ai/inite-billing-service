@@ -1,3 +1,9 @@
+<p align="center">
+  <a href="https://billing.inite.ai">
+    <img src="assets/banner.png" alt="INITE Billing — payment-rail-agnostic, AI-first billing gateway" width="100%">
+  </a>
+</p>
+
 <h1 align="center">INITE Billing Service</h1>
 
 <p align="center">
@@ -10,6 +16,8 @@
 <p align="center">
   <a href="https://github.com/inite-ai/inite-billing-service/actions/workflows/ci.yml"><img src="https://github.com/inite-ai/inite-billing-service/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue.svg" alt="License: AGPL-3.0"></a>
+  <a href="https://github.com/inite-ai/inite-billing-service/releases"><img src="https://img.shields.io/github/v/release/inite-ai/inite-billing-service?sort=semver&color=8b5cf6" alt="Release"></a>
+  <a href="https://github.com/inite-ai/inite-billing-service/stargazers"><img src="https://img.shields.io/github/stars/inite-ai/inite-billing-service?style=flat" alt="Stars"></a>
   <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs welcome"></a>
   <img src="https://img.shields.io/badge/TypeScript-3178c6.svg" alt="TypeScript">
   <img src="https://img.shields.io/badge/NestJS-e0234e.svg" alt="NestJS">

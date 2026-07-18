@@ -97,9 +97,17 @@ jobs:
         cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/inite-billing-frontend:buildcache,mode=max
         platforms: linux/amd64
 
-  # ── Deploy backend ─────────────────────────────────────────
+  # ── Deploy backend (incremental fast-path) ─────────────────
+  # Only for code-only changes where the stack already exists on the host.
+  # When infra changed (or force_all), deploy-infra does a full up -d of both
+  # services, so this job is skipped to avoid racing it (on a first deploy the
+  # compose file does not exist yet — that is deploy-infra's job to create).
   deploy-backend:
-    needs: [build-backend]
+    needs: [build-backend, changes]
+    if: |
+      needs.changes.outputs.backend == 'true'
+      && needs.changes.outputs.infra != 'true'
+      && github.event.inputs.force_all != 'true'
     runs-on: self-hosted
     steps:
     - uses: docker/login-action@v3
@@ -145,9 +153,14 @@ jobs:
           exit 1
         fi
 
-  # ── Deploy frontend ────────────────────────────────────────
+  # ── Deploy frontend (incremental fast-path) ────────────────
+  # Skipped when a full infra deploy runs — see deploy-backend for rationale.
   deploy-frontend:
-    needs: [build-frontend]
+    needs: [build-frontend, changes]
+    if: |
+      needs.changes.outputs.frontend == 'true'
+      && needs.changes.outputs.infra != 'true'
+      && github.event.inputs.force_all != 'true'
     runs-on: self-hosted
     steps:
     - uses: docker/login-action@v3
@@ -177,8 +190,11 @@ jobs:
         fi
 
   # ── Full infra deploy (docker-compose.yml + .env + both services) ──
+  # Runs on infra changes and on the first deploy; also the force_all path.
+  # Waits on both image builds (which always run when infra/force is set) so it
+  # never pulls a stale :latest, and it recreates compose + brings up the stack.
   deploy-infra:
-    needs: [tests, changes]
+    needs: [tests, changes, build-backend, build-frontend]
     if: needs.changes.outputs.infra == 'true' || github.event.inputs.force_all == 'true'
     runs-on: self-hosted
     steps:

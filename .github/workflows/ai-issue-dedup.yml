@@ -65,8 +65,9 @@ jobs:
           max-completion-tokens: 300
           temperature: 0
           system-prompt: |
-            You detect duplicate GitHub issues for INITE Brain (a knowledge-graph
-            memory service). Given a NEW issue and a list of EXISTING open issues,
+            You detect duplicate GitHub issues for INITE Billing (a payment-rail-agnostic
+            billing gateway — subscriptions, metered credits, entitlements). Given a NEW
+            issue and a list of EXISTING open issues,
             decide if the new one is essentially the same request/bug as one existing
             issue. Return ONLY minified JSON, no prose, no code fences:
             {"duplicate_of": <issue number or null>, "confidence": <0..1>, "reason": "<one sentence>"}
