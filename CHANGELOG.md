@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.2](https://github.com/inite-ai/inite-billing-service/compare/inite-billing-service-v1.1.1...inite-billing-service-v1.1.2) (2026-07-18)
+
+
+### Bug Fixes
+
+* **ci:** don't tag :latest from release-image (it rolled prod backwards) ([#37](https://github.com/inite-ai/inite-billing-service/issues/37)) ([9580f27](https://github.com/inite-ai/inite-billing-service/commit/9580f27966e67438e7de40b97f1375c4850ee503))
+* **prisma:** stop gitignoring migrations so the image can migrate prod ([#35](https://github.com/inite-ai/inite-billing-service/issues/35)) ([bddcbf5](https://github.com/inite-ai/inite-billing-service/commit/bddcbf5cbddc77fec2fdbda02320e123df72f74d))
+
 ## [1.1.1](https://github.com/inite-ai/inite-billing-service/compare/inite-billing-service-v1.1.0...inite-billing-service-v1.1.1) (2026-07-18)
 
 
