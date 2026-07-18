@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.63",
-    "@ai-sdk/react": "^3.0.136",
+    "@ai-sdk/react": "^4.0.34",
     "@swc/helpers": "^0.5.23",
     "ai": "^6.0.134",
     "axios": "^1.13.2",
