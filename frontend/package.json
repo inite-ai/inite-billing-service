@@ -10,10 +10,10 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.63",
-    "@ai-sdk/react": "^3.0.136",
+    "@ai-sdk/anthropic": "^4.0.16",
+    "@ai-sdk/react": "^4.0.34",
     "@swc/helpers": "^0.5.23",
-    "ai": "^6.0.134",
+    "ai": "^7.0.31",
     "axios": "^1.13.2",
     "framer-motion": "^12.42.2",
     "lucide-react": "^0.562.0",
@@ -26,7 +26,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
-    "@types/node": "^25.0.3",
+    "@types/node": "^26.1.1",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "autoprefixer": "^10.5.4",
