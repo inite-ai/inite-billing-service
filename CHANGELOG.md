@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.3](https://github.com/inite-ai/inite-billing-service/compare/inite-billing-service-v1.1.2...inite-billing-service-v1.1.3) (2026-07-19)
+
+
+### Bug Fixes
+
+* **security:** resolve code-scanning alerts (open-redirect, unused vars, RNG) ([#40](https://github.com/inite-ai/inite-billing-service/issues/40)) ([59b0af1](https://github.com/inite-ai/inite-billing-service/commit/59b0af12927328f742f4af850e31f7e7bd0a23b9))
+
 ## [1.1.2](https://github.com/inite-ai/inite-billing-service/compare/inite-billing-service-v1.1.1...inite-billing-service-v1.1.2) (2026-07-18)
 
 
