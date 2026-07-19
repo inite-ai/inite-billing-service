@@ -27,7 +27,14 @@ export async function middleware(request: NextRequest) {
   // Redirect logged-in users from login page to dashboard (or returnTo)
   if (pathname === '/login' && shouldRedirectFromAuth(token)) {
     const returnTo = request.nextUrl.searchParams.get('returnTo');
-    if (returnTo && returnTo.startsWith('/')) {
+    // Only allow same-origin, absolute internal paths. Reject protocol-relative
+    // (`//evil.com`) and backslash (`/\evil.com`) forms that resolve off-origin.
+    if (
+      returnTo &&
+      returnTo.startsWith('/') &&
+      !returnTo.startsWith('//') &&
+      !returnTo.startsWith('/\\')
+    ) {
       return redirect(request, returnTo);
     }
     const destination = getUserDestination(token!);

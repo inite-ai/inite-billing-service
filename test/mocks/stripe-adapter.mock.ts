@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import {
   PaymentRailAdapter,
   CreateIntentInput,
@@ -20,7 +21,7 @@ export class MockStripeAdapter implements PaymentRailAdapter {
   }
 
   async createPaymentIntent(input: CreateIntentInput): Promise<CreateIntentResult> {
-    const intentId = `pi_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const intentId = `pi_${Date.now()}_${randomUUID().replace(/-/g, '').slice(0, 9)}`;
     const sessionId = `cs_${Date.now()}`;
 
     // Store mock intent

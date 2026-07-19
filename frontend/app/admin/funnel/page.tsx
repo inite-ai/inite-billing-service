@@ -3,15 +3,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslations } from 'next-intl'
 import { motion } from 'framer-motion'
-import { Card } from '@/components/ui/Card'
-import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Tabs } from '@/components/ui/Tabs'
 import { Select } from '@/components/ui/Select'
 import {
   Loader2, ShoppingCart, CreditCard, CheckCircle, Users,
   XCircle, TrendingDown, DollarSign, BarChart3, Clock,
-  Bot, Send, Tag, Mail, AlertTriangle, ChevronRight,
+  Bot, Send, Tag, Mail, AlertTriangle,
   X, Play, Eye,
 } from 'lucide-react'
 import api from '@/lib/api'
