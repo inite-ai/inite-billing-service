@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { motion } from 'framer-motion'
 import { Loader2, Tag, Check, X, CreditCard, Lock, ShoppingBag } from 'lucide-react'
@@ -66,7 +66,6 @@ function formatPrice(amount: string | number): string {
 
 export default function CheckoutPage() {
   const params = useParams()
-  const router = useRouter()
   const sessionId = params.sessionId as string
   const t = useTranslations('checkout')
 

@@ -12,7 +12,6 @@ interface RecentOrdersProps {
 
 export function RecentOrders({ orders }: RecentOrdersProps) {
   const t = useTranslations('dashboard')
-  const tc = useTranslations('common')
 
   return (
     <Card>

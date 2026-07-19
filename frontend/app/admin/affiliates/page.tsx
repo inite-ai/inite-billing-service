@@ -5,12 +5,11 @@ import { useTranslations } from 'next-intl'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
-import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
 import { Select } from '@/components/ui/Select'
 import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
 import { Pagination } from '@/components/ui/Pagination'
-import { Search, Loader2, Users, DollarSign, GitBranch, Copy } from 'lucide-react'
+import { Loader2, Users, DollarSign, GitBranch, Copy } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import type { PaginatedResponse } from '@/lib/types'
@@ -37,8 +36,7 @@ export default function AdminAffiliatesPage() {
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<AffiliateWithCount | null>(null)
-  const [commissions, setCommissions] = useState<any[]>([])
-  const [detailLoading, setDetailLoading] = useState(false)
+  const [, setDetailLoading] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -52,14 +50,6 @@ export default function AdminAffiliatesPage() {
   const handleStatusChange = async (id: string, status: string) => {
     await api.put(`/v1/admin/affiliates/${id}`, { status })
     toast.success(t('affiliates.updated'))
-    load()
-  }
-
-  const handleCommissionRateChange = async (id: string, rate: string) => {
-    const numRate = parseFloat(rate) / 100
-    if (isNaN(numRate) || numRate < 0 || numRate > 1) return
-    await api.put(`/v1/admin/affiliates/${id}`, { commissionRate: numRate })
-    toast.success(t('affiliates.rateUpdated'))
     load()
   }
 

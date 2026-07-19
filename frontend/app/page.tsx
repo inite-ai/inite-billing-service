@@ -11,7 +11,7 @@ import {
   ArrowRight, LogIn, LayoutDashboard,
   Code2, Webhook, KeyRound, Lock, CheckCircle2,
   GitBranch, BookOpen, Headphones, TrendingUp,
-  DollarSign, Layers, Repeat, Bell, Activity,
+  DollarSign, Layers, Repeat, Activity,
   ChevronRight, Sparkles, ArrowUpRight,
 } from 'lucide-react'
 
