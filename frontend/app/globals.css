@@ -179,6 +179,27 @@ body {
 }
 
 /* ============================================================
+   Docs section — Ledger palette, scoped under .docs (--d-* vars,
+   consumed by mdx-components.tsx + app/docs/*). Does not touch the app.
+   ============================================================ */
+.docs {
+  --d-bg: #0a0a0b;
+  --d-elevated: #101012;
+  --d-overlay: #17171a;
+  --d-border: rgba(255, 255, 255, 0.09);
+  --d-border-strong: rgba(255, 255, 255, 0.18);
+  --d-text: #ececea;
+  --d-muted: #9a9a94;
+  --d-faint: #6a6a64;
+  --d-accent: #ccff00;
+  --d-accent-hover: #dbff45;
+  background: var(--d-bg);
+  color: var(--d-text);
+  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  letter-spacing: -0.01em;
+}
+
+/* ============================================================
    Landing page — "Ledger" theme. Fully scoped under .lp so the
    dashboard/admin app is untouched. Cyrillic-complete fonts.
    ============================================================ */
