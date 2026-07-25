@@ -11,10 +11,10 @@ Every LLM consumer injects the shared Anthropic client from
 
 `src/assistant/` — Claude chat embedded in the user dashboard and admin.
 
-- **Streaming**: the backend emits the AI SDK v6 UI Message Stream protocol
+- **Streaming**: the backend emits the AI SDK v7 UI Message Stream protocol
   (`x-vercel-ai-ui-message-stream: v1`, `data: [DONE]` terminated); the
   frontend is `useChat` + `DefaultChatTransport` (`ChatPanel.tsx`).
-- **Tools (17)**, role-gated server-side:
+- **Tools (19 = 14 read + 5 confirm-gated actions)**, role-gated server-side. The 14 read-only tools:
   - user: orders, subscriptions, entitlements, catalog, referral stats,
     `search_catalog` (semantic), `recommend_products`, `validate_promo_code`;
   - admin: stats, `search_orders` (exact + fuzzy), funnel metrics, abandoned

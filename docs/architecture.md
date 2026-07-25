@@ -1,6 +1,6 @@
 # Architecture
 
-NestJS 10 backend + Next.js frontend, PostgreSQL (Prisma 5, everything in the
+NestJS 11 backend (Express 5) + Next.js frontend, PostgreSQL (Prisma 5, everything in the
 `billing` schema) and Redis/BullMQ for background work. The service is the
 single money gateway for INITE platform modules, which call it
 machine-to-machine.
@@ -42,7 +42,7 @@ INITE modules (club/events/education/...)          End users
 | `funnel/` | `FunnelEvent` journey (awareness → churned). 15-min cron detects abandoned checkouts and churning subscriptions; powers admin analytics and outreach triggers. |
 | `notifications/` | Channel layer: Resend email (BullMQ queue, retries, delivery webhooks, unsubscribe + suppression) and in-app notifications; per-category preferences; `UserContact` captured lazily from JWT email + locale header. |
 | `outreach/` | AI retention engine: trigger scheduler → LLM generation (template fallback) → notify → conversion attribution. See [ai-features.md](ai-features.md). |
-| `assistant/` + `conversations/` | Claude chat over the AI SDK v6 stream protocol; role-gated tools; `actions/` sub-layer for confirm-gated writes; telemetry in `assistant_tool_calls`. |
+| `assistant/` + `conversations/` | Claude chat over the AI SDK v7 stream protocol (UI Message Stream, wire version `v1`); role-gated tools; `actions/` sub-layer for confirm-gated writes; telemetry in `assistant_tool_calls`. |
 | `rag/` | pgvector product embeddings (OpenAI `text-embedding-3-small`), semantic product search, pg_trgm fuzzy order search. |
 | `recommendations/` | Rule-based next-best-offer (upgrade / abandoned / cross-sell / co-purchase / top-seller) with optional LLM explanations. |
 | `risk/` | Heuristic checkout risk scoring; monitor-only unless `RISK_BLOCKING_ENABLED`. |
