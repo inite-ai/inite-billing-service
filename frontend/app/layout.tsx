@@ -6,6 +6,7 @@ import { AuthProvider } from '@/contexts/AuthContext'
 import ChatWrapper from '@/components/assistant/ChatWrapper'
 import { NextIntlClientProvider } from 'next-intl'
 import { getMessages, getLocale } from 'next-intl/server'
+import { SITE_URL } from '@/lib/brand'
 
 const inter = Inter({ subsets: ['latin', 'cyrillic'] })
 
@@ -28,8 +29,19 @@ const mono = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'INITE Billing - Dashboard',
-  description: 'INITE Billing Service - Manage your subscriptions, orders, and referrals',
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: 'INITE Billing — AI-first billing gateway',
+    template: '%s · INITE Billing',
+  },
+  description:
+    'Payment-rail-agnostic, AI-first billing gateway for the INITE platform — subscriptions, metered credits, entitlements and multi-level referrals.',
+  applicationName: 'INITE Billing',
+  alternates: { types: { 'text/llms+txt': `${SITE_URL}/llms.txt` } },
+}
+
+export const viewport = {
+  themeColor: '#0a0a0b',
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
