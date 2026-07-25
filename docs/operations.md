@@ -11,7 +11,8 @@ Deploying, flipping feature flags safely, and extending the service.
   backend/frontend to `billing.inite.ai` (path-filtered — only what changed).
 - **Releases**: release-please maintains a release PR; merging it tags
   `vX.Y.Z`, updates `CHANGELOG.md`, and builds the immutable Docker image
-  (`:vX.Y.Z`, `:X.Y`, `:latest`) via `release-image.yml`
+  (`:vX.Y.Z`, `:X.Y`) via `release-image.yml` — releases do **not** tag `:latest`
+  (that tracks the rolling `main` deploy only)
   (needs `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` secrets).
 - **CI safety net**: lint, build, full jest suite against pgvector
   postgres + redis services, frontend typecheck+build, docker build, npm
@@ -19,10 +20,11 @@ Deploying, flipping feature flags safely, and extending the service.
 
 ## Database
 
-- Postgres must support the `vector` extension (`pgvector/pgvector:pg15`
-  image, or RDS/Cloud SQL/Neon which ship it). **Verify before deploying the
-  embeddings migration** — `prisma migrate deploy` runs
-  `CREATE EXTENSION vector`.
+- Postgres must support the `vector` extension (`pgvector/pgvector` image, or
+  RDS/Cloud SQL/Neon which ship it). **Verify before deploying the embeddings
+  migration** — `prisma migrate deploy` runs `CREATE EXTENSION vector`. Local
+  compose / CI use `pgvector/pgvector:pg15`; the shared production Postgres runs
+  `pgvector/pgvector:pg14`.
 - Migrations are append-only and applied automatically on boot
   (`prisma migrate deploy`).
 - Backups: the `billing` schema is the money ledger — treat it accordingly.

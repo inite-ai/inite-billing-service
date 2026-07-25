@@ -49,7 +49,7 @@ provider reduced to a pluggable adapter.
 - **Rail-agnostic by design** — Stripe, ONE, Lava, Apple IAP, Google Play
   RTDN, and native multi-chain crypto (ETH/SOL/TON/TRON) implement one
   `PaymentRailAdapter` interface; the orchestrator state machine
-  (`created → paid → completed/refunded`) doesn't know which rail paid.
+  (`created → open → paid → refunded/failed/expired`) doesn't know which rail paid.
 - **AI-first, not AI-bolted-on** — an embedded Claude assistant with
   role-gated tools and a confirm-before-execute action layer; LLM-generated
   dunning / win-back / abandoned-checkout outreach; semantic catalog search
@@ -64,7 +64,7 @@ provider reduced to a pluggable adapter.
   fan out via a transactional outbox to per-service webhooks.
 - **Complete revenue toolkit** — multi-level affiliate program with NET-15
   payouts, promo codes, conversion funnel tracking with churn detection,
-  heuristic payment-risk scoring, full admin UI (22 pages) + user dashboard
+  heuristic payment-risk scoring, full admin UI (19 pages) + user dashboard
   in Next.js, EN/RU localized.
 - **Operable and audited** — append-only migrations, IDOR-hardened endpoints,
   webhook signature verification, SSRF-guarded outbox, idempotency at every
@@ -105,12 +105,12 @@ Full walkthrough (test DB, docker profiles, troubleshooting):
 | **Subscriptions** | Trials, grace periods, renewal/expiry crons, lifecycle webhooks (`billing.subscription.*`) |
 | **Credits & metering** | Ledger (grant/consume/reset/refund), metered feature registry, model-tier rates, windowed quotas, usage analytics |
 | **Entitlements** | Access rights granted on payment, revoked on refund/expiry, queryable per user |
-| **AI assistant** | Claude chat (AI SDK v6 streaming) with 17 tools, confirm-gated write actions, tool telemetry, 👍/👎 feedback, eval harness |
+| **AI assistant** | Claude chat (AI SDK v7 streaming) with 19 tools (14 read + 5 confirm-gated actions), tool telemetry, 👍/👎 feedback, eval harness |
 | **Retention automation** | Funnel event tracking, abandoned-checkout / dunning (day 0-2-5) / win-back / trial-ending outreach: LLM-personalized email + in-app, EN/RU |
 | **Notifications** | Resend email (delivery webhooks, unsubscribe, suppression) + in-app notification center with preferences |
 | **Affiliates** | Multi-level referral program, configurable commission levels, NET-15 payouts, payout providers |
 | **Risk** | Velocity / outlier / failed-burst heuristics, monitor-only by default, admin review queue |
-| **Admin UI** | 22 pages: funnel kanban + AI insights, outreach stats, metering, risk review, catalog/orders/subscriptions/credits CRUD |
+| **Admin UI** | 19 pages: funnel kanban + AI insights, outreach stats, metering, risk review, catalog/orders/subscriptions/credits CRUD |
 
 ## Documentation
 

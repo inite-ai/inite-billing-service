@@ -7,12 +7,13 @@ import { useTranslations } from 'next-intl'
 import LanguageSwitcher from '@/components/ui/LanguageSwitcher'
 import { useRef } from 'react'
 import {
-  CreditCard, Users, BarChart3, Shield, Zap, Globe,
+  CreditCard, Users, Globe,
   ArrowRight, LogIn, LayoutDashboard,
   Code2, Webhook, KeyRound, Lock, CheckCircle2,
   GitBranch, BookOpen, Headphones, TrendingUp,
   DollarSign, Layers, Repeat, Activity,
   ChevronRight, Sparkles, ArrowUpRight,
+  Bot, Mail, Gauge, Search,
 } from 'lucide-react'
 
 /* ── Fade-in wrapper ── */
@@ -48,12 +49,20 @@ function Bar({ width, delay, color }: { width: string; delay: number; color: str
 
 /* ── Feature cards data ── */
 const features = [
-  { icon: CreditCard, titleKey: 'featureSubscriptionTitle', descKey: 'featureSubscriptionDesc', gradient: 'from-blue-500 to-cyan-500' },
+  { icon: Layers, titleKey: 'featureRailsTitle', descKey: 'featureRailsDesc', gradient: 'from-blue-500 to-cyan-500' },
+  { icon: CreditCard, titleKey: 'featureCreditsTitle', descKey: 'featureCreditsDesc', gradient: 'from-emerald-500 to-green-500' },
   { icon: Users, titleKey: 'featureReferralTitle', descKey: 'featureReferralDesc', gradient: 'from-violet-500 to-purple-500' },
-  { icon: BarChart3, titleKey: 'featureAnalyticsTitle', descKey: 'featureAnalyticsDesc', gradient: 'from-emerald-500 to-green-500' },
-  { icon: Shield, titleKey: 'featureSecurityTitle', descKey: 'featureSecurityDesc', gradient: 'from-orange-500 to-amber-500' },
-  { icon: Zap, titleKey: 'featureAccessTitle', descKey: 'featureAccessDesc', gradient: 'from-pink-500 to-rose-500' },
+  { icon: Bot, titleKey: 'featureAssistantTitle', descKey: 'featureAssistantDesc', gradient: 'from-violet-500 to-fuchsia-500' },
+  { icon: Sparkles, titleKey: 'featureRetentionTitle', descKey: 'featureRetentionDesc', gradient: 'from-pink-500 to-rose-500' },
   { icon: Globe, titleKey: 'featurePlatformTitle', descKey: 'featurePlatformDesc', gradient: 'from-indigo-500 to-blue-500' },
+] as const
+
+/* ── AI capability cards data ── */
+const aiFeatures = [
+  { icon: Bot, titleKey: 'aiCard1Title', descKey: 'aiCard1Desc' },
+  { icon: Mail, titleKey: 'aiCard2Title', descKey: 'aiCard2Desc' },
+  { icon: Gauge, titleKey: 'aiCard3Title', descKey: 'aiCard3Desc' },
+  { icon: Search, titleKey: 'aiCard4Title', descKey: 'aiCard4Desc' },
 ] as const
 
 /* ── How it works steps ── */
@@ -81,9 +90,9 @@ const benefitKeys = [
 
 /* ── Example referral levels (illustrative) ── */
 const exampleLevels = [
-  { level: 1, rate: 15, label: 'Direct referral' },
-  { level: 2, rate: 5, label: 'Level 2' },
-  { level: 3, rate: 3, label: 'Level 3' },
+  { level: 1, rate: 15 },
+  { level: 2, rate: 5 },
+  { level: 3, rate: 3 },
 ]
 
 export default function LandingPage() {
@@ -248,6 +257,35 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ═══════════ AI-FIRST ═══════════ */}
+      <section id="ai" className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
+        <FadeIn className="text-center mb-16">
+          <div className="inline-flex items-center gap-2 bg-violet-500/10 border border-violet-500/20 rounded-full px-4 py-1.5 mb-4">
+            <Sparkles className="w-3.5 h-3.5 text-violet-400" />
+            <span className="text-xs text-violet-300 font-medium">{t('aiBadge')}</span>
+          </div>
+          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-4">{t('aiTitle')}</h2>
+          <p className="text-slate-400 max-w-xl mx-auto">{t('aiSubtitle')}</p>
+        </FadeIn>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          {aiFeatures.map((feat, i) => {
+            const Icon = feat.icon
+            return (
+              <FadeIn key={feat.titleKey} delay={i * 0.08}>
+                <div className="group bg-white/[0.03] border border-white/[0.06] rounded-2xl p-6 hover:bg-white/[0.06] hover:border-white/10 transition-all duration-300 h-full">
+                  <div className="w-10 h-10 bg-violet-500/10 border border-violet-500/15 rounded-xl flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+                    <Icon className="w-5 h-5 text-violet-400" />
+                  </div>
+                  <h3 className="text-base font-semibold mb-2">{t(feat.titleKey)}</h3>
+                  <p className="text-sm text-slate-400 leading-relaxed">{t(feat.descKey)}</p>
+                </div>
+              </FadeIn>
+            )
+          })}
+        </div>
+      </section>
+
       {/* ═══════════ REFERRAL PROGRAM ═══════════ */}
       <section id="referral" className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
         <div className="relative overflow-hidden bg-gradient-to-br from-violet-950/60 via-purple-950/40 to-slate-950/60 border border-violet-500/10 rounded-3xl">
@@ -388,7 +426,7 @@ export default function LandingPage() {
         <FadeIn className="text-center mb-16">
           <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-4 py-1.5 mb-4">
             <Code2 className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="text-xs text-emerald-300 font-medium">API-first</span>
+            <span className="text-xs text-emerald-300 font-medium">{t('devBadge')}</span>
           </div>
           <h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-4">{t('devTitle')}</h2>
           <p className="text-slate-400 max-w-xl mx-auto">{t('devSubtitle')}</p>
@@ -465,15 +503,15 @@ export default function LandingPage() {
             <span className="text-sm text-slate-600">{t('footerBrand')}</span>
           </div>
           <div className="flex items-center gap-6">
-            <a href="/api/docs" className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-300 transition-colors">
+            <a href="https://github.com/inite-ai/inite-billing-service/blob/main/docs/api.md" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-300 transition-colors">
               <BookOpen className="w-3.5 h-3.5" />
               {t('footerApiDocs')}
             </a>
-            <a href="https://github.com/inite" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-300 transition-colors">
+            <a href="https://github.com/inite-ai/inite-billing-service" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-300 transition-colors">
               <GitBranch className="w-3.5 h-3.5" />
-              GitHub
+              {t('footerGithub')}
             </a>
-            <a href="mailto:support@inite.com" className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-300 transition-colors">
+            <a href="mailto:support@inite.ai" className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-300 transition-colors">
               <Headphones className="w-3.5 h-3.5" />
               {t('footerSupport')}
             </a>

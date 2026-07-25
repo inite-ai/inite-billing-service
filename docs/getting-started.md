@@ -22,7 +22,7 @@ This starts:
 | Service | Image | Host port |
 |---|---|---|
 | PostgreSQL | `pgvector/pgvector:pg15` | 5433 |
-| Redis | `redis:7-alpine` | 6380 |
+| Redis | `redis:7-alpine` | 6381 |
 
 > **pgvector is required.** The embeddings migration runs
 > `CREATE EXTENSION vector` — a plain `postgres` image will fail to migrate.

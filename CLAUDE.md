@@ -4,7 +4,7 @@ Payment-rail-agnostic billing gateway for the INITE platform: the single service
 
 ## Stack
 
-- Backend: NestJS 10, Prisma 5 (PostgreSQL, `multiSchema`, everything in schema `billing`), Redis + BullMQ, Swagger at `/api` (non-prod).
+- Backend: NestJS 11 (Express 5), Prisma 5 (PostgreSQL, `multiSchema`, everything in schema `billing`), Redis + BullMQ, Swagger at `/api` (non-prod).
 - Frontend: Next.js App Router in `frontend/` (React 19, Tailwind v4, `next-intl` EN/RU, axios). Runs on port 3001.
 - AI: `@anthropic-ai/sdk` via the shared `AnthropicModule` (`src/common/anthropic/`) — inject `ANTHROPIC_CLIENT` + `AnthropicConfigService`; model/max_tokens/temperature come from env (`ANTHROPIC_MODEL`, default `claude-sonnet-4-5`). Never hardcode model IDs.
 

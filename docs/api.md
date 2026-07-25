@@ -62,7 +62,7 @@ Admin endpoints additionally require the `admin` role in the JWT.
 
 | Endpoint | Auth | Notes |
 |---|---|---|
-| `POST /v1/assistant/chat` | JWT | SSE — AI SDK v6 UI Message Stream (`x-vercel-ai-ui-message-stream: v1`); throttled 10/min |
+| `POST /v1/assistant/chat` | JWT | SSE — AI SDK v7 UI Message Stream (`x-vercel-ai-ui-message-stream: v1`); throttled 10/min |
 | `POST /v1/assistant/generate-features` | JWT | One-shot product-copy generation |
 | `GET /v1/assistant/actions?conversationId=` | JWT | List action proposals |
 | `POST /v1/assistant/actions/:id/confirm` / `:id/reject` | JWT | Execute/decline a proposal; owner-only, role re-checked; double-confirm → 409 |
