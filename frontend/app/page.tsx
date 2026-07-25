@@ -1,520 +1,454 @@
 'use client'
 
-import { motion, useInView } from 'framer-motion'
 import Link from 'next/link'
-import { useAuth } from '@/contexts/AuthContext'
 import { useTranslations } from 'next-intl'
+import { useAuth } from '@/contexts/AuthContext'
 import LanguageSwitcher from '@/components/ui/LanguageSwitcher'
-import { useRef } from 'react'
-import {
-  CreditCard, Users, Globe,
-  ArrowRight, LogIn, LayoutDashboard,
-  Code2, Webhook, KeyRound, Lock, CheckCircle2,
-  GitBranch, BookOpen, Headphones, TrendingUp,
-  DollarSign, Layers, Repeat, Activity,
-  ChevronRight, Sparkles, ArrowUpRight,
-  Bot, Mail, Gauge, Search,
-} from 'lucide-react'
 
-/* ── Fade-in wrapper ── */
-function FadeIn({ children, delay = 0, className = '' }: { children: React.ReactNode; delay?: number; className?: string }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 24 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: '-60px' }}
-      transition={{ duration: 0.5, delay, ease: 'easeOut' }}
-      className={className}
-    >
-      {children}
-    </motion.div>
-  )
-}
-
-/* ── Animated bar ── */
-function Bar({ width, delay, color }: { width: string; delay: number; color: string }) {
-  const ref = useRef<HTMLDivElement>(null)
-  const inView = useInView(ref, { once: true })
-  return (
-    <div ref={ref} className="h-2 bg-white/5 rounded-full overflow-hidden">
-      <motion.div
-        className={`h-full rounded-full ${color}`}
-        initial={{ width: 0 }}
-        animate={inView ? { width } : {}}
-        transition={{ duration: 0.8, delay, ease: 'easeOut' }}
-      />
-    </div>
-  )
-}
-
-/* ── Feature cards data ── */
-const features = [
-  { icon: Layers, titleKey: 'featureRailsTitle', descKey: 'featureRailsDesc', gradient: 'from-blue-500 to-cyan-500' },
-  { icon: CreditCard, titleKey: 'featureCreditsTitle', descKey: 'featureCreditsDesc', gradient: 'from-emerald-500 to-green-500' },
-  { icon: Users, titleKey: 'featureReferralTitle', descKey: 'featureReferralDesc', gradient: 'from-violet-500 to-purple-500' },
-  { icon: Bot, titleKey: 'featureAssistantTitle', descKey: 'featureAssistantDesc', gradient: 'from-violet-500 to-fuchsia-500' },
-  { icon: Sparkles, titleKey: 'featureRetentionTitle', descKey: 'featureRetentionDesc', gradient: 'from-pink-500 to-rose-500' },
-  { icon: Globe, titleKey: 'featurePlatformTitle', descKey: 'featurePlatformDesc', gradient: 'from-indigo-500 to-blue-500' },
-] as const
-
-/* ── AI capability cards data ── */
-const aiFeatures = [
-  { icon: Bot, titleKey: 'aiCard1Title', descKey: 'aiCard1Desc' },
-  { icon: Mail, titleKey: 'aiCard2Title', descKey: 'aiCard2Desc' },
-  { icon: Gauge, titleKey: 'aiCard3Title', descKey: 'aiCard3Desc' },
-  { icon: Search, titleKey: 'aiCard4Title', descKey: 'aiCard4Desc' },
-] as const
-
-/* ── How it works steps ── */
-const steps = [
-  { icon: Layers, color: 'from-violet-500 to-purple-600' },
-  { icon: Activity, color: 'from-blue-500 to-cyan-500' },
-  { icon: TrendingUp, color: 'from-emerald-500 to-green-500' },
-]
-
-/* ── Developer features ── */
-const devFeatures = [
-  { icon: Code2, titleKey: 'devApi', descKey: 'devApiDesc' },
-  { icon: Webhook, titleKey: 'devWebhooks', descKey: 'devWebhooksDesc' },
-  { icon: Lock, titleKey: 'devAuth', descKey: 'devAuthDesc' },
-  { icon: KeyRound, titleKey: 'devKeys', descKey: 'devKeysDesc' },
-] as const
-
-/* ── Referral benefits ── */
-const benefitKeys = [
-  'referralBenefit1',
-  'referralBenefit2',
-  'referralBenefit3',
-  'referralBenefit4',
-] as const
-
-/* ── Example referral levels (illustrative) ── */
-const exampleLevels = [
-  { level: 1, rate: 15 },
-  { level: 2, rate: 5 },
-  { level: 3, rate: 3 },
-]
-
+/**
+ * INITE Billing — landing page ("Ledger" theme).
+ * All visual styling lives in globals.css scoped under `.lp` so the
+ * authenticated app is untouched. Copy comes from the `landing` i18n
+ * namespace (EN + RU parity enforced in messages/{en,ru}.json).
+ */
 export default function LandingPage() {
   const { user } = useAuth()
   const t = useTranslations('landing')
 
-  return (
-    <div className="min-h-screen bg-[#030712] text-white">
-      {/* ── Background ── */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute -top-40 left-1/3 w-[700px] h-[700px] bg-violet-600/8 rounded-full blur-[150px]" />
-        <div className="absolute top-1/2 -right-20 w-[500px] h-[500px] bg-blue-600/6 rounded-full blur-[130px]" />
-        <div className="absolute -bottom-40 left-0 w-[600px] h-[600px] bg-purple-600/5 rounded-full blur-[140px]" />
-        {/* Grid overlay */}
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:64px_64px]" />
-      </div>
+  const primaryHref = user ? '/dashboard' : '/login'
+  const primaryLabel = user ? t('goToDashboard') : t('getStarted')
+  const docsUrl =
+    'https://github.com/inite-ai/inite-billing-service/blob/main/docs/api.md'
 
-      {/* ═══════════ NAV ═══════════ */}
-      <nav className="relative z-20 border-b border-white/5">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-lg shadow-violet-500/20">
-              <span className="text-white font-bold text-xs">IN</span>
-            </div>
-            <span className="text-lg font-bold">
-              {t('brand')}<span className="text-violet-400">{t('brandHighlight')}</span>
-            </span>
+  return (
+    <div className="lp">
+      <div className="lp-grain" />
+      <div className="lp-gridbg" />
+      <div className="lp-vign" />
+
+      {/* NAV */}
+      <nav>
+        <div className="wrap navrow">
+          <div className="brand">
+            <div className="logo">IN</div>
+            {t('brand')}
+            <b>{t('brandHighlight')}</b>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="navr">
             <LanguageSwitcher />
             {user ? (
-              <Link href="/dashboard" className="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors shadow-lg shadow-violet-500/20">
-                <LayoutDashboard className="w-4 h-4" />
-                {t('goToDashboard')}
+              <Link href="/dashboard" className="btn ghost">
+                {t('dashboard')}
               </Link>
             ) : (
-              <Link href="/login" className="flex items-center gap-2 bg-white/10 hover:bg-white/15 border border-white/10 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors backdrop-blur-sm">
-                <LogIn className="w-4 h-4" />
+              <Link href="/login" className="btn ghost">
                 {t('signIn')}
               </Link>
             )}
+            <Link href={primaryHref} className="btn acc">
+              {t('navStart')}
+            </Link>
           </div>
         </div>
       </nav>
 
-      {/* ═══════════ HERO ═══════════ */}
-      <section className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 sm:pt-32 pb-20">
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7 }}
-          className="text-center max-w-4xl mx-auto"
+      {/* HERO */}
+      <header className="wrap hero mesh">
+        <svg
+          className="hero-graphic"
+          viewBox="0 0 600 500"
+          fill="none"
+          aria-hidden="true"
         >
-          <div className="inline-flex items-center gap-2 bg-violet-500/10 border border-violet-500/20 rounded-full px-4 py-1.5 mb-8">
-            <Sparkles className="w-3.5 h-3.5 text-violet-400" />
-            <span className="text-sm text-violet-300/90">{t('badge')}</span>
-          </div>
+          <g stroke="#CCFF00" strokeWidth="1">
+            <path d="M-20 40 L560 250" opacity=".5" />
+            <path d="M-20 150 L560 250" opacity=".38" />
+            <path d="M-20 250 L560 250" opacity=".55" />
+            <path d="M-20 350 L560 250" opacity=".38" />
+            <path d="M-20 460 L560 250" opacity=".5" />
+          </g>
+          <g stroke="#CCFF00" fill="none">
+            <circle cx="560" cy="250" r="34" opacity=".55" />
+            <circle cx="560" cy="250" r="82" opacity=".26" />
+            <circle cx="560" cy="250" r="140" opacity=".14" />
+            <circle cx="560" cy="250" r="205" opacity=".07" />
+            <circle className="ping" cx="560" cy="250" r="205" opacity=".4" />
+            <circle className="ping b" cx="560" cy="250" r="205" opacity=".4" />
+            <circle className="ping c" cx="560" cy="250" r="205" opacity=".4" />
+          </g>
+          <circle cx="560" cy="250" r="6" fill="#CCFF00" />
+        </svg>
+        <div className="watermark" style={{ right: '-30px', bottom: '-120px' }}>
+          ₽
+        </div>
 
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold leading-[1.1] tracking-tight mb-6">
-            {t('heroTitle')}
-            <br />
-            <span className="bg-gradient-to-r from-violet-400 via-purple-400 to-blue-400 bg-clip-text text-transparent">
-              {t('heroTitleHighlight')}
+        <div>
+          <div className="h-eye rise d1">
+            <span className="eyebrow">
+              <span className="dot">◆</span> {t('heroEyebrow')}
             </span>
+          </div>
+          <h1 className="h1 rise d2">
+            {t('heroTitleLead')}
+            <br />
+            <span className="l2">{t('heroTitleMuted')}</span>{' '}
+            <span className="mk">{t('heroTitleAccent')}</span>
           </h1>
-
-          <p className="text-lg sm:text-xl text-slate-400 mb-10 max-w-2xl mx-auto leading-relaxed">
-            {t('heroDescription')}
+          <p className="sub rise d3">
+            {t.rich('heroSub', { b: (chunks) => <b>{chunks}</b> })}
           </p>
-
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-20">
-            <Link
-              href={user ? '/dashboard' : '/login'}
-              className="group flex items-center gap-2 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white font-semibold py-3.5 px-8 rounded-2xl transition-all duration-300 shadow-xl shadow-violet-600/20 hover:shadow-violet-600/30 text-lg"
-            >
-              {user ? t('goToDashboard') : t('getStarted')}
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
+          <div className="h-cta rise d3">
+            <Link href={primaryHref} className="btn acc">
+              {primaryLabel} →
             </Link>
             <a
-              href="#features"
-              className="flex items-center gap-2 text-slate-400 hover:text-white font-medium py-3.5 px-6 transition-colors"
+              href={docsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn ghost"
             >
-              {t('learnAboutReferrals')}
-              <ChevronRight className="w-4 h-4" />
+              {t('docs')}
             </a>
           </div>
+          <div className="microrail rise d4">{t('heroMicro')}</div>
+        </div>
 
-          {/* ── Hero metrics ── */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-white/5 rounded-2xl overflow-hidden border border-white/5">
-            {(['stat1', 'stat2', 'stat3'] as const).map((key, i) => (
-              <motion.div
-                key={key}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.6 + i * 0.15 }}
-                className="bg-[#030712] px-6 py-6 text-center"
+        <div className="receipt rise d3 tex-scan">
+          <div className="rc-top">
+            <div className="path">
+              POST /v1/checkout/<span>pay</span>
+            </div>
+            <div className="live">
+              <i />
+              live
+            </div>
+          </div>
+          <div className="rc-body">
+            <div className="rc-line">
+              <span className="k">rail</span>
+              <span className="v">stripe</span>
+            </div>
+            <div className="rc-line">
+              <span className="k">amount</span>
+              <span className="v tnum">₽ 4 900,00</span>
+            </div>
+            <div className="rc-line">
+              <span className="k">status</span>
+              <span className="v ok">→ paid</span>
+            </div>
+            <div className="rc-line">
+              <span className="k">latency</span>
+              <span className="v tnum">128 ms</span>
+            </div>
+          </div>
+          <div className="rc-foot">
+            <span className="chip">
+              <i>✓</i> {t('receiptCheck1')}
+            </span>
+            <span className="chip">
+              <i>✓</i> {t('receiptCheck2')}
+            </span>
+            <span className="chip">
+              <i>✓</i> {t('receiptCheck3')}
+            </span>
+          </div>
+          <div className="stamp">PAID</div>
+        </div>
+      </header>
+
+      {/* RAILS TICKER */}
+      <div className="ticker mesh tex-dots">
+        <div className="track">
+          <span>Stripe</span>
+          <span>{t('tickerCrypto')}</span>
+          <span>Apple IAP</span>
+          <span>Google Play</span>
+          <span>Lava</span>
+          <span>ONE</span>
+          <span>Stripe</span>
+          <span>{t('tickerCrypto')}</span>
+          <span>Apple IAP</span>
+          <span>Google Play</span>
+          <span>Lava</span>
+          <span>ONE</span>
+        </div>
+      </div>
+
+      <div className="wrap">
+        {/* STATS */}
+        <div className="stats">
+          <div className="stat">
+            <div className="n">
+              <em>6</em>
+            </div>
+            <div className="l">{t('statRailsLabel')}</div>
+          </div>
+          <div className="stat">
+            <div className="n">N</div>
+            <div className="l">{t('statLevelsLabel')}</div>
+          </div>
+          <div className="stat">
+            <div className="n">
+              <em>19</em>
+            </div>
+            <div className="l">{t('statToolsLabel')}</div>
+          </div>
+        </div>
+
+        {/* 01 — FEATURES */}
+        <section className="sec" id="features">
+          <div className="sechead">
+            <span className="secnum">01</span>
+            <h2>{t('featuresTitle')}</h2>
+            <div className="hint">{t('featuresHint')}</div>
+          </div>
+
+          <div className="bento">
+            <div className="cell c-lg mesh tex-hatch">
+              <div className="tag">{t('featRailsTag')}</div>
+              <div className="ct">{t('featRailsTitle')}</div>
+              <div className="cd">{t('featRailsDesc')}</div>
+              <div className="diagram">
+                <div className="rails-col">
+                  <div className="pill">Stripe</div>
+                  <div className="pill">{t('railCrypto')}</div>
+                  <div className="pill">Apple / Google</div>
+                  <div className="pill">Lava · ONE</div>
+                </div>
+                <span className="arrow">──▶</span>
+                <div className="core">{t('railCore')}</div>
+                <span className="arrow">──▶</span>
+                <div className="outs">
+                  <span>{t('outSubs')}</span>
+                  <span>{t('outCredits')}</span>
+                  <span>{t('outReferrals')}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="cell c-md">
+              <div className="tag">{t('featSubsTag')}</div>
+              <div className="ct">{t('featSubsTitle')}</div>
+              <div className="cd">{t('featSubsDesc')}</div>
+              <div className="meter">
+                <div className="row">
+                  <span>{t('meterLabel')}</span>
+                  <span className="tnum">7 400 / 10 000</span>
+                </div>
+                <div className="bar">
+                  <i style={{ width: '74%' }} />
+                </div>
+                <div className="quota">{t('meterQuota')}</div>
+              </div>
+            </div>
+
+            <div className="cell c-3 tex-scan">
+              <div className="tag">{t('featAsstTag')}</div>
+              <div className="ct">{t('featAsstTitle')}</div>
+              <div className="cd">{t('featAsstDesc')}</div>
+              <div className="chat">
+                <div className="msg u">{t('asstUser')}</div>
+                <div className="msg a">{t('asstReply')}</div>
+                <div className="confirm">
+                  <b>{t('confirm')}</b>
+                  <span className="no">{t('cancel')}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="cell c-3">
+              <div className="tag">{t('featRetTag')}</div>
+              <div className="ct">{t('featRetTitle')}</div>
+              <div className="cd">{t('featRetDesc')}</div>
+              <div className="diagram">
+                <div className="pill">{t('flowAbandoned')}</div>
+                <span className="arrow">▶</span>
+                <div className="pill">{t('flowReminder')}</div>
+                <span className="arrow">▶</span>
+                <div className="core">{t('flowPaid')}</div>
+              </div>
+            </div>
+
+            <div className="cell c-3">
+              <div className="tag">{t('featRefTag')}</div>
+              <div className="ct">{t('featRefTitle')}</div>
+              <div className="cd">{t('featRefDesc')}</div>
+              <div className="tree">
+                <div className="node you">{t('you')}</div>
+                <div className="conn" />
+                <div className="rown">
+                  <div className="node">L1</div>
+                  <div className="node">L1</div>
+                  <div className="node">L1</div>
+                </div>
+                <div className="rown">
+                  <div className="node">L2</div>
+                  <div className="node">L2</div>
+                  <div className="node">L2</div>
+                  <div className="node">L2</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="cell c-3 mesh">
+              <div className="tag">{t('featScaleTag')}</div>
+              <div className="ct">{t('featScaleTitle')}</div>
+              <div className="cd">{t('featScaleDesc')}</div>
+              <div className="diagram">
+                <div className="core">{t('scaleCore')}</div>
+                <span className="arrow">──▶</span>
+                <div className="rails-col">
+                  <div className="pill">club</div>
+                  <div className="pill">education</div>
+                </div>
+                <div className="rails-col">
+                  <div className="pill">shop</div>
+                  <div className="pill">health</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* 02 — REFERRAL */}
+        <section className="sec" id="referral">
+          <div className="sechead">
+            <span className="secnum">02</span>
+            <h2>{t('referralTitle')}</h2>
+            <div className="hint">{t('referralHint')}</div>
+          </div>
+          <div className="ref">
+            <div className="ref-card">
+              <div className="eyebrow" style={{ marginBottom: '6px' }}>
+                {t('exampleSub')}
+              </div>
+              <div className="levels">
+                <div className="lvl">
+                  <span className="lb">{t('exampleLevel', { level: 1 })}</span>
+                  <div className="track2">
+                    <i style={{ width: '100%' }} />
+                  </div>
+                  <span className="amt tnum">{t('exampleAmt1')}</span>
+                </div>
+                <div className="lvl">
+                  <span className="lb">{t('exampleLevel', { level: 2 })}</span>
+                  <div className="track2">
+                    <i style={{ width: '33%' }} />
+                  </div>
+                  <span className="amt tnum">{t('exampleAmt2')}</span>
+                </div>
+                <div className="lvl">
+                  <span className="lb">{t('exampleLevel', { level: 3 })}</span>
+                  <div className="track2">
+                    <i style={{ width: '20%' }} />
+                  </div>
+                  <span className="amt tnum">{t('exampleAmt3')}</span>
+                </div>
+              </div>
+              <div className="total">
+                <span className="tl">{t('exampleTotal')}</span>
+                <span className="tv">23%</span>
+              </div>
+            </div>
+            <div className="ref-card">
+              <div className="eyebrow" style={{ marginBottom: '14px' }}>
+                {t('scenarioTitle')}
+              </div>
+              <div
+                className="cd"
+                style={{ color: 'var(--dim)', fontSize: '14.5px', marginBottom: '6px' }}
               >
-                <p className="text-3xl sm:text-4xl font-bold tracking-tight bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent mb-1">
-                  {t(`${key}Value`)}
-                </p>
-                <p className="text-sm text-slate-500">{t(`${key}Label`)}</p>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
-      </section>
-
-      {/* ═══════════ HOW IT WORKS ═══════════ */}
-      <section className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
-        <FadeIn className="text-center mb-16">
-          <p className="text-sm font-medium text-violet-400 uppercase tracking-wider mb-3">{t('howItWorksBadge')}</p>
-          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">{t('howItWorksTitle')}</h2>
-        </FadeIn>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 lg:gap-12">
-          {([1, 2, 3] as const).map((step, i) => {
-            const StepIcon = steps[i].icon
-            return (
-              <FadeIn key={step} delay={i * 0.12}>
-                <div className="relative text-center">
-                  <div className={`w-16 h-16 mx-auto mb-6 rounded-2xl bg-gradient-to-br ${steps[i].color} flex items-center justify-center shadow-lg`}>
-                    <StepIcon className="w-7 h-7 text-white" />
-                  </div>
-                  {i < 2 && (
-                    <div className="hidden md:block absolute top-8 left-[calc(50%+48px)] w-[calc(100%-96px)] border-t border-dashed border-white/10" />
-                  )}
-                  <div className="text-xs font-bold text-violet-400/60 uppercase tracking-widest mb-2">
-                    {t('stepLabel', { step })}
-                  </div>
-                  <h3 className="text-xl font-semibold mb-3">{t(`step${step}Title`)}</h3>
-                  <p className="text-slate-400 leading-relaxed text-sm">{t(`step${step}Desc`)}</p>
-                </div>
-              </FadeIn>
-            )
-          })}
-        </div>
-      </section>
-
-      {/* ═══════════ FEATURES ═══════════ */}
-      <section id="features" className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
-        <FadeIn className="text-center mb-16">
-          <p className="text-sm font-medium text-emerald-400 uppercase tracking-wider mb-3">{t('featuresBadge')}</p>
-          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-4">{t('featuresTitle')}</h2>
-          <p className="text-slate-400 max-w-xl mx-auto">{t('featuresSubtitle')}</p>
-        </FadeIn>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {features.map((feature, i) => {
-            const Icon = feature.icon
-            return (
-              <FadeIn key={feature.titleKey} delay={i * 0.08}>
-                <div className="group relative bg-white/[0.03] border border-white/[0.06] rounded-2xl p-6 hover:bg-white/[0.06] hover:border-white/10 transition-all duration-300 h-full">
-                  <div className={`w-11 h-11 bg-gradient-to-br ${feature.gradient} rounded-xl flex items-center justify-center mb-4 shadow-lg group-hover:scale-105 transition-transform`}>
-                    <Icon className="w-5 h-5 text-white" />
-                  </div>
-                  <h3 className="text-base font-semibold mb-2">{t(feature.titleKey)}</h3>
-                  <p className="text-sm text-slate-400 leading-relaxed">{t(feature.descKey)}</p>
-                </div>
-              </FadeIn>
-            )
-          })}
-        </div>
-      </section>
-
-      {/* ═══════════ AI-FIRST ═══════════ */}
-      <section id="ai" className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
-        <FadeIn className="text-center mb-16">
-          <div className="inline-flex items-center gap-2 bg-violet-500/10 border border-violet-500/20 rounded-full px-4 py-1.5 mb-4">
-            <Sparkles className="w-3.5 h-3.5 text-violet-400" />
-            <span className="text-xs text-violet-300 font-medium">{t('aiBadge')}</span>
-          </div>
-          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-4">{t('aiTitle')}</h2>
-          <p className="text-slate-400 max-w-xl mx-auto">{t('aiSubtitle')}</p>
-        </FadeIn>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-          {aiFeatures.map((feat, i) => {
-            const Icon = feat.icon
-            return (
-              <FadeIn key={feat.titleKey} delay={i * 0.08}>
-                <div className="group bg-white/[0.03] border border-white/[0.06] rounded-2xl p-6 hover:bg-white/[0.06] hover:border-white/10 transition-all duration-300 h-full">
-                  <div className="w-10 h-10 bg-violet-500/10 border border-violet-500/15 rounded-xl flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
-                    <Icon className="w-5 h-5 text-violet-400" />
-                  </div>
-                  <h3 className="text-base font-semibold mb-2">{t(feat.titleKey)}</h3>
-                  <p className="text-sm text-slate-400 leading-relaxed">{t(feat.descKey)}</p>
-                </div>
-              </FadeIn>
-            )
-          })}
-        </div>
-      </section>
-
-      {/* ═══════════ REFERRAL PROGRAM ═══════════ */}
-      <section id="referral" className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
-        <div className="relative overflow-hidden bg-gradient-to-br from-violet-950/60 via-purple-950/40 to-slate-950/60 border border-violet-500/10 rounded-3xl">
-          {/* Glow */}
-          <div className="absolute -top-32 -right-32 w-64 h-64 bg-violet-500/10 rounded-full blur-[100px]" />
-          <div className="absolute -bottom-32 -left-32 w-64 h-64 bg-purple-500/10 rounded-full blur-[100px]" />
-
-          <div className="relative grid grid-cols-1 lg:grid-cols-2 gap-12 p-8 sm:p-12">
-            {/* Left */}
-            <FadeIn>
-              <div className="inline-flex items-center gap-2 bg-violet-500/15 border border-violet-500/20 rounded-full px-3 py-1 mb-5">
-                <Users className="w-3.5 h-3.5 text-violet-400" />
-                <span className="text-xs text-violet-300 font-medium">{t('referralBadge')}</span>
+                {t('scenarioDesc')}
               </div>
-              <h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-4">
-                {t('referralTitle')}
-              </h2>
-              <p className="text-slate-300/80 mb-8 leading-relaxed">
-                {t('referralDescription')}
-              </p>
-              <div className="space-y-3 mb-8">
-                {benefitKeys.map((key) => (
-                  <div key={key} className="flex items-start gap-3">
-                    <div className="w-5 h-5 rounded-full bg-violet-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <CheckCircle2 className="w-3 h-3 text-violet-400" />
-                    </div>
-                    <span className="text-slate-300/80 text-sm leading-relaxed">{t(key)}</span>
-                  </div>
-                ))}
-              </div>
-              <Link
-                href={user ? '/referrals' : '/login'}
-                className="inline-flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white font-medium py-3 px-6 rounded-xl transition-colors shadow-lg shadow-violet-600/20"
-              >
-                {user ? t('viewMyReferrals') : t('startEarning')}
-                <ArrowRight className="w-4 h-4" />
-              </Link>
-            </FadeIn>
-
-            {/* Right — Infographic */}
-            <FadeIn delay={0.15} className="space-y-5">
-              {/* Commission example */}
-              <div className="bg-slate-900/60 border border-white/[0.06] rounded-2xl p-6">
-                <div className="flex items-center gap-2 mb-1">
-                  <DollarSign className="w-4 h-4 text-emerald-400" />
-                  <h3 className="text-sm font-semibold text-white">{t('exampleTitle')}</h3>
+              <div className="tree">
+                <div className="node you">{t('you')}</div>
+                <div className="conn" />
+                <div className="rown">
+                  <div className="node">•</div>
+                  <div className="node">•</div>
+                  <div className="node">•</div>
                 </div>
-                <p className="text-xs text-slate-500 mb-5">
-                  {t('exampleBase')}: <span className="text-white font-medium">$100</span>{t('examplePerMonth')}
-                </p>
-
-                <div className="space-y-4">
-                  {exampleLevels.map((lvl, i) => (
-                    <div key={lvl.level}>
-                      <div className="flex items-center justify-between text-sm mb-1.5">
-                        <div className="flex items-center gap-2">
-                          <span className="w-6 h-6 rounded-lg bg-violet-500/15 text-violet-300 text-xs font-bold flex items-center justify-center">
-                            {lvl.level}
-                          </span>
-                          <span className="text-slate-400">{t('exampleLevel', { level: lvl.level })}</span>
-                        </div>
-                        <span className="text-white font-medium">{lvl.rate}% &mdash; ${lvl.rate.toFixed(2)}</span>
-                      </div>
-                      <Bar
-                        width={`${(lvl.rate / 15) * 100}%`}
-                        delay={i * 0.15}
-                        color={i === 0 ? 'bg-gradient-to-r from-violet-500 to-purple-500' : 'bg-gradient-to-r from-violet-600/60 to-purple-600/60'}
-                      />
-                    </div>
-                  ))}
-                  <div className="flex items-center gap-2 text-xs text-slate-500 pt-1">
-                    <Repeat className="w-3.5 h-3.5" />
-                    <span>{t('exampleMore')}</span>
-                  </div>
+                <div className="rown">
+                  <div className="node">·</div>
+                  <div className="node">·</div>
+                  <div className="node">·</div>
+                  <div className="node">·</div>
+                  <div className="node">·</div>
                 </div>
-
-                <div className="mt-5 pt-4 border-t border-white/5 flex items-center justify-between">
-                  <span className="text-sm text-slate-400">{t('exampleTotal')}</span>
-                  <span className="text-lg font-bold bg-gradient-to-r from-violet-400 to-blue-400 bg-clip-text text-transparent">
-                    {t('exampleTotalConfigurable')}
-                  </span>
-                </div>
-
-                <p className="text-[11px] text-slate-600 mt-3 leading-relaxed">{t('exampleNote')}</p>
-              </div>
-
-              {/* Network effect */}
-              <div className="bg-slate-900/60 border border-white/[0.06] rounded-2xl p-6">
-                <div className="flex items-center gap-2 mb-3">
-                  <TrendingUp className="w-4 h-4 text-emerald-400" />
-                  <h3 className="text-sm font-semibold text-white">{t('scenarioTitle')}</h3>
-                </div>
-
-                {/* Visual network tree */}
-                <div className="flex justify-center py-4">
-                  <div className="flex flex-col items-center gap-2">
-                    {/* You */}
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-xs font-bold shadow-lg shadow-violet-500/30">
-                      {t('you')}
-                    </div>
-                    <div className="w-px h-3 bg-violet-500/30" />
-                    {/* Level 1 */}
-                    <div className="flex gap-3">
-                      {[1, 2, 3].map((n) => (
-                        <div key={n} className="flex flex-col items-center">
-                          <div className="w-8 h-8 rounded-full bg-violet-500/20 border border-violet-500/30 flex items-center justify-center text-[10px] text-violet-300" />
-                          <div className="w-px h-2 bg-violet-500/20" />
-                          <div className="flex gap-1.5">
-                            {[1, 2].map((m) => (
-                              <div key={m} className="w-5 h-5 rounded-full bg-purple-500/10 border border-purple-500/20" />
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <p className="text-[10px] text-slate-500 mt-1">...{t('andDeeper')}</p>
-                  </div>
-                </div>
-
-                <p className="text-sm text-slate-400 leading-relaxed mb-4 text-center">
-                  {t('scenarioDesc')}
-                </p>
-                <div className="bg-violet-500/10 border border-violet-500/15 rounded-xl p-4 text-center">
-                  <p className="text-[10px] text-slate-500 uppercase tracking-widest mb-1">{t('scenarioIncome')}</p>
-                  <p className="text-2xl font-bold bg-gradient-to-r from-violet-400 to-blue-400 bg-clip-text text-transparent">
-                    {t('scenarioAmount')}
-                  </p>
-                  <p className="text-[10px] text-slate-600 mt-0.5">{t('scenarioNote')}</p>
+                <div className="eyebrow" style={{ marginTop: '6px' }}>
+                  {t('andDeeper')}
                 </div>
               </div>
-            </FadeIn>
-          </div>
-        </div>
-      </section>
-
-      {/* ═══════════ FOR DEVELOPERS ═══════════ */}
-      <section className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
-        <FadeIn className="text-center mb-16">
-          <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-4 py-1.5 mb-4">
-            <Code2 className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="text-xs text-emerald-300 font-medium">{t('devBadge')}</span>
-          </div>
-          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-4">{t('devTitle')}</h2>
-          <p className="text-slate-400 max-w-xl mx-auto">{t('devSubtitle')}</p>
-        </FadeIn>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-          {devFeatures.map((feat, i) => {
-            const Icon = feat.icon
-            return (
-              <FadeIn key={feat.titleKey} delay={i * 0.08}>
-                <div className="group bg-white/[0.03] border border-white/[0.06] rounded-2xl p-6 hover:bg-white/[0.06] hover:border-white/10 transition-all duration-300">
-                  <div className="w-10 h-10 bg-emerald-500/10 border border-emerald-500/15 rounded-xl flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
-                    <Icon className="w-5 h-5 text-emerald-400" />
-                  </div>
-                  <h3 className="text-base font-semibold mb-2">{t(feat.titleKey)}</h3>
-                  <p className="text-sm text-slate-400 leading-relaxed">{t(feat.descKey)}</p>
-                </div>
-              </FadeIn>
-            )
-          })}
-        </div>
-      </section>
-
-      {/* ═══════════ PRICING ═══════════ */}
-      <section className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
-        <FadeIn className="text-center">
-          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-4">{t('pricingTitle')}</h2>
-          <p className="text-slate-400 max-w-xl mx-auto mb-12">{t('pricingSubtitle')}</p>
-
-          <div className="max-w-md mx-auto bg-white/[0.03] border border-white/[0.06] rounded-3xl p-10 hover:border-white/10 transition-colors">
-            <div className="w-16 h-16 mx-auto mb-6 bg-gradient-to-br from-violet-600 to-purple-600 rounded-2xl flex items-center justify-center shadow-xl shadow-violet-600/20">
-              <DollarSign className="w-7 h-7 text-white" />
-            </div>
-            <h3 className="text-3xl font-bold mb-2">{t('pricingFree')}</h3>
-            <p className="text-slate-400 mb-6 leading-relaxed text-sm">{t('pricingFreeDesc')}</p>
-            <div className="border-t border-white/5 pt-4">
-              <p className="text-xs text-slate-600">{t('pricingNote')}</p>
             </div>
           </div>
-        </FadeIn>
-      </section>
+        </section>
 
-      {/* ═══════════ CTA ═══════════ */}
-      <section className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
-        <FadeIn>
-          <div className="relative overflow-hidden text-center bg-gradient-to-br from-violet-950/60 to-purple-950/60 border border-violet-500/10 rounded-3xl p-12 sm:p-16">
-            <div className="absolute -top-20 -right-20 w-40 h-40 bg-violet-500/10 rounded-full blur-[80px]" />
-            <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-purple-500/10 rounded-full blur-[80px]" />
-
-            <div className="relative">
-              <h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-4">{t('ctaTitle')}</h2>
-              <p className="text-slate-300/70 mb-10 max-w-lg mx-auto leading-relaxed">
-                {t('ctaDescription')}
-              </p>
-              <Link
-                href={user ? '/dashboard' : '/login'}
-                className="group inline-flex items-center gap-2 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white font-semibold py-4 px-10 rounded-2xl transition-all duration-300 shadow-xl shadow-violet-600/20 hover:shadow-violet-600/30 text-lg"
-              >
-                {user ? t('openDashboard') : t('getStarted')}
-                <ArrowUpRight className="w-5 h-5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-              </Link>
+        {/* 03 — DEVELOPERS */}
+        <section className="sec">
+          <div className="sechead">
+            <span className="secnum">03</span>
+            <h2>{t('devTitle')}</h2>
+            <div className="hint">{t('devHint')}</div>
+          </div>
+          <div className="spec">
+            <div className="s">
+              <div className="st">REST</div>
+              <div className="sh">{t('devApiTitle')}</div>
+              <div className="sp">{t('devApiDesc')}</div>
+            </div>
+            <div className="s">
+              <div className="st">EVENTS</div>
+              <div className="sh">{t('devHooksTitle')}</div>
+              <div className="sp">{t('devHooksDesc')}</div>
+            </div>
+            <div className="s">
+              <div className="st">AUTH</div>
+              <div className="sh">{t('devAuthTitle')}</div>
+              <div className="sp">{t('devAuthDesc')}</div>
+            </div>
+            <div className="s">
+              <div className="st">KEYS</div>
+              <div className="sh">{t('devKeysTitle')}</div>
+              <div className="sp">{t('devKeysDesc')}</div>
             </div>
           </div>
-        </FadeIn>
-      </section>
+        </section>
 
-      {/* ═══════════ FOOTER ═══════════ */}
-      <footer className="relative z-10 border-t border-white/5 py-8">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
-              <span className="text-white font-bold text-[8px]">IN</span>
-            </div>
-            <span className="text-sm text-slate-600">{t('footerBrand')}</span>
+        {/* CTA */}
+        <section className="ctaband mesh tex-dots">
+          <div
+            className="watermark"
+            style={{ left: '50%', top: '-90px', transform: 'translateX(-50%)', opacity: 0.03 }}
+          >
+            ₽
           </div>
-          <div className="flex items-center gap-6">
-            <a href="https://github.com/inite-ai/inite-billing-service/blob/main/docs/api.md" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-300 transition-colors">
-              <BookOpen className="w-3.5 h-3.5" />
-              {t('footerApiDocs')}
+          <h2>{t('ctaTitle')}</h2>
+          <p>{t('ctaDescription')}</p>
+          <Link href={primaryHref} className="btn acc">
+            {user ? t('openDashboard') : t('ctaButton')} →
+          </Link>
+        </section>
+      </div>
+
+      {/* FOOTER */}
+      <footer>
+        <div className="wrap frow">
+          <div className="brand">
+            <div className="logo">IN</div>
+            {t('footerBrand')}
+          </div>
+          <div className="flinks">
+            <a href={docsUrl} target="_blank" rel="noopener noreferrer">
+              {t('footerDocs')}
             </a>
-            <a href="https://github.com/inite-ai/inite-billing-service" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-300 transition-colors">
-              <GitBranch className="w-3.5 h-3.5" />
+            <a
+              href="https://github.com/inite-ai/inite-billing-service"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               {t('footerGithub')}
             </a>
-            <a href="mailto:support@inite.ai" className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-300 transition-colors">
-              <Headphones className="w-3.5 h-3.5" />
-              {t('footerSupport')}
-            </a>
+            <a href="mailto:support@inite.ai">{t('footerSupport')}</a>
           </div>
         </div>
       </footer>
