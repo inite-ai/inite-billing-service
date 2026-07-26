@@ -45,6 +45,9 @@ export function getAllPosts(): Post[] {
 }
 
 export function getPost(slug: string): Post | null {
+  // Slug comes from the URL — constrain it to a safe charset before it ever
+  // touches the filesystem (no path traversal, no separators, no dots).
+  if (!/^[a-z0-9-]+$/.test(slug)) return null
   try {
     return parse(`${slug}.mdx`)
   } catch {
