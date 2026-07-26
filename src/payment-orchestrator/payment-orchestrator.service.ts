@@ -718,11 +718,32 @@ export class PaymentOrchestratorService {
         // recurring contracts reference this one via parentContractId.
         providerSubscriptionId = intent.providerIntentId || null;
         break;
-      case 'APPLE':
-        providerSubscriptionId = snapshot.originalTransactionId || snapshot.transactionId || null;
+      case 'APPLE_IAP':
+        // Apple identifies an auto-renewable subscription by its ORIGINAL
+        // transaction id — constant across renewals. The per-renewal
+        // transactionId changes each cycle, so renewal/cancel webhooks (which
+        // anchor on originalTransactionId) must resolve to the same value we
+        // persist here. The snapshot may hold it camelCase (raw StoreKit
+        // transaction) or snake_case (our createPaymentIntent metadata); fall
+        // back to providerIntentId, which equals originalTransactionId for the
+        // first purchase.
+        providerSubscriptionId =
+          snapshot.originalTransactionId ||
+          snapshot.apple_original_transaction_id ||
+          intent.providerIntentId ||
+          null;
         break;
-      case 'GOOGLE':
-        providerSubscriptionId = snapshot.purchaseToken || null;
+      case 'GOOGLE_PLAY':
+        // Google identifies a subscription by its purchase token, which we
+        // persist as the PaymentIntent providerIntentId at creation. The paid
+        // transition overwrites the snapshot with the SubscriptionPurchaseV2
+        // object (which does not echo the token), so providerIntentId is the
+        // reliable anchor.
+        providerSubscriptionId =
+          intent.providerIntentId ||
+          snapshot.google_purchase_token ||
+          snapshot.purchaseToken ||
+          null;
         break;
       case 'PROMO':
       case 'CRYPTO':
