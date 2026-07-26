@@ -12,6 +12,10 @@ import { OutboxService } from '../outbox/outbox.service';
 import { CreditsService } from '../credits/credits.service';
 import { FunnelService } from '../funnel/funnel.service';
 
+/** Trial setup now grants credits inside the same transaction; give it the same
+ * headroom as the payment-fulfilment chain instead of Prisma's 5s default. */
+const TRIAL_TX_OPTIONS = { maxWait: 10_000, timeout: 30_000 } as const;
+
 @Injectable()
 export class SubscriptionsService {
   constructor(
@@ -232,13 +236,16 @@ export class SubscriptionsService {
       const metadata = (product.metadata as Record<string, any>) || {};
       const creditsPerPeriod = metadata.creditsPerPeriod || metadata.credits;
       if (creditsPerPeriod) {
-        await this.creditsService.grant({
-          userId,
-          serviceId: product.serviceId || undefined,
-          amount: creditsPerPeriod,
-          description: `Trial credits for ${product.code}`,
-          resetsAt: trialEnd,
-        });
+        await this.creditsService.grant(
+          {
+            userId,
+            serviceId: product.serviceId || undefined,
+            amount: creditsPerPeriod,
+            description: `Trial credits for ${product.code}`,
+            resetsAt: trialEnd,
+          },
+          tx,
+        );
       }
 
       // Track funnel event
@@ -275,7 +282,7 @@ export class SubscriptionsService {
         createdAt: subscription.createdAt,
         updatedAt: subscription.updatedAt,
       };
-    });
+    }, TRIAL_TX_OPTIONS);
   }
 
   private extractEntitlementKeys(product: any): string[] {

@@ -58,21 +58,29 @@ export class CreditsService {
   }
 
   /**
-   * Grant credits (on subscription payment or one-time purchase)
+   * Grant credits (on subscription payment or one-time purchase).
+   *
+   * Pass `tx` to run inside an existing transaction (e.g. the payment
+   * fulfilment tx) so the grant commits or rolls back atomically with the
+   * order — otherwise a rollback leaves phantom credits and a grant failure is
+   * invisible to the paid order. Called standalone, it opens its own tx.
    */
-  async grant(data: {
-    userId: string;
-    serviceId?: string;
-    amount: number;
-    description?: string;
-    orderId?: string;
-    resetsAt?: Date;
-  }): Promise<CreditBalance> {
-    return this.prisma.$transaction(async (tx) => {
-      const balance = await this.findOrCreateBalance(tx, data.userId, data.serviceId);
+  async grant(
+    data: {
+      userId: string;
+      serviceId?: string;
+      amount: number;
+      description?: string;
+      orderId?: string;
+      resetsAt?: Date;
+    },
+    tx?: Prisma.TransactionClient,
+  ): Promise<CreditBalance> {
+    const run = async (db: Prisma.TransactionClient) => {
+      const balance = await this.findOrCreateBalance(db, data.userId, data.serviceId);
 
       // Increment balance and totalGranted
-      const updated = await tx.creditBalance.update({
+      const updated = await db.creditBalance.update({
         where: { id: balance.id },
         data: {
           balance: { increment: data.amount },
@@ -82,7 +90,7 @@ export class CreditsService {
       });
 
       // Create CreditUsage record
-      await tx.creditUsage.create({
+      await db.creditUsage.create({
         data: {
           creditBalanceId: balance.id,
           userId: data.userId,
@@ -98,7 +106,9 @@ export class CreditsService {
       );
 
       return updated;
-    });
+    };
+
+    return tx ? run(tx) : this.prisma.$transaction(run);
   }
 
   /**
@@ -265,18 +275,21 @@ export class CreditsService {
   /**
    * Reset credits (on subscription renewal)
    */
-  async resetForPeriod(data: {
-    userId: string;
-    serviceId?: string;
-    newBalance: number;
-    resetsAt: Date;
-  }): Promise<CreditBalance> {
-    return this.prisma.$transaction(async (tx) => {
-      const balance = await this.findOrCreateBalance(tx, data.userId, data.serviceId);
+  async resetForPeriod(
+    data: {
+      userId: string;
+      serviceId?: string;
+      newBalance: number;
+      resetsAt: Date;
+    },
+    tx?: Prisma.TransactionClient,
+  ): Promise<CreditBalance> {
+    const run = async (db: Prisma.TransactionClient) => {
+      const balance = await this.findOrCreateBalance(db, data.userId, data.serviceId);
 
       // If current balance > 0, log old balance as reset
       if (balance.balance > 0) {
-        await tx.creditUsage.create({
+        await db.creditUsage.create({
           data: {
             creditBalanceId: balance.id,
             userId: data.userId,
@@ -288,7 +301,7 @@ export class CreditsService {
       }
 
       // Set balance = newBalance, update resetsAt
-      const updated = await tx.creditBalance.update({
+      const updated = await db.creditBalance.update({
         where: { id: balance.id },
         data: {
           balance: data.newBalance,
@@ -298,7 +311,7 @@ export class CreditsService {
       });
 
       // Log new grant
-      await tx.creditUsage.create({
+      await db.creditUsage.create({
         data: {
           creditBalanceId: balance.id,
           userId: data.userId,
@@ -313,7 +326,9 @@ export class CreditsService {
       );
 
       return updated;
-    });
+    };
+
+    return tx ? run(tx) : this.prisma.$transaction(run);
   }
 
   /**
@@ -410,16 +425,19 @@ export class CreditsService {
   /**
    * Refund credits (on order refund)
    */
-  async refund(data: {
-    userId: string;
-    serviceId?: string;
-    amount: number;
-    orderId: string;
-  }): Promise<CreditBalance> {
-    return this.prisma.$transaction(async (tx) => {
-      const balance = await this.findOrCreateBalance(tx, data.userId, data.serviceId);
+  async refund(
+    data: {
+      userId: string;
+      serviceId?: string;
+      amount: number;
+      orderId: string;
+    },
+    tx?: Prisma.TransactionClient,
+  ): Promise<CreditBalance> {
+    const run = async (db: Prisma.TransactionClient) => {
+      const balance = await this.findOrCreateBalance(db, data.userId, data.serviceId);
 
-      const updated = await tx.creditBalance.update({
+      const updated = await db.creditBalance.update({
         where: { id: balance.id },
         data: {
           balance: { increment: data.amount },
@@ -427,7 +445,7 @@ export class CreditsService {
         },
       });
 
-      await tx.creditUsage.create({
+      await db.creditUsage.create({
         data: {
           creditBalanceId: balance.id,
           userId: data.userId,
@@ -443,7 +461,9 @@ export class CreditsService {
       );
 
       return updated;
-    });
+    };
+
+    return tx ? run(tx) : this.prisma.$transaction(run);
   }
 
   /**
