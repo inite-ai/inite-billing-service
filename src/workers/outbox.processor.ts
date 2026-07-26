@@ -30,9 +30,9 @@ function isPublicUrl(rawUrl: string): boolean {
 }
 
 /**
- * Outbox publisher processor.
- * Polls outbox_events and delivers them via HTTP POST to all registered
- * services that have a webhookUrl configured.
+ * Outbox publisher processor. Consumes `drain-outbox` jobs enqueued by
+ * `OutboxScheduler`, loads pending `outbox_events`, and delivers each via HTTP
+ * POST to every active service that has a `webhookUrl` (SSRF-guarded).
  */
 @Processor('outbox', {
   concurrency: 10,
