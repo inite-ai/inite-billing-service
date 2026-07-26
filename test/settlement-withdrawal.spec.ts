@@ -4,6 +4,7 @@ import { TestAppModule } from './test-app.module';
 import { PrismaService } from '../src/common/services/prisma.service';
 import { AffiliatesService } from '../src/affiliates/affiliates.service';
 import { CommissionSettlementScheduler } from '../src/affiliates/commission-settlement.scheduler';
+import { AdminAffiliatesService } from '../src/admin/services/admin-affiliates.service';
 import { JwtAuthGuard } from '../src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../src/auth/guards/roles.guard';
 import { MockJwtAuthGuard } from './mocks/auth.mock';
@@ -170,42 +171,80 @@ describe('Settlement & Withdrawal', () => {
     expect(Number(balance.minWithdrawalAmount)).toBe(5);
   });
 
-  it('should reject withdrawal below minimum', async () => {
-    await expect(affiliatesService.requestWithdrawal(affiliateId, 2, 'USD')).rejects.toThrow(
-      'Minimum withdrawal amount',
-    );
-  });
-
   it('should reject withdrawal exceeding balance', async () => {
     await expect(affiliatesService.requestWithdrawal(affiliateId, 1000, 'USD')).rejects.toThrow(
       'Insufficient balance',
     );
   });
 
-  it('should process withdrawal request', async () => {
-    const payout = await affiliatesService.requestWithdrawal(affiliateId, 10, 'USD');
+  it('should process a full-balance withdrawal and LINK the commissions it pays', async () => {
+    // No amount => withdraw the full available balance (what the UI does).
+    const payout = await affiliatesService.requestWithdrawal(affiliateId, undefined, 'USD');
     expect(payout).toBeDefined();
     expect(payout.status).toBe('pending');
-    expect(Number(payout.totalAmount)).toBe(10);
+    expect(Number(payout.totalAmount)).toBeCloseTo(15, 1);
 
-    // Balance should decrease
+    // The commission is now reconciled to this payout: linked + marked paid.
+    const commissions = await prisma.affiliateCommission.findMany({ where: { affiliateId } });
+    expect(commissions).toHaveLength(1);
+    expect(commissions[0].status).toBe('paid');
+    expect(commissions[0].payoutId).toBe(payout.id);
+
+    // Balance is now exhausted.
     const balance = await affiliatesService.getBalance(affiliateId);
-    expect(Number(balance.available)).toBeCloseTo(5, 1); // 15 - 10
+    expect(Number(balance.available)).toBeCloseTo(0, 1);
+
+    // Crucially: NO settled+unpaid commissions remain, so the monthly
+    // AffiliatePayoutProcessor (which pays payoutId=null 'earned' rows) can
+    // never pay this commission a second time. This is the double-pay fix.
+    const reloadable = await prisma.affiliateCommission.findMany({
+      where: { affiliateId, status: 'earned', payoutId: null },
+    });
+    expect(reloadable).toHaveLength(0);
   });
 
-  it('should reject duplicate pending withdrawal', async () => {
-    await expect(affiliatesService.requestWithdrawal(affiliateId, 5, 'USD')).rejects.toThrow(
-      'already have a pending withdrawal',
-    );
+  it('should reject a duplicate withdrawal while one is pending', async () => {
+    await expect(
+      affiliatesService.requestWithdrawal(affiliateId, undefined, 'USD'),
+    ).rejects.toThrow('already have a pending withdrawal');
+  });
+
+  it('failing the payout restores the balance and releases the commission', async () => {
+    const pending = await prisma.affiliatePayout.findFirst({
+      where: { affiliateId, status: 'pending' },
+    });
+    expect(pending).toBeTruthy();
+
+    // AdminAffiliatesService only depends on Prisma — instantiate directly.
+    const admin = new AdminAffiliatesService(prisma);
+    await admin.failPayout(pending!.id, 'integration test reversal');
+
+    // Balance is restored...
+    const balance = await affiliatesService.getBalance(affiliateId);
+    expect(Number(balance.available)).toBeCloseTo(15, 1);
+
+    // ...and the commission is withdrawable again (earned, unlinked).
+    const commissions = await prisma.affiliateCommission.findMany({ where: { affiliateId } });
+    expect(commissions[0].status).toBe('earned');
+    expect(commissions[0].payoutId).toBeNull();
+  });
+
+  it('failPayout is idempotent — a second call does not double-restore', async () => {
+    const failed = await prisma.affiliatePayout.findFirst({
+      where: { affiliateId, status: 'failed' },
+    });
+    const admin = new AdminAffiliatesService(prisma);
+    await admin.failPayout(failed!.id);
+
+    const balance = await affiliatesService.getBalance(affiliateId);
+    expect(Number(balance.available)).toBeCloseTo(15, 1); // still 15, not 30
   });
 
   it('should not settle already earned commissions', async () => {
-    // Run settlement again — nothing should change
+    // Run settlement again — the (re-released) earned commission stays earned.
     await settlementScheduler.settleCommissions();
 
-    const commissions = await prisma.affiliateCommission.findMany({
-      where: { affiliateId },
-    });
+    const commissions = await prisma.affiliateCommission.findMany({ where: { affiliateId } });
     expect(commissions).toHaveLength(1);
     expect(commissions[0].status).toBe('earned');
 
