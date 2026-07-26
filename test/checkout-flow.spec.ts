@@ -74,6 +74,7 @@ describe('CheckoutService', () => {
       },
       paymentIntent: {
         create: jest.fn(),
+        findFirst: jest.fn().mockResolvedValue(null),
       },
       promoCode: {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -232,6 +233,33 @@ describe('CheckoutService', () => {
       }),
     );
     expect(mockPaymentOrchestrator.applyStateTransition).toHaveBeenCalledWith('pi-1', 'paid');
+  });
+
+  it('paySession() reuses a live intent for the same rail instead of double-charging', async () => {
+    mockPrisma.order.findUnique.mockResolvedValue(mockOrder);
+    // A checkout URL was already issued for this order+rail (e.g. a double-click).
+    mockPrisma.paymentIntent.findFirst.mockResolvedValue({
+      id: 'existing-pi',
+      rail: 'STRIPE',
+      status: 'created',
+      checkoutUrl: 'https://stripe/checkout/existing',
+    });
+
+    const result = await service.paySession('order-1', 'user-1', { rail: 'STRIPE' });
+
+    expect(result).toEqual({
+      checkoutUrl: 'https://stripe/checkout/existing',
+      paymentIntentId: 'existing-pi',
+    });
+    // No new provider intent, no new DB row.
+    expect(mockPaymentOrchestrator.getAdapter).not.toHaveBeenCalled();
+    expect(mockPrisma.paymentIntent.create).not.toHaveBeenCalled();
+    // The reuse query is scoped to non-terminal intents on this order + rail.
+    expect(mockPrisma.paymentIntent.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { orderId: 'order-1', rail: 'STRIPE', status: { in: ['created', 'opened'] } },
+      }),
+    );
   });
 
   it('paySession() rejects already-paid order', async () => {

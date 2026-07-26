@@ -396,6 +396,25 @@ export class CheckoutService {
       rail = activeProvider.code;
     }
 
+    // Reuse a still-live intent for this order + rail instead of creating a
+    // second one. Without this a double-click / retry (or two tabs) issues two
+    // payment URLs for the same order — the customer can pay both and get
+    // double-charged. A DIFFERENT rail is a deliberate method switch, so it
+    // still creates a fresh intent (the previous one abandons/expires).
+    const liveIntent = await this.prisma.paymentIntent.findFirst({
+      where: { orderId: order.id, rail, status: { in: ['created', 'opened'] } },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (liveIntent) {
+      this.logger.log(
+        `Reusing live payment intent ${liveIntent.id} for order ${order.id} (${rail})`,
+      );
+      return {
+        checkoutUrl: liveIntent.checkoutUrl || '',
+        paymentIntentId: liveIntent.id,
+      };
+    }
+
     // Get adapter
     let adapter;
     try {
