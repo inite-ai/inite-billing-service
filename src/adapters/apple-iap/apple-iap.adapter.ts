@@ -252,7 +252,16 @@ export class AppleIAPAdapter implements PaymentRailAdapter {
       transaction = this.decodeJWSPayload(data.signedTransactionInfo);
     }
 
-    const entityId = transaction.transactionId || transaction.originalTransactionId || '';
+    // Anchor the subscription on the ORIGINAL transaction id (stable across
+    // renewals) so renewal/cancel notifications resolve to the same Subscription
+    // we linked at purchase. The per-renewal transactionId changes each cycle;
+    // anchoring on it would make every renewal look up a non-existent sub.
+    const entityId = transaction.originalTransactionId || transaction.transactionId || '';
+    // Keep the dedup key unique per transaction (+ Apple's notificationUUID when
+    // present): using the stable originalTransactionId alone would make every
+    // renewal collide on (rail, webhookId) and be dropped as a duplicate.
+    const dedupId =
+      notification.notificationUUID || transaction.transactionId || entityId || 'unknown';
 
     // Map Apple notification types to billing events
     const eventMap: Record<string, string> = {
@@ -268,7 +277,7 @@ export class AppleIAPAdapter implements PaymentRailAdapter {
     };
 
     return {
-      webhookId: `apple_${entityId}_${notificationType}`,
+      webhookId: `apple_${dedupId}_${notificationType}`,
       eventType: eventMap[notificationType] || notificationType,
       entityId,
       rail: 'APPLE_IAP',

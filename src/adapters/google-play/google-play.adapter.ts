@@ -333,7 +333,12 @@ export class GooglePlayAdapter implements PaymentRailAdapter {
       };
 
       return {
-        webhookId: `gplay_sub_${subNotif.purchaseToken}_${subNotif.notificationType}`,
+        // Google keeps the same purchaseToken across renewals and reuses
+        // notificationType 2 (RENEWED) each cycle, so the token+type pair alone
+        // collides on (rail, webhookId) and every renewal after the first would
+        // be dropped as a duplicate. eventTimeMillis distinguishes cycles while
+        // still deduping genuine RTDN re-deliveries (Pub/Sub is at-least-once).
+        webhookId: `gplay_sub_${subNotif.purchaseToken}_${subNotif.notificationType}_${notification.eventTimeMillis || ''}`,
         eventType:
           typeMap[subNotif.notificationType] || `subscription.type_${subNotif.notificationType}`,
         entityId: subNotif.purchaseToken,
