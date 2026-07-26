@@ -1,6 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/services/prisma.service';
 
+/** Give up re-delivering a `failed` event after this many attempts. */
+const MAX_DELIVERY_ATTEMPTS = 10;
+
 @Injectable()
 export class OutboxService {
   private readonly logger = new Logger(OutboxService.name);
@@ -35,12 +38,14 @@ export class OutboxService {
   }
 
   /**
-   * Get pending outbox events
+   * Get pending outbox events: brand-new events, plus `failed` events that
+   * still have retry budget (so a transient consumer outage self-heals on the
+   * next drain instead of stranding the event forever).
    */
   async getPendingEvents(limit: number = 100): Promise<any[]> {
     return this.prisma.outboxEvent.findMany({
       where: {
-        status: 'new',
+        OR: [{ status: 'new' }, { status: 'failed', attempts: { lt: MAX_DELIVERY_ATTEMPTS } }],
       },
       orderBy: {
         createdAt: 'asc',
@@ -63,18 +68,15 @@ export class OutboxService {
   }
 
   /**
-   * Mark event as failed
+   * Mark event as failed. Uses an atomic `increment` so concurrent updates
+   * can't clobber the attempt count (the previous read-modify-write was racy).
    */
   async markFailed(eventId: string, error: string): Promise<void> {
-    const event = await this.prisma.outboxEvent.findUnique({
-      where: { id: eventId },
-    });
-
     await this.prisma.outboxEvent.update({
       where: { id: eventId },
       data: {
         status: 'failed',
-        attempts: (event?.attempts || 0) + 1,
+        attempts: { increment: 1 },
         lastError: error,
       },
     });

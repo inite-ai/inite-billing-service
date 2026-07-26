@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { WebhookProcessor } from './webhook.processor';
 import { OutboxProcessor } from './outbox.processor';
+import { OutboxScheduler } from './outbox.scheduler';
 import { NotificationEmailProcessor } from './notification-email.processor';
 import { OutreachProcessor } from './outreach.processor';
 import { SubscriptionExpirerScheduler } from './subscription-expirer.scheduler';
@@ -53,6 +54,7 @@ import { PrismaService } from '../common/services/prisma.service';
   providers: [
     WebhookProcessor,
     OutboxProcessor,
+    OutboxScheduler,
     NotificationEmailProcessor,
     OutreachProcessor,
     SubscriptionExpirerScheduler,
