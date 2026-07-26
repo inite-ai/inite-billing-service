@@ -186,7 +186,8 @@
     "footerBrand": "INITE Billing Service",
     "footerDocs": "Docs",
     "footerGithub": "GitHub",
-    "footerSupport": "Support"
+    "footerSupport": "Support",
+    "footerBlog": "Blog"
   },
   "login": {
     "title": "INITE Billing",

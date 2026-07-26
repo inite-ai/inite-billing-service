@@ -17,8 +17,6 @@ export default function LandingClient() {
 
   const primaryHref = user ? '/dashboard' : '/login'
   const primaryLabel = user ? t('goToDashboard') : t('getStarted')
-  const docsUrl =
-    'https://github.com/inite-ai/inite-billing-service/blob/main/docs/api.md'
 
   return (
     <div className="lp">
@@ -35,6 +33,12 @@ export default function LandingClient() {
             <b>{t('brandHighlight')}</b>
           </div>
           <div className="navr">
+            <Link href="/docs" className="btn ghost">
+              {t('docs')}
+            </Link>
+            <Link href="/blog" className="btn ghost">
+              {t('footerBlog')}
+            </Link>
             <LanguageSwitcher />
             {user ? (
               <Link href="/dashboard" className="btn ghost">
@@ -101,14 +105,9 @@ export default function LandingClient() {
             <Link href={primaryHref} className="btn acc">
               {primaryLabel} →
             </Link>
-            <a
-              href={docsUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn ghost"
-            >
+            <Link href="/docs" className="btn ghost">
               {t('docs')}
-            </a>
+            </Link>
           </div>
           <div className="microrail rise d4">{t('heroMicro')}</div>
         </div>
@@ -438,9 +437,8 @@ export default function LandingClient() {
             {t('footerBrand')}
           </div>
           <div className="flinks">
-            <a href={docsUrl} target="_blank" rel="noopener noreferrer">
-              {t('footerDocs')}
-            </a>
+            <Link href="/docs">{t('footerDocs')}</Link>
+            <Link href="/blog">{t('footerBlog')}</Link>
             <a
               href="https://github.com/inite-ai/inite-billing-service"
               target="_blank"
