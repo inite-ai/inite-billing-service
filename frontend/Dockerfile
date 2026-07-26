@@ -31,6 +31,8 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/next.config.mjs ./next.config.mjs
+# Blog MDX is read from disk at runtime (next-mdx-remote), so it must ship.
+COPY --from=builder /app/content ./content
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \

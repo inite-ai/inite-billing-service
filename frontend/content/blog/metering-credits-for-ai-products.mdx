@@ -1,0 +1,54 @@
+---
+title: "Metering credits for AI products"
+description: "Flat credit buckets break the moment your costs are per-token. Here's how tiered rates, windowed quotas, and soft caps let you bill AI usage without surprising your users — or yourself."
+date: "2026-07-25"
+author: "INITE Billing"
+category: "Billing"
+tags: ["credits", "metering", "ai"]
+directAnswer: "Metered credits price usage by what it actually costs: each feature charges a per-model-tier rate (tokens, requests, or generations), quotas reset on a rolling window, and a soft cap warns users before they hit the limit. It replaces the flat 'one credit = one action' bucket that falls apart when a single call can cost 100x another."
+faqs:
+  - question: "Why not just use a flat credit bucket?"
+    answer: "Because AI costs are not flat. A long-context generation can cost orders of magnitude more than a short classification. A flat bucket either overcharges cheap actions or bankrupts you on expensive ones. Per-tier rates track real cost."
+  - question: "What is a windowed quota?"
+    answer: "A usage limit measured over a rolling window (for example, 10,000 credits per 30 days) rather than a lifetime total. It resets on renewal and supports soft-cap warnings as the user approaches it."
+---
+
+The first credit system everyone builds is a counter: one credit per action,
+deduct on use. It works until your actions stop costing the same. The day a
+single AI call can cost a hundred times another, the flat bucket is
+simultaneously too generous and too stingy.
+
+## Rates, not counts
+
+Metered billing charges by tier. A feature declares what it consumes, and the
+ledger applies the rate for that model tier:
+
+```typescript
+await credits.consume({
+  userId,
+  featureCode: 'assistant.generate',
+  units: tokensUsed,
+  modelTier: 'frontier',   // rate looked up per tier
+})
+```
+
+The same `consume` call still supports the legacy flat form (`{ userId, amount }`)
+— metering is additive, not a breaking change.
+
+## Windowed quotas and soft caps
+
+A lifetime total is the wrong unit for a subscription. INITE Billing meters
+against a **rolling window** — say 10,000 credits per 30 days — that resets on
+renewal:
+
+- **Soft cap** at 90%: the user is warned, nothing breaks.
+- **Hard cap**: the consume call returns a quota result instead of charging,
+  so your product can degrade gracefully instead of failing.
+
+## Why it matters for AI
+
+If you are billing an AI product on flat credits, you are guessing. Per-tier
+rates make the price of a feature track its cost, quotas make spend
+predictable, and soft caps keep the experience honest. That is the difference
+between a credit system that survives contact with real usage and one that
+doesn't.
