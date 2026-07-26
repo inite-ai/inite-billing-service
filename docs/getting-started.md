@@ -1,7 +1,37 @@
 # Getting started
 
+> The rendered version (with diagrams) lives at
+> [billing.inite.ai/docs/getting-started](https://billing.inite.ai/docs/getting-started).
+> Integrating a module? Start with the [guides](https://billing.inite.ai/docs/quickstart).
+
 Local development setup for the INITE Billing Service. Node 22+, Docker, and
 an Anthropic API key (for the assistant) are expected.
+
+## The local stack
+
+Two Node processes (backend + frontend) talk to a Dockerized Postgres and Redis, plus two
+external services — `auth.inite.ai` for identity and the Anthropic API for the AI surfaces.
+
+```mermaid
+flowchart LR
+  subgraph local["Your machine"]
+    fe["frontend<br/>Next.js · :3001"]
+    be["backend<br/>NestJS · :3000"]
+    subgraph compose["docker compose"]
+      pg[("PostgreSQL<br/>pgvector · :5433")]
+      redis[("Redis<br/>:6381")]
+    end
+  end
+  auth["auth.inite.ai<br/>JWT · JWKS"]
+  anthropic["Anthropic API"]
+
+  fe -->|"REST · axios"| be
+  fe -->|"OAuth PKCE"| auth
+  be -->|"Prisma"| pg
+  be -->|"BullMQ"| redis
+  be -->|"verify JWT · JWKS"| auth
+  be -->|"assistant · outreach · insights"| anthropic
+```
 
 ## 1. Install
 
