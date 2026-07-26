@@ -11,6 +11,7 @@ import { SubscriptionResponseDto } from '../common/dto/subscription.dto';
 import { OutboxService } from '../outbox/outbox.service';
 import { CreditsService } from '../credits/credits.service';
 import { FunnelService } from '../funnel/funnel.service';
+import { PaymentOrchestratorService } from '../payment-orchestrator/payment-orchestrator.service';
 
 /** Trial setup now grants credits inside the same transaction; give it the same
  * headroom as the payment-fulfilment chain instead of Prisma's 5s default. */
@@ -25,6 +26,8 @@ export class SubscriptionsService {
     private readonly creditsService: CreditsService,
     @Inject(forwardRef(() => FunnelService))
     private readonly funnelService: FunnelService,
+    @Inject(forwardRef(() => PaymentOrchestratorService))
+    private readonly orchestrator: PaymentOrchestratorService,
   ) {}
 
   async cancelSubscription(userId: string, subscriptionId: string): Promise<void> {
@@ -38,6 +41,12 @@ export class SubscriptionsService {
     if (!subscription) {
       throw new NotFoundException(`Subscription not found: ${subscriptionId}`);
     }
+
+    // Tell the provider to stop renewing BEFORE we flag it in our DB — otherwise
+    // a DB-only "cancel" leaves the provider billing the customer next cycle.
+    // Throws if the provider call fails; a no-op for rails without programmatic
+    // cancel (e.g. IAP, where the user cancels in the store).
+    await this.orchestrator.cancelProviderSubscription(subscription, true);
 
     await this.prisma.subscription.update({
       where: { id: subscriptionId },

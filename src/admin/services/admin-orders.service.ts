@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../common/services/prisma.service';
 import { PaymentOrchestratorService } from '../../payment-orchestrator/payment-orchestrator.service';
+import { Connector } from '../../common/connectors/connector.interface';
 import { paginate } from '../../common/helpers/paginate';
 
 @Injectable()
@@ -54,6 +55,12 @@ export class AdminOrdersService {
     // This will revoke entitlements and update invoices via the orchestrator
     const paidIntent = order.paymentIntents.find((pi) => pi.status === 'paid');
     if (paidIntent) {
+      // Issue the provider refund BEFORE the DB transition: applyStateTransition
+      // revokes entitlements + reverses credits, so if we did that first and the
+      // provider refund then failed, the customer would lose access without ever
+      // getting their money back. For rails that can't refund programmatically
+      // (IAP, crypto) this is a no-op and the refund is handled out-of-band.
+      await this.issueProviderRefund(paidIntent, order);
       await this.paymentOrchestrator.applyStateTransition(paidIntent.id, 'refunded');
     } else {
       // Fallback: no paid intent found, just update order status directly
@@ -68,6 +75,49 @@ export class AdminOrdersService {
       where: { id },
       include: { paymentIntents: true },
     });
+  }
+
+  /**
+   * Ask the rail's connector to refund the charge, when it supports it. Throws
+   * if the provider refund fails so the caller aborts before touching the DB —
+   * a failed refund must not silently revoke the customer's access. Rails that
+   * can't refund programmatically are skipped (refund handled out-of-band).
+   */
+  private async issueProviderRefund(paidIntent: any, order: any): Promise<void> {
+    let connector: Connector | undefined;
+    try {
+      connector = this.paymentOrchestrator.getAdapter(paidIntent.rail) as Connector;
+    } catch {
+      this.logger.warn(
+        `No connector for rail ${paidIntent.rail} — marking order ${order.id} refunded in DB only (refund the provider manually)`,
+      );
+      return;
+    }
+
+    const supportsRefund = connector.capabilities?.().supportsRefund && !!connector.refund;
+    if (!supportsRefund) {
+      this.logger.warn(
+        `Rail ${paidIntent.rail} has no programmatic refund — order ${order.id} refunded in DB only (refund the provider manually)`,
+      );
+      return;
+    }
+    if (!paidIntent.providerIntentId) {
+      throw new BadRequestException(
+        `Cannot refund order ${order.id}: paid intent has no providerIntentId`,
+      );
+    }
+
+    const result = await connector.refund!({
+      providerIntentId: paidIntent.providerIntentId,
+      amount: Number(order.amount),
+      currency: order.currency,
+    });
+    if (!result.refunded) {
+      throw new BadRequestException(`Provider refund did not succeed for order ${order.id}`);
+    }
+    this.logger.log(
+      `Provider refund issued for order ${order.id} (${paidIntent.rail}, refund ${result.providerRefundId ?? 'n/a'})`,
+    );
   }
 
   async getSubscriptions(params: {
@@ -93,9 +143,12 @@ export class AdminOrdersService {
     const sub = await this.prisma.subscription.findUnique({ where: { id } });
     if (!sub) throw new NotFoundException(`Subscription not found: ${id}`);
 
-    return this.prisma.subscription.update({
-      where: { id },
-      data: { status: 'canceled', cancelAtPeriodEnd: true },
-    });
+    // Stop the provider billing immediately, then revoke entitlements and emit
+    // the domain event through the orchestrator — a bare status write left the
+    // provider charging and downstream services (and the user's access) stale.
+    await this.paymentOrchestrator.cancelProviderSubscription(sub, false);
+    await this.paymentOrchestrator.endSubscription(id, 'cancelled_at_period_end');
+
+    return this.prisma.subscription.findUnique({ where: { id } });
   }
 }
