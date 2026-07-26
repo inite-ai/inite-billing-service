@@ -11,6 +11,15 @@ import { AffiliatesService } from '../affiliates/affiliates.service';
 import { FunnelService } from '../funnel/funnel.service';
 import { CreditsService } from '../credits/credits.service';
 
+/**
+ * Interactive-transaction budget for the deep payment-fulfilment chain
+ * (payment → order → subscription → entitlements → credits → commissions).
+ * Prisma's 5s default is too tight now that credits and commissions run inside
+ * the same transaction under load; give the chain headroom while still bounding
+ * a stuck transaction. maxWait bounds how long we queue for a pool connection.
+ */
+const FULFILMENT_TX_OPTIONS = { maxWait: 10_000, timeout: 30_000 } as const;
+
 @Injectable()
 export class PaymentOrchestratorService {
   private readonly logger = new Logger(PaymentOrchestratorService.name);
@@ -149,7 +158,7 @@ export class PaymentOrchestratorService {
           stage: 'churned',
         });
       }
-    });
+    }, FULFILMENT_TX_OPTIONS);
   }
 
   private async handleOrderPaid(orderId: string, tx: any): Promise<void> {
@@ -501,7 +510,7 @@ export class PaymentOrchestratorService {
       } else if (eventType === 'subscription.cancelled') {
         await this.handleProviderCancellation(subscription, tx);
       }
-    });
+    }, FULFILMENT_TX_OPTIONS);
   }
 
   /**
@@ -778,40 +787,43 @@ export class PaymentOrchestratorService {
 
     const serviceId = product.serviceId;
 
-    try {
-      if (order.mode === 'SUBSCRIPTION') {
-        // For subscriptions, find the subscription to get period end
-        const subscription = await tx.subscription.findFirst({
-          where: {
-            userId: order.userId,
-            priceId: order.priceId,
-            status: { in: ['trialing', 'active', 'past_due'] },
-          },
-          orderBy: { updatedAt: 'desc' },
-        });
+    // Credits are granted on the SAME transaction as the payment (tx) — never a
+    // separate one. A failure here must roll the whole fulfilment back (the
+    // webhook then retries) rather than be swallowed, otherwise a paid order can
+    // silently grant nothing, and a later rollback would leave phantom credits.
+    if (order.mode === 'SUBSCRIPTION') {
+      // For subscriptions, find the subscription to get period end
+      const subscription = await tx.subscription.findFirst({
+        where: {
+          userId: order.userId,
+          priceId: order.priceId,
+          status: { in: ['trialing', 'active', 'past_due'] },
+        },
+        orderBy: { updatedAt: 'desc' },
+      });
 
-        const periodEnd =
-          subscription?.currentPeriodEnd || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      const periodEnd =
+        subscription?.currentPeriodEnd || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-        await this.creditsService.resetForPeriod({
+      await this.creditsService.resetForPeriod(
+        {
           userId: order.userId,
           serviceId,
           newBalance: creditsPerPeriod,
           resetsAt: periodEnd,
-        });
-      } else {
-        await this.creditsService.grant({
+        },
+        tx,
+      );
+    } else {
+      await this.creditsService.grant(
+        {
           userId: order.userId,
           serviceId,
           amount: creditsPerPeriod,
           description: `Credits from order ${order.id}`,
           orderId: order.id,
-        });
-      }
-    } catch (error: any) {
-      this.logger.error(
-        `Error granting credits for order ${order.id}: ${error.message}`,
-        error.stack,
+        },
+        tx,
       );
     }
   }
@@ -829,20 +841,19 @@ export class PaymentOrchestratorService {
       include: { creditBalance: true },
     });
 
+    // Refund on the same tx as the order refund so they commit atomically —
+    // don't swallow, or a paid order could be marked refunded while the credits
+    // it granted stay spent.
     for (const usage of creditUsages) {
-      try {
-        await this.creditsService.refund({
+      await this.creditsService.refund(
+        {
           userId: usage.userId,
           serviceId: usage.creditBalance.serviceId ?? undefined,
           amount: usage.amount,
           orderId: order.id,
-        });
-      } catch (error: any) {
-        this.logger.error(
-          `Error refunding credits for order ${order.id}: ${error.message}`,
-          error.stack,
-        );
-      }
+        },
+        tx,
+      );
     }
   }
 
