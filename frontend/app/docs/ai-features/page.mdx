@@ -30,6 +30,34 @@ Every LLM consumer injects the shared Anthropic client from
   with token usage. Users can leave 👍/👎 (+comment) per message —
   stored on `chat_messages`.
 
+The chat runs a bounded tool-use loop: Claude may call read-only tools inline, but any write is
+turned into a **proposal** the user must confirm — the model has no execute path of its own.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant U as User
+  participant A as Assistant · SSE
+  participant M as Claude
+  participant T as Read tools (role-gated)
+  participant X as Action layer
+
+  U->>A: POST /v1/assistant/chat
+  loop up to 5 iterations
+    A->>M: messages + tool schemas
+    alt read-only tool
+      M->>T: orders · catalog · funnel · search …
+      T-->>M: result (logged to assistant_tool_calls)
+    else write (action)
+      M->>X: propose (assistant_actions · 15-min TTL)
+      X-->>U: confirmation card (server summary)
+    end
+    M-->>A: stream tokens
+  end
+  A-->>U: data: [DONE]
+  Note over U,X: execution only via POST /actions/:id/confirm<br/>CAS pending → executing · double-click → 409
+```
+
 ### Action layer (writes need a click)
 
 LLM-triggered writes never execute directly. An action tool call creates a
@@ -76,6 +104,23 @@ server-side) with **static template fallback** on any failure → email +
 in-app via the notifications layer → `follow_up_sent` funnel event → hourly
 outcome sweep attributes `converted / resolved / churned` within 14 days.
 
+```mermaid
+flowchart TB
+  trig["funnel signal<br/>abandoned · dunning · winback · trial_ending"]
+  trig --> ks{"kill-switch on?"}
+  ks -->|no| stop1(["skip"])
+  ks -->|yes| live{"trigger still live?"}
+  live -->|no| stop2(["skip"])
+  live -->|yes| contact["resolve contact + locale · EN/RU"]
+  contact --> optout{"opt-out / 7-day rate cap?"}
+  optout -->|blocked| stop3(["skip · dunning exempt"])
+  optout -->|ok| gen["Claude generates subject + body"]
+  gen -->|failure| tmpl["static template fallback"]
+  gen --> send["email + in-app"]
+  tmpl --> send
+  send --> attr["14-day outcome sweep<br/>converted · resolved · churned"]
+```
+
 Idempotency is DB-unique `triggerKey` — safe across cron re-runs and multiple
 instances. `/admin/outreach` shows per-trigger conversion and the LLM→template
 fallback rate.
@@ -97,6 +142,22 @@ fallback rate.
 - **Backwards compatible**: the legacy flat `{userId, amount}` call is
   byte-identical in behavior (contract-tested); metered calls return a
   superset (`creditsCharged`, `quota`).
+
+The whole charge happens inside one transaction under a balance row lock, so concurrent consumes
+can't race the quota check:
+
+```mermaid
+flowchart TB
+  in["POST /v1/credits/consume<br/>featureCode · units · modelTier"]
+  in --> compute["computeCredits<br/>ceil(units × tierRate)"]
+  compute --> lock["$transaction · SELECT balance FOR UPDATE"]
+  lock --> quota{"windowed quota<br/>evaluation"}
+  quota -->|"hard cap"| block["200 · success:false<br/>error: Quota exceeded"]
+  quota -->|"soft cap"| warn["quota_warning notification"]
+  quota -->|ok| debit["balance −= credits<br/>write CreditUsage · type=consume"]
+  warn --> debit
+  debit --> done["200 · success:true<br/>creditsCharged · remainingBalance"]
+```
 
 Admin UI: `/admin/metering` (features, quotas, usage dashboards);
 users see per-feature breakdowns via `/v1/credits/me/usage/breakdown`.

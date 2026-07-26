@@ -199,6 +199,127 @@ body {
   letter-spacing: -0.01em;
 }
 
+/* ------------------------------------------------------------
+   Mermaid diagrams (components/docs/Mermaid.tsx). Branded figure
+   card, loading skeleton, hover zoom -> native <dialog>. Scoped
+   to .docs so only docs + blog are affected.
+   ------------------------------------------------------------ */
+.docs .mmd-figure {
+  position: relative;
+  margin: 1.5rem 0;
+  padding: 1rem;
+  border: 1px solid var(--d-border);
+  background: var(--d-elevated);
+  border-radius: 0.75rem;
+}
+.docs .mmd-canvas {
+  overflow-x: auto;
+}
+.docs .mmd-canvas svg {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}
+.docs .mmd-caption {
+  margin-top: 0.75rem;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--d-faint);
+  text-align: center;
+}
+.docs .mmd-skeleton {
+  height: 200px;
+  border-radius: 0.5rem;
+  background: linear-gradient(
+    90deg,
+    var(--d-overlay) 25%,
+    var(--d-elevated) 50%,
+    var(--d-overlay) 75%
+  );
+  background-size: 200% 100%;
+  animation: mmd-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes mmd-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+.docs .mmd-zoom-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 1;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid var(--d-border);
+  background: var(--d-overlay);
+  color: var(--d-muted);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.docs .mmd-figure:hover .mmd-zoom-btn,
+.docs .mmd-zoom-btn:focus-visible {
+  opacity: 1;
+}
+.docs .mmd-zoom-btn:hover {
+  color: var(--d-accent);
+  border-color: var(--d-border-strong);
+}
+.docs .mmd-error .mmd-source {
+  margin: 0;
+  padding: 0.75rem;
+  overflow-x: auto;
+  font-family: var(--font-mono), monospace;
+  font-size: 12px;
+  color: var(--d-muted);
+}
+.docs .mmd-dialog {
+  width: min(92vw, 1100px);
+  max-height: 90vh;
+  margin: auto;
+  border: 1px solid var(--d-border-strong);
+  border-radius: 0.75rem;
+  background: var(--d-elevated);
+  color: var(--d-text);
+  padding: 1.5rem 1.5rem 2rem;
+  overflow: auto;
+}
+.docs .mmd-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(2px);
+}
+.docs .mmd-dialog-canvas {
+  overflow: auto;
+}
+/* Override mermaid's inline `max-width` (useMaxWidth) so the diagram scales up to fill the modal. */
+.docs .mmd-dialog-canvas svg {
+  width: 100%;
+  height: auto;
+  max-width: none !important;
+}
+.docs .mmd-dialog-close {
+  position: sticky;
+  top: 0;
+  float: right;
+  margin-left: 1rem;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--d-border);
+  background: var(--d-overlay);
+  color: var(--d-muted);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.docs .mmd-dialog-close:hover {
+  color: var(--d-accent);
+  border-color: var(--d-border-strong);
+}
+
 /* ============================================================
    Landing page — "Ledger" theme. Fully scoped under .lp so the
    dashboard/admin app is untouched. Cyrillic-complete fonts.

@@ -24,6 +24,17 @@ Deploying, flipping feature flags safely, and extending the service.
   postgres + redis services, frontend typecheck+build, docker build, npm
   audit, CodeQL, gitleaks (full history), dependency review, scorecard.
 
+```mermaid
+flowchart LR
+  pr["PR → main<br/>squash · Conventional Commits"] --> ci["CI<br/>lint · jest · build<br/>CodeQL · gitleaks · audit"]
+  ci --> deploy["deploy.yml<br/>(path-filtered)"]
+  deploy --> be["backend<br/>migrate deploy → restart"]
+  deploy --> fe["frontend<br/>Docker :latest → recreate"]
+  be --> live["billing.inite.ai"]
+  fe --> live
+  rp["release-please PR"] -->|merge| tag["tag vX.Y.Z<br/>immutable :vX.Y.Z image"]
+```
+
 ## Database
 
 - Postgres must support the `vector` extension (`pgvector/pgvector` image, or
@@ -83,6 +94,14 @@ export class NewRailAdapter implements PaymentRailAdapter {
 3. Add a webhook endpoint in `src/webhooks/` if the provider pushes events —
    store to `webhook_events` and let the BullMQ processor validate and apply.
 4. Add provider credentials via the admin UI (`payment_providers`).
+
+```mermaid
+flowchart LR
+  a["1 · implement<br/>PaymentRailAdapter"] --> b["2 · register in main.ts<br/>registerAdapter(...)"]
+  b --> c["3 · webhook endpoint<br/>if the provider pushes events"]
+  c --> d["4 · credentials via admin UI<br/>payment_providers.config"]
+  d --> e(["orchestrator · subs · credits<br/>need NO changes"])
+```
 
 The orchestrator, subscriptions, credits and entitlements need **no changes**
 — that's the point of the adapter boundary.
