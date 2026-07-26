@@ -69,7 +69,49 @@ export class StripeAdapter implements Connector {
     return {
       supportedModes: ['PAYMENT', 'SUBSCRIPTION'],
       requiresRedirect: true,
+      supportsRefund: true,
+      supportsCancel: true,
     };
+  }
+
+  /**
+   * Issue a Stripe refund against the paid PaymentIntent. Amount is optional —
+   * omitting it refunds the full charge. Returns the refund id and whether it
+   * has settled (`succeeded`) or is in flight (`pending`, e.g. some bank rails).
+   */
+  async refund(input: {
+    providerIntentId: string;
+    amount?: number;
+    currency?: string;
+  }): Promise<{ refunded: boolean; providerRefundId?: string }> {
+    const body: Record<string, any> = { payment_intent: input.providerIntentId };
+    if (input.amount != null) {
+      // Stripe amounts are in the smallest currency unit.
+      body.amount = Math.round(input.amount * 100);
+    }
+    const refund = await this.stripeRequest('POST', '/v1/refunds', body);
+    return {
+      refunded: refund.status === 'succeeded' || refund.status === 'pending',
+      providerRefundId: refund.id,
+    };
+  }
+
+  /**
+   * Cancel a Stripe subscription — immediately (default) or at period end.
+   * Without this the provider keeps charging after a DB-only "cancel".
+   */
+  async cancelSubscription(input: {
+    providerSubscriptionId: string;
+    atPeriodEnd?: boolean;
+  }): Promise<{ cancelled: boolean }> {
+    if (input.atPeriodEnd) {
+      await this.stripeRequest('POST', `/v1/subscriptions/${input.providerSubscriptionId}`, {
+        cancel_at_period_end: true,
+      });
+    } else {
+      await this.stripeRequest('DELETE', `/v1/subscriptions/${input.providerSubscriptionId}`);
+    }
+    return { cancelled: true };
   }
 
   private async stripeRequest(

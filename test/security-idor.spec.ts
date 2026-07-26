@@ -110,6 +110,7 @@ describe('IDOR — Subscription Trial', () => {
       { emit: jest.fn() } as any,
       { grant: jest.fn() } as any,
       { track: jest.fn() } as any,
+      { cancelProviderSubscription: jest.fn() } as any,
     );
   });
 

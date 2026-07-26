@@ -9,6 +9,7 @@ import {
 import { PrismaService } from '../common/services/prisma.service';
 import { PaymentRailAdapter } from '../common/interfaces/payment-rail-adapter.interface';
 import { ConnectorRegistry } from '../common/connectors/connector-registry.service';
+import { Connector } from '../common/connectors/connector.interface';
 import {
   isValidTransition,
   mapIntentToOrderStatus,
@@ -58,6 +59,42 @@ export class PaymentOrchestratorService {
       throw new NotFoundException(`Payment rail adapter not found: ${rail}`);
     }
     return adapter;
+  }
+
+  /**
+   * Best-effort provider-side subscription cancel, shared by the user and admin
+   * cancel flows. Returns false (and logs) when the rail can't cancel
+   * programmatically (IAP — the user cancels in the store) or isn't wired, so
+   * the caller can still update its own state. Throws if the provider call
+   * itself fails, so a "cancelled" that didn't stop billing is never silent.
+   */
+  async cancelProviderSubscription(subscription: any, atPeriodEnd: boolean): Promise<boolean> {
+    const rail = subscription?.rail;
+    const providerSubscriptionId = subscription?.providerSubscriptionId;
+    if (!rail || !providerSubscriptionId) return false;
+
+    let connector: Connector;
+    try {
+      connector = this.getAdapter(rail) as Connector;
+    } catch {
+      this.logger.warn(
+        `No connector for rail ${rail} — subscription ${subscription.id} cancelled in DB only`,
+      );
+      return false;
+    }
+
+    if (!connector.capabilities?.().supportsCancel || !connector.cancelSubscription) {
+      this.logger.warn(
+        `Rail ${rail} has no programmatic cancel — subscription ${subscription.id} cancelled in DB only`,
+      );
+      return false;
+    }
+
+    await connector.cancelSubscription({ providerSubscriptionId, atPeriodEnd });
+    this.logger.log(
+      `Provider subscription ${providerSubscriptionId} cancelled (${rail}, atPeriodEnd=${atPeriodEnd})`,
+    );
+    return true;
   }
 
   /**
