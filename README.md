@@ -114,6 +114,17 @@ Full walkthrough (test DB, docker profiles, troubleshooting):
 
 ## Documentation
 
+Full rendered docs — with diagrams and integration guides — at
+**[billing.inite.ai/docs](https://billing.inite.ai/docs)**.
+
+**Guides:** [Sell your first subscription](https://billing.inite.ai/docs/quickstart) ·
+[Meter AI usage with credits](https://billing.inite.ai/docs/metering-credits) ·
+[Gate access with entitlements](https://billing.inite.ai/docs/entitlements) ·
+[Receive billing events](https://billing.inite.ai/docs/webhooks) ·
+[Go to production](https://billing.inite.ai/docs/going-live)
+
+**Reference** (mirrored in-repo):
+
 | Doc | What's inside |
 |---|---|
 | [docs/getting-started.md](docs/getting-started.md) | Local setup, env variables, migrations, running tests |

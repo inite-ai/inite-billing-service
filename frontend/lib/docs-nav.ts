@@ -23,9 +23,45 @@ export const DOCS_GROUPS: DocGroup[] = [
     heading: 'Start here',
     pages: [
       {
+        slug: 'concepts',
+        title: 'Core concepts',
+        description:
+          'The mental model — services, products, prices, orders, entitlements, credits, and the orchestrator.',
+      },
+      {
         slug: 'getting-started',
         title: 'Getting started',
         description: 'Local setup, environment variables, migrations, and running the test suite.',
+      },
+    ],
+  },
+  {
+    heading: 'Guides',
+    pages: [
+      {
+        slug: 'quickstart',
+        title: 'Sell your first subscription',
+        description: 'End-to-end: from a product and price to a paid subscription and a live entitlement.',
+      },
+      {
+        slug: 'metering-credits',
+        title: 'Meter AI usage with credits',
+        description: 'Charge per token/request with model-tier rates and quotas, from your module.',
+      },
+      {
+        slug: 'entitlements',
+        title: 'Gate access with entitlements',
+        description: 'Grant on payment, check from your module, and revoke on refund or expiry.',
+      },
+      {
+        slug: 'webhooks',
+        title: 'Receive billing events',
+        description: 'Subscribe to billing.* events — payloads, delivery guarantees, and idempotency.',
+      },
+      {
+        slug: 'going-live',
+        title: 'Go to production',
+        description: 'Configure a payment provider, set your webhook URL, flip feature flags, and test.',
       },
     ],
   },

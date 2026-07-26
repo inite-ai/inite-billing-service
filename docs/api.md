@@ -1,5 +1,9 @@
 # API reference
 
+> The rendered version (with diagrams) lives at
+> [billing.inite.ai/docs/api](https://billing.inite.ai/docs/api). For task-oriented
+> walkthroughs, see the [guides](https://billing.inite.ai/docs/quickstart).
+
 REST only, everything under `/v1/*` except provider webhooks and `/health`.
 Interactive Swagger lives at `/api` (non-production). This page is the
 orientation map; exact request/response shapes are in Swagger.
@@ -12,6 +16,33 @@ Two principals, three guards:
 |---|---|---|
 | **End user** | `Authorization: Bearer <jwt>` (issued by auth.inite.ai; RS256 via JWKS, HS256 fallback for dev) | `userId` always comes from the token — endpoints ignore user IDs in params/body for non-service callers (IDOR guard) |
 | **INITE module (service)** | `x-api-key: <Service.apiKey>` (created in admin UI, revocable) | May act on behalf of any user; `serviceId` is auto-injected from the key |
+
+`JwtOrServiceGuard` picks the principal from the headers: an `x-api-key` is resolved to an active
+`Service`, otherwise the `Bearer` JWT is verified against the JWKS. Either way, `userId` for
+user-scoped reads comes from the token — never from the request body.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant C as Caller
+  participant G as JwtOrServiceGuard
+  participant DB as Postgres
+  participant J as JWKS · auth.inite.ai
+  participant H as Route handler
+
+  C->>G: request + headers
+  alt x-api-key present
+    G->>DB: find active Service by apiKey
+    DB-->>G: Service
+    Note over G: user = isService, serviceId, roles=[service]
+  else Authorization: Bearer jwt
+    G->>J: verify signature (RS256 · JWKS)
+    J-->>G: claims
+    Note over G: user = userId, roles, email
+  end
+  G->>H: attach request.user
+  Note over H: userId from token, never from body (IDOR guard)
+```
 
 ```bash
 # User
