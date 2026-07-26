@@ -1,0 +1,58 @@
+---
+title: "Payment-rail-agnostic billing: one interface, any provider"
+description: "Why binding your billing logic to a single payment provider is a trap — and how one adapter interface lets you add Stripe, crypto, or in-app purchases without touching your core."
+date: "2026-07-24"
+author: "INITE Billing"
+category: "Architecture"
+tags: ["payments", "architecture", "adapters"]
+directAnswer: "Payment-rail-agnostic billing means your subscriptions, credits, and entitlements live behind one interface, and each payment provider (Stripe, crypto, Apple/Google IAP, regional rails) plugs in as an adapter. The core never learns which rail took the money, so adding or swapping a provider changes zero business logic."
+faqs:
+  - question: "What is a payment rail?"
+    answer: "A payment rail is the channel that actually moves money — Stripe cards, an on-chain crypto transfer, Apple/Google in-app purchase, or a regional processor. INITE Billing supports six behind one adapter interface."
+  - question: "Do I have to change code to add a new provider?"
+    answer: "No. A new provider implements the adapter interface and registers itself. Subscriptions, credits, entitlements, and referrals are untouched — that is the whole point of the boundary."
+---
+
+Most billing code rots the same way: it starts as a thin wrapper around one
+provider's SDK, and six months later that provider's concepts — its webhook
+shapes, its idempotency rules, its refund semantics — have leaked into every
+corner of the app. Swapping providers, or adding a second one, becomes a
+rewrite.
+
+## The adapter boundary
+
+The fix is an old one: put a boundary between *what a payment is* and *how it
+was taken*. In INITE Billing every provider implements one interface:
+
+```typescript
+export interface PaymentRailAdapter {
+  rail(): string
+  createPaymentIntent(input: CreateIntentInput): Promise<CreateIntentResult>
+  getIntentStatus(providerIntentId: string): Promise<IntentStatusResult>
+}
+```
+
+Stripe, native multi-chain crypto (ETH/SOL/TON/TRON), Apple IAP, Google Play,
+Lava, and ONE each satisfy it. The payment orchestrator — the state machine that
+drives orders, subscriptions, entitlements and credits — only ever sees a
+`PaymentIntent`. It does not know or care which rail paid.
+
+## What you get for free
+
+Because the core is provider-blind, everything downstream is written once:
+
+| Concern | Handled by |
+|---|---|
+| Webhook verification | The webhook processor, per adapter |
+| Idempotent retries | The orchestrator, on every state transition |
+| Subscriptions & credits | The core, independent of rail |
+| Referrals & payouts | The affiliate engine, independent of rail |
+
+Adding a rail is: implement the interface, register it, add a webhook endpoint
+if the provider pushes events. Nothing else moves.
+
+## The test that matters
+
+If adding a payment provider forces you to touch subscription logic, the
+boundary is wrong. With an adapter interface, the diff for a new rail is a new
+file — not a migration across your codebase.
