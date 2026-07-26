@@ -1,6 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
-  PaymentRailAdapter,
+  Connector,
+  ConnectorCapabilities,
+  RegisterConnector,
+} from '../../common/connectors/connector.interface';
+import { RAILS } from '../../common/connectors/rail';
+import {
   CreateIntentInput,
   CreateIntentResult,
   IntentStatusResult,
@@ -31,8 +36,9 @@ interface LavaProviderConfig {
  * Contract statuses: new, in-progress, completed, failed, cancelled,
  *   subscription-active, subscription-expired, subscription-cancelled, subscription-failed
  */
+@RegisterConnector(RAILS.LAVA)
 @Injectable()
-export class LavaAdapter implements PaymentRailAdapter {
+export class LavaAdapter implements Connector {
   private readonly logger = new Logger(LavaAdapter.name);
 
   constructor(private readonly prisma: PrismaService) {}
@@ -63,7 +69,14 @@ export class LavaAdapter implements PaymentRailAdapter {
   }
 
   rail(): string {
-    return 'LAVA';
+    return RAILS.LAVA;
+  }
+
+  capabilities(): ConnectorCapabilities {
+    return {
+      supportedModes: ['PAYMENT', 'SUBSCRIPTION'],
+      requiresRedirect: true,
+    };
   }
 
   /**

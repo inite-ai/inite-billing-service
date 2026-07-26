@@ -1,6 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
-  PaymentRailAdapter,
+  Connector,
+  ConnectorCapabilities,
+  RegisterConnector,
+} from '../../common/connectors/connector.interface';
+import { RAILS } from '../../common/connectors/rail';
+import {
   CreateIntentInput,
   CreateIntentResult,
   IntentStatusResult,
@@ -33,8 +38,9 @@ interface AppleIAPConfig {
  * Server notifications: https://developer.apple.com/documentation/appstoreservernotifications
  * Events: DID_RENEW, DID_FAIL_TO_RENEW, EXPIRED, REFUND, SUBSCRIBED, etc.
  */
+@RegisterConnector(RAILS.APPLE_IAP)
 @Injectable()
-export class AppleIAPAdapter implements PaymentRailAdapter {
+export class AppleIAPAdapter implements Connector {
   private readonly logger = new Logger(AppleIAPAdapter.name);
 
   constructor(private readonly prisma: PrismaService) {}
@@ -119,7 +125,25 @@ export class AppleIAPAdapter implements PaymentRailAdapter {
   }
 
   rail(): string {
-    return 'APPLE_IAP';
+    return RAILS.APPLE_IAP;
+  }
+
+  capabilities(): ConnectorCapabilities {
+    return {
+      supportedModes: ['SUBSCRIPTION', 'PAYMENT'],
+      isClientSide: true,
+    };
+  }
+
+  /** Apple anchors an auto-renewable subscription on the original transaction id
+   * (stable across renewals). Mirrors the orchestrator's linkage resolution. */
+  subscriptionAnchorId(snapshot: Record<string, any>, intent?: any): string | null {
+    return (
+      snapshot?.originalTransactionId ||
+      snapshot?.apple_original_transaction_id ||
+      intent?.providerIntentId ||
+      null
+    );
   }
 
   /**

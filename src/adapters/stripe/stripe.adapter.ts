@@ -1,6 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
-  PaymentRailAdapter,
+  Connector,
+  ConnectorCapabilities,
+  RegisterConnector,
+} from '../../common/connectors/connector.interface';
+import { RAILS } from '../../common/connectors/rail';
+import {
   CreateIntentInput,
   CreateIntentResult,
   IntentStatusResult,
@@ -30,8 +35,9 @@ interface StripeProviderConfig {
  *   customer.subscription.created, customer.subscription.updated,
  *   customer.subscription.deleted
  */
+@RegisterConnector(RAILS.STRIPE)
 @Injectable()
-export class StripeAdapter implements PaymentRailAdapter {
+export class StripeAdapter implements Connector {
   private readonly logger = new Logger(StripeAdapter.name);
   private readonly API_BASE = 'https://api.stripe.com';
 
@@ -56,7 +62,14 @@ export class StripeAdapter implements PaymentRailAdapter {
   }
 
   rail(): string {
-    return 'STRIPE';
+    return RAILS.STRIPE;
+  }
+
+  capabilities(): ConnectorCapabilities {
+    return {
+      supportedModes: ['PAYMENT', 'SUBSCRIPTION'],
+      requiresRedirect: true,
+    };
   }
 
   private async stripeRequest(

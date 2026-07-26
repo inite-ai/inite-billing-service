@@ -1,6 +1,14 @@
-import { Injectable, Logger, NotFoundException, Inject, forwardRef } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  Inject,
+  forwardRef,
+  Optional,
+} from '@nestjs/common';
 import { PrismaService } from '../common/services/prisma.service';
 import { PaymentRailAdapter } from '../common/interfaces/payment-rail-adapter.interface';
+import { ConnectorRegistry } from '../common/connectors/connector-registry.service';
 import {
   isValidTransition,
   mapIntentToOrderStatus,
@@ -34,6 +42,7 @@ export class PaymentOrchestratorService {
     private readonly funnelService: FunnelService,
     @Inject(forwardRef(() => CreditsService))
     private readonly creditsService: CreditsService,
+    @Optional() private readonly connectorRegistry?: ConnectorRegistry,
   ) {}
 
   registerAdapter(adapter: PaymentRailAdapter) {
@@ -42,7 +51,9 @@ export class PaymentOrchestratorService {
   }
 
   getAdapter(rail: string): PaymentRailAdapter {
-    const adapter = this.adapters.get(rail);
+    // Explicitly-registered adapters (tests, main.ts) win; otherwise fall back
+    // to the auto-discovered ConnectorRegistry (the single source going forward).
+    const adapter = this.adapters.get(rail) ?? this.connectorRegistry?.get(rail);
     if (!adapter) {
       throw new NotFoundException(`Payment rail adapter not found: ${rail}`);
     }

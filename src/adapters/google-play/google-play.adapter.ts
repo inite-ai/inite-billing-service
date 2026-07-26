@@ -1,6 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
-  PaymentRailAdapter,
+  Connector,
+  ConnectorCapabilities,
+  RegisterConnector,
+} from '../../common/connectors/connector.interface';
+import { RAILS } from '../../common/connectors/rail';
+import {
   CreateIntentInput,
   CreateIntentResult,
   IntentStatusResult,
@@ -32,8 +37,9 @@ interface GooglePlayConfig {
  * https://developer.android.com/google/play/billing/rtdn-reference
  * Pub/Sub topic for subscription state changes
  */
+@RegisterConnector(RAILS.GOOGLE_PLAY)
 @Injectable()
-export class GooglePlayAdapter implements PaymentRailAdapter {
+export class GooglePlayAdapter implements Connector {
   private readonly logger = new Logger(GooglePlayAdapter.name);
   private readonly PLAY_API_BASE = 'https://androidpublisher.googleapis.com/androidpublisher/v3';
   private readonly TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -136,7 +142,22 @@ export class GooglePlayAdapter implements PaymentRailAdapter {
   }
 
   rail(): string {
-    return 'GOOGLE_PLAY';
+    return RAILS.GOOGLE_PLAY;
+  }
+
+  capabilities(): ConnectorCapabilities {
+    return {
+      supportedModes: ['SUBSCRIPTION', 'PAYMENT'],
+      isClientSide: true,
+    };
+  }
+
+  /** Google anchors a subscription on the purchase token, which we persist as
+   * the PaymentIntent providerIntentId. Mirrors the orchestrator's linkage. */
+  subscriptionAnchorId(snapshot: Record<string, any>, intent?: any): string | null {
+    return (
+      intent?.providerIntentId || snapshot?.google_purchase_token || snapshot?.purchaseToken || null
+    );
   }
 
   /**
