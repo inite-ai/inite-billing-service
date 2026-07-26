@@ -67,11 +67,17 @@ export class AffiliatePayoutProcessor extends WorkerHost {
             return;
           }
 
-          // Get earned commissions for the period that haven't been paid
+          // Only pay SETTLED ('earned') commissions that aren't already linked to
+          // a payout. Including 'pending' (unsettled) commissions would pay out
+          // money still inside the refund window and push totalPaid above
+          // totalEarned (which only counts settled commissions), driving the
+          // affiliate's available balance negative. payoutId=null keeps this
+          // reconciled with manual withdrawals, which link the commissions they
+          // pay — so neither path can double-pay the other's commissions.
           const commissions = await tx.affiliateCommission.findMany({
             where: {
               affiliateId: affiliate.id,
-              status: { in: ['earned', 'pending'] },
+              status: 'earned',
               earnedAt: {
                 gte: lastMonth,
                 lte: lastMonthEnd,

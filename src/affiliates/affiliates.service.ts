@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { randomInt } from 'crypto';
 import { PrismaService } from '../common/services/prisma.service';
@@ -452,57 +453,109 @@ export class AffiliatesService {
   }
 
   async requestWithdrawal(affiliateId: string, amount?: number, currency?: string) {
-    const affiliate = await this.prisma.affiliate.findUnique({
-      where: { id: affiliateId },
-      include: { service: true },
+    const payoutCurrency = (currency || 'USD').toUpperCase();
+
+    // The whole request runs in one transaction with the affiliate row locked so
+    // two concurrent withdrawals (or a withdrawal racing the monthly auto-payout)
+    // can't both pass the balance check and double-spend. Critically, the payout
+    // is reconciled against settled commissions: the exact commissions it covers
+    // are linked (payoutId) and marked 'paid', so the monthly AffiliatePayout
+    // processor — which only picks up payoutId=null 'earned' commissions — can
+    // never pay them a second time.
+    return this.prisma.$transaction(async (tx) => {
+      // Serialize concurrent withdrawals for this affiliate (TOCTOU guard).
+      await tx.$queryRaw(Prisma.sql`
+        SELECT id FROM billing.affiliates WHERE id = ${affiliateId}::uuid FOR UPDATE
+      `);
+
+      const affiliate = await tx.affiliate.findUnique({
+        where: { id: affiliateId },
+        include: { service: true },
+      });
+      if (!affiliate) throw new NotFoundException(`Affiliate not found: ${affiliateId}`);
+      if (affiliate.status !== 'active') {
+        throw new BadRequestException('Affiliate account is not active');
+      }
+
+      // Re-check for an in-flight payout inside the lock.
+      const pendingPayout = await tx.affiliatePayout.findFirst({
+        where: { affiliateId, status: { in: ['pending', 'processing'] } },
+      });
+      if (pendingPayout) {
+        throw new BadRequestException('You already have a pending withdrawal request');
+      }
+
+      const available = new Decimal(affiliate.totalEarned).minus(affiliate.totalPaid);
+      const minWithdrawal = new Decimal(
+        (affiliate.service?.metadata as any)?.minWithdrawalAmount ?? 10,
+      );
+
+      const target = amount != null ? new Decimal(amount) : available;
+      if (target.lte(0)) {
+        throw new BadRequestException('Nothing to withdraw');
+      }
+      if (target.gt(available)) {
+        throw new BadRequestException(`Insufficient balance. Available: ${available.toFixed(2)}`);
+      }
+
+      // Cover whole settled ('earned'), not-yet-paid commissions oldest-first, up
+      // to the requested amount. Commissions are indivisible, so the payout total
+      // is the sum actually covered (== available when withdrawing everything).
+      const settled = await tx.affiliateCommission.findMany({
+        where: {
+          affiliateId,
+          status: 'earned',
+          payoutId: null,
+          currency: payoutCurrency,
+        },
+        orderBy: { earnedAt: 'asc' },
+      });
+
+      const selected: typeof settled = [];
+      let sum = new Decimal(0);
+      for (const commission of settled) {
+        const next = sum.plus(commission.amount);
+        if (next.gt(target)) break; // don't exceed the requested/available amount
+        selected.push(commission);
+        sum = next;
+      }
+
+      if (selected.length === 0) {
+        throw new BadRequestException(
+          `No settled ${payoutCurrency} commissions are available to withdraw`,
+        );
+      }
+      if (sum.lt(minWithdrawal)) {
+        throw new BadRequestException(`Minimum withdrawal amount is ${minWithdrawal.toString()}`);
+      }
+
+      const now = new Date();
+      const payout = await tx.affiliatePayout.create({
+        data: {
+          affiliateId,
+          periodStart: selected[0].earnedAt ?? now,
+          periodEnd: now,
+          totalAmount: sum,
+          currency: payoutCurrency,
+          status: 'pending',
+        },
+      });
+
+      await tx.affiliateCommission.updateMany({
+        where: { id: { in: selected.map((c) => c.id) } },
+        data: { payoutId: payout.id, status: 'paid' },
+      });
+
+      await tx.affiliate.update({
+        where: { id: affiliateId },
+        data: { totalPaid: { increment: sum } },
+      });
+
+      this.logger.log(
+        `Withdrawal request: ${payout.id}, amount: ${sum.toString()} ${payoutCurrency} (${selected.length} commissions)`,
+      );
+      return this.mapPayoutToDto(payout);
     });
-    if (!affiliate) throw new NotFoundException(`Affiliate not found: ${affiliateId}`);
-    if (affiliate.status !== 'active') {
-      throw new BadRequestException('Affiliate account is not active');
-    }
-
-    const available = Number(affiliate.totalEarned) - Number(affiliate.totalPaid);
-    const minWithdrawal = (affiliate.service?.metadata as any)?.minWithdrawalAmount
-      ? Number((affiliate.service!.metadata as any).minWithdrawalAmount)
-      : 10;
-
-    const withdrawAmount = amount || available;
-    if (withdrawAmount <= 0) {
-      throw new BadRequestException('Nothing to withdraw');
-    }
-    if (withdrawAmount > available) {
-      throw new BadRequestException(`Insufficient balance. Available: ${available.toFixed(2)}`);
-    }
-    if (withdrawAmount < minWithdrawal) {
-      throw new BadRequestException(`Minimum withdrawal amount is ${minWithdrawal}`);
-    }
-
-    const pendingPayout = await this.prisma.affiliatePayout.findFirst({
-      where: { affiliateId, status: 'pending' },
-    });
-    if (pendingPayout) {
-      throw new BadRequestException('You already have a pending withdrawal request');
-    }
-
-    const now = new Date();
-    const payout = await this.prisma.affiliatePayout.create({
-      data: {
-        affiliateId,
-        periodStart: now,
-        periodEnd: now,
-        totalAmount: withdrawAmount,
-        currency: currency || 'USD',
-        status: 'pending',
-      },
-    });
-
-    await this.prisma.affiliate.update({
-      where: { id: affiliateId },
-      data: { totalPaid: { increment: withdrawAmount } },
-    });
-
-    this.logger.log(`Withdrawal request: ${payout.id}, amount: ${withdrawAmount}`);
-    return this.mapPayoutToDto(payout);
   }
 
   /**

@@ -73,14 +73,42 @@ export class AdminAffiliatesService {
   }
 
   async failPayout(id: string, reason?: string) {
-    const payout = await this.prisma.affiliatePayout.findUnique({
-      where: { id },
-    });
-    if (!payout) throw new NotFoundException(`Payout not found: ${id}`);
+    return this.prisma.$transaction(async (tx) => {
+      const payout = await tx.affiliatePayout.findUnique({ where: { id } });
+      if (!payout) throw new NotFoundException(`Payout not found: ${id}`);
 
-    return this.prisma.affiliatePayout.update({
-      where: { id },
-      data: { status: 'failed', failureReason: reason || 'Marked as failed by admin' },
+      // Idempotent: a payout already marked failed has already been reversed.
+      if (payout.status === 'failed') {
+        return payout;
+      }
+      // Money for a 'paid' payout has already left — reversing the balance here
+      // would silently credit the affiliate twice. Refunds of sent money are a
+      // separate, manual concern.
+      if (payout.status === 'paid') {
+        throw new BadRequestException('Cannot fail a payout that has already been paid out');
+      }
+
+      // Release the commissions this payout reserved so they become withdrawable
+      // again, and reverse the affiliate's paid total. Without this, a failed
+      // payout permanently strands the balance (available never recovers).
+      await tx.affiliateCommission.updateMany({
+        where: { payoutId: id },
+        data: { payoutId: null, status: 'earned' },
+      });
+
+      await tx.affiliate.update({
+        where: { id: payout.affiliateId },
+        data: { totalPaid: { decrement: payout.totalAmount } },
+      });
+
+      return tx.affiliatePayout.update({
+        where: { id },
+        data: {
+          status: 'failed',
+          failureReason: reason || 'Marked as failed by admin',
+          processedAt: new Date(),
+        },
+      });
     });
   }
 }
