@@ -1,6 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
-  PaymentRailAdapter,
+  Connector,
+  ConnectorCapabilities,
+  RegisterConnector,
+} from '../../common/connectors/connector.interface';
+import { RAILS } from '../../common/connectors/rail';
+import {
   CreateIntentInput,
   CreateIntentResult,
   IntentStatusResult,
@@ -29,8 +34,9 @@ interface OneProviderConfig {
   apiSecret: string;
 }
 
+@RegisterConnector(RAILS.ONE)
 @Injectable()
-export class OneAdapter implements PaymentRailAdapter {
+export class OneAdapter implements Connector {
   private readonly logger = new Logger(OneAdapter.name);
 
   constructor(private readonly prisma: PrismaService) {}
@@ -62,7 +68,14 @@ export class OneAdapter implements PaymentRailAdapter {
   }
 
   rail(): string {
-    return 'ONE';
+    return RAILS.ONE;
+  }
+
+  capabilities(): ConnectorCapabilities {
+    return {
+      supportedModes: ['PAYMENT', 'SUBSCRIPTION'],
+      requiresRedirect: true,
+    };
   }
 
   async createPaymentIntent(input: CreateIntentInput): Promise<CreateIntentResult> {

@@ -5,11 +5,13 @@ import { OutboxModule } from '../outbox/outbox.module';
 import { AffiliatesModule } from '../affiliates/affiliates.module';
 import { FunnelModule } from '../funnel/funnel.module';
 import { CreditsModule } from '../credits/credits.module';
+import { ConnectorsModule } from '../common/connectors/connectors.module';
 
 @Global()
 @Module({
   imports: [
     OutboxModule,
+    ConnectorsModule,
     forwardRef(() => AffiliatesModule),
     forwardRef(() => FunnelModule),
     forwardRef(() => CreditsModule),

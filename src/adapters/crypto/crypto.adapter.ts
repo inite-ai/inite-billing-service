@@ -1,6 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
-  PaymentRailAdapter,
+  Connector,
+  ConnectorCapabilities,
+  RegisterConnector,
+} from '../../common/connectors/connector.interface';
+import { RAILS } from '../../common/connectors/rail';
+import {
   CreateIntentInput,
   CreateIntentResult,
   IntentStatusResult,
@@ -108,8 +113,9 @@ const DEFAULT_CHAINS: Record<string, Omit<ChainConfig, 'rpcUrl'>> = {
  * - Indexer webhook: blockchain indexer pushes tx confirmations
  * - Manual confirmation: admin verifies and updates status
  */
+@RegisterConnector(RAILS.CRYPTO)
 @Injectable()
-export class CryptoAdapter implements PaymentRailAdapter {
+export class CryptoAdapter implements Connector {
   private readonly logger = new Logger(CryptoAdapter.name);
 
   constructor(private readonly prisma: PrismaService) {}
@@ -145,7 +151,14 @@ export class CryptoAdapter implements PaymentRailAdapter {
   }
 
   rail(): string {
-    return 'CRYPTO';
+    return RAILS.CRYPTO;
+  }
+
+  capabilities(): ConnectorCapabilities {
+    return {
+      supportedModes: ['PAYMENT'],
+      requiresRedirect: false,
+    };
   }
 
   /**
