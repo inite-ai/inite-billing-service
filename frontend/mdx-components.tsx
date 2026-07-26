@@ -1,6 +1,28 @@
 import type { MDXComponents } from 'mdx/types'
 import Link from 'next/link'
-import { ReactNode } from 'react'
+import { isValidElement, ReactElement, ReactNode } from 'react'
+import Mermaid from '@/components/docs/Mermaid'
+
+/**
+ * Pull the language + raw text out of a fenced code block's inner <code> child.
+ * MDX (both @next/mdx and next-mdx-remote) lowers a ```lang fence to
+ * <pre><code className="language-lang">…</code></pre>; the text children may be a
+ * single string or an array of strings. Returns null when `child` isn't a code el.
+ */
+function extractCode(child: ReactNode): { lang: string | null; text: string } | null {
+  if (!isValidElement(child)) return null
+  const el = child as ReactElement<{ className?: string; children?: ReactNode }>
+  const className = el.props.className ?? ''
+  const match = /language-([\w-]+)/.exec(className)
+  const raw = el.props.children
+  const text =
+    typeof raw === 'string'
+      ? raw
+      : Array.isArray(raw)
+        ? raw.map((c) => (typeof c === 'string' ? c : '')).join('')
+        : String(raw ?? '')
+  return { lang: match ? match[1] : null, text: text.replace(/\n$/, '') }
+}
 
 /**
  * Typography for MDX (docs page.mdx via @next/mdx, and the blog body via
@@ -51,11 +73,17 @@ export const mdxComponents: MDXComponents = {
       {...props}
     />
   ),
-  pre: ({ children }: { children?: ReactNode }) => (
-    <pre className="my-4 p-4 rounded-md border border-[var(--d-border)] bg-[var(--d-elevated)] overflow-x-auto text-[13px] leading-relaxed font-mono text-[var(--d-text)]">
-      {children}
-    </pre>
-  ),
+  pre: ({ children }: { children?: ReactNode }) => {
+    const info = extractCode(children)
+    if (info?.lang === 'mermaid') {
+      return <Mermaid chart={info.text} />
+    }
+    return (
+      <pre className="my-4 p-4 rounded-md border border-[var(--d-border)] bg-[var(--d-elevated)] overflow-x-auto text-[13px] leading-relaxed font-mono text-[var(--d-text)]">
+        {children}
+      </pre>
+    )
+  },
   blockquote: (props) => (
     <blockquote className="my-4 pl-3 border-l-2 border-[var(--d-accent)] text-[var(--d-muted)]" {...props} />
   ),
