@@ -70,6 +70,13 @@ export class WebhooksController {
     const config = await this.webhooksService.getProviderConfig('ONE');
     const apiSecret = config.apiSecret || '';
 
+    // Fail closed: an empty key makes the HMAC attacker-computable (forged
+    // "paid" webhook -> free fulfilment), so refuse rather than accept unverified.
+    if (!apiSecret) {
+      this.logger.error('ONE webhook secret not configured — rejecting (fail closed)');
+      throw new ForbiddenException('Webhook verification not configured');
+    }
+
     const expected = crypto
       .createHmac('sha256', apiSecret)
       .update(rawBytes(req, payload))
@@ -112,6 +119,11 @@ export class WebhooksController {
   ): Promise<{ received: boolean }> {
     const config = await this.webhooksService.getProviderConfig('LAVA');
     const apiKey = config.apiKey || '';
+
+    if (!apiKey) {
+      this.logger.error('LAVA webhook API key not configured — rejecting (fail closed)');
+      throw new ForbiddenException('Webhook verification not configured');
+    }
 
     if (!apiKeyHeader || !safeTimingSafeEqual(apiKey, apiKeyHeader)) {
       this.logger.warn('LAVA webhook API key verification failed');
@@ -205,12 +217,15 @@ export class WebhooksController {
     const config = await this.webhooksService.getProviderConfig('GOOGLE_PLAY');
     const expectedToken = (config as any).pubsubToken;
 
-    if (expectedToken) {
-      const token = authHeader?.replace('Bearer ', '');
-      if (!token || !safeTimingSafeEqual(expectedToken, token)) {
-        this.logger.warn('Google Play webhook auth verification failed');
-        throw new ForbiddenException('Invalid webhook authorization');
-      }
+    // Fail closed: without a configured token, anyone could POST a forged RTDN.
+    if (!expectedToken) {
+      this.logger.error('Google Play webhook token not configured — rejecting (fail closed)');
+      throw new ForbiddenException('Webhook verification not configured');
+    }
+    const token = authHeader?.replace('Bearer ', '');
+    if (!token || !safeTimingSafeEqual(expectedToken, token)) {
+      this.logger.warn('Google Play webhook auth verification failed');
+      throw new ForbiddenException('Invalid webhook authorization');
     }
 
     const parsed = await this.googlePlayAdapter.handleWebhook(payload);
@@ -240,11 +255,15 @@ export class WebhooksController {
     const config = await this.webhooksService.getProviderConfig('CRYPTO');
     const expectedSecret = (config as any).webhookSecret;
 
-    if (expectedSecret) {
-      if (!webhookSecret || !safeTimingSafeEqual(expectedSecret, webhookSecret)) {
-        this.logger.warn('Crypto webhook secret verification failed');
-        throw new ForbiddenException('Invalid webhook secret');
-      }
+    // Fail closed: without a configured secret, a forged "confirmed" tx webhook
+    // would trigger free fulfilment.
+    if (!expectedSecret) {
+      this.logger.error('Crypto webhook secret not configured — rejecting (fail closed)');
+      throw new ForbiddenException('Webhook verification not configured');
+    }
+    if (!webhookSecret || !safeTimingSafeEqual(expectedSecret, webhookSecret)) {
+      this.logger.warn('Crypto webhook secret verification failed');
+      throw new ForbiddenException('Invalid webhook secret');
     }
 
     const parsed = await this.cryptoAdapter.handleWebhook(payload);
