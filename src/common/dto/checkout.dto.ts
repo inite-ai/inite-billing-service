@@ -6,11 +6,9 @@ export enum CheckoutMode {
   SUBSCRIPTION = 'SUBSCRIPTION',
 }
 
-export enum PaymentRail {
-  ONE = 'ONE',
-  LAVA = 'LAVA',
-  CRYPTO = 'CRYPTO',
-}
+// NOTE: the canonical rail identity lives in src/common/connectors/rail.ts
+// (RAILS). The old narrow `PaymentRail` enum here (ONE/LAVA/CRYPTO only) was
+// never imported anywhere and disagreed with the real rails, so it was removed.
 
 export class CreateCheckoutSessionDto {
   @ApiProperty({ description: 'Price code to purchase' })

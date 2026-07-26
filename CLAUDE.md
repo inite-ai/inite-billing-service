@@ -41,7 +41,7 @@ All tests must pass before a task is considered done (see `.cursorrules`).
 
 - `Service` → `Product` → `Price` (interval, trialDays, graceDays); `Order` → `PaymentIntent` → `Subscription`/`Entitlement`/`Invoice`.
 - Money is `Decimal(19,4)` — never float. Credits are integers on `CreditBalance`.
-- Order statuses: `created → paid → completed / refunded / cancelled / failed`.
+- Order statuses (`OrderStatus` enum): `created → open → paid`, plus terminal `failed` / `refunded` / `expired`.
 - Products carry `metadata.creditsPerPeriod` / `metadata.credits` — granted on payment, reset on renewal.
 
 ## Conventions

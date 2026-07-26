@@ -103,14 +103,10 @@ export class WebhookProcessor extends WorkerHost {
         return;
       }
 
-      // For ONE: Always fetch latest status from API
-      let statusResult;
-      if (rail === 'ONE') {
-        statusResult = await adapter.getIntentStatus(webhookEvent.entityId);
-      } else {
-        // For other rails, use webhook data
-        statusResult = await adapter.getIntentStatus(webhookEvent.entityId);
-      }
+      // Re-fetch the authoritative status from the provider for every rail
+      // (never trust the webhook body's amount/status — see the validation
+      // below), then reconcile against the stored order.
+      const statusResult = await adapter.getIntentStatus(webhookEvent.entityId);
 
       // Find payment intent by provider intent ID
       const paymentIntent = await this.prisma.paymentIntent.findFirst({

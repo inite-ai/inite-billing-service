@@ -520,7 +520,7 @@ model PayoutProvider {
 
 model PaymentProvider {
   id             String   @id @default(uuid()) @db.Uuid
-  code           String   @unique @db.VarChar(50)    // ONE, LAVA, CRYPTO
+  code           String   @unique @db.VarChar(50)    // canonical rail id: ONE, LAVA, STRIPE, CRYPTO, APPLE_IAP, GOOGLE_PLAY (see src/common/connectors/rail.ts)
   name           String   @db.VarChar(255)
   isActive       Boolean  @default(false) @map("is_active")
   supportedModes String[] @map("supported_modes")    // PAYMENT, SUBSCRIPTION
