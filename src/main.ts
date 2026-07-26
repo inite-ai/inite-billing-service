@@ -13,7 +13,11 @@ import { AppleIAPAdapter } from './adapters/apple-iap/apple-iap.adapter';
 import { GooglePlayAdapter } from './adapters/google-play/google-play.adapter';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // rawBody: capture the exact request bytes on `req.rawBody`. Provider webhook
+  // signatures (Stripe, ONE, Resend/svix) are computed over the raw body — a
+  // re-serialized `JSON.stringify(req.body)` does not match, so without this the
+  // signatures fail (Stripe webhooks 403). Body is still parsed as usual.
+  const app = await NestFactory.create(AppModule, { rawBody: true });
 
   // Security headers & cookie parsing
   app.use(helmet());

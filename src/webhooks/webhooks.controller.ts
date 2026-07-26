@@ -3,6 +3,8 @@ import {
   Post,
   Body,
   Headers,
+  Req,
+  RawBodyRequest,
   HttpCode,
   HttpStatus,
   ForbiddenException,
@@ -10,7 +12,14 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { SkipThrottle } from '@nestjs/throttler';
+import type { Request } from 'express';
 import * as crypto from 'crypto';
+
+/** Exact request bytes for signature verification (falls back to a re-serialized
+ * body only if raw capture is unavailable — see `rawBody: true` in main.ts). */
+function rawBytes(req: RawBodyRequest<Request>, payload: unknown): Buffer {
+  return req.rawBody ?? Buffer.from(JSON.stringify(payload));
+}
 import { WebhooksService } from './webhooks.service';
 import { OneAdapter } from '../adapters/one/one.adapter';
 import { LavaAdapter } from '../adapters/lava/lava.adapter';
@@ -55,13 +64,16 @@ export class WebhooksController {
   @ApiResponse({ status: 200 })
   async handleOneWebhook(
     @Body() payload: any,
+    @Req() req: RawBodyRequest<Request>,
     @Headers('x-signature') signature: string,
   ): Promise<{ received: boolean }> {
     const config = await this.webhooksService.getProviderConfig('ONE');
     const apiSecret = config.apiSecret || '';
 
-    const rawBody = JSON.stringify(payload);
-    const expected = crypto.createHmac('sha256', apiSecret).update(rawBody).digest('hex');
+    const expected = crypto
+      .createHmac('sha256', apiSecret)
+      .update(rawBytes(req, payload))
+      .digest('hex');
 
     if (!signature || !safeTimingSafeEqual(expected, signature)) {
       this.logger.warn('ONE webhook signature verification failed');
@@ -125,6 +137,7 @@ export class WebhooksController {
   @ApiResponse({ status: 200 })
   async handleStripeWebhook(
     @Body() payload: any,
+    @Req() req: RawBodyRequest<Request>,
     @Headers('stripe-signature') signature: string,
   ): Promise<{ received: boolean }> {
     if (!signature) {
@@ -132,9 +145,9 @@ export class WebhooksController {
       throw new ForbiddenException('Missing Stripe-Signature header');
     }
 
-    // Verify signature
+    // Verify over the exact request bytes — Stripe signs the raw body.
     const isValid = await this.stripeAdapter.verifyWebhookSignature(
-      JSON.stringify(payload),
+      rawBytes(req, payload),
       signature,
     );
     if (!isValid) {
