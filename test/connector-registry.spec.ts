@@ -9,6 +9,7 @@ import { StripeAdapter } from '../src/adapters/stripe/stripe.adapter';
 import { CryptoAdapter } from '../src/adapters/crypto/crypto.adapter';
 import { AppleIAPAdapter } from '../src/adapters/apple-iap/apple-iap.adapter';
 import { GooglePlayAdapter } from '../src/adapters/google-play/google-play.adapter';
+import { PaymentOrchestratorService } from '../src/payment-orchestrator/payment-orchestrator.service';
 
 /**
  * The registry must auto-discover every @RegisterConnector() adapter via
@@ -78,6 +79,23 @@ describe('ConnectorRegistry auto-discovery', () => {
 
   it('validates active providers against the registry at boot', () => {
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { isActive: true } }));
+  });
+
+  it('orchestrator self-populates every rail from the registry (no main.ts wiring)', () => {
+    // Mirrors the boot path after removing the hand-maintained main.ts block:
+    // the orchestrator pulls adapters from the auto-discovered registry.
+    const orchestrator = new PaymentOrchestratorService(
+      null as any,
+      null as any,
+      null as any,
+      null as any,
+      null as any,
+      registry,
+    );
+    orchestrator.onModuleInit();
+    for (const rail of registry.rails()) {
+      expect(orchestrator.getAdapter(rail).rail()).toBe(rail);
+    }
   });
 });
 
