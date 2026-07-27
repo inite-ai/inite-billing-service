@@ -147,6 +147,30 @@ describe('CheckoutService', () => {
     );
   });
 
+  it('createSession() is idempotent for the same key (no duplicate order)', async () => {
+    // No REDIS_URL -> exercises the in-process fallback store deterministically.
+    mockConfig.get.mockImplementation((k: string) =>
+      k === 'REDIS_URL' ? undefined : 'https://billing.test',
+    );
+
+    const first = await service.createSession(
+      'user-1',
+      { priceCode: 'pro-monthly', mode: 'SUBSCRIPTION' as any },
+      'idem-key-1',
+    );
+    mockPrisma.order.create.mockClear();
+
+    const second = await service.createSession(
+      'user-1',
+      { priceCode: 'pro-monthly', mode: 'SUBSCRIPTION' as any },
+      'idem-key-1',
+    );
+
+    expect(second).toEqual(first);
+    // The replayed request must NOT create a second order.
+    expect(mockPrisma.order.create).not.toHaveBeenCalled();
+  });
+
   it('createSession() rejects inactive product', async () => {
     mockCatalog.getPriceByCode.mockResolvedValue({
       ...mockPrice,

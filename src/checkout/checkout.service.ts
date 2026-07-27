@@ -7,6 +7,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import Redis from 'ioredis';
 import { RiskService } from '../risk/risk.service';
 import { PrismaService } from '../common/services/prisma.service';
 import { CatalogService } from '../catalog/catalog.service';
@@ -24,7 +25,11 @@ import { v4 as uuidv4 } from 'uuid';
 @Injectable()
 export class CheckoutService {
   private readonly logger = new Logger(CheckoutService.name);
+  /** Fallback idempotency store when Redis is unavailable (single-instance
+   * only — does not survive restart or span instances). */
   private readonly idempotencyStore: Map<string, CheckoutSessionResponseDto> = new Map();
+  private redis: Redis | null = null;
+  private static readonly IDEM_TTL_SECONDS = 3600;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -36,6 +41,57 @@ export class CheckoutService {
     private readonly configService: ConfigService,
     @Optional() private readonly riskService?: RiskService,
   ) {}
+
+  /**
+   * Lazily-created Redis client for cross-instance / restart-surviving
+   * idempotency. Null when REDIS_URL is unset — callers fall back to the
+   * in-process Map. Errors are logged, never thrown (idempotency is best-effort).
+   */
+  private getRedis(): Redis | null {
+    if (this.redis) return this.redis;
+    const url = this.configService.get<string>('REDIS_URL');
+    if (!url) return null;
+    try {
+      this.redis = new Redis(url, { maxRetriesPerRequest: 1, lazyConnect: true });
+      this.redis.on('error', (err) =>
+        this.logger.warn(`Redis error (checkout idempotency): ${err.message}`),
+      );
+      return this.redis;
+    } catch {
+      return null;
+    }
+  }
+
+  private async idempotencyGet(key: string): Promise<CheckoutSessionResponseDto | null> {
+    const redis = this.getRedis();
+    if (redis) {
+      try {
+        const raw = await redis.get(key);
+        return raw ? (JSON.parse(raw) as CheckoutSessionResponseDto) : null;
+      } catch (err: any) {
+        this.logger.warn(`Redis idempotency read failed, falling back: ${err.message}`);
+      }
+    }
+    return this.idempotencyStore.get(key) ?? null;
+  }
+
+  private async idempotencySet(key: string, value: CheckoutSessionResponseDto): Promise<void> {
+    const redis = this.getRedis();
+    if (redis) {
+      try {
+        await redis.set(key, JSON.stringify(value), 'EX', CheckoutService.IDEM_TTL_SECONDS);
+        return;
+      } catch (err: any) {
+        this.logger.warn(`Redis idempotency write failed, falling back: ${err.message}`);
+      }
+    }
+    this.idempotencyStore.set(key, value);
+    // unref so the eviction timer never keeps the process (or a test run) alive.
+    setTimeout(
+      () => this.idempotencyStore.delete(key),
+      CheckoutService.IDEM_TTL_SECONDS * 1000,
+    ).unref();
+  }
 
   /**
    * List active payment providers for checkout.
@@ -58,9 +114,11 @@ export class CheckoutService {
     idempotencyKey?: string,
     clientIp?: string,
   ): Promise<CheckoutSessionResponseDto> {
-    // Idempotency check
-    if (idempotencyKey) {
-      const existing = this.idempotencyStore.get(`${userId}:${idempotencyKey}`);
+    // Idempotency check (Redis-backed so it survives restarts and is shared
+    // across instances; falls back to an in-process Map if Redis is absent).
+    const idemKey = idempotencyKey ? `checkout:idem:${userId}:${idempotencyKey}` : null;
+    if (idemKey) {
+      const existing = await this.idempotencyGet(idemKey);
       if (existing) {
         this.logger.debug(
           `Returning existing checkout session for idempotency key: ${idempotencyKey}`,
@@ -174,11 +232,8 @@ export class CheckoutService {
     };
 
     // Store for idempotency
-    if (idempotencyKey) {
-      this.idempotencyStore.set(`${userId}:${idempotencyKey}`, response);
-      setTimeout(() => {
-        this.idempotencyStore.delete(`${userId}:${idempotencyKey}`);
-      }, 3600000);
+    if (idemKey) {
+      await this.idempotencySet(idemKey, response);
     }
 
     return response;
