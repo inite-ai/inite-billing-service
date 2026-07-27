@@ -4,13 +4,6 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
 import * as cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
-import { PaymentOrchestratorService } from './payment-orchestrator/payment-orchestrator.service';
-import { OneAdapter } from './adapters/one/one.adapter';
-import { CryptoAdapter } from './adapters/crypto/crypto.adapter';
-import { LavaAdapter } from './adapters/lava/lava.adapter';
-import { StripeAdapter } from './adapters/stripe/stripe.adapter';
-import { AppleIAPAdapter } from './adapters/apple-iap/apple-iap.adapter';
-import { GooglePlayAdapter } from './adapters/google-play/google-play.adapter';
 
 async function bootstrap() {
   // rawBody: capture the exact request bytes on `req.rawBody`. Provider webhook
@@ -53,21 +46,9 @@ async function bootstrap() {
     SwaggerModule.setup('api', app, document);
   }
 
-  // Register adapters with orchestrator
-  const orchestrator = app.get(PaymentOrchestratorService);
-  const oneAdapter = app.get(OneAdapter);
-  const cryptoAdapter = app.get(CryptoAdapter);
-  const lavaAdapter = app.get(LavaAdapter);
-  const stripeAdapter = app.get(StripeAdapter);
-  const appleIAPAdapter = app.get(AppleIAPAdapter);
-  const googlePlayAdapter = app.get(GooglePlayAdapter);
-
-  orchestrator.registerAdapter(oneAdapter);
-  orchestrator.registerAdapter(cryptoAdapter);
-  orchestrator.registerAdapter(lavaAdapter);
-  orchestrator.registerAdapter(stripeAdapter);
-  orchestrator.registerAdapter(appleIAPAdapter);
-  orchestrator.registerAdapter(googlePlayAdapter);
+  // Payment adapters self-register via the ConnectorRegistry (auto-discovered
+  // by @RegisterConnector) — the orchestrator pulls them in on module init, so
+  // there is no hand-maintained registration list here anymore.
 
   const port = process.env.PORT || 3000;
   await app.listen(port);

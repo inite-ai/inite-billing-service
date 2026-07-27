@@ -5,6 +5,7 @@ import {
   Inject,
   forwardRef,
   Optional,
+  OnModuleInit,
 } from '@nestjs/common';
 import { PrismaService } from '../common/services/prisma.service';
 import { PaymentRailAdapter } from '../common/interfaces/payment-rail-adapter.interface';
@@ -30,7 +31,7 @@ import { CreditsService } from '../credits/credits.service';
 const FULFILMENT_TX_OPTIONS = { maxWait: 10_000, timeout: 30_000 } as const;
 
 @Injectable()
-export class PaymentOrchestratorService {
+export class PaymentOrchestratorService implements OnModuleInit {
   private readonly logger = new Logger(PaymentOrchestratorService.name);
   private adapters: Map<string, PaymentRailAdapter> = new Map();
 
@@ -45,6 +46,20 @@ export class PaymentOrchestratorService {
     private readonly creditsService: CreditsService,
     @Optional() private readonly connectorRegistry?: ConnectorRegistry,
   ) {}
+
+  /**
+   * Populate the adapter map from the auto-discovered ConnectorRegistry at boot.
+   * This replaces the old hand-maintained registration block in main.ts — adding
+   * a rail no longer means editing bootstrap wiring. The registry's onModuleInit
+   * (in an imported module) runs first, so discovery is complete here. Tests that
+   * call registerAdapter directly still override by rail.
+   */
+  onModuleInit(): void {
+    if (!this.connectorRegistry) return;
+    for (const connector of this.connectorRegistry.all()) {
+      this.registerAdapter(connector);
+    }
+  }
 
   registerAdapter(adapter: PaymentRailAdapter) {
     this.adapters.set(adapter.rail(), adapter);
