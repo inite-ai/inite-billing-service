@@ -15,6 +15,7 @@ import {
 } from '../../common/interfaces/payment-rail-adapter.interface';
 import { PrismaService } from '../../common/services/prisma.service';
 import { createSign } from 'crypto';
+import { verifyAppleSignedPayload } from './apple-jws.util';
 
 interface AppleIAPConfig {
   bundleId: string;
@@ -136,11 +137,31 @@ export class AppleIAPAdapter implements Connector {
     };
   }
 
-  /** Apple sends a signed JWS (signedPayload); the JWS itself is decoded in
-   * handleWebhook. Here we require the notification envelope to be present —
-   * preserving the controller's prior presence check. */
-  verifyWebhook({ payload }: WebhookVerifyInput): boolean {
-    return !!(payload?.signedPayload || payload?.notificationType);
+  /**
+   * Verify the App Store Server Notification V2 `signedPayload` JWS: full x5c
+   * certificate-chain validation up to the pinned Apple Root CA G3, then ES256
+   * signature verification with the leaf key. Fails closed on anything that is
+   * not a genuine Apple-signed notification — closing the previous presence-only
+   * check that let an unauthenticated attacker mint free subscriptions/refunds.
+   *
+   * The nested `data.signedTransactionInfo` is not re-verified in handleWebhook:
+   * it is covered by this outer signature (Apple signs the whole envelope), and
+   * handleWebhook only runs after this returns true.
+   */
+  async verifyWebhook({ payload, config }: WebhookVerifyInput): Promise<boolean> {
+    const signedPayload = payload?.signedPayload;
+    if (typeof signedPayload !== 'string') {
+      this.logger.warn('Apple webhook rejected: missing signedPayload JWS');
+      return false;
+    }
+
+    const result = await verifyAppleSignedPayload(signedPayload, {
+      bundleId: (config as any)?.bundleId || undefined,
+    });
+    if (!result.verified) {
+      this.logger.warn(`Apple webhook rejected: ${result.reason}`);
+    }
+    return result.verified;
   }
 
   /** Apple anchors an auto-renewable subscription on the original transaction id
