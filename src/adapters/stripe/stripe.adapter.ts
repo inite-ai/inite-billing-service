@@ -314,6 +314,10 @@ export class StripeAdapter implements Connector {
         return {
           status: statusMap[pi.status] || 'created',
           metadata: { stripe_status: pi.status },
+          // Stripe amounts are in the smallest currency unit (cents) — normalize
+          // to major units so the processor reconciles against Order.amount.
+          amount: typeof pi.amount === 'number' ? pi.amount / 100 : undefined,
+          currency: pi.currency ? String(pi.currency).toUpperCase() : undefined,
           providerData: {
             id: pi.id,
             amount: pi.amount,
@@ -339,6 +343,9 @@ export class StripeAdapter implements Connector {
         return {
           status: statusMap[session.status] || 'created',
           metadata: { stripe_status: session.status },
+          // Checkout Session totals are in cents under amount_total.
+          amount: typeof session.amount_total === 'number' ? session.amount_total / 100 : undefined,
+          currency: session.currency ? String(session.currency).toUpperCase() : undefined,
           providerData: session,
         };
       }

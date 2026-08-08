@@ -4,6 +4,7 @@ import { Logger, Optional } from '@nestjs/common';
 import { PrismaService } from '../common/services/prisma.service';
 import { PaymentOrchestratorService } from '../payment-orchestrator/payment-orchestrator.service';
 import { RiskService } from '../risk/risk.service';
+import { reconcileAmount } from './reconcile-amount';
 
 interface WebhookJobData {
   rail: string;
@@ -132,32 +133,25 @@ export class WebhookProcessor extends WorkerHost {
 
       let finalStatus = statusResult.status as any;
 
-      if (finalStatus === 'paid' && statusResult.providerData) {
-        const order = paymentIntent.order;
-        const providerAmount = Number(
-          statusResult.providerData.amount ??
-            statusResult.providerData.amountTotal?.amount ??
-            statusResult.providerData.total_amount,
-        );
-        const providerCurrency = (
-          statusResult.providerData.currency ??
-          statusResult.providerData.amountTotal?.currency ??
-          ''
-        ).toUpperCase();
-
-        const orderAmount = Number(order.amount);
-        const orderCurrency = order.currency.toUpperCase();
-
-        if (!isNaN(providerAmount) && providerAmount < orderAmount) {
+      if (finalStatus === 'paid') {
+        // Reconcile against the adapter's NORMALIZED amount/currency (major
+        // units). The previous check read raw provider fields
+        // (amount/amountTotal.amount/total_amount) that don't exist under those
+        // names and mixed cents with dollars, so provider(cents) < order(dollars)
+        // was always false and underpayments were never caught.
+        const rec = reconcileAmount(paymentIntent.order, statusResult);
+        if (!rec.ok) {
           this.logger.warn(
-            `Amount mismatch for intent ${paymentIntent.id}: provider=${providerAmount}, order=${orderAmount}`,
+            `Reconciliation ${rec.reason} for intent ${paymentIntent.id}: ` +
+              `provider=${statusResult.amount} ${statusResult.currency ?? ''}, ` +
+              `order=${paymentIntent.order.amount} ${paymentIntent.order.currency}`,
           );
           finalStatus = 'failed';
-        } else if (providerCurrency && providerCurrency !== orderCurrency) {
+        } else if (!rec.reconciled) {
           this.logger.warn(
-            `Currency mismatch for intent ${paymentIntent.id}: provider=${providerCurrency}, order=${orderCurrency}`,
+            `Paid webhook for intent ${paymentIntent.id} on rail ${rail} was not ` +
+              `amount-reconciled: adapter supplied no normalized amount`,
           );
-          finalStatus = 'failed';
         }
       }
 
