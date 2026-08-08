@@ -344,11 +344,7 @@ export class AffiliatesService {
     return userIds;
   }
 
-  private async checkQualification(
-    affiliate: any,
-    criteria: any,
-    serviceId: string | undefined,
-  ): Promise<boolean> {
+  private async checkQualification(affiliate: any, criteria: any): Promise<boolean> {
     if (!criteria || Object.keys(criteria).length === 0) {
       return true; // No criteria = always qualified
     }
@@ -676,7 +672,7 @@ export class AffiliatesService {
 
       // Check qualification criteria
       const criteria = levelConfig?.qualificationCriteria || {};
-      const isQualified = await this.checkQualification(currentAffiliate, criteria, serviceId);
+      const isQualified = await this.checkQualification(currentAffiliate, criteria);
 
       if (!isQualified) {
         this.logger.debug(
