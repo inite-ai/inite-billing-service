@@ -27,6 +27,8 @@ describe('SubscriptionExpirerScheduler', () => {
     scheduler = new SubscriptionExpirerScheduler(
       prisma as PrismaService,
       orchestrator as PaymentOrchestratorService,
+      // Lock stub: run the body directly (no coordination in unit tests).
+      { runWithLock: (_k: string, _t: number, fn: () => Promise<void>) => fn() } as any,
     );
   });
 

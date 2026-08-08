@@ -12,6 +12,8 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { CreatePromoCodeDto } from './dto/create-promo-code.dto';
+import { CreateReferralLevelDto, UpdateReferralLevelDto } from './dto/referral-level.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -342,24 +344,13 @@ export class AdminController {
   @Post('referral-levels')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a referral level' })
-  async createReferralLevel(
-    @Body()
-    body: {
-      serviceId: string;
-      level: number;
-      commissionRate: number;
-      name: string;
-    },
-  ) {
+  async createReferralLevel(@Body() body: CreateReferralLevelDto) {
     return this.referralLevelsService.createLevel(body);
   }
 
   @Put('referral-levels/:id')
   @ApiOperation({ summary: 'Update a referral level' })
-  async updateReferralLevel(
-    @Param('id') id: string,
-    @Body() body: { commissionRate?: number; name?: string; isActive?: boolean },
-  ) {
+  async updateReferralLevel(@Param('id') id: string, @Body() body: UpdateReferralLevelDto) {
     return this.referralLevelsService.updateLevel(id, body);
   }
 
@@ -547,25 +538,7 @@ export class AdminController {
   @Post('promo-codes')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a promo code' })
-  async createPromoCode(
-    @Body()
-    body: {
-      code: string;
-      name: string;
-      description?: string;
-      discountType: string;
-      discountValue: number;
-      serviceId?: string;
-      minPurchaseAmount?: number;
-      maxDiscountAmount?: number;
-      validFrom: string;
-      validUntil?: string;
-      isActive?: boolean;
-      maxUsageCount?: number;
-      maxUsagePerUser?: number;
-      metadata?: any;
-    },
-  ) {
+  async createPromoCode(@Body() body: CreatePromoCodeDto) {
     return this.promoCodesService.create(body);
   }
 

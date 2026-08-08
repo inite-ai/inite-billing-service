@@ -159,16 +159,20 @@ export class CreditsService {
     let softCapCrossed: Array<any> = [];
 
     const result = await this.prisma.$transaction(async (tx) => {
-      if (isMetered) {
-        // Row-lock the balance to serialize concurrent metered consumes
-        // (closes the quota-evaluation race)
-        await tx.$queryRaw(Prisma.sql`
-          SELECT id FROM billing.credit_balances
-          WHERE user_id = ${data.userId}
-            AND service_id IS NOT DISTINCT FROM ${data.serviceId ?? null}::uuid
-          FOR UPDATE
-        `);
-      }
+      // Row-lock the balance up front to serialize concurrent consumes on the
+      // same (userId, serviceId). BOTH paths read the balance, check it, then
+      // decrement — without this lock two concurrent requests can each pass the
+      // balance check on the same funds and drive the ledger negative
+      // (double-spend). The metered path additionally relies on the lock to make
+      // its quota evaluation race-free. FOR UPDATE locks the existing row; when
+      // no balance row exists the consume fails the check anyway (nothing to
+      // over-spend), so locking only existing rows is sufficient here.
+      await tx.$queryRaw(Prisma.sql`
+        SELECT id FROM billing.credit_balances
+        WHERE user_id = ${data.userId}
+          AND service_id IS NOT DISTINCT FROM ${data.serviceId ?? null}::uuid
+        FOR UPDATE
+      `);
 
       const balance = await tx.creditBalance.findUnique({
         where: {

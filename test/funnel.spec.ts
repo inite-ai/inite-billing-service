@@ -26,7 +26,9 @@ describe('FunnelService', () => {
       },
     };
 
-    service = new FunnelService(mockPrisma);
+    service = new FunnelService(mockPrisma, {
+      runWithLock: (_k: string, _t: number, fn: () => Promise<void>) => fn(),
+    } as any);
   });
 
   // --- track() ---
@@ -102,11 +104,8 @@ describe('FunnelService', () => {
     };
 
     mockPrisma.order.findMany.mockResolvedValue([staleOrder]);
-    // Already has abandonment event
-    mockPrisma.funnelEvent.findFirst.mockResolvedValue({
-      id: 'event-existing',
-      eventType: 'checkout_abandoned',
-    });
+    // Already has abandonment event (batched existence check via findMany).
+    mockPrisma.funnelEvent.findMany.mockResolvedValue([{ orderId: 'order-stale' }]);
 
     const count = await service.detectAbandonedCheckouts();
 

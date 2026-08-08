@@ -15,6 +15,7 @@ import {
   WebhookParseResult,
 } from '../../common/interfaces/payment-rail-adapter.interface';
 import { PrismaService } from '../../common/services/prisma.service';
+import { toOnChainAmount } from './amount.util';
 
 /**
  * Chain-specific configuration
@@ -227,11 +228,9 @@ export class CryptoAdapter implements Connector {
     const tokenConfig = chainConfig.tokens[token];
     const expiresAt = new Date(Date.now() + config.expiryMinutes * 60 * 1000);
 
-    // Amount in token's smallest unit
+    // Amount in token's smallest unit (exact string scaling — no float math).
     const rawAmount = input.amount;
-    const onChainAmount = BigInt(
-      Math.round(rawAmount * Math.pow(10, tokenConfig.decimals)),
-    ).toString();
+    const onChainAmount = toOnChainAmount(rawAmount, tokenConfig.decimals);
 
     // Generate a unique memo/tag for payment identification
     const memo = this.generateMemo(input.orderId);
@@ -282,7 +281,46 @@ export class CryptoAdapter implements Connector {
     const snapshot = (intent?.snapshot as Record<string, any>) || {};
     const chain = snapshot.chain || providerIntentId.split('_')[1];
 
-    // Check if we have a confirmed txHash
+    // A transfer observed by the indexer webhook (persisted by handleWebhook).
+    // It must be validated against THIS invoice before it can settle the order —
+    // otherwise any transfer of any token/amount to any address would count as
+    // payment. Only a validated transfer with enough confirmations is 'paid'.
+    const observed = snapshot.observedTransfer as Record<string, any> | undefined;
+    if (observed) {
+      const check = this.validateObservedTransfer(snapshot, observed);
+      if (!check.ok) {
+        this.logger.warn(
+          `Crypto tx ${observed.txHash} rejected for ${providerIntentId}: ${check.reason}`,
+        );
+        return {
+          status: 'failed',
+          metadata: { chain, reason: check.reason, txHash: observed.txHash },
+        };
+      }
+
+      const required = Number(
+        snapshot.requiredConfirmations ?? DEFAULT_CHAINS[chain]?.confirmations ?? 1,
+      );
+      const confirmations = Number(observed.confirmations ?? 0);
+      if (confirmations >= required) {
+        return {
+          status: 'paid',
+          metadata: { txHash: observed.txHash, confirmations, chain },
+          providerData: { ...observed, validated: true },
+        };
+      }
+      return {
+        status: 'opened',
+        metadata: {
+          txHash: observed.txHash,
+          confirmations,
+          requiredConfirmations: required,
+          chain,
+        },
+      };
+    }
+
+    // Manual/admin confirmation path (confirmTransaction writes snapshot.txHash)
     if (snapshot.txHash && snapshot.confirmations >= (snapshot.requiredConfirmations || 1)) {
       return {
         status: 'paid',
@@ -423,16 +461,49 @@ export class CryptoAdapter implements Connector {
    * }
    */
   async handleWebhook(rawPayload: any): Promise<WebhookParseResult> {
-    const { chain, txHash, to, token, amount, confirmations, memo } = rawPayload;
+    const { chain, txHash, from, to, token, amount, confirmations, memo, blockNumber } = rawPayload;
 
     if (!chain || !txHash) {
       throw new Error('Invalid crypto webhook: missing chain or txHash');
     }
 
-    // Try to find the payment intent by memo or receiver address
-    const entityId = memo || txHash;
+    // Resolve the invoice this transfer pays. The indexer reports the on-chain
+    // memo/tag we embedded at invoice creation; the previous code set
+    // entityId=memo, but the intent's providerIntentId is the invoice id — so
+    // the generic processor (which looks up by providerIntentId) could NEVER
+    // reconcile a real confirmation. Match the memo back to the intent and
+    // return its providerIntentId as the entityId.
+    const intent = await this.resolveIntentForTransfer({ chain, memo, to });
 
-    const confirmed = confirmations >= (DEFAULT_CHAINS[chain]?.confirmations || 1);
+    // Persist the observed transfer so getIntentStatus can validate it against
+    // the invoice (receiver/token/amount/chain) and decide paid/opened/failed.
+    // Only the authenticated indexer reaches here — verifyWebhook gates on the
+    // shared webhookSecret and fails closed when it is unset.
+    if (intent) {
+      const snapshot = (intent.snapshot as Record<string, any>) || {};
+      await this.prisma.paymentIntent.update({
+        where: { id: intent.id },
+        data: {
+          txHash,
+          snapshot: {
+            ...snapshot,
+            observedTransfer: {
+              chain,
+              txHash,
+              from: from ?? null,
+              to: to ?? null,
+              token: token ?? null,
+              amount: amount ?? null,
+              confirmations: Number(confirmations ?? 0),
+              blockNumber: blockNumber ?? null,
+            },
+          },
+        },
+      });
+    }
+
+    const entityId = intent?.providerIntentId || memo || txHash;
+    const confirmed = Number(confirmations ?? 0) >= (DEFAULT_CHAINS[chain]?.confirmations || 1);
 
     return {
       webhookId: `crypto_${chain}_${txHash}`,
@@ -442,6 +513,7 @@ export class CryptoAdapter implements Connector {
       payload: {
         chain,
         txHash,
+        from,
         to,
         token,
         amount,
@@ -450,6 +522,112 @@ export class CryptoAdapter implements Connector {
         confirmed,
       },
     };
+  }
+
+  /**
+   * Resolve the PaymentIntent a webhook-observed transfer belongs to, by the
+   * memo/tag embedded at invoice creation. Scoped to the crypto rail and further
+   * narrowed by chain + receiver address to disambiguate memo collisions (the
+   * memo is only the order id suffix). Most recent match wins.
+   */
+  private async resolveIntentForTransfer(params: {
+    chain?: string;
+    memo?: string;
+    to?: string;
+  }): Promise<{ id: string; providerIntentId: string | null; snapshot: any } | null> {
+    if (!params.memo) return null;
+
+    const candidates = await this.prisma.paymentIntent.findMany({
+      where: {
+        rail: RAILS.CRYPTO,
+        snapshot: { path: ['memo'], equals: params.memo },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    });
+
+    // Narrow by chain, then PREFER a receiver-address match to break memo
+    // collisions — but still resolve to the memo+chain invoice on a receiver
+    // mismatch so getIntentStatus can explicitly reject it (receiver_mismatch)
+    // rather than silently leaving it unreconciled.
+    const chainMatches = candidates.filter((intent) => {
+      const s = (intent.snapshot as Record<string, any>) || {};
+      return !params.chain || !s.chain || s.chain === params.chain;
+    });
+    const preferred = params.to
+      ? chainMatches.find((intent) => {
+          const s = (intent.snapshot as Record<string, any>) || {};
+          return (
+            s.receiverAddress &&
+            String(s.receiverAddress).toLowerCase() === String(params.to).toLowerCase()
+          );
+        })
+      : undefined;
+    const match = preferred || chainMatches[0];
+
+    return match
+      ? { id: match.id, providerIntentId: match.providerIntentId, snapshot: match.snapshot }
+      : null;
+  }
+
+  /**
+   * Validate an observed transfer against the invoice snapshot: same chain, same
+   * token, correct receiver, and at least the invoiced on-chain amount. Returns
+   * a reason on failure so getIntentStatus can mark the intent failed.
+   */
+  private validateObservedTransfer(
+    snapshot: Record<string, any>,
+    observed: Record<string, any>,
+  ): { ok: boolean; reason?: string } {
+    if (snapshot.chain && observed.chain && snapshot.chain !== observed.chain) {
+      return { ok: false, reason: 'chain_mismatch' };
+    }
+    if (
+      snapshot.token &&
+      observed.token &&
+      String(snapshot.token).toUpperCase() !== String(observed.token).toUpperCase()
+    ) {
+      return { ok: false, reason: 'token_mismatch' };
+    }
+    if (
+      snapshot.receiverAddress &&
+      observed.to &&
+      String(snapshot.receiverAddress).toLowerCase() !== String(observed.to).toLowerCase()
+    ) {
+      return { ok: false, reason: 'receiver_mismatch' };
+    }
+
+    const expected = this.toBigIntOrNull(snapshot.onChainAmount);
+    const got = this.observedRawAmount(observed.amount, Number(snapshot.decimals ?? 0));
+    if (expected === null || got === null) {
+      return { ok: false, reason: 'unparseable_amount' };
+    }
+    if (got < expected) {
+      return { ok: false, reason: 'amount_too_low' };
+    }
+    return { ok: true };
+  }
+
+  private toBigIntOrNull(value: any): bigint | null {
+    if (value === undefined || value === null) return null;
+    const s = String(value).trim();
+    return /^\d+$/.test(s) ? BigInt(s) : null;
+  }
+
+  /**
+   * Interpret an indexer-reported amount as the token's smallest on-chain unit.
+   * Accepts a raw integer string (already smallest units) or a decimal token
+   * amount (scaled by `decimals`). Returns null if it cannot be parsed.
+   */
+  private observedRawAmount(value: any, decimals: number): bigint | null {
+    if (value === undefined || value === null) return null;
+    const s = String(value).trim();
+    if (/^\d+$/.test(s)) return BigInt(s);
+    const m = s.match(/^(\d+)(?:\.(\d+))?$/);
+    if (!m) return null;
+    const whole = m[1];
+    const frac = (m[2] || '').padEnd(decimals, '0').slice(0, decimals);
+    return BigInt(whole + (decimals > 0 ? frac : ''));
   }
 
   /**

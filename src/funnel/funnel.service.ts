@@ -2,12 +2,16 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../common/services/prisma.service';
+import { DistributedLockService } from '../common/locks/distributed-lock.service';
 
 @Injectable()
 export class FunnelService {
   private readonly logger = new Logger(FunnelService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly lock: DistributedLockService,
+  ) {}
 
   /**
    * Track a funnel event
@@ -53,9 +57,13 @@ export class FunnelService {
    */
   @Cron('0 */15 * * * *')
   async processAutomatedActions(): Promise<void> {
-    await this.detectAbandonedCheckouts();
-    await this.detectChurningSubscriptions();
-    await this.cleanupStaleOrders();
+    // One instance at a time — otherwise every replica emits duplicate funnel
+    // events and races the stale-order cleanup.
+    await this.lock.runWithLock('funnel-automated-actions', 5 * 60_000, async () => {
+      await this.detectAbandonedCheckouts();
+      await this.detectChurningSubscriptions();
+      await this.cleanupStaleOrders();
+    });
   }
 
   /**
@@ -80,46 +88,64 @@ export class FunnelService {
   /**
    * Detect abandoned checkouts (orders created >1hr ago, still in 'created' status).
    */
-  async detectAbandonedCheckouts(): Promise<number> {
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  /** Scan window / page size for the abandoned-checkout sweep. */
+  private static readonly ABANDONED_WINDOW_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
+  private static readonly ABANDONED_BATCH = 200;
 
-    // Find orders with status='created' older than 1 hour
-    const staleOrders = await this.prisma.order.findMany({
-      where: {
-        status: 'created',
-        createdAt: { lt: oneHourAgo },
-      },
-      include: {
-        price: { include: { product: true } },
-      },
-    });
+  async detectAbandonedCheckouts(): Promise<number> {
+    const now = Date.now();
+    const oneHourAgo = new Date(now - 60 * 60 * 1000);
+    // 'created' orders are never cleaned up, so scanning ALL of them (with a
+    // per-order existence check) grew unbounded and N+1 every 15 minutes. Bound
+    // the scan to a recent window — every abandonment is caught within it — and
+    // page through it, checking existing events one batch at a time.
+    const windowStart = new Date(now - FunnelService.ABANDONED_WINDOW_MS);
+    const detectedAt = new Date(now).toISOString();
 
     let count = 0;
+    let cursor: string | undefined;
 
-    for (const order of staleOrders) {
-      // Check if checkout_abandoned event already exists for this order
-      const existing = await this.prisma.funnelEvent.findFirst({
+    for (;;) {
+      const staleOrders = await this.prisma.order.findMany({
         where: {
-          orderId: order.id,
-          eventType: 'checkout_abandoned',
+          status: 'created',
+          createdAt: { gte: windowStart, lt: oneHourAgo },
         },
+        include: { price: { include: { product: true } } },
+        orderBy: { id: 'asc' },
+        take: FunnelService.ABANDONED_BATCH,
+        ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
       });
 
-      if (existing) continue;
+      if (staleOrders.length === 0) break;
+      cursor = staleOrders[staleOrders.length - 1].id;
 
-      await this.track({
-        userId: order.userId,
-        eventType: 'checkout_abandoned',
-        stage: 'churned',
-        orderId: order.id,
-        productId: order.price?.product?.id,
-        serviceId: order.price?.product?.serviceId ?? undefined,
-        amount: Number(order.amount),
-        currency: order.currency,
-        properties: { detectedAt: new Date().toISOString() },
+      // One query for the whole batch instead of one per order (kills the N+1).
+      const orderIds = staleOrders.map((o) => o.id);
+      const existing = await this.prisma.funnelEvent.findMany({
+        where: { orderId: { in: orderIds }, eventType: 'checkout_abandoned' },
+        select: { orderId: true },
       });
+      const alreadyAbandoned = new Set(existing.map((e) => e.orderId));
 
-      count++;
+      for (const order of staleOrders) {
+        if (alreadyAbandoned.has(order.id)) continue;
+
+        await this.track({
+          userId: order.userId,
+          eventType: 'checkout_abandoned',
+          stage: 'churned',
+          orderId: order.id,
+          productId: order.price?.product?.id,
+          serviceId: order.price?.product?.serviceId ?? undefined,
+          amount: Number(order.amount),
+          currency: order.currency,
+          properties: { detectedAt },
+        });
+        count++;
+      }
+
+      if (staleOrders.length < FunnelService.ABANDONED_BATCH) break;
     }
 
     if (count > 0) {

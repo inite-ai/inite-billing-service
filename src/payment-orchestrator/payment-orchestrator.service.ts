@@ -11,6 +11,7 @@ import { PrismaService } from '../common/services/prisma.service';
 import { PaymentRailAdapter } from '../common/interfaces/payment-rail-adapter.interface';
 import { ConnectorRegistry } from '../common/connectors/connector-registry.service';
 import { Connector } from '../common/connectors/connector.interface';
+import { calculatePeriodEnd } from './period.util';
 import {
   isValidTransition,
   mapIntentToOrderStatus,
@@ -591,17 +592,43 @@ export class PaymentOrchestratorService implements OnModuleInit {
     tx: any,
   ): Promise<void> {
     const price = subscription.price;
-    const renewalChargeId =
+
+    // Idempotency key for THIS renewal cycle. Prefer the provider's charge id
+    // (stable across webhook re-deliveries). The fallback must be DETERMINISTIC —
+    // the old `renewal_<sub>_<Date.now()>` produced a fresh id every time, so a
+    // reprocess (crash between the renewal commit and marking the webhook event
+    // 'processed' → 5-min recovery re-run; or a BullMQ retry) created a SECOND
+    // paid renewal Order and double-granted entitlements/credits. Deriving it
+    // from the current (about-to-be-advanced) period makes a retry map to the
+    // same key.
+    const renewalChargeId = String(
       providerData?.id ||
-      providerData?.charge ||
-      providerData?.payment_intent ||
-      `renewal_${subscription.id}_${Date.now()}`;
+        providerData?.charge ||
+        providerData?.payment_intent ||
+        `renewal_${subscription.id}_${new Date(subscription.currentPeriodEnd).toISOString()}`,
+    );
+
+    // Idempotency guard: if a PaymentIntent already exists for
+    // (rail, renewalChargeId) this renewal was already applied — skip instead of
+    // double-charging/regranting. The DB unique constraint
+    // (provider_intent_id, rail) is the race backstop for concurrent deliveries
+    // (the loser's tx aborts, the webhook is retried, and this guard then hits).
+    const existing = await tx.paymentIntent.findFirst({
+      where: { rail: subscription.rail, providerIntentId: renewalChargeId },
+      select: { id: true },
+    });
+    if (existing) {
+      this.logger.warn(
+        `Renewal ${renewalChargeId} already applied for subscription ${subscription.id}; skipping (idempotent)`,
+      );
+      return;
+    }
 
     const order = await tx.order.create({
       data: {
         userId: subscription.userId,
         priceId: price.id,
-        externalId: `renewal_${subscription.id}_${Date.now()}`,
+        externalId: `renewal_${renewalChargeId}`,
         status: 'paid',
         mode: 'SUBSCRIPTION',
         amount: price.amount,
@@ -619,7 +646,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
         orderId: order.id,
         rail: subscription.rail,
         status: 'paid',
-        providerIntentId: String(renewalChargeId),
+        providerIntentId: renewalChargeId,
         amount: price.amount,
         currency: price.currency,
         snapshot: providerData,
@@ -832,13 +859,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
   }
 
   private calculatePeriodEnd(start: Date, interval: string): Date {
-    const end = new Date(start);
-    if (interval === 'month') {
-      end.setMonth(end.getMonth() + 1);
-    } else if (interval === 'year') {
-      end.setFullYear(end.getFullYear() + 1);
-    }
-    return end;
+    return calculatePeriodEnd(start, interval);
   }
 
   /**

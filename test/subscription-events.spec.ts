@@ -167,6 +167,62 @@ describe('handleSubscriptionEvent', () => {
       expect(prisma.order.create).not.toHaveBeenCalled();
       expect(prisma.subscription.update).not.toHaveBeenCalled();
     });
+
+    it('is idempotent — a reprocessed renewal with an existing charge intent is skipped', async () => {
+      const sub = mockSub();
+      prisma.subscription.findFirst.mockResolvedValue(sub);
+      // A PaymentIntent already exists for (rail, renewal charge id): this
+      // renewal was already applied (duplicate delivery / crash-recovery re-run).
+      prisma.paymentIntent.findFirst.mockResolvedValue({ id: 'existing-renewal-pi' });
+
+      await orchestrator.handleSubscriptionEvent(
+        'STRIPE',
+        'subscription.renewed',
+        'sub_stripe_xyz',
+        {
+          id: 'ch_renewal_42',
+        },
+      );
+
+      // No second Order / PaymentIntent, no double period-advance / regrant.
+      expect(prisma.order.create).not.toHaveBeenCalled();
+      expect(prisma.paymentIntent.create).not.toHaveBeenCalled();
+      expect(prisma.subscription.update).not.toHaveBeenCalled();
+      expect(prisma.invoice.create).not.toHaveBeenCalled();
+    });
+
+    it('uses a deterministic charge id (no Date.now) when the provider sends none', async () => {
+      const sub = mockSub();
+      prisma.subscription.findFirst.mockResolvedValue(sub);
+      prisma.order.findUnique.mockResolvedValue({
+        id: 'renewal-order-1',
+        userId: sub.userId,
+        priceId: sub.priceId,
+        amount: 29,
+        currency: 'USD',
+        mode: 'SUBSCRIPTION',
+        status: 'paid',
+        price: sub.price,
+      });
+      prisma.subscription.findUnique.mockResolvedValue(sub);
+
+      // No id/charge/payment_intent in providerData → deterministic fallback.
+      await orchestrator.handleSubscriptionEvent(
+        'STRIPE',
+        'subscription.renewed',
+        'sub_stripe_xyz',
+        {},
+      );
+
+      const providerIntentId = prisma.paymentIntent.create.mock.calls[0][0].data.providerIntentId;
+      expect(providerIntentId).toBe(`renewal_sub-1_${sub.currentPeriodEnd.toISOString()}`);
+      // The guard checked (rail, that same deterministic id) first.
+      expect(prisma.paymentIntent.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { rail: 'STRIPE', providerIntentId },
+        }),
+      );
+    });
   });
 
   describe('subscription.renewal_failed', () => {
