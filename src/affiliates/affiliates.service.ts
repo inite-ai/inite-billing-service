@@ -296,27 +296,49 @@ export class AffiliatesService {
    * Check if affiliate qualifies for a commission level
    * based on qualificationCriteria from ReferralLevel
    */
-  private async getDownlineUserIds(affiliateId: string, db: any): Promise<string[]> {
-    const userIds: string[] = [];
-    const queue = [affiliateId];
+  /** Safety cap on downline traversal — bounds a pathological/deep tree. */
+  private static readonly MAX_DOWNLINE_NODES = 10_000;
 
-    while (queue.length > 0) {
-      const currentId = queue.shift()!;
-      const referrals = await db.referral.findMany({
-        where: { affiliateId: currentId },
+  /**
+   * Collect every user id in an affiliate's downline (breadth-first).
+   *
+   * Reads run against `this.prisma`, NOT a passed transaction: this is invoked
+   * from qualification checks during paid-order fulfilment, and running these
+   * heavy reads inside that transaction extended it (30s-timeout risk) and held
+   * locks. The traversal is level-batched (two queries per level, not N+1),
+   * cycle-safe (a `visited` set — the old queue-based walk could loop forever on
+   * a referral cycle), and bounded by MAX_DOWNLINE_NODES.
+   */
+  private async getDownlineUserIds(affiliateId: string): Promise<string[]> {
+    const userIds: string[] = [];
+    const visitedAffiliates = new Set<string>([affiliateId]);
+    let frontier: string[] = [affiliateId];
+
+    while (frontier.length > 0 && userIds.length < AffiliatesService.MAX_DOWNLINE_NODES) {
+      const referrals = await this.prisma.referral.findMany({
+        where: { affiliateId: { in: frontier } },
         select: { referredUserId: true },
       });
-      for (const r of referrals) {
-        userIds.push(r.referredUserId);
-        // Find if referred user is also an affiliate (for deeper levels)
-        const childAffiliate = await db.affiliate.findFirst({
-          where: { userId: r.referredUserId },
-          select: { id: true },
-        });
-        if (childAffiliate) {
-          queue.push(childAffiliate.id);
-        }
-      }
+      const referredUserIds = referrals.map((r: any) => r.referredUserId);
+      if (referredUserIds.length === 0) break;
+      userIds.push(...referredUserIds);
+
+      // Which of those referred users are themselves affiliates? One query for
+      // the whole level instead of one per referral.
+      const childAffiliates = await this.prisma.affiliate.findMany({
+        where: { userId: { in: referredUserIds } },
+        select: { id: true },
+      });
+      frontier = childAffiliates
+        .map((a: any) => a.id)
+        .filter((id: string) => !visitedAffiliates.has(id));
+      frontier.forEach((id: string) => visitedAffiliates.add(id));
+    }
+
+    if (userIds.length >= AffiliatesService.MAX_DOWNLINE_NODES) {
+      this.logger.warn(
+        `getDownlineUserIds(${affiliateId}) hit the ${AffiliatesService.MAX_DOWNLINE_NODES}-node cap; downline metrics truncated`,
+      );
     }
 
     return userIds;
@@ -326,11 +348,15 @@ export class AffiliatesService {
     affiliate: any,
     criteria: any,
     serviceId: string | undefined,
-    db: any,
   ): Promise<boolean> {
     if (!criteria || Object.keys(criteria).length === 0) {
       return true; // No criteria = always qualified
     }
+
+    // Qualification is read-only and based on already-committed history, so it
+    // runs against this.prisma rather than the fulfilment transaction — keeping
+    // these heavy counts/aggregates out of the money-tx (timeout / lock risk).
+    const db = this.prisma;
 
     // minDirectReferrals — minimum total direct referrals
     if (criteria.minDirectReferrals) {
@@ -390,7 +416,7 @@ export class AffiliatesService {
 
     // minDownlineOrders — minimum paid orders across entire downline structure
     if (criteria.minDownlineOrders) {
-      const downlineUserIds = await this.getDownlineUserIds(affiliate.id, db);
+      const downlineUserIds = await this.getDownlineUserIds(affiliate.id);
       const count = await db.order.count({
         where: {
           userId: { in: downlineUserIds },
@@ -650,7 +676,7 @@ export class AffiliatesService {
 
       // Check qualification criteria
       const criteria = levelConfig?.qualificationCriteria || {};
-      const isQualified = await this.checkQualification(currentAffiliate, criteria, serviceId, db);
+      const isQualified = await this.checkQualification(currentAffiliate, criteria, serviceId);
 
       if (!isQualified) {
         this.logger.debug(
