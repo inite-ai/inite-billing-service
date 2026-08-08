@@ -44,7 +44,12 @@ services:
       JWT_SECRET: dev-jwt-secret-key-change-in-production
       PORT: 3000
       NODE_ENV: development
-      FRONTEND_URL: http://localhost:3000
+      # The frontend dev server runs on :3001 — used to build checkout/email links.
+      FRONTEND_URL: http://localhost:3001
+      # Optional: forwarded from your shell/.env so the AI assistant and email
+      # work inside the container (both features are off unless keys are set).
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
     volumes:
       - .:/app
       - /app/node_modules

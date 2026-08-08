@@ -2,7 +2,17 @@
   "name": "inite-billing-frontend",
   "version": "1.0.0",
   "description": "INITE Billing Service - Frontend",
+  "author": "INITE (https://inite.ai)",
+  "license": "AGPL-3.0-or-later",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/inite-ai/inite-billing-service.git",
+    "directory": "frontend"
+  },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "next dev -p 3001 --turbopack",
     "build": "next build",
