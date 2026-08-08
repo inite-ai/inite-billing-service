@@ -3,7 +3,9 @@ import {
   Connector,
   ConnectorCapabilities,
   RegisterConnector,
+  WebhookVerifyInput,
 } from '../../common/connectors/connector.interface';
+import { safeTimingSafeEqual } from '../../common/connectors/webhook-verify.util';
 import { RAILS } from '../../common/connectors/rail';
 import {
   CreateIntentInput,
@@ -159,6 +161,15 @@ export class CryptoAdapter implements Connector {
       supportedModes: ['PAYMENT'],
       requiresRedirect: false,
     };
+  }
+
+  /** The indexer authenticates with a shared secret in x-webhook-secret. Fails
+   * closed when unset (a forged "confirmed" tx would trigger free fulfilment). */
+  verifyWebhook({ headers, config }: WebhookVerifyInput): boolean {
+    const expectedSecret = config.webhookSecret;
+    if (!expectedSecret) return false;
+    const secret = headers['x-webhook-secret'];
+    return !!secret && safeTimingSafeEqual(expectedSecret, secret);
   }
 
   /**

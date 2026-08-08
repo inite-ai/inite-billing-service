@@ -50,6 +50,32 @@ export interface Connector extends PaymentRailAdapter {
    * the structural version of the per-rail logic in the orchestrator switch.
    */
   subscriptionAnchorId?(snapshot: Record<string, any>, intent?: any): string | null;
+
+  /**
+   * Verify an inbound webhook. MUST fail closed (return false) when the required
+   * secret/token is missing or empty — an absent secret is attacker-forgeable.
+   * Return a boolean; do not throw for an ordinary bad signature.
+   */
+  verifyWebhook?(input: WebhookVerifyInput): Promise<boolean> | boolean;
+
+  /**
+   * Transform the raw request body into the representation to persist on the
+   * WebhookEvent (e.g. Google decodes its base64 Pub/Sub envelope). Defaults to
+   * the raw body when a connector doesn't override it.
+   */
+  webhookStoragePayload?(rawPayload: any): any;
+}
+
+/** Everything a connector needs to authenticate an inbound webhook. */
+export interface WebhookVerifyInput {
+  /** Exact request bytes (req.rawBody) — signatures are computed over these. */
+  rawBody: Buffer;
+  /** Lower-cased request headers. */
+  headers: Record<string, string | undefined>;
+  /** The provider's stored config (PaymentProvider.config), or {} if absent. */
+  config: Record<string, any>;
+  /** The parsed request body. */
+  payload: any;
 }
 
 /** Reflect-metadata key marking a provider class as a payment connector. */

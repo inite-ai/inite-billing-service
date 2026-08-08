@@ -2,6 +2,7 @@ import { createHmac } from 'crypto';
 import { ForbiddenException, RawBodyRequest } from '@nestjs/common';
 import type { Request } from 'express';
 import { StripeAdapter } from '../src/adapters/stripe/stripe.adapter';
+import { OneAdapter } from '../src/adapters/one/one.adapter';
 import { WebhooksController } from '../src/webhooks/webhooks.controller';
 
 /**
@@ -67,7 +68,7 @@ describe('Webhook signature verification (raw body)', () => {
     });
   });
 
-  describe('ONE controller', () => {
+  describe('ONE controller (dynamic route)', () => {
     let controller: WebhooksController;
     let webhooksService: any;
     const API_SECRET = 'one_api_secret';
@@ -77,28 +78,20 @@ describe('Webhook signature verification (raw body)', () => {
         getProviderConfig: jest.fn().mockResolvedValue({ apiSecret: API_SECRET }),
         storeWebhookEvent: jest.fn().mockResolvedValue(undefined),
       };
-      const oneAdapter: any = {}; // no handleWebhook -> controller uses its fallback parse
-      const noop: any = {};
-      controller = new WebhooksController(
-        webhooksService,
-        oneAdapter,
-        noop,
-        noop,
-        noop,
-        noop,
-        noop,
-      );
+      const orchestrator = { getAdapter: jest.fn().mockReturnValue(new OneAdapter({} as any)) };
+      controller = new WebhooksController(webhooksService, orchestrator as any);
     });
 
     it('accepts a signature over the raw body even when it differs from JSON.stringify(payload)', async () => {
       const payload = { id: 'wh1', event_type: 'payment.order.updated', entity_id: 'pi_1' };
       // Raw bytes the client actually sent — different key order + whitespace than
-      // JSON.stringify(payload). The old code signed JSON.stringify(payload) and
-      // would reject this; the fix verifies over rawBody and accepts it.
+      // JSON.stringify(payload). Verification is over rawBody, so this is accepted.
       const raw = '{ "entity_id": "pi_1", "event_type": "payment.order.updated", "id": "wh1" }';
       const sig = createHmac('sha256', API_SECRET).update(raw).digest('hex');
 
-      const res = await controller.handleOneWebhook(payload, rawReq(raw), sig);
+      const res = await controller.handleWebhook('one', payload, rawReq(raw), {
+        'x-signature': sig,
+      });
 
       expect(res).toEqual({ received: true });
       expect(webhooksService.storeWebhookEvent).toHaveBeenCalledWith(
@@ -111,10 +104,10 @@ describe('Webhook signature verification (raw body)', () => {
     });
 
     it('rejects an invalid signature', async () => {
-      const payload = { id: 'wh2', entity_id: 'pi_2' };
+      const payload = { id: 'wh2', entity_id: 'pi_2', event_type: 'payment.order.updated' };
       const raw = JSON.stringify(payload);
       await expect(
-        controller.handleOneWebhook(payload, rawReq(raw), 'deadbeef'),
+        controller.handleWebhook('one', payload, rawReq(raw), { 'x-signature': 'deadbeef' }),
       ).rejects.toBeInstanceOf(ForbiddenException);
       expect(webhooksService.storeWebhookEvent).not.toHaveBeenCalled();
     });

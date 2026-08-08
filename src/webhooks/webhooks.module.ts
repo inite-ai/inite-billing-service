@@ -3,11 +3,9 @@ import { BullModule } from '@nestjs/bullmq';
 import { WebhooksController } from './webhooks.controller';
 import { WebhooksService } from './webhooks.service';
 import { PrismaService } from '../common/services/prisma.service';
-import { AdaptersModule } from '../adapters/adapters.module';
 
 @Module({
   imports: [
-    AdaptersModule,
     BullModule.registerQueue({
       name: 'webhooks',
     }),
@@ -16,6 +14,7 @@ import { AdaptersModule } from '../adapters/adapters.module';
   providers: [WebhooksService, PrismaService],
   exports: [WebhooksService],
 })
-export class WebhooksModule {
-  // OneAdapter and CryptoAdapter are provided by AdaptersModule
-}
+// The controller resolves each rail's connector via the global
+// PaymentOrchestratorService (fed by the ConnectorRegistry) — no per-rail
+// adapter wiring here anymore.
+export class WebhooksModule {}

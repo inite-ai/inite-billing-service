@@ -3,6 +3,7 @@ import {
   Connector,
   ConnectorCapabilities,
   RegisterConnector,
+  WebhookVerifyInput,
 } from '../../common/connectors/connector.interface';
 import { RAILS } from '../../common/connectors/rail';
 import {
@@ -72,6 +73,14 @@ export class StripeAdapter implements Connector {
       supportsRefund: true,
       supportsCancel: true,
     };
+  }
+
+  /** Stripe signs the raw body (t=…,v1=… with a 5-minute tolerance). Delegates
+   * to verifyWebhookSignature, which fetches the webhook secret from config. */
+  async verifyWebhook({ rawBody, headers }: WebhookVerifyInput): Promise<boolean> {
+    const signature = headers['stripe-signature'];
+    if (!signature) return false;
+    return this.verifyWebhookSignature(rawBody, signature);
   }
 
   /**
