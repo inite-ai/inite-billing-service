@@ -263,17 +263,84 @@ export class GooglePlayAdapter implements Connector {
         },
         providerData: sub,
       };
-    } catch {
-      // Not a subscription, try one-time product
-      // For one-time products, we need the productId which is in the metadata
-      // stored when creating the intent. Fall back to basic status.
-      this.logger.warn(`Could not fetch subscription status for token, may be a one-time product`);
+    } catch (subError: any) {
+      // The subscriptions lookup can fail because the token is a one-time
+      // product OR because of a transient/auth error or an invalid token. The
+      // old code assumed the former and returned 'paid' unconditionally — a
+      // Google outage or a forged token would mark an unpaid order paid. Instead
+      // verify the one-time product explicitly and fail closed otherwise.
+      return this.getOneTimeProductStatus(config, providerIntentId, subError);
+    }
+  }
+
+  /**
+   * Verify a one-time product purchase via the Android Publisher products API.
+   * Returns 'paid' ONLY when Google reports purchaseState = Purchased (0).
+   * Any inability to verify (missing productId, transient/auth error, invalid
+   * token) fails closed to a non-paid status — never assume paid.
+   */
+  private async getOneTimeProductStatus(
+    config: GooglePlayConfig,
+    purchaseToken: string,
+    subError: any,
+  ): Promise<IntentStatusResult> {
+    // The productId is required to query the products endpoint; it is persisted
+    // on the intent snapshot when the intent is created.
+    const intent = await this.prisma.paymentIntent.findFirst({
+      where: { providerIntentId: purchaseToken, rail: RAILS.GOOGLE_PLAY },
+    });
+    const snapshot = (intent?.snapshot as Record<string, any>) || {};
+    const productId = snapshot.google_product_id || snapshot.googleProductId;
+
+    if (!productId) {
+      this.logger.warn(
+        `Google Play: cannot verify token as a one-time product (no productId on intent); ` +
+          `not marking paid (subscription lookup: ${subError?.message})`,
+      );
+      return {
+        status: 'created',
+        metadata: {
+          google_purchase_token: purchaseToken,
+          note: 'unverified — missing productId, refusing to assume paid',
+        },
+      };
+    }
+
+    try {
+      const product = await this.googleRequest(
+        'GET',
+        `/applications/${config.packageName}/purchases/products/${productId}/tokens/${purchaseToken}`,
+      );
+
+      // ProductPurchase.purchaseState: 0 Purchased, 1 Canceled, 2 Pending
+      const stateMap: Record<number, IntentStatusResult['status']> = {
+        0: 'paid',
+        1: 'failed',
+        2: 'created',
+      };
 
       return {
-        status: 'paid', // If token exists and was valid at creation, assume paid
+        status: stateMap[product.purchaseState] ?? 'created',
         metadata: {
-          google_purchase_token: providerIntentId,
-          note: 'one-time product — verified at creation',
+          google_purchase_token: purchaseToken,
+          google_product_id: productId,
+          purchase_state: product.purchaseState,
+          order_id: product.orderId,
+        },
+        providerData: product,
+      };
+    } catch (productError: any) {
+      // Both lookups failed → transient/auth error or invalid token. Fail closed
+      // so a Google error can never mark an unpaid order paid.
+      this.logger.warn(
+        `Google Play: unable to verify purchase token (subscription: ${subError?.message}; ` +
+          `product: ${productError?.message}); not marking paid`,
+      );
+      return {
+        status: 'created',
+        metadata: {
+          google_purchase_token: purchaseToken,
+          note: 'verification failed — refusing to assume paid',
         },
       };
     }
