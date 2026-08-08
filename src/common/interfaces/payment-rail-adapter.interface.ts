@@ -24,6 +24,17 @@ export interface IntentStatusResult {
   status: 'created' | 'opened' | 'paid' | 'failed' | 'expired' | 'refunded';
   metadata?: Record<string, any>;
   providerData?: Record<string, any>;
+  /**
+   * The amount the provider actually settled, NORMALIZED to major currency units
+   * (the same scale as Order.amount — e.g. dollars, not cents). Adapters populate
+   * this when the settled amount is known so the webhook processor can reconcile
+   * it against the order. Leave undefined when the rail does not expose a
+   * reliable amount (the processor then skips the amount check rather than
+   * comparing mismatched units).
+   */
+  amount?: number;
+  /** ISO currency of {@link amount} (case-insensitive), for reconciliation. */
+  currency?: string;
 }
 
 export interface PaymentMethod {
