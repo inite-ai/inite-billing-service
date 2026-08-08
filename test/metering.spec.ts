@@ -223,12 +223,14 @@ describe('CreditsService metered consume', () => {
     service = new CreditsService(mockPrisma, mockMetering);
   });
 
-  it('legacy flat consume works without metering calls or row locks', async () => {
+  it('legacy flat consume works without metering calls, but still row-locks the balance', async () => {
     const result = await service.consume({ userId: 'user-1', amount: 10 });
     expect(result.success).toBe(true);
     expect(result.remainingBalance).toBe(90);
     expect(result.creditsCharged).toBeUndefined();
-    expect(mockTx.$queryRaw).not.toHaveBeenCalled();
+    // Double-spend guard: the flat path now acquires the same FOR UPDATE lock as
+    // the metered path (previously it skipped locking entirely).
+    expect(mockTx.$queryRaw).toHaveBeenCalledTimes(1);
     expect(mockMetering.resolveFeature).not.toHaveBeenCalled();
     const usage = mockTx.creditUsage.create.mock.calls[0][0].data;
     expect(usage.featureCode).toBeUndefined();
