@@ -6,8 +6,7 @@ import { buildJwtOptions } from '../src/auth/strategies/jwt.strategy';
  * These pins are opt-in via env and forwarded to jsonwebtoken.verify.
  */
 describe('buildJwtOptions issuer/audience pinning', () => {
-  const cfg = (env: Record<string, string | undefined>) =>
-    ({ get: (k: string) => env[k] }) as any;
+  const cfg = (env: Record<string, string | undefined>) => ({ get: (k: string) => env[k] }) as any;
 
   it('omits issuer/audience when unset (backward compatible)', () => {
     const opts = buildJwtOptions(cfg({ JWT_SECRET: 's', NODE_ENV: 'test' })) as any;
