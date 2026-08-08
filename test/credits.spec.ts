@@ -23,6 +23,8 @@ describe('CreditsService', () => {
 
   beforeEach(() => {
     mockTx = {
+      // Raw row-lock (SELECT … FOR UPDATE) issued at the top of consume().
+      $queryRaw: jest.fn().mockResolvedValue([]),
       creditBalance: {
         findUnique: jest.fn(),
         create: jest.fn(),
@@ -153,6 +155,24 @@ describe('CreditsService', () => {
           amount: -30,
         }),
       }),
+    );
+  });
+
+  it('consume() flat path acquires a FOR UPDATE row lock (double-spend guard)', async () => {
+    const existing = { ...baseBalance, balance: 100 };
+    mockTx.creditBalance.findUnique.mockResolvedValue(existing);
+    mockTx.creditBalance.update.mockResolvedValue({ ...existing, balance: 70, totalUsed: 30 });
+    mockTx.creditUsage.create.mockResolvedValue({});
+
+    await service.consume({ userId: 'user-1', amount: 30 });
+
+    // The lock must be taken, and taken BEFORE the balance is read.
+    expect(mockTx.$queryRaw).toHaveBeenCalledTimes(1);
+    const sqlArg = mockTx.$queryRaw.mock.calls[0][0];
+    const rawSql = Array.isArray(sqlArg?.strings) ? sqlArg.strings.join('') : String(sqlArg);
+    expect(rawSql).toMatch(/FOR UPDATE/i);
+    expect(mockTx.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      mockTx.creditBalance.findUnique.mock.invocationCallOrder[0],
     );
   });
 

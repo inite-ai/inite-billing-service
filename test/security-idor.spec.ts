@@ -187,6 +187,8 @@ describe('IDOR — Credits Consume', () => {
 
   beforeEach(() => {
     mockTx = {
+      // consume() acquires a SELECT … FOR UPDATE row lock on both paths.
+      $queryRaw: jest.fn().mockResolvedValue([]),
       creditBalance: {
         findUnique: jest.fn(),
         create: jest.fn(),
