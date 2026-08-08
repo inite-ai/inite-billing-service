@@ -496,21 +496,43 @@ export class CheckoutService {
       },
     });
 
-    // Create payment intent record
-    const paymentIntent = await this.prisma.paymentIntent.create({
-      data: {
-        orderId: order.id,
-        rail,
-        status: 'created',
-        providerIntentId: intentResult.providerIntentId,
-        providerCheckoutId: intentResult.providerCheckoutId,
-        checkoutUrl: intentResult.checkoutUrl,
-        amount: orderAmount,
-        currency: price.currency,
-        expiresAt: intentResult.expiresAt,
-        snapshot: intentResult.metadata || {},
-      },
-    });
+    // Create payment intent record. The partial unique index
+    // (payment_intents_one_live_per_order) enforces one live intent per order at
+    // the DB level, closing the race the reuse-check above can't (two requests
+    // that both miss the check before either inserts). If a concurrent request
+    // won, our insert hits a unique violation (P2002) — reuse the winner's intent
+    // instead of surfacing a 500. Our own provider intent is left to expire.
+    let paymentIntent;
+    try {
+      paymentIntent = await this.prisma.paymentIntent.create({
+        data: {
+          orderId: order.id,
+          rail,
+          status: 'created',
+          providerIntentId: intentResult.providerIntentId,
+          providerCheckoutId: intentResult.providerCheckoutId,
+          checkoutUrl: intentResult.checkoutUrl,
+          amount: orderAmount,
+          currency: price.currency,
+          expiresAt: intentResult.expiresAt,
+          snapshot: intentResult.metadata || {},
+        },
+      });
+    } catch (error: any) {
+      if (error?.code === 'P2002') {
+        const winner = await this.prisma.paymentIntent.findFirst({
+          where: { orderId: order.id, rail, status: { in: ['created', 'opened'] } },
+          orderBy: { createdAt: 'desc' },
+        });
+        if (winner) {
+          this.logger.log(
+            `Concurrent intent race for order ${order.id} (${rail}) — reusing ${winner.id}`,
+          );
+          return { checkoutUrl: winner.checkoutUrl || '', paymentIntentId: winner.id };
+        }
+      }
+      throw error;
+    }
 
     return {
       checkoutUrl: intentResult.checkoutUrl || '',

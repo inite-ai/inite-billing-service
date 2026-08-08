@@ -286,6 +286,31 @@ describe('CheckoutService', () => {
     );
   });
 
+  it('paySession() reuses the winner on a concurrent unique-violation (P2002)', async () => {
+    mockPrisma.order.findUnique.mockResolvedValue(mockOrder);
+    // Reuse-check misses first; after the DB rejects our insert (another request
+    // won the one-live-intent-per-order index), the winner is found and reused.
+    mockPrisma.paymentIntent.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      id: 'winner-pi',
+      rail: 'STRIPE',
+      status: 'created',
+      checkoutUrl: 'https://stripe/winner',
+    });
+    mockPaymentOrchestrator.getAdapter.mockReturnValue({
+      createPaymentIntent: jest
+        .fn()
+        .mockResolvedValue({ providerIntentId: 'pi_x', checkoutUrl: 'https://stripe/mine' }),
+    });
+    mockPrisma.paymentIntent.create.mockRejectedValue({ code: 'P2002' });
+
+    const result = await service.paySession('order-1', 'user-1', { rail: 'STRIPE' });
+
+    expect(result).toEqual({
+      checkoutUrl: 'https://stripe/winner',
+      paymentIntentId: 'winner-pi',
+    });
+  });
+
   it('paySession() rejects already-paid order', async () => {
     mockPrisma.order.findUnique.mockResolvedValue({
       ...mockOrder,
