@@ -31,7 +31,25 @@ export class EntitlementsService {
     }));
   }
 
-  async getUserEntitlementsByUserId(userId: string): Promise<EntitlementResponseDto[]> {
-    return this.getUserEntitlements(userId);
+  /**
+   * Read a user's entitlements on behalf of another caller.
+   *
+   * When `callerServiceId` is given (a service-to-service read), the result is
+   * scoped to entitlements owned by THAT service — a service must not see other
+   * services' grants (IDOR). Legacy rows granted before scoping existed carry no
+   * `value.service_id` and stay visible during the transition, so existing
+   * access checks don't regress. A JWT user read (no callerServiceId) sees all
+   * of their own entitlements across services, unchanged.
+   */
+  async getUserEntitlementsByUserId(
+    userId: string,
+    callerServiceId?: string,
+  ): Promise<EntitlementResponseDto[]> {
+    const entitlements = await this.getUserEntitlements(userId);
+    if (!callerServiceId) return entitlements;
+    return entitlements.filter((e) => {
+      const serviceId = (e.value as Record<string, any> | undefined)?.service_id;
+      return serviceId == null || serviceId === callerServiceId;
+    });
   }
 }

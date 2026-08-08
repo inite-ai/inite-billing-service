@@ -222,6 +222,7 @@ export class SubscriptionsService {
               subscription_id: subscription.id,
               product_code: product.code,
               trial: true,
+              service_id: product.serviceId ?? null,
             },
           },
         });

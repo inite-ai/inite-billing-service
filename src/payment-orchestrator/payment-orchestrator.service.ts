@@ -381,6 +381,9 @@ export class PaymentOrchestratorService implements OnModuleInit {
           value: {
             order_id: order.id,
             product_code: product.code,
+            // Records the owning service so a service-to-service read can be
+            // scoped to its own entitlements (see EntitlementsService).
+            service_id: product.serviceId ?? null,
           },
         },
       });
@@ -507,6 +510,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
           value: {
             subscription_id: subscription.id,
             product_code: product.code,
+            service_id: product.serviceId ?? null,
           },
         },
       });

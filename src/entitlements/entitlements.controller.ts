@@ -40,6 +40,11 @@ export class EntitlementsController {
     if (!user.isService && user.userId !== userId) {
       throw new ForbiddenException('Access denied');
     }
-    return this.entitlementsService.getUserEntitlementsByUserId(userId);
+    // A service caller only sees entitlements owned by its own service; a user
+    // caller (already ownership-checked above) sees all of theirs.
+    return this.entitlementsService.getUserEntitlementsByUserId(
+      userId,
+      user.isService ? user.serviceId : undefined,
+    );
   }
 }
