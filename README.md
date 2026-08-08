@@ -81,6 +81,7 @@ cp env.example .env           # fill in secrets (ANTHROPIC_API_KEY for the assis
 docker compose up -d postgres redis
 
 npm run prisma:migrate        # apply schema (pgvector image required)
+npm run db:seed               # optional: demo catalog (service + products + prices)
 npm run start:dev             # backend on :3000, Swagger at /api
 
 cd frontend && npm install && npm run dev   # UI on :3001

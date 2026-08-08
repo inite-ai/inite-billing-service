@@ -26,8 +26,12 @@
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "db:reset": "prisma migrate reset",
+    "db:seed": "prisma db seed",
     "postinstall": "prisma generate",
     "prepare": "husky || true"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.3",
