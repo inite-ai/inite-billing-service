@@ -3,31 +3,8 @@ import { Job } from 'bullmq';
 import { Logger } from '@nestjs/common';
 import { OutboxService } from '../outbox/outbox.service';
 import { PrismaService } from '../common/services/prisma.service';
-
-const PRIVATE_IP_PATTERNS = [
-  /^localhost$/i,
-  /^127\./,
-  /^10\./,
-  /^172\.(1[6-9]|2\d|3[01])\./,
-  /^192\.168\./,
-  /^0\./,
-  /^169\.254\./,
-  /^\[?::1\]?$/,
-  /^\[?fe80:/i,
-  /^\[?fd[0-9a-f]{2}:/i,
-  /^metadata\.google\.internal$/i,
-];
-
-function isPublicUrl(rawUrl: string): boolean {
-  try {
-    const parsed = new URL(rawUrl);
-    if (!['http:', 'https:'].includes(parsed.protocol)) return false;
-    const hostname = parsed.hostname.replace(/^\[|\]$/g, '');
-    return !PRIVATE_IP_PATTERNS.some((p) => p.test(hostname));
-  } catch {
-    return false;
-  }
-}
+import { assertPublicUrl } from './ssrf-guard';
+import { signOutboxDelivery } from './outbox-signature';
 
 /**
  * Outbox publisher processor. Consumes `drain-outbox` jobs enqueued by
@@ -73,35 +50,53 @@ export class OutboxProcessor extends WorkerHost {
         const webhookUrl = (service as any).webhookUrl as string;
         if (!webhookUrl) continue;
 
-        if (!isPublicUrl(webhookUrl)) {
+        // SSRF guard: resolve the host and reject if it (or any address it
+        // resolves to) is private/loopback/link-local — not just a string check.
+        const guard = await assertPublicUrl(webhookUrl);
+        if (!guard.ok) {
           this.logger.warn(
-            `Rejecting private/invalid webhook URL for service ${service.code}: ${webhookUrl}`,
+            `Rejecting webhook URL for service ${service.code} (${guard.reason}): ${webhookUrl}`,
           );
           continue;
         }
 
+        // Sign the exact body so consumers can authenticate the event (and reject
+        // forged/replayed ones): HMAC-SHA256 over `${timestamp}.${body}` keyed on
+        // the service's apiKey — a secret the consumer already holds.
+        const timestamp = Math.floor(Date.now() / 1000).toString();
+        const body = JSON.stringify({
+          type: event.eventType,
+          data: event.payload,
+          aggregate: event.aggregate,
+          eventId: event.id,
+          timestamp: event.createdAt,
+        });
+        const signature = signOutboxDelivery((service as any).apiKey, timestamp, body);
+
         try {
           const res = await fetch(webhookUrl, {
             method: 'POST',
+            // Don't follow redirects — a public URL could 3xx into a private
+            // target, sidestepping the SSRF guard above.
+            redirect: 'manual',
             headers: {
               'Content-Type': 'application/json',
               'x-service-code': service.code,
               'x-event-type': event.eventType,
               'x-event-id': event.id,
+              'x-billing-timestamp': timestamp,
+              'x-billing-signature': signature,
             },
-            body: JSON.stringify({
-              type: event.eventType,
-              data: event.payload,
-              aggregate: event.aggregate,
-              eventId: event.id,
-              timestamp: event.createdAt,
-            }),
+            body,
             signal: AbortSignal.timeout(10_000),
           });
 
+          // With redirect:'manual' a 3xx surfaces as a non-ok response; treat it
+          // (and any non-2xx) as a failed delivery to retry.
           if (!res.ok) {
+            const note = res.status >= 300 && res.status < 400 ? ' (redirect not followed)' : '';
             this.logger.warn(
-              `Webhook delivery failed for ${service.code}: ${res.status} ${res.statusText}`,
+              `Webhook delivery failed for ${service.code}: ${res.status} ${res.statusText}${note}`,
             );
             allDelivered = false;
           }

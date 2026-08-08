@@ -1,3 +1,9 @@
+// Resolve any hostname to a public IP so the SSRF guard doesn't do real DNS.
+// (localhost / private hosts are rejected by name before any lookup.)
+jest.mock('dns/promises', () => ({
+  lookup: jest.fn().mockResolvedValue([{ address: '93.184.216.34', family: 4 }]),
+}));
+
 import { OutboxService } from '../src/outbox/outbox.service';
 import { OutboxProcessor } from '../src/workers/outbox.processor';
 import { OutboxScheduler } from '../src/workers/outbox.scheduler';
@@ -47,7 +53,12 @@ describe('Outbox delivery', () => {
   it('POSTs an emitted event to an active public webhook and marks it sent', async () => {
     mockPrisma.outboxEvent.findMany.mockResolvedValue([event]);
     mockPrisma.service.findMany.mockResolvedValue([
-      { code: 'club', isActive: true, webhookUrl: 'https://club.inite.ai/hooks/billing' },
+      {
+        code: 'club',
+        isActive: true,
+        apiKey: 'club_key',
+        webhookUrl: 'https://club.inite.ai/hooks/billing',
+      },
     ]);
     fetchMock.mockResolvedValue({ ok: true, status: 200, statusText: 'OK' });
 
@@ -75,7 +86,12 @@ describe('Outbox delivery', () => {
   it('never POSTs to a private/loopback webhook URL (SSRF guard)', async () => {
     mockPrisma.outboxEvent.findMany.mockResolvedValue([event]);
     mockPrisma.service.findMany.mockResolvedValue([
-      { code: 'evil', isActive: true, webhookUrl: 'http://localhost:3000/steal' },
+      {
+        code: 'evil',
+        isActive: true,
+        apiKey: 'evil_key',
+        webhookUrl: 'http://localhost:3000/steal',
+      },
     ]);
 
     await processor.process({} as any);
@@ -86,7 +102,12 @@ describe('Outbox delivery', () => {
   it('marks an event failed (with attempt increment) when delivery fails', async () => {
     mockPrisma.outboxEvent.findMany.mockResolvedValue([event]);
     mockPrisma.service.findMany.mockResolvedValue([
-      { code: 'club', isActive: true, webhookUrl: 'https://club.inite.ai/hooks/billing' },
+      {
+        code: 'club',
+        isActive: true,
+        apiKey: 'club_key',
+        webhookUrl: 'https://club.inite.ai/hooks/billing',
+      },
     ]);
     fetchMock.mockResolvedValue({ ok: false, status: 500, statusText: 'Server Error' });
 
