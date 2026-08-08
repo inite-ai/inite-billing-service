@@ -21,14 +21,26 @@ function extractJwt(req: Request): string | null {
   return req?.cookies?.access_token || null;
 }
 
-function buildJwtOptions(configService: ConfigService): StrategyOptionsWithoutRequest {
+export function buildJwtOptions(configService: ConfigService): StrategyOptionsWithoutRequest {
   const logger = new Logger('JwtStrategy');
   const jwtSecret = configService.get<string>('JWT_SECRET');
   const authServiceUrl = configService.get<string>('AUTH_SERVICE_URL') || 'https://auth.inite.ai';
 
+  // Pin the token issuer and audience when configured. Without these, a valid
+  // token the identity provider minted for a DIFFERENT audience (another service
+  // sharing the same JWKS/issuer) would be accepted here — token confusion.
+  // Opt-in via env so existing deployments aren't broken; passport-jwt forwards
+  // them to jsonwebtoken.verify, which enforces the `iss` / `aud` claims.
+  const issuer = configService.get<string>('JWT_ISSUER') || undefined;
+  const audience = configService.get<string>('JWT_AUDIENCE') || undefined;
+  if (issuer) logger.log(`Pinning JWT issuer: ${issuer}`);
+  if (audience) logger.log(`Pinning JWT audience: ${audience}`);
+
   const base = {
     jwtFromRequest: extractJwt,
     ignoreExpiration: false,
+    ...(issuer ? { issuer } : {}),
+    ...(audience ? { audience } : {}),
   };
 
   // Test/dev fallback: symmetric HS256 via JWT_SECRET
