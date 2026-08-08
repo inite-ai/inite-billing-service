@@ -30,7 +30,10 @@ export function isPrivateIPv4(ip: string): boolean {
  * Handles IPv4-mapped IPv6 (`::ffff:a.b.c.d`). Non-IP input is unsafe.
  */
 export function isPrivateAddress(ip: string): boolean {
-  const addr = ip.replace(/^\[|\]$/g, '').trim().toLowerCase();
+  const addr = ip
+    .replace(/^\[|\]$/g, '')
+    .trim()
+    .toLowerCase();
   const kind = isIP(addr);
   if (kind === 4) return isPrivateIPv4(addr);
   if (kind === 6) {

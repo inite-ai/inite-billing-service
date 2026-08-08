@@ -1,10 +1,6 @@
 jest.mock('dns/promises', () => ({ lookup: jest.fn() }));
 import { lookup } from 'dns/promises';
-import {
-  isPrivateIPv4,
-  isPrivateAddress,
-  assertPublicUrl,
-} from '../src/workers/ssrf-guard';
+import { isPrivateIPv4, isPrivateAddress, assertPublicUrl } from '../src/workers/ssrf-guard';
 
 const mockLookup = lookup as unknown as jest.Mock;
 

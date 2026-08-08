@@ -94,8 +94,7 @@ export class OutboxProcessor extends WorkerHost {
           // With redirect:'manual' a 3xx surfaces as a non-ok response; treat it
           // (and any non-2xx) as a failed delivery to retry.
           if (!res.ok) {
-            const note =
-              res.status >= 300 && res.status < 400 ? ' (redirect not followed)' : '';
+            const note = res.status >= 300 && res.status < 400 ? ' (redirect not followed)' : '';
             this.logger.warn(
               `Webhook delivery failed for ${service.code}: ${res.status} ${res.statusText}${note}`,
             );
