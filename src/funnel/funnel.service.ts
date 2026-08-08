@@ -2,12 +2,16 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../common/services/prisma.service';
+import { DistributedLockService } from '../common/locks/distributed-lock.service';
 
 @Injectable()
 export class FunnelService {
   private readonly logger = new Logger(FunnelService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly lock: DistributedLockService,
+  ) {}
 
   /**
    * Track a funnel event
@@ -53,9 +57,13 @@ export class FunnelService {
    */
   @Cron('0 */15 * * * *')
   async processAutomatedActions(): Promise<void> {
-    await this.detectAbandonedCheckouts();
-    await this.detectChurningSubscriptions();
-    await this.cleanupStaleOrders();
+    // One instance at a time — otherwise every replica emits duplicate funnel
+    // events and races the stale-order cleanup.
+    await this.lock.runWithLock('funnel-automated-actions', 5 * 60_000, async () => {
+      await this.detectAbandonedCheckouts();
+      await this.detectChurningSubscriptions();
+      await this.cleanupStaleOrders();
+    });
   }
 
   /**

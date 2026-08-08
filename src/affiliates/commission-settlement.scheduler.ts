@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../common/services/prisma.service';
+import { DistributedLockService } from '../common/locks/distributed-lock.service';
 
 /**
  * Settles pending commissions after the service's settlement period.
@@ -15,10 +16,19 @@ import { PrismaService } from '../common/services/prisma.service';
 export class CommissionSettlementScheduler {
   private readonly logger = new Logger(CommissionSettlementScheduler.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly lock: DistributedLockService,
+  ) {}
 
   @Cron(CronExpression.EVERY_HOUR)
   async settleCommissions() {
+    // One instance at a time — a concurrent replica could re-settle the same
+    // pending commissions and double-count totalEarned.
+    await this.lock.runWithLock('commission-settlement', 10 * 60_000, () => this.runSettlement());
+  }
+
+  private async runSettlement() {
     const services = await this.prisma.service.findMany({
       where: { isActive: true },
       select: { id: true, metadata: true },

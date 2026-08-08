@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../common/services/prisma.service';
 import { PaymentOrchestratorService } from '../payment-orchestrator/payment-orchestrator.service';
+import { DistributedLockService } from '../common/locks/distributed-lock.service';
 
 /**
  * Closes the loop on subscriptions whose currentPeriodEnd has passed.
@@ -22,10 +23,17 @@ export class SubscriptionExpirerScheduler {
   constructor(
     private readonly prisma: PrismaService,
     private readonly orchestrator: PaymentOrchestratorService,
+    private readonly lock: DistributedLockService,
   ) {}
 
   @Cron(CronExpression.EVERY_HOUR)
   async sweep(): Promise<void> {
+    // One instance at a time — otherwise every replica double-processes the same
+    // expired subscriptions (and races renewal webhooks).
+    await this.lock.runWithLock('subscription-expirer', 10 * 60_000, () => this.runSweep());
+  }
+
+  private async runSweep(): Promise<void> {
     const now = new Date();
     const expired = await this.prisma.subscription.findMany({
       where: {

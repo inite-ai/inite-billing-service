@@ -5,6 +5,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard } from '@nestjs/throttler';
+import { LockModule } from './common/locks/lock.module';
 import { AnthropicModule } from './common/anthropic/anthropic.module';
 import { AuthModule } from './auth/auth.module';
 import { PaymentOrchestratorModule } from './payment-orchestrator/payment-orchestrator.module';
@@ -41,6 +42,7 @@ import { InsightsModule } from './insights/insights.module';
       throttlers: [{ ttl: 60000, limit: 60 }],
     }),
     ScheduleModule.forRoot(),
+    LockModule,
     BullModule.forRootAsync({
       useFactory: () => {
         const redisUrl = new URL(process.env.REDIS_URL || 'redis://localhost:6379');
