@@ -14,6 +14,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { IsIn, IsOptional, IsString, IsEmail } from 'class-validator';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../common/services/prisma.service';
 import { EmailService } from '../notifications/email.service';
 import { renderTemplate, isKnownTemplate } from '../notifications/templates';
@@ -41,6 +42,7 @@ export class AdminOutreachController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
+    private readonly config: ConfigService,
   ) {}
 
   @Get()
@@ -156,9 +158,10 @@ export class AdminOutreachController {
   @ApiOperation({ summary: 'Send a template-rendered test email (ops smoke test)' })
   async testEmail(@Body() body: TestEmailDto) {
     const trigger = isKnownTemplate(body.trigger) ? body.trigger : 'abandoned_checkout';
+    const frontendUrl = this.config.get<string>('FRONTEND_URL') || 'https://billing.inite.ai';
     const rendered = renderTemplate(trigger, body.locale, {
       productName: body.productName || 'Test Product',
-      ctaUrl: 'https://billing.inite.ai/dashboard',
+      ctaUrl: `${frontendUrl.replace(/\/$/, '')}/dashboard`,
     });
     const result = await this.emailService.send({
       to: body.to,
