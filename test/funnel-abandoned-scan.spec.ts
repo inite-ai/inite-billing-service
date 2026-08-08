@@ -23,9 +23,7 @@ describe('FunnelService.detectAbandonedCheckouts', () => {
     });
     const funnelFindMany = jest.fn(async ({ where }: any) => {
       const ids: string[] = where.orderId.in;
-      return ids
-        .filter((id) => alreadyAbandonedIds.includes(id))
-        .map((id) => ({ orderId: id }));
+      return ids.filter((id) => alreadyAbandonedIds.includes(id)).map((id) => ({ orderId: id }));
     });
     const funnelCreate = jest.fn(async () => ({}));
     const prisma: any = {
