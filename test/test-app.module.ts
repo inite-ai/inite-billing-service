@@ -2,6 +2,7 @@ import { Module, OnModuleInit } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
 import { ScheduleModule } from '@nestjs/schedule';
+import { LockModule } from '../src/common/locks/lock.module';
 import { AnthropicModule } from '../src/common/anthropic/anthropic.module';
 import { AuthModule } from '../src/auth/auth.module';
 import { PaymentOrchestratorModule } from '../src/payment-orchestrator/payment-orchestrator.module';
@@ -29,6 +30,7 @@ import { OneAdapter } from '../src/adapters/one/one.adapter';
       envFilePath: '.env.test',
     }),
     ScheduleModule.forRoot(),
+    LockModule,
     BullModule.forRootAsync({
       useFactory: () => {
         const redisUrl = process.env.REDIS_URL || 'redis://localhost:6381';
