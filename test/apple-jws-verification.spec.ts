@@ -67,8 +67,14 @@ describe('Apple JWS verification', () => {
 
     it('enforces bundleId when provided', async () => {
       const jws = await signAppleJws(notification);
-      expect((await verifyAppleSignedPayload(jws, { roots: [TEST_ROOT], bundleId: 'ai.inite.app' })).verified).toBe(true);
-      expect((await verifyAppleSignedPayload(jws, { roots: [TEST_ROOT], bundleId: 'com.evil.app' })).verified).toBe(false);
+      expect(
+        (await verifyAppleSignedPayload(jws, { roots: [TEST_ROOT], bundleId: 'ai.inite.app' }))
+          .verified,
+      ).toBe(true);
+      expect(
+        (await verifyAppleSignedPayload(jws, { roots: [TEST_ROOT], bundleId: 'com.evil.app' }))
+          .verified,
+      ).toBe(false);
     });
 
     it('rejects malformed input', async () => {
