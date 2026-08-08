@@ -3,7 +3,9 @@ import {
   Connector,
   ConnectorCapabilities,
   RegisterConnector,
+  WebhookVerifyInput,
 } from '../../common/connectors/connector.interface';
+import { safeTimingSafeEqual } from '../../common/connectors/webhook-verify.util';
 import { RAILS } from '../../common/connectors/rail';
 import {
   CreateIntentInput,
@@ -150,6 +152,23 @@ export class GooglePlayAdapter implements Connector {
       supportedModes: ['SUBSCRIPTION', 'PAYMENT'],
       isClientSide: true,
     };
+  }
+
+  /** Google Pub/Sub push authenticates with an OAuth Bearer token we compare to
+   * the configured pubsubToken. Fails closed when the token is unset. */
+  verifyWebhook({ headers, config }: WebhookVerifyInput): boolean {
+    const expectedToken = (config as any).pubsubToken;
+    if (!expectedToken) return false;
+    const token = headers['authorization']?.replace('Bearer ', '');
+    return !!token && safeTimingSafeEqual(expectedToken, token);
+  }
+
+  /** RTDN wraps the notification as a base64 Pub/Sub envelope — persist the
+   * decoded JSON, not the envelope, matching the prior controller behaviour. */
+  webhookStoragePayload(rawPayload: any): any {
+    return typeof rawPayload.message?.data === 'string'
+      ? JSON.parse(Buffer.from(rawPayload.message.data, 'base64').toString())
+      : rawPayload;
   }
 
   /** Google anchors a subscription on the purchase token, which we persist as

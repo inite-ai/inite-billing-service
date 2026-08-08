@@ -3,7 +3,9 @@ import {
   Connector,
   ConnectorCapabilities,
   RegisterConnector,
+  WebhookVerifyInput,
 } from '../../common/connectors/connector.interface';
+import { safeTimingSafeEqual } from '../../common/connectors/webhook-verify.util';
 import { RAILS } from '../../common/connectors/rail';
 import {
   CreateIntentInput,
@@ -77,6 +79,15 @@ export class LavaAdapter implements Connector {
       supportedModes: ['PAYMENT', 'SUBSCRIPTION'],
       requiresRedirect: true,
     };
+  }
+
+  /** Lava authenticates webhooks with a shared api key in the x-api-key header.
+   * Fails closed when the key is unset. */
+  verifyWebhook({ headers, config }: WebhookVerifyInput): boolean {
+    const apiKey = config.apiKey || '';
+    if (!apiKey) return false;
+    const header = headers['x-api-key'];
+    return !!header && safeTimingSafeEqual(apiKey, header);
   }
 
   /**

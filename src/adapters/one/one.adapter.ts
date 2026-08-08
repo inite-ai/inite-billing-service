@@ -1,9 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { createHmac } from 'crypto';
 import {
   Connector,
   ConnectorCapabilities,
   RegisterConnector,
+  WebhookVerifyInput,
 } from '../../common/connectors/connector.interface';
+import { safeTimingSafeEqual } from '../../common/connectors/webhook-verify.util';
 import { RAILS } from '../../common/connectors/rail';
 import {
   CreateIntentInput,
@@ -76,6 +79,16 @@ export class OneAdapter implements Connector {
       supportedModes: ['PAYMENT', 'SUBSCRIPTION'],
       requiresRedirect: true,
     };
+  }
+
+  /** HMAC-SHA256 over the raw body with the provider apiSecret. Fails closed
+   * when the secret is unset (an empty-key HMAC is attacker-computable). */
+  verifyWebhook({ rawBody, headers, config }: WebhookVerifyInput): boolean {
+    const apiSecret = config.apiSecret || '';
+    if (!apiSecret) return false;
+    const signature = headers['x-signature'];
+    const expected = createHmac('sha256', apiSecret).update(rawBody).digest('hex');
+    return !!signature && safeTimingSafeEqual(expected, signature);
   }
 
   async createPaymentIntent(input: CreateIntentInput): Promise<CreateIntentResult> {

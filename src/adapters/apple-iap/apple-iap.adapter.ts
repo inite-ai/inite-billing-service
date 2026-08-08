@@ -3,6 +3,7 @@ import {
   Connector,
   ConnectorCapabilities,
   RegisterConnector,
+  WebhookVerifyInput,
 } from '../../common/connectors/connector.interface';
 import { RAILS } from '../../common/connectors/rail';
 import {
@@ -133,6 +134,13 @@ export class AppleIAPAdapter implements Connector {
       supportedModes: ['SUBSCRIPTION', 'PAYMENT'],
       isClientSide: true,
     };
+  }
+
+  /** Apple sends a signed JWS (signedPayload); the JWS itself is decoded in
+   * handleWebhook. Here we require the notification envelope to be present —
+   * preserving the controller's prior presence check. */
+  verifyWebhook({ payload }: WebhookVerifyInput): boolean {
+    return !!(payload?.signedPayload || payload?.notificationType);
   }
 
   /** Apple anchors an auto-renewable subscription on the original transaction id

@@ -3,277 +3,108 @@ import {
   Post,
   Body,
   Headers,
+  Param,
   Req,
   RawBodyRequest,
   HttpCode,
   HttpStatus,
   ForbiddenException,
+  NotFoundException,
   Logger,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { SkipThrottle } from '@nestjs/throttler';
 import type { Request } from 'express';
-import * as crypto from 'crypto';
-
-/** Exact request bytes for signature verification (falls back to a re-serialized
- * body only if raw capture is unavailable — see `rawBody: true` in main.ts). */
-function rawBytes(req: RawBodyRequest<Request>, payload: unknown): Buffer {
-  return req.rawBody ?? Buffer.from(JSON.stringify(payload));
-}
 import { WebhooksService } from './webhooks.service';
-import { OneAdapter } from '../adapters/one/one.adapter';
-import { LavaAdapter } from '../adapters/lava/lava.adapter';
-import { StripeAdapter } from '../adapters/stripe/stripe.adapter';
-import { AppleIAPAdapter } from '../adapters/apple-iap/apple-iap.adapter';
-import { GooglePlayAdapter } from '../adapters/google-play/google-play.adapter';
-import { CryptoAdapter } from '../adapters/crypto/crypto.adapter';
+import { PaymentOrchestratorService } from '../payment-orchestrator/payment-orchestrator.service';
+import { Connector } from '../common/connectors/connector.interface';
+import { RAILS } from '../common/connectors/rail';
 
-function safeTimingSafeEqual(a: string, b: string): boolean {
-  const bufA = Buffer.from(a, 'utf8');
-  const bufB = Buffer.from(b, 'utf8');
-  if (bufA.length !== bufB.length) {
-    // Constant-time comparison even when lengths differ:
-    // hash both to fixed-length digests to avoid timing leaks
-    const hashA = crypto.createHash('sha256').update(bufA).digest();
-    const hashB = crypto.createHash('sha256').update(bufB).digest();
-    crypto.timingSafeEqual(hashA, hashB);
-    return false;
-  }
-  return crypto.timingSafeEqual(bufA, bufB);
-}
-
+/**
+ * A single dynamic inbound endpoint for every payment rail. The URL path maps
+ * to a canonical rail; the rail's connector owns verification (fail-closed) and
+ * parsing. The six original paths (/webhooks/one, /stripe, /apple, …) still work
+ * as-is — providers keep pointing at them — but adding a rail no longer means
+ * editing this controller.
+ */
 @ApiTags('Webhooks')
 @SkipThrottle()
 @Controller('webhooks')
 export class WebhooksController {
   private readonly logger = new Logger(WebhooksController.name);
 
+  /** URL segment (as configured on each provider) → canonical rail id. */
+  private static readonly RAIL_BY_PATH: Record<string, string> = {
+    one: RAILS.ONE,
+    lava: RAILS.LAVA,
+    stripe: RAILS.STRIPE,
+    apple: RAILS.APPLE_IAP,
+    google: RAILS.GOOGLE_PLAY,
+    crypto: RAILS.CRYPTO,
+  };
+
   constructor(
     private readonly webhooksService: WebhooksService,
-    private readonly oneAdapter: OneAdapter,
-    private readonly lavaAdapter: LavaAdapter,
-    private readonly stripeAdapter: StripeAdapter,
-    private readonly appleIAPAdapter: AppleIAPAdapter,
-    private readonly googlePlayAdapter: GooglePlayAdapter,
-    private readonly cryptoAdapter: CryptoAdapter,
+    private readonly orchestrator: PaymentOrchestratorService,
   ) {}
 
-  @Post('one')
+  @Post(':railPath')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'ONE payment webhook endpoint' })
+  @ApiOperation({ summary: 'Inbound payment webhook (per-rail)' })
+  @ApiParam({ name: 'railPath', enum: ['one', 'lava', 'stripe', 'apple', 'google', 'crypto'] })
   @ApiResponse({ status: 200 })
-  async handleOneWebhook(
+  async handleWebhook(
+    @Param('railPath') railPath: string,
     @Body() payload: any,
     @Req() req: RawBodyRequest<Request>,
-    @Headers('x-signature') signature: string,
+    @Headers() headers: Record<string, string | undefined>,
   ): Promise<{ received: boolean }> {
-    const config = await this.webhooksService.getProviderConfig('ONE');
-    const apiSecret = config.apiSecret || '';
-
-    // Fail closed: an empty key makes the HMAC attacker-computable (forged
-    // "paid" webhook -> free fulfilment), so refuse rather than accept unverified.
-    if (!apiSecret) {
-      this.logger.error('ONE webhook secret not configured — rejecting (fail closed)');
-      throw new ForbiddenException('Webhook verification not configured');
+    const rail = WebhooksController.RAIL_BY_PATH[(railPath || '').toLowerCase()];
+    if (!rail) {
+      throw new NotFoundException(`Unknown webhook rail: ${railPath}`);
     }
 
-    const expected = crypto
-      .createHmac('sha256', apiSecret)
-      .update(rawBytes(req, payload))
-      .digest('hex');
-
-    if (!signature || !safeTimingSafeEqual(expected, signature)) {
-      this.logger.warn('ONE webhook signature verification failed');
-      throw new ForbiddenException('Invalid webhook signature');
+    let connector: Connector;
+    try {
+      connector = this.orchestrator.getAdapter(rail) as Connector;
+    } catch {
+      throw new NotFoundException(`No connector registered for rail ${rail}`);
+    }
+    if (!connector.verifyWebhook || !connector.handleWebhook) {
+      throw new NotFoundException(`Rail ${rail} does not accept webhooks`);
     }
 
-    let parsed;
-    if (this.oneAdapter.handleWebhook) {
-      parsed = await this.oneAdapter.handleWebhook(payload);
-    } else {
-      parsed = {
-        eventType: payload.event_type || payload.eventType || 'payment.order.updated',
-        entityId: payload.entity_id || payload.entityId || payload.id,
-        payload,
-      };
+    // Provider config drives secret-based verification. Best-effort: an absent
+    // or inactive provider yields {}, which makes fail-closed rails reject (403)
+    // and leaves signature-in-payload rails (Apple) unaffected.
+    let config: Record<string, any> = {};
+    try {
+      config = await this.webhooksService.getProviderConfig(rail);
+    } catch {
+      config = {};
     }
+
+    // Exact request bytes for signature verification (raw capture from
+    // `rawBody: true` in main.ts; falls back to a re-serialized body).
+    const rawBody = req.rawBody ?? Buffer.from(JSON.stringify(payload));
+
+    const verified = await connector.verifyWebhook({ rawBody, headers, config, payload });
+    if (!verified) {
+      this.logger.warn(`${rail} webhook verification failed`);
+      throw new ForbiddenException('Invalid webhook');
+    }
+
+    const parsed = await connector.handleWebhook(payload);
+    const storagePayload = connector.webhookStoragePayload
+      ? connector.webhookStoragePayload(payload)
+      : payload;
 
     await this.webhooksService.storeWebhookEvent(
-      'ONE',
-      payload.id || parsed.entityId,
+      rail,
+      parsed.webhookId ?? payload.id ?? parsed.entityId,
       parsed.eventType,
       parsed.entityId,
-      payload,
-    );
-
-    return { received: true };
-  }
-
-  @Post('lava')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Lava.top payment webhook endpoint' })
-  @ApiResponse({ status: 200 })
-  async handleLavaWebhook(
-    @Body() payload: any,
-    @Headers('x-api-key') apiKeyHeader: string,
-  ): Promise<{ received: boolean }> {
-    const config = await this.webhooksService.getProviderConfig('LAVA');
-    const apiKey = config.apiKey || '';
-
-    if (!apiKey) {
-      this.logger.error('LAVA webhook API key not configured — rejecting (fail closed)');
-      throw new ForbiddenException('Webhook verification not configured');
-    }
-
-    if (!apiKeyHeader || !safeTimingSafeEqual(apiKey, apiKeyHeader)) {
-      this.logger.warn('LAVA webhook API key verification failed');
-      throw new ForbiddenException('Invalid webhook API key');
-    }
-
-    const parsed = await this.lavaAdapter.handleWebhook(payload);
-
-    await this.webhooksService.storeWebhookEvent(
-      'LAVA',
-      parsed.webhookId || parsed.entityId,
-      parsed.eventType,
-      parsed.entityId,
-      payload,
-    );
-
-    return { received: true };
-  }
-
-  @Post('stripe')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Stripe payment webhook endpoint' })
-  @ApiResponse({ status: 200 })
-  async handleStripeWebhook(
-    @Body() payload: any,
-    @Req() req: RawBodyRequest<Request>,
-    @Headers('stripe-signature') signature: string,
-  ): Promise<{ received: boolean }> {
-    if (!signature) {
-      this.logger.warn('Stripe webhook missing signature');
-      throw new ForbiddenException('Missing Stripe-Signature header');
-    }
-
-    // Verify over the exact request bytes — Stripe signs the raw body.
-    const isValid = await this.stripeAdapter.verifyWebhookSignature(
-      rawBytes(req, payload),
-      signature,
-    );
-    if (!isValid) {
-      this.logger.warn('Stripe webhook signature verification failed');
-      throw new ForbiddenException('Invalid webhook signature');
-    }
-
-    const parsed = await this.stripeAdapter.handleWebhook(payload);
-
-    await this.webhooksService.storeWebhookEvent(
-      'STRIPE',
-      parsed.webhookId || parsed.entityId,
-      parsed.eventType,
-      parsed.entityId,
-      payload,
-    );
-
-    return { received: true };
-  }
-
-  @Post('apple')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Apple App Store Server Notification V2' })
-  @ApiResponse({ status: 200 })
-  async handleAppleWebhook(@Body() payload: any): Promise<{ received: boolean }> {
-    // Apple sends signedPayload — the adapter decodes and validates the JWS
-    if (!payload?.signedPayload && !payload?.notificationType) {
-      this.logger.warn('Apple webhook missing signedPayload');
-      throw new ForbiddenException('Invalid Apple notification format');
-    }
-
-    const parsed = await this.appleIAPAdapter.handleWebhook(payload);
-
-    await this.webhooksService.storeWebhookEvent(
-      'APPLE_IAP',
-      parsed.webhookId || parsed.entityId,
-      parsed.eventType,
-      parsed.entityId,
-      payload,
-    );
-
-    return { received: true };
-  }
-
-  @Post('google')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Google Play RTDN webhook endpoint' })
-  @ApiResponse({ status: 200 })
-  async handleGooglePlayWebhook(
-    @Body() payload: any,
-    @Headers('authorization') authHeader: string,
-  ): Promise<{ received: boolean }> {
-    // Google Pub/Sub uses OAuth Bearer token for push authentication
-    // Verify the token matches our configured secret
-    const config = await this.webhooksService.getProviderConfig('GOOGLE_PLAY');
-    const expectedToken = (config as any).pubsubToken;
-
-    // Fail closed: without a configured token, anyone could POST a forged RTDN.
-    if (!expectedToken) {
-      this.logger.error('Google Play webhook token not configured — rejecting (fail closed)');
-      throw new ForbiddenException('Webhook verification not configured');
-    }
-    const token = authHeader?.replace('Bearer ', '');
-    if (!token || !safeTimingSafeEqual(expectedToken, token)) {
-      this.logger.warn('Google Play webhook auth verification failed');
-      throw new ForbiddenException('Invalid webhook authorization');
-    }
-
-    const parsed = await this.googlePlayAdapter.handleWebhook(payload);
-
-    await this.webhooksService.storeWebhookEvent(
-      'GOOGLE_PLAY',
-      parsed.webhookId || parsed.entityId,
-      parsed.eventType,
-      parsed.entityId,
-      typeof payload.message?.data === 'string'
-        ? JSON.parse(Buffer.from(payload.message.data, 'base64').toString())
-        : payload,
-    );
-
-    return { received: true };
-  }
-
-  @Post('crypto')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Crypto blockchain indexer webhook' })
-  @ApiResponse({ status: 200 })
-  async handleCryptoWebhook(
-    @Body() payload: any,
-    @Headers('x-webhook-secret') webhookSecret: string,
-  ): Promise<{ received: boolean }> {
-    // Verify secret from indexer
-    const config = await this.webhooksService.getProviderConfig('CRYPTO');
-    const expectedSecret = (config as any).webhookSecret;
-
-    // Fail closed: without a configured secret, a forged "confirmed" tx webhook
-    // would trigger free fulfilment.
-    if (!expectedSecret) {
-      this.logger.error('Crypto webhook secret not configured — rejecting (fail closed)');
-      throw new ForbiddenException('Webhook verification not configured');
-    }
-    if (!webhookSecret || !safeTimingSafeEqual(expectedSecret, webhookSecret)) {
-      this.logger.warn('Crypto webhook secret verification failed');
-      throw new ForbiddenException('Invalid webhook secret');
-    }
-
-    const parsed = await this.cryptoAdapter.handleWebhook(payload);
-
-    await this.webhooksService.storeWebhookEvent(
-      'CRYPTO',
-      parsed.webhookId || parsed.entityId,
-      parsed.eventType,
-      parsed.entityId,
-      payload,
+      storagePayload,
     );
 
     return { received: true };
