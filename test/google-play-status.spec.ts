@@ -21,11 +21,13 @@ describe('GooglePlayAdapter.getIntentStatus fail-closed verification', () => {
         }),
       },
       paymentIntent: {
-        findFirst: jest.fn().mockResolvedValue(
-          opts.productId === undefined
-            ? { snapshot: {} }
-            : { snapshot: { google_product_id: opts.productId } },
-        ),
+        findFirst: jest
+          .fn()
+          .mockResolvedValue(
+            opts.productId === undefined
+              ? { snapshot: {} }
+              : { snapshot: { google_product_id: opts.productId } },
+          ),
       },
     };
     const adapter = new GooglePlayAdapter(prisma);
