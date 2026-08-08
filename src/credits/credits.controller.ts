@@ -100,8 +100,11 @@ export class CreditsController {
   ) {
     // C3 fix: Force userId for non-service callers to prevent IDOR
     const userId = user.isService ? body.userId : user.userId;
-    // Auto-inject serviceId from API key when not explicitly provided
-    const serviceId = body.serviceId ?? (user.isService ? user.serviceId : undefined);
+    // A service key may only ever act within its OWN service scope. Deriving the
+    // scope from the authenticated key (never body.serviceId) stops one service
+    // from draining credits booked under another service's scope. A user caller
+    // operates on their own balances (optionally body-scoped to a service).
+    const serviceId = user.isService ? user.serviceId : body.serviceId;
     return this.creditsService.consume({ ...body, userId, serviceId });
   }
 
@@ -122,7 +125,10 @@ export class CreditsController {
     if (!user.isService) {
       throw new ForbiddenException('Only service accounts can adjust credits');
     }
-    const serviceId = body.serviceId ?? user.serviceId;
+    // Scope the adjustment to the calling service's own credits — never a
+    // body-supplied serviceId. Otherwise any service key could mint or drain
+    // credits under another service's scope (write-access IDOR).
+    const serviceId = user.serviceId;
     return this.creditsService.adminAdjust({
       ...body,
       serviceId,
