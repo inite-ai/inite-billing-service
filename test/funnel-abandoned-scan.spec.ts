@@ -30,7 +30,13 @@ describe('FunnelService.detectAbandonedCheckouts', () => {
       order: { findMany: orderFindMany },
       funnelEvent: { findMany: funnelFindMany, create: funnelCreate, findFirst: jest.fn() },
     };
-    return { service: new FunnelService(prisma), orderFindMany, funnelFindMany, funnelCreate };
+    const lock = { runWithLock: (_k: string, _t: number, fn: () => Promise<void>) => fn() } as any;
+    return {
+      service: new FunnelService(prisma, lock),
+      orderFindMany,
+      funnelFindMany,
+      funnelCreate,
+    };
   };
 
   it('constrains the query to a bounded recent window', async () => {
