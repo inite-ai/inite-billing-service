@@ -11,6 +11,7 @@ import { PrismaService } from '../common/services/prisma.service';
 import { PaymentRailAdapter } from '../common/interfaces/payment-rail-adapter.interface';
 import { ConnectorRegistry } from '../common/connectors/connector-registry.service';
 import { Connector } from '../common/connectors/connector.interface';
+import { calculatePeriodEnd } from './period.util';
 import {
   isValidTransition,
   mapIntentToOrderStatus,
@@ -858,13 +859,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
   }
 
   private calculatePeriodEnd(start: Date, interval: string): Date {
-    const end = new Date(start);
-    if (interval === 'month') {
-      end.setMonth(end.getMonth() + 1);
-    } else if (interval === 'year') {
-      end.setFullYear(end.getFullYear() + 1);
-    }
-    return end;
+    return calculatePeriodEnd(start, interval);
   }
 
   /**
