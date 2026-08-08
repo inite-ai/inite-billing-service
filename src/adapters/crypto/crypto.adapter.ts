@@ -15,6 +15,7 @@ import {
   WebhookParseResult,
 } from '../../common/interfaces/payment-rail-adapter.interface';
 import { PrismaService } from '../../common/services/prisma.service';
+import { toOnChainAmount } from './amount.util';
 
 /**
  * Chain-specific configuration
@@ -227,11 +228,9 @@ export class CryptoAdapter implements Connector {
     const tokenConfig = chainConfig.tokens[token];
     const expiresAt = new Date(Date.now() + config.expiryMinutes * 60 * 1000);
 
-    // Amount in token's smallest unit
+    // Amount in token's smallest unit (exact string scaling — no float math).
     const rawAmount = input.amount;
-    const onChainAmount = BigInt(
-      Math.round(rawAmount * Math.pow(10, tokenConfig.decimals)),
-    ).toString();
+    const onChainAmount = toOnChainAmount(rawAmount, tokenConfig.decimals);
 
     // Generate a unique memo/tag for payment identification
     const memo = this.generateMemo(input.orderId);
