@@ -65,7 +65,12 @@ describe('StripeAdapter.getIntentStatus normalizes cents to major units', () => 
   };
 
   it('reports amount in dollars (cents / 100) for a PaymentIntent', async () => {
-    const adapter = buildAdapter({ id: 'pi_1', amount: 1000, currency: 'usd', status: 'succeeded' });
+    const adapter = buildAdapter({
+      id: 'pi_1',
+      amount: 1000,
+      currency: 'usd',
+      status: 'succeeded',
+    });
     const res = await adapter.getIntentStatus('pi_1');
     expect(res.status).toBe('paid');
     expect(res.amount).toBe(10);

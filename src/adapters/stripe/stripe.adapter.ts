@@ -344,8 +344,7 @@ export class StripeAdapter implements Connector {
           status: statusMap[session.status] || 'created',
           metadata: { stripe_status: session.status },
           // Checkout Session totals are in cents under amount_total.
-          amount:
-            typeof session.amount_total === 'number' ? session.amount_total / 100 : undefined,
+          amount: typeof session.amount_total === 'number' ? session.amount_total / 100 : undefined,
           currency: session.currency ? String(session.currency).toUpperCase() : undefined,
           providerData: session,
         };
