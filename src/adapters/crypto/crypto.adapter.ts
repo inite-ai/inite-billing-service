@@ -312,7 +312,12 @@ export class CryptoAdapter implements Connector {
       }
       return {
         status: 'opened',
-        metadata: { txHash: observed.txHash, confirmations, requiredConfirmations: required, chain },
+        metadata: {
+          txHash: observed.txHash,
+          confirmations,
+          requiredConfirmations: required,
+          chain,
+        },
       };
     }
 
