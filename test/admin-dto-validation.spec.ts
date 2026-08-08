@@ -35,7 +35,8 @@ describe('CreatePromoCodeDto', () => {
   it('coerces a string-form numeric (UI sends discountValue as a string)', () =>
     ok(CreatePromoCodeDto, { ...valid, discountValue: '20' }));
 
-  it('rejects a negative discount', () => fails(CreatePromoCodeDto, { ...valid, discountValue: -5 }));
+  it('rejects a negative discount', () =>
+    fails(CreatePromoCodeDto, { ...valid, discountValue: -5 }));
 
   it('rejects a non-numeric discount', () =>
     fails(CreatePromoCodeDto, { ...valid, discountValue: 'lots' }));
@@ -46,7 +47,8 @@ describe('CreatePromoCodeDto', () => {
   it('rejects an unknown discountType', () =>
     fails(CreatePromoCodeDto, { ...valid, discountType: 'bogus' }));
 
-  it('rejects a bad validFrom', () => fails(CreatePromoCodeDto, { ...valid, validFrom: 'yesterday' }));
+  it('rejects a bad validFrom', () =>
+    fails(CreatePromoCodeDto, { ...valid, validFrom: 'yesterday' }));
 
   it('forbids mass-assigned fields (forbidNonWhitelisted)', () =>
     fails(CreatePromoCodeDto, { ...valid, isAdmin: true, usedCount: 9999 }));
