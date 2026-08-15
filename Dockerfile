@@ -15,6 +15,11 @@ RUN npm ci
 COPY src ./src
 RUN npm run build
 
+# Fail the build here rather than at container start: a stray .ts outside src
+# shifts tsc's rootDir and moves the entrypoint to dist/src/main.js, which
+# otherwise only surfaces in production as a MODULE_NOT_FOUND crash loop.
+RUN test -f dist/main.js || (echo "Build error: dist/main.js missing — check tsconfig include/rootDir" && ls -R dist | head -50 && exit 1)
+
 # Production stage
 FROM node:22-alpine
 
