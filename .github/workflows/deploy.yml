@@ -301,8 +301,13 @@ jobs:
             external: true
         COMPOSE_EOF
 
-        # Clean up failed prisma migrations table if exists
-        docker exec postgres psql -U ${{ secrets.ORCH_POSTGRES_USER }} -d inite_billing -c "DROP TABLE IF EXISTS billing._prisma_migrations;" 2>/dev/null || true
+        # Clear a stuck/interrupted migration so `migrate deploy` can retry it.
+        # This used to DROP the whole _prisma_migrations table, which on an
+        # already-populated database makes Prisma replay every migration from
+        # init and fail on the first CREATE TABLE. Only unfinished rows go.
+        docker exec postgres psql -U ${{ secrets.ORCH_POSTGRES_USER }} -d inite_billing -c "
+          DELETE FROM billing._prisma_migrations WHERE finished_at IS NULL;
+        " 2>/dev/null || true
 
         docker pull ${{ secrets.DOCKERHUB_USERNAME }}/inite-billing-service:latest
         docker pull ${{ secrets.DOCKERHUB_USERNAME }}/inite-billing-frontend:latest
