@@ -143,15 +143,22 @@ jobs:
 
         docker pull ${{ secrets.DOCKERHUB_USERNAME }}/inite-billing-service:latest
         docker-compose up -d --no-deps --force-recreate billing-service
-        sleep 15
 
-        if docker-compose ps billing-service | grep -q "Up"; then
-          echo "Backend deployed successfully"
-        else
-          echo "Backend deployment failed!"
-          docker-compose logs billing-service
-          exit 1
-        fi
+        # Poll the app's own /health instead of the container state: a
+        # crash-looping container still reads as "Up" while it is mid-boot,
+        # which is how a broken image shipped green on 2026-08-09.
+        for i in $(seq 1 30); do
+          if docker exec inite-billing-service wget --spider -q http://localhost:3000/health 2>/dev/null; then
+            echo "Backend deployed successfully (healthy after ${i} attempt(s))"
+            exit 0
+          fi
+          sleep 5
+        done
+
+        echo "Backend deployment failed — /health never came up"
+        docker-compose ps billing-service
+        docker-compose logs --tail 100 billing-service
+        exit 1
 
   # ── Deploy frontend (incremental fast-path) ────────────────
   # Skipped when a full infra deploy runs — see deploy-backend for rationale.
@@ -179,15 +186,20 @@ jobs:
 
         docker pull ${{ secrets.DOCKERHUB_USERNAME }}/inite-billing-frontend:latest
         docker-compose up -d --no-deps --force-recreate billing-frontend
-        sleep 10
 
-        if docker-compose ps billing-frontend | grep -q "Up"; then
-          echo "Frontend deployed successfully"
-        else
-          echo "Frontend deployment failed!"
-          docker-compose logs billing-frontend
-          exit 1
-        fi
+        # Same reasoning as the backend gate: serve a real request, not a state string.
+        for i in $(seq 1 24); do
+          if docker exec inite-billing-frontend wget --spider -q http://localhost:3001/ 2>/dev/null; then
+            echo "Frontend deployed successfully (healthy after ${i} attempt(s))"
+            exit 0
+          fi
+          sleep 5
+        done
+
+        echo "Frontend deployment failed — the app never served a request"
+        docker-compose ps billing-frontend
+        docker-compose logs --tail 100 billing-frontend
+        exit 1
 
   # ── Full infra deploy (docker-compose.yml + .env + both services) ──
   # Runs on infra changes and on the first deploy; also the force_all path.
@@ -298,15 +310,29 @@ jobs:
         docker-compose down --remove-orphans
         docker-compose up -d
 
-        sleep 30
+        # The old gate grepped `docker-compose ps` for "Up", which passed as
+        # long as *any* container was running — a dead backend behind a live
+        # frontend still reported a green deploy. Both services must now answer.
+        backend_ok=""
+        frontend_ok=""
+        for i in $(seq 1 30); do
+          if [ -z "$backend_ok" ] && docker exec inite-billing-service wget --spider -q http://localhost:3000/health 2>/dev/null; then
+            backend_ok=1
+          fi
+          if [ -z "$frontend_ok" ] && docker exec inite-billing-frontend wget --spider -q http://localhost:3001/ 2>/dev/null; then
+            frontend_ok=1
+          fi
+          if [ -n "$backend_ok" ] && [ -n "$frontend_ok" ]; then
+            echo "Full deploy successful (both services healthy after ${i} attempt(s))"
+            exit 0
+          fi
+          sleep 5
+        done
 
-        if docker-compose ps | grep -q "Up"; then
-          echo "Full deploy successful!"
-        else
-          echo "Deployment failed!"
-          docker-compose logs
-          exit 1
-        fi
+        echo "Deployment failed — backend_ok='${backend_ok:-no}' frontend_ok='${frontend_ok:-no}'"
+        docker-compose ps
+        docker-compose logs --tail 100
+        exit 1
 
     - name: Cleanup
       if: always()

@@ -21,6 +21,11 @@
       "@/*": ["src/*"]
     }
   },
-  "exclude": ["node_modules", "dist", "frontend", "test"]
+  // Keep the compiled program limited to `src`. Any .ts outside it (e.g.
+  // prisma/seed.ts) would widen tsc's inferred rootDir to the repo root and
+  // emit dist/src/main.js instead of dist/main.js, which the Dockerfile CMD
+  // and `start:prod` both point at.
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "frontend", "test", "prisma"]
 }
 
