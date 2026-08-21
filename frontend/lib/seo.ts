@@ -124,14 +124,36 @@ export function buildLandingJsonLd(locale: Locale) {
   return {
     '@context': 'https://schema.org',
     '@graph': [
+      /**
+       * INITE Billing, as its own entity.
+       *
+       * This node used to describe the parent instead: `@id` was
+       * https://inite.ai/#organization and the name was INITE AI, on a site
+       * that is not inite.ai. inite.ai lists seventeen brands as
+       * `subOrganization`, one of them https://billing.inite.ai/#organization
+       * — and nothing declared it, so the reference resolved to nothing. Every
+       * other node here also pointed its publisher at a company on a different
+       * domain, which is a claim about inite.ai rather than about this product.
+       *
+       * Billing is a product with a name, a repository and a licence. It gets
+       * to be a company of its own, hanging off the one that makes it.
+       */
       {
         '@type': 'Organization',
-        '@id': `${ORG.url}/#organization`,
-        name: ORG.name,
+        '@id': `${SITE_URL}/#organization`,
+        name: BRAND.name,
         legalName: ORG.legalName,
-        url: ORG.url,
+        url: SITE_URL,
+        description: m.description,
         logo: { '@type': 'ImageObject', url: ORG.logo, width: 512, height: 512 },
-        sameAs: ORG.sameAs,
+        sameAs: BRAND.sameAs,
+        parentOrganization: {
+          '@type': 'Organization',
+          '@id': `${ORG.url}/#organization`,
+          name: ORG.name,
+          legalName: ORG.legalName,
+          url: ORG.url,
+        },
         founder: { '@type': 'Person', name: ORG.founder.name, jobTitle: ORG.founder.jobTitle },
       },
       {
@@ -140,7 +162,7 @@ export function buildLandingJsonLd(locale: Locale) {
         name: BRAND.name,
         url: SITE_URL,
         inLanguage: ['en', 'ru'],
-        publisher: { '@id': `${ORG.url}/#organization` },
+        publisher: { '@id': `${SITE_URL}/#organization` },
       },
       {
         '@type': 'SoftwareApplication',
@@ -161,8 +183,8 @@ export function buildLandingJsonLd(locale: Locale) {
               ? 'Бесплатная интеграция — вы платите только комиссию платёжного провайдера'
               : 'Free to integrate — you only pay your payment provider fees',
         },
-        publisher: { '@id': `${ORG.url}/#organization` },
-        provider: { '@id': `${ORG.url}/#organization` },
+        publisher: { '@id': `${SITE_URL}/#organization` },
+        provider: { '@id': `${SITE_URL}/#organization` },
       },
       {
         '@type': 'FAQPage',
