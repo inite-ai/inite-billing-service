@@ -5,8 +5,11 @@ on:
   workflow_call:
   push:
     branches: [main, develop]
+  # Every pull request, not only the ones targeting main. Stacked branches —
+  # a review PR based on a design PR based on main — were opening, being
+  # reviewed and merging without CI ever running on them; the suite first saw
+  # that code as a push to main, which is after the decision, not before it.
   pull_request:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
