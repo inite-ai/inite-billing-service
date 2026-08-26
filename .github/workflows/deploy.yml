@@ -144,11 +144,12 @@ jobs:
         docker pull ${{ secrets.DOCKERHUB_USERNAME }}/inite-billing-service:latest
         docker-compose up -d --no-deps --force-recreate billing-service
 
-        # Poll the app's own /health instead of the container state: a
+        # Poll the app's own readiness (database + redis) instead of the container
+        # state: a
         # crash-looping container still reads as "Up" while it is mid-boot,
         # which is how a broken image shipped green on 2026-08-09.
         for i in $(seq 1 30); do
-          if docker exec inite-billing-service wget --spider -q http://localhost:3000/health 2>/dev/null; then
+          if docker exec inite-billing-service wget --spider -q http://localhost:3000/health/ready 2>/dev/null; then
             echo "Backend deployed successfully (healthy after ${i} attempt(s))"
             exit 0
           fi
@@ -257,7 +258,7 @@ jobs:
             networks:
               - traefik-global
             healthcheck:
-              test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/health"]
+              test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/health/ready"]
               interval: 30s
               timeout: 10s
               retries: 5
@@ -321,7 +322,7 @@ jobs:
         backend_ok=""
         frontend_ok=""
         for i in $(seq 1 30); do
-          if [ -z "$backend_ok" ] && docker exec inite-billing-service wget --spider -q http://localhost:3000/health 2>/dev/null; then
+          if [ -z "$backend_ok" ] && docker exec inite-billing-service wget --spider -q http://localhost:3000/health/ready 2>/dev/null; then
             backend_ok=1
           fi
           if [ -z "$frontend_ok" ] && docker exec inite-billing-frontend wget --spider -q http://localhost:3001/ 2>/dev/null; then
