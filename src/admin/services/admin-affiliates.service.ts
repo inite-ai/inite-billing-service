@@ -102,6 +102,41 @@ export class AdminAffiliatesService {
     });
   }
 
+  /**
+   * Apply one action to a selection of payouts.
+   *
+   * Not atomic, and deliberately not presented as such: each payout is its own
+   * transaction and the response carries a per-id verdict, so a payout that is
+   * already paid or already failed stops itself without taking the other
+   * nineteen down with it. The caller shows the operator exactly which ones
+   * went through and why the rest did not.
+   *
+   * Sequential on purpose — `failPayout` reverses an affiliate's balance, and
+   * running a batch in parallel would have several of those contending for the
+   * same affiliate row.
+   */
+  async bulkPayoutAction(params: { ids: string[]; action: 'process' | 'fail'; reason?: string }) {
+    const { ids, action, reason } = params;
+    const results: Array<{ id: string; ok: boolean; status?: string; error?: string }> = [];
+
+    for (const id of ids) {
+      try {
+        const payout =
+          action === 'process' ? await this.processPayout(id) : await this.failPayout(id, reason);
+        results.push({ id, ok: true, status: payout.status });
+      } catch (e: any) {
+        results.push({ id, ok: false, error: e?.message ?? 'Failed' });
+      }
+    }
+
+    return {
+      requested: ids.length,
+      succeeded: results.filter((r) => r.ok).length,
+      failed: results.filter((r) => !r.ok).length,
+      results,
+    };
+  }
+
   async failPayout(id: string, reason?: string) {
     return this.prisma.$transaction(async (tx) => {
       const payout = await tx.affiliatePayout.findUnique({ where: { id } });

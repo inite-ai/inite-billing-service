@@ -29,6 +29,7 @@ import {
 } from './dto/provider.dto';
 import {
   ApplyReferralTemplateDto,
+  BulkPayoutDto,
   FailPayoutDto,
   UpdateAffiliateDto,
 } from './dto/affiliate-admin.dto';
@@ -387,6 +388,13 @@ export class AdminController {
     });
   }
 
+  @Post('payouts/bulk')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Process or fail a selection of payouts, reporting each outcome' })
+  async bulkPayouts(@Body() body: BulkPayoutDto) {
+    return this.affiliatesService.bulkPayoutAction(body);
+  }
+
   @Post('payouts/:id/process')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Process a payout' })
@@ -665,5 +673,11 @@ export class AdminController {
   @ApiOperation({ summary: 'Get overall statistics' })
   async getStats() {
     return this.statsService.getStats();
+  }
+
+  @Get('stats/triage')
+  @ApiOperation({ summary: 'Counts of everything currently waiting for an operator' })
+  async getTriage() {
+    return this.statsService.getTriage();
   }
 }

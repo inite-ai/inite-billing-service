@@ -1,5 +1,8 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  ArrayNotEmpty,
+  IsArray,
   IsIn,
   IsNotEmpty,
   IsNumber,
@@ -46,6 +49,33 @@ export class ApplyReferralTemplateDto {
 
 /** Body for POST /v1/admin/payouts/:id/fail. */
 export class FailPayoutDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  reason?: string;
+}
+
+/** The most rows one bulk request may carry — a screenful of a payout run. */
+export const BULK_PAYOUT_MAX = 200;
+
+/**
+ * Body for POST /v1/admin/payouts/bulk.
+ *
+ * The ids are validated as UUIDs up front so a malformed selection is rejected
+ * whole, before any money moves: a bulk request that processed nineteen
+ * payouts and then failed on a typo would leave the operator reconstructing
+ * which nineteen.
+ */
+export class BulkPayoutDto {
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(BULK_PAYOUT_MAX)
+  @IsUUID('4', { each: true })
+  ids!: string[];
+
+  @IsIn(['process', 'fail'])
+  action!: 'process' | 'fail';
+
   @IsOptional()
   @IsString()
   @MaxLength(500)
