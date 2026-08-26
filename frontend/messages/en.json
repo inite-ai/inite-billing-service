@@ -88,7 +88,25 @@
     "retry": "Try again",
     "copy": "Copy",
     "expand": "Show details",
-    "collapse": "Hide details"
+    "collapse": "Hide details",
+    "bulk": {
+      "label": "Bulk actions",
+      "selected": "{count, plural, one {# row selected} other {# rows selected}}",
+      "clear": "Clear selection",
+      "selectRow": "Select this row",
+      "selectAll": "Select every row on this page",
+      "applying": "Working through the selection…",
+      "allDone": "{count, plural, one {# row done} other {# rows done}}",
+      "partial": "{done} done, {failed} could not be",
+      "failuresTitle": "These were not changed",
+      "confirmTitle": "Apply to the selected rows?"
+    },
+    "export": {
+      "label": "Export CSV",
+      "done": "{count, plural, one {Exported # row} other {Exported # rows}}",
+      "doneUnknown": "Export downloaded",
+      "failed": "Export failed"
+    }
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -779,7 +797,16 @@
       "processConfirm": "Mark this payout as processed?",
       "processed": "Payout processed",
       "failReason": "Failure reason:",
-      "markedFailed": "Payout marked as failed"
+      "markedFailed": "Payout marked as failed",
+      "tabPending": "Pending",
+      "tabPaid": "Paid",
+      "tabFailed": "Failed",
+      "tabAll": "All",
+      "empty": "Nothing in this queue",
+      "failTitle": "Mark payout as failed",
+      "failReasonPlaceholder": "e.g. bank rejected the transfer",
+      "bulkMixedCurrencies": "mixed currencies",
+      "bulkRecordMixed": "{count} payouts in more than one currency"
     },
     "credits": {
       "title": "Credits",

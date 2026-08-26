@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { useAuth } from '@/contexts/AuthContext'
@@ -50,7 +50,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </span>
         </header>
 
-        <main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8">{children}</main>
+        {/* Admin pages keep their filters, page and sort in the URL, so they
+            read `useSearchParams` — which needs a boundary above it or the
+            whole route opts out of prerendering at build time. */}
+        <main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8">
+          <Suspense fallback={null}>{children}</Suspense>
+        </main>
       </div>
     </div>
   )
