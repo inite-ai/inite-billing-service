@@ -18,6 +18,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { User, RequestUser } from '../auth/decorators/user.decorator';
 import { PrismaService } from '../common/services/prisma.service';
 import { AdminOrdersService } from '../admin/services/admin-orders.service';
+import { ReviewAssessmentDto } from './dto/review-assessment.dto';
 
 @ApiTags('Admin')
 @Controller('v1/admin/risk')
@@ -97,7 +98,7 @@ export class RiskAdminController {
   async review(
     @User() user: RequestUser,
     @Param('id') id: string,
-    @Body() body: { resolution: 'ok' | 'fraud'; note?: string; refund?: boolean },
+    @Body() body: ReviewAssessmentDto,
   ) {
     if (!['ok', 'fraud'].includes(body.resolution)) {
       throw new BadRequestException('resolution must be "ok" or "fraud"');

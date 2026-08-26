@@ -14,6 +14,8 @@ import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { JwtOrServiceGuard } from '../auth/guards/jwt-or-service.guard';
 import { User, RequestUser } from '../auth/decorators/user.decorator';
 import { ConversationsService } from './conversations.service';
+import { publicApiValidation } from '../common/pipes/public-api-validation.pipe';
+import { AddMessageDto, GetOrCreateConversationDto, SetFeedbackDto } from './dto/conversations.dto';
 
 @ApiTags('Conversations')
 @Controller('v1/conversations')
@@ -24,7 +26,10 @@ export class ConversationsController {
   @Post()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get or create active conversation' })
-  async getOrCreate(@User() user: RequestUser, @Body() body: { mode?: string; userId?: string }) {
+  async getOrCreate(
+    @User() user: RequestUser,
+    @Body(publicApiValidation()) body: GetOrCreateConversationDto,
+  ) {
     const userId = user.isService && body.userId ? body.userId : user.userId;
     const mode = body.mode || 'user';
     return this.conversationsService.getOrCreate(userId, mode);
@@ -44,7 +49,7 @@ export class ConversationsController {
   async addMessage(
     @User() user: RequestUser,
     @Param('id') conversationId: string,
-    @Body() body: { role: string; content: string; toolCalls?: any; toolResults?: any },
+    @Body(publicApiValidation()) body: AddMessageDto,
   ) {
     // H1 fix: Verify conversation ownership
     if (!user.isService) {
@@ -108,7 +113,7 @@ export class ConversationsController {
     @User() user: RequestUser,
     @Param('id') conversationId: string,
     @Param('messageId') messageId: string,
-    @Body() body: { rating: 'up' | 'down' | null; comment?: string },
+    @Body(publicApiValidation()) body: SetFeedbackDto,
   ) {
     // H1 fix: Verify conversation ownership
     if (!user.isService) {

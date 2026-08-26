@@ -5,6 +5,7 @@ import { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { User, RequestUser } from '../auth/decorators/user.decorator';
 import { AssistantService } from './assistant.service';
+import { ChatDto, GenerateFeaturesDto } from './dto/assistant.dto';
 import {
   sse,
   sseDone,
@@ -23,26 +24,13 @@ export class AssistantController {
 
   @Post('generate-features')
   @ApiOperation({ summary: 'Generate product features with AI' })
-  async generateFeatures(
-    @Body()
-    body: {
-      name: string;
-      type: string;
-      description?: string;
-      creditsPerPeriod?: number;
-      locale?: string;
-    },
-  ) {
+  async generateFeatures(@Body() body: GenerateFeaturesDto) {
     return this.assistantService.generateProductFeatures(body);
   }
 
   @Post('chat')
   @ApiOperation({ summary: 'Chat with AI assistant (SSE streaming)' })
-  async chat(
-    @User() user: RequestUser,
-    @Res() res: Response,
-    @Body() body: { message: string; conversationId?: string },
-  ) {
+  async chat(@User() user: RequestUser, @Res() res: Response, @Body() body: ChatDto) {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');

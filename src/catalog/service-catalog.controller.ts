@@ -14,7 +14,9 @@ import {
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { ServiceAuthGuard } from '../auth/guards/service-auth.guard';
 import { CatalogService } from './catalog.service';
-import { CreatePriceDto } from '../admin/dto/price.dto';
+import { CreatePriceDto, UpdateServicePriceDto } from '../admin/dto/price.dto';
+import { CreateServiceProductDto, UpdateServiceProductDto } from '../admin/dto/product.dto';
+import { publicApiValidation } from '../common/pipes/public-api-validation.pipe';
 
 /**
  * Service-level API for managing own products and prices.
@@ -38,17 +40,7 @@ export class ServiceCatalogController {
   @Post('products')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a product for this service' })
-  async createProduct(
-    @Req() req: any,
-    @Body()
-    body: {
-      code: string;
-      name: string;
-      type: 'subscription' | 'one_time' | 'usage';
-      moduleScope?: string;
-      metadata?: any;
-    },
-  ) {
+  async createProduct(@Req() req: any, @Body(publicApiValidation()) body: CreateServiceProductDto) {
     return this.catalogService.createServiceProduct(req.user.serviceId, body);
   }
 
@@ -57,7 +49,7 @@ export class ServiceCatalogController {
   async updateProduct(
     @Req() req: any,
     @Param('id') id: string,
-    @Body() body: { name?: string; isActive?: boolean; metadata?: any },
+    @Body(publicApiValidation()) body: UpdateServiceProductDto,
   ) {
     return this.catalogService.updateServiceProduct(req.user.serviceId, id, body);
   }
@@ -79,7 +71,7 @@ export class ServiceCatalogController {
   @Post('prices')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a price for a product' })
-  async createPrice(@Req() req: any, @Body() body: CreatePriceDto) {
+  async createPrice(@Req() req: any, @Body(publicApiValidation()) body: CreatePriceDto) {
     return this.catalogService.createServicePrice(req.user.serviceId, body);
   }
 
@@ -88,7 +80,7 @@ export class ServiceCatalogController {
   async updatePrice(
     @Req() req: any,
     @Param('id') id: string,
-    @Body() body: { amount?: number; isActive?: boolean; metadata?: any },
+    @Body(publicApiValidation()) body: UpdateServicePriceDto,
   ) {
     return this.catalogService.updateServicePrice(req.user.serviceId, id, body);
   }

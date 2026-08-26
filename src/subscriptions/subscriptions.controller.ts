@@ -1,5 +1,6 @@
 import {
   Controller,
+  ParseUUIDPipe,
   Post,
   Body,
   Get,
@@ -17,6 +18,8 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { JwtOrServiceGuard } from '../auth/guards/jwt-or-service.guard';
 import { User, RequestUser } from '../auth/decorators/user.decorator';
 import { SubscriptionsService } from './subscriptions.service';
+import { publicApiValidation } from '../common/pipes/public-api-validation.pipe';
+import { StartTrialDto } from './dto/start-trial.dto';
 import { SubscriptionResponseDto } from '../common/dto/subscription.dto';
 
 @ApiTags('Subscriptions')
@@ -31,7 +34,9 @@ export class SubscriptionsController {
   @ApiResponse({ status: 200 })
   async cancelSubscription(
     @User() user: RequestUser,
-    @Body('subscriptionId') subscriptionId: string,
+    // A single primitive body field bypasses the global pipe entirely, so a
+    // malformed id used to reach Prisma instead of returning a 400.
+    @Body('subscriptionId', new ParseUUIDPipe()) subscriptionId: string,
   ): Promise<void> {
     return this.subscriptionsService.cancelSubscription(user.userId, subscriptionId);
   }
@@ -43,7 +48,7 @@ export class SubscriptionsController {
   @ApiResponse({ status: 200 })
   async resumeSubscription(
     @User() user: RequestUser,
-    @Body('subscriptionId') subscriptionId: string,
+    @Body('subscriptionId', new ParseUUIDPipe()) subscriptionId: string,
   ): Promise<void> {
     return this.subscriptionsService.resumeSubscription(user.userId, subscriptionId);
   }
@@ -65,7 +70,7 @@ export class SubscriptionsController {
   @ApiResponse({ status: 201, type: SubscriptionResponseDto })
   async startTrial(
     @Req() req: any,
-    @Body() body: { priceCode: string; userId?: string },
+    @Body(publicApiValidation()) body: StartTrialDto,
   ): Promise<SubscriptionResponseDto> {
     if (!body.priceCode) {
       throw new BadRequestException('priceCode is required');

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Get,
   Post,
@@ -15,6 +16,8 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { JwtOrServiceGuard } from '../auth/guards/jwt-or-service.guard';
 import { User, RequestUser } from '../auth/decorators/user.decorator';
 import { CreditsService } from './credits.service';
+import { publicApiValidation } from '../common/pipes/public-api-validation.pipe';
+import { AdjustCreditsDto, ConsumeCreditsDto } from './dto/credits.dto';
 import { MeteringService } from './metering.service';
 
 @ApiTags('Credits')
@@ -86,20 +89,13 @@ export class CreditsController {
   @ApiOperation({ summary: 'Consume credits for a user (flat or metered)' })
   async consumeCredits(
     @User() user: RequestUser,
-    @Body()
-    body: {
-      userId: string;
-      serviceId?: string;
-      amount?: number;
-      featureCode?: string;
-      units?: number;
-      modelTier?: string;
-      description?: string;
-      metadata?: Record<string, any>;
-    },
+    @Body(publicApiValidation()) body: ConsumeCreditsDto,
   ) {
     // C3 fix: Force userId for non-service callers to prevent IDOR
     const userId = user.isService ? body.userId : user.userId;
+    if (!userId) {
+      throw new BadRequestException('userId is required (pass in body for service API key calls)');
+    }
     // A service key may only ever act within its OWN service scope. Deriving the
     // scope from the authenticated key (never body.serviceId) stops one service
     // from draining credits booked under another service's scope. A user caller
@@ -114,13 +110,7 @@ export class CreditsController {
   @ApiOperation({ summary: 'Adjust credits for a user (service-to-service)' })
   async adjustCredits(
     @User() user: RequestUser,
-    @Body()
-    body: {
-      userId: string;
-      serviceId?: string;
-      amount: number;
-      description?: string;
-    },
+    @Body(publicApiValidation()) body: AdjustCreditsDto,
   ) {
     if (!user.isService) {
       throw new ForbiddenException('Only service accounts can adjust credits');
@@ -129,8 +119,12 @@ export class CreditsController {
     // body-supplied serviceId. Otherwise any service key could mint or drain
     // credits under another service's scope (write-access IDOR).
     const serviceId = user.serviceId;
+    if (!body.userId) {
+      throw new BadRequestException('userId is required');
+    }
     return this.creditsService.adminAdjust({
       ...body,
+      userId: body.userId,
       serviceId,
       description: body.description || 'service-adjust',
     });

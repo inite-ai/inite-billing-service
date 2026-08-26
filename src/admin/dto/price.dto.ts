@@ -107,3 +107,21 @@ export class UpdatePriceDto {
   @IsObject()
   metadata?: Record<string, any>;
 }
+
+/** Body for the service-scoped PUT /v1/prices/:id. */
+export class UpdateServicePriceDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 4 })
+  @Min(0)
+  @Max(9_999_999_999_999)
+  amount?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
+  @IsOptional()
+  @IsObject()
+  metadata?: Record<string, any>;
+}

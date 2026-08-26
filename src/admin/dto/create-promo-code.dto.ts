@@ -89,3 +89,77 @@ export class CreatePromoCodeDto {
   @IsObject()
   metadata?: Record<string, any>;
 }
+
+/**
+ * Body for PUT /v1/admin/promo-codes/:id. Same bounds as creation, everything
+ * optional, and `code` is absent because it is the redeemable identifier.
+ *
+ * The admin UI clears a field by sending an explicit `null` — `@IsOptional()`
+ * skips null as well as undefined, so clearing keeps working.
+ */
+export class UpdatePromoCodeDto {
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(255)
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  description?: string;
+
+  @IsOptional()
+  @IsIn(['percentage', 'fixed_amount'])
+  discountType?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 4 })
+  @IsPositive()
+  discountValue?: number;
+
+  @IsOptional()
+  @IsUUID()
+  serviceId?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 4 })
+  @Min(0)
+  minPurchaseAmount?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 4 })
+  @Min(0)
+  maxDiscountAmount?: number;
+
+  @IsOptional()
+  @IsDateString()
+  validFrom?: string;
+
+  @IsOptional()
+  @IsDateString()
+  validUntil?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  maxUsageCount?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  maxUsagePerUser?: number;
+
+  @IsOptional()
+  @IsObject()
+  metadata?: Record<string, any>;
+}

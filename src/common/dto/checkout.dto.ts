@@ -1,4 +1,12 @@
-import { IsEnum, IsOptional, IsString, IsObject, IsUrl } from 'class-validator';
+import {
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsObject,
+  IsUrl,
+  MaxLength,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export enum CheckoutMode {
@@ -71,4 +79,20 @@ export class PaySessionResponseDto {
 
   @ApiPropertyOptional({ description: 'Payment Intent ID (if payment created)' })
   paymentIntentId?: string;
+}
+
+/**
+ * Body for POST /v1/checkout/validate-promo — the pre-checkout check the
+ * frontend runs before showing a discount.
+ */
+export class ValidatePromoCodeDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(64)
+  promoCode!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(100)
+  priceCode!: string;
 }

@@ -12,6 +12,7 @@ import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { User, RequestUser } from '../auth/decorators/user.decorator';
 import { AffiliatesService } from './affiliates.service';
+import { RequestWithdrawalDto } from './dto/request-withdrawal.dto';
 import {
   AffiliateResponseDto,
   ReferralResponseDto,
@@ -119,7 +120,7 @@ export class AffiliatesController {
   @ApiOperation({ summary: 'Request withdrawal from affiliate balance' })
   async requestWithdrawal(
     @User() user: RequestUser,
-    @Body() body: { amount?: number; currency?: string },
+    @Body() body: RequestWithdrawalDto,
     @Query('serviceId') serviceId?: string,
   ) {
     const affiliate = await this.affiliatesService.getAffiliateByUserId(user.userId, serviceId);
