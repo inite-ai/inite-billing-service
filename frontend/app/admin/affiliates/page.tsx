@@ -13,6 +13,9 @@ import { Loader2, Users, DollarSign, GitBranch, Copy } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import type { PaginatedResponse } from '@/lib/types'
+import { PageHeader } from '@/components/ui/PageHeader'
+import { StatusBadge } from '@/components/ui/StatusBadge'
+import { TableSkeleton } from '@/components/ui/Skeleton'
 
 interface AffiliateWithCount {
   id: string
@@ -63,26 +66,26 @@ export default function AdminAffiliatesPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">{t('affiliates.title')}</h1>
+      <PageHeader title={t('affiliates.title')} />
 
       <Card>
         {loading ? (
-          <div className="flex items-center gap-2 text-gray-500 py-4"><Loader2 className="w-5 h-5 animate-spin" /> {tc('loading')}</div>
+          <TableSkeleton />
         ) : !data || data.items.length === 0 ? (
           <div className="text-center py-8">
-            <Users className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-            <p className="text-gray-500">{t('affiliates.noAffiliates')}</p>
+            <Users className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+            <p className="text-slate-500">{t('affiliates.noAffiliates')}</p>
           </div>
         ) : (
           <>
-            <p className="text-sm text-gray-500 mb-3">{t('affiliates.totalAffiliates', { count: data.total })}</p>
+            <p className="text-sm text-slate-500 mb-3">{t('affiliates.totalAffiliates', { count: data.total })}</p>
             <Table>
               <Thead>
                 <tr><Th>{t('affiliates.tableUser')}</Th><Th>{t('affiliates.tableCode')}</Th><Th>{t('affiliates.tableReferrals')}</Th><Th>{t('affiliates.tableCommissions')}</Th><Th>{t('affiliates.tableEarned')}</Th><Th>{t('affiliates.tablePaid')}</Th><Th>{t('affiliates.tableRate')}</Th><Th>{t('affiliates.tableStatus')}</Th></tr>
               </Thead>
               <Tbody>
                 {data.items.map((a) => (
-                  <tr key={a.id} className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50" onClick={() => handleDetail(a)}>
+                  <tr key={a.id} className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50" onClick={() => handleDetail(a)}>
                     <Td className="font-mono text-xs">{a.userId.slice(0, 8)}...</Td>
                     <Td>
                       <span className="font-mono text-sm font-semibold text-violet-600 dark:text-violet-400">{a.referralCode}</span>
@@ -120,17 +123,17 @@ export default function AdminAffiliatesPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <span className="font-mono text-lg font-bold text-violet-600 dark:text-violet-400">{selected.referralCode}</span>
-              <Badge>{selected.status}</Badge>
+              <StatusBadge status={selected.status} />
             </div>
 
-            <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4 space-y-2 text-sm">
-              <div className="flex justify-between"><span className="text-gray-500">{t('affiliates.detailAffiliateId')}</span><span className="font-mono text-xs">{selected.id}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">{t('affiliates.detailUserId')}</span><span className="font-mono text-xs">{selected.userId}</span></div>
+            <div className="bg-slate-50 dark:bg-slate-900 rounded-xl p-4 space-y-2 text-sm">
+              <div className="flex justify-between"><span className="text-slate-500">{t('affiliates.detailAffiliateId')}</span><span className="font-mono text-xs">{selected.id}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">{t('affiliates.detailUserId')}</span><span className="font-mono text-xs">{selected.userId}</span></div>
               {selected.parentAffiliateId && (
-                <div className="flex justify-between"><span className="text-gray-500">{t('affiliates.detailParentAffiliate')}</span><span className="font-mono text-xs">{selected.parentAffiliateId.slice(0, 8)}...</span></div>
+                <div className="flex justify-between"><span className="text-slate-500">{t('affiliates.detailParentAffiliate')}</span><span className="font-mono text-xs">{selected.parentAffiliateId.slice(0, 8)}...</span></div>
               )}
-              <div className="flex justify-between"><span className="text-gray-500">{t('affiliates.detailCommissionRate')}</span><span className="font-semibold">{(Number(selected.commissionRate) * 100).toFixed(1)}%</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">{t('affiliates.detailCreated')}</span><span>{new Date(selected.createdAt).toLocaleString()}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">{t('affiliates.detailCommissionRate')}</span><span className="font-semibold">{(Number(selected.commissionRate) * 100).toFixed(1)}%</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">{t('affiliates.detailCreated')}</span><span>{new Date(selected.createdAt).toLocaleString()}</span></div>
             </div>
 
             {/* Stats */}

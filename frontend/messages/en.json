@@ -57,7 +57,10 @@
     "pagination": {
       "page": "Page {page} of {pages}",
       "showing": "Showing {from} to {to} of {total}",
-      "itemsPerPage": "Items per page"
+      "itemsPerPage": "Items per page",
+      "label": "Pagination",
+      "previous": "Previous page",
+      "next": "Next page"
     },
     "errors": {
       "generic": "An error occurred",
@@ -80,7 +83,12 @@
     "product": "Product",
     "price": "Price",
     "noData": "No data",
-    "na": "N/A"
+    "na": "N/A",
+    "loadFailed": "Could not load this data",
+    "retry": "Try again",
+    "copy": "Copy",
+    "expand": "Show details",
+    "collapse": "Hide details"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -477,7 +485,12 @@
       "deactivated": "Product deactivated",
       "deleted": "Product deleted",
       "deleteConfirm": "Delete this product? This will also delete all associated prices.",
-      "deleteError": "Failed to delete — product may have orders"
+      "deleteError": "Failed to delete — product may have orders",
+      "types": {
+        "subscription": "subscription",
+        "one_time": "one-time",
+        "usage": "usage"
+      }
     },
     "prices": {
       "title": "Prices",

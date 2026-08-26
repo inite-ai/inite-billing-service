@@ -9,6 +9,8 @@ import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
 import { Tabs } from '@/components/ui/Tabs'
 import { Gauge, Loader2, Plus, Pencil, Trash2 } from 'lucide-react'
 import api from '@/lib/api'
+import { IconButton } from '@/components/ui/IconButton'
+import { Button } from '@/components/ui/Button'
 
 interface Feature {
   id: string
@@ -65,6 +67,7 @@ const emptyQuotaForm = {
 
 export default function AdminMeteringPage() {
   const t = useTranslations('admin.metering')
+  const tc = useTranslations('common')
   const [tab, setTab] = useState('features')
   const [loading, setLoading] = useState(true)
   const [features, setFeatures] = useState<Feature[]>([])
@@ -222,12 +225,9 @@ export default function AdminMeteringPage() {
       ) : tab === 'features' ? (
         <Card>
           <div className="flex justify-end mb-4">
-            <button
-              onClick={() => openFeatureModal()}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gradient-to-r from-violet-600 to-purple-600 text-white text-sm font-semibold hover:opacity-90"
-            >
-              <Plus className="w-4 h-4" /> {t('addFeature')}
-            </button>
+            <Button onClick={() => openFeatureModal()} icon={<Plus className="w-4 h-4" />} size="sm">
+  {t('addFeature')}
+            </Button>
           </div>
           <Table>
             <Thead>
@@ -260,18 +260,18 @@ export default function AdminMeteringPage() {
                   </Td>
                   <Td>
                     <div className="flex gap-1">
-                      <button
+                      <IconButton
                         onClick={() => openFeatureModal(f)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-violet-500"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button
+                        tone="primary"
+                        label={tc('edit')}
+                        icon={<Pencil className="w-4 h-4" />}
+                      />
+                      <IconButton
                         onClick={() => deleteFeature(f)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-500"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                        tone="danger"
+                        label={tc('delete')}
+                        icon={<Trash2 className="w-4 h-4" />}
+                      />
                     </div>
                   </Td>
                 </tr>
@@ -292,15 +292,12 @@ export default function AdminMeteringPage() {
       ) : tab === 'quotas' ? (
         <Card>
           <div className="flex justify-end mb-4">
-            <button
-              onClick={() => {
+            <Button onClick={() => {
                 setFormError(null)
                 setQuotaModal(true)
-              }}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gradient-to-r from-violet-600 to-purple-600 text-white text-sm font-semibold hover:opacity-90"
-            >
-              <Plus className="w-4 h-4" /> {t('addQuota')}
-            </button>
+              }} icon={<Plus className="w-4 h-4" />} size="sm">
+  {t('addQuota')}
+            </Button>
           </div>
           <Table>
             <Thead>
@@ -336,12 +333,12 @@ export default function AdminMeteringPage() {
                     </Badge>
                   </Td>
                   <Td>
-                    <button
+                    <IconButton
                       onClick={() => deleteQuota(q)}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-red-500"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                      tone="danger"
+                      label={tc('delete')}
+                      icon={<Trash2 className="w-4 h-4" />}
+                    />
                   </Td>
                 </tr>
               ))}
@@ -467,13 +464,9 @@ export default function AdminMeteringPage() {
             />
           </div>
           {formError && <p className="text-xs text-red-500">{formError}</p>}
-          <button
-            onClick={saveFeature}
-            disabled={saving || !featureForm.code || !featureForm.name}
-            className="w-full py-2 rounded-lg bg-gradient-to-r from-violet-600 to-purple-600 text-white text-sm font-semibold disabled:opacity-50"
-          >
-            {saving ? '…' : t('save')}
-          </button>
+          <Button onClick={saveFeature} loading={saving} disabled={!featureForm.code || !featureForm.name} className="w-full">
+  {t('save')}
+            </Button>
         </div>
       </Modal>
 
@@ -585,13 +578,9 @@ export default function AdminMeteringPage() {
             </select>
           </div>
           {formError && <p className="text-xs text-red-500">{formError}</p>}
-          <button
-            onClick={saveQuota}
-            disabled={saving || (!quotaForm.limitCredits && !quotaForm.limitUnits)}
-            className="w-full py-2 rounded-lg bg-gradient-to-r from-violet-600 to-purple-600 text-white text-sm font-semibold disabled:opacity-50"
-          >
-            {saving ? '…' : t('save')}
-          </button>
+          <Button onClick={saveQuota} loading={saving} disabled={(!quotaForm.limitCredits && !quotaForm.limitUnits)} className="w-full">
+  {t('save')}
+            </Button>
         </div>
       </Modal>
     </div>

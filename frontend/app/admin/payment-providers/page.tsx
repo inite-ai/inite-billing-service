@@ -12,6 +12,10 @@ import { Plus, Pencil, Trash2, Eye, EyeOff, Plug, Loader2, Globe, CreditCard, Za
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import type { PaymentProvider } from '@/lib/types'
+import { PageHeader } from '@/components/ui/PageHeader'
+import { ActiveBadge } from '@/components/ui/StatusBadge'
+import { TableSkeleton } from '@/components/ui/Skeleton'
+import { IconButton } from '@/components/ui/IconButton'
 
 const KNOWN_PROVIDERS = [
   { code: 'ONE', name: 'ONE Payment', currencies: ['BRL', 'USD'], countries: ['BR', 'LATAM'], modes: ['PAYMENT', 'SUBSCRIPTION'], description: 'Latin America payment gateway — Pix, cards, bank transfer' },
@@ -171,51 +175,58 @@ export default function AdminPaymentProvidersPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('providers.title')}</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('providers.subtitle')}</p>
-        </div>
-        <Button size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => { resetForm(); setShowCreate(true) }}>{t('providers.addProvider')}</Button>
-      </div>
-
+      <PageHeader
+        title={t('providers.title')}
+        subtitle={t('providers.subtitle')}
+        actions={
+    <Button size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => { resetForm(); setShowCreate(true) }}>{t('providers.addProvider')}</Button>
+        }
+      />
       {/* Active Providers */}
       <Card>
         {loading ? (
-          <div className="flex items-center gap-2 text-gray-500 py-4"><Loader2 className="w-5 h-5 animate-spin" /> {tc('loading')}</div>
+          <TableSkeleton />
         ) : providers.length === 0 ? (
           <div className="text-center py-8">
-            <Plug className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-            <p className="text-gray-500 mb-2">{t('providers.noProviders')}</p>
-            <p className="text-sm text-gray-400">{t('providers.noProvidersHint')}</p>
+            <Plug className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+            <p className="text-slate-500 mb-2">{t('providers.noProviders')}</p>
+            <p className="text-sm text-slate-400">{t('providers.noProvidersHint')}</p>
           </div>
         ) : (
           <div className="space-y-4">
             {providers.map((p) => (
-              <div key={p.id} className={`border rounded-xl p-4 ${p.isActive ? 'border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-900/10' : 'border-gray-200 dark:border-gray-700'}`}>
+              <div key={p.id} className={`border rounded-xl p-4 ${p.isActive ? 'border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-900/10' : 'border-slate-200 dark:border-slate-700'}`}>
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${p.isActive ? 'bg-green-100 dark:bg-green-900/30' : 'bg-gray-100 dark:bg-gray-800'}`}>
-                      <CreditCard className={`w-5 h-5 ${p.isActive ? 'text-green-600' : 'text-gray-400'}`} />
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${p.isActive ? 'bg-green-100 dark:bg-green-900/30' : 'bg-slate-100 dark:bg-slate-800'}`}>
+                      <CreditCard className={`w-5 h-5 ${p.isActive ? 'text-green-600' : 'text-slate-400'}`} />
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <h3 className="font-semibold text-gray-900 dark:text-white">{p.name}</h3>
-                        <span className="font-mono text-xs text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded">{p.code}</span>
-                        <Badge>{p.isActive ? tc('status.active') : tc('status.inactive')}</Badge>
+                        <h3 className="font-semibold text-slate-900 dark:text-white">{p.name}</h3>
+                        <span className="font-mono text-xs text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">{p.code}</span>
+                        <ActiveBadge active={p.isActive} />
                       </div>
-                      <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
+                      <div className="flex items-center gap-4 mt-1 text-xs text-slate-500">
                         <span className="flex items-center gap-1"><Globe className="w-3 h-3" /> {p.countries.join(', ') || t('providers.noCountries')}</span>
                         <span className="flex items-center gap-1"><Zap className="w-3 h-3" /> {p.supportedModes.join(', ')}</span>
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => handleToggleActive(p.id, p.isActive)} className="text-gray-400 hover:text-blue-500" title={p.isActive ? tc('deactivate') : tc('activate')}>
-                      {p.isActive ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                    <button onClick={() => startEdit(p)} className="text-gray-400 hover:text-blue-500" title={tc('edit')}><Pencil className="w-4 h-4" /></button>
-                    <button onClick={() => handleDelete(p.id)} className="text-gray-400 hover:text-red-500" title={tc('delete')}><Trash2 className="w-4 h-4" /></button>
+                    <IconButton
+                      onClick={() => handleToggleActive(p.id, p.isActive)}
+                      tone="primary"
+                      label={p.isActive ? tc('deactivate') : tc('activate')}
+                      icon={p.isActive ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    />
+                    <IconButton
+                      onClick={() => startEdit(p)}
+                      tone="primary"
+                      label={tc('edit')}
+                      icon={<Pencil className="w-4 h-4" />}
+                    />
+                    <IconButton onClick={() => handleDelete(p.id)} tone="danger" label={tc('delete')} icon={<Trash2 className="w-4 h-4" />} />
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-1.5 mt-3">
@@ -224,7 +235,7 @@ export default function AdminPaymentProvidersPage() {
                   ))}
                 </div>
                 {p.webhookUrl && (
-                  <p className="text-xs text-gray-400 mt-2 font-mono truncate">{t('providers.webhook', { url: p.webhookUrl })}</p>
+                  <p className="text-xs text-slate-400 mt-2 font-mono truncate">{t('providers.webhook', { url: p.webhookUrl })}</p>
                 )}
               </div>
             ))}
@@ -237,20 +248,20 @@ export default function AdminPaymentProvidersPage() {
         <div className="space-y-4">
           {/* Quick templates */}
           <div>
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('providers.quickSetup')}</p>
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">{t('providers.quickSetup')}</p>
             <div className="flex flex-wrap gap-2">
               {KNOWN_PROVIDERS.map((tmpl) => (
                 <button
                   key={tmpl.code}
                   onClick={() => handleSelectTemplate(tmpl)}
-                  className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${formCode === tmpl.code ? 'border-violet-500 bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300' : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                  className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${formCode === tmpl.code ? 'border-violet-500 bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
                 >
                   {tmpl.name}
                 </button>
               ))}
             </div>
             {formCode && KNOWN_PROVIDERS.find((t) => t.code === formCode) && (
-              <p className="text-xs text-gray-400 mt-2">{KNOWN_PROVIDERS.find((t) => t.code === formCode)?.description}</p>
+              <p className="text-xs text-slate-400 mt-2">{KNOWN_PROVIDERS.find((t) => t.code === formCode)?.description}</p>
             )}
           </div>
 
@@ -263,8 +274,8 @@ export default function AdminPaymentProvidersPage() {
           <Input label={t('providers.formSupportedModes')} value={formModes} onChange={(e) => setFormModes(e.target.value)} placeholder="PAYMENT, SUBSCRIPTION" />
           <Input label={t('providers.formWebhookUrl')} value={formWebhook} onChange={(e) => setFormWebhook(e.target.value)} placeholder="https://billing-api.inite.ai/v1/webhooks/lava" />
 
-          <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('providers.apiCredentials')}</p>
+          <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">{t('providers.apiCredentials')}</p>
             <div className="grid grid-cols-2 gap-4">
               <Input label={t('providers.formApiKey')} value={formApiKey} onChange={(e) => setFormApiKey(e.target.value)} placeholder="sk_live_..." />
               <Input label={t('providers.formApiSecret')} type="password" value={formApiSecret} onChange={(e) => setFormApiSecret(e.target.value)} placeholder="secret..." />
@@ -286,8 +297,8 @@ export default function AdminPaymentProvidersPage() {
           <Input label={t('providers.formCountries')} value={formCountries} onChange={(e) => setFormCountries(e.target.value)} />
           <Input label={t('providers.formSupportedModes')} value={formModes} onChange={(e) => setFormModes(e.target.value)} />
           <Input label={t('providers.formWebhookUrl')} value={formWebhook} onChange={(e) => setFormWebhook(e.target.value)} />
-          <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-            <p className="text-sm text-gray-500 mb-2">{t('providers.apiCredentialsUpdate')}</p>
+          <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
+            <p className="text-sm text-slate-500 mb-2">{t('providers.apiCredentialsUpdate')}</p>
             <div className="grid grid-cols-2 gap-4">
               <Input label={t('providers.formApiKey')} value={formApiKey} onChange={(e) => setFormApiKey(e.target.value)} placeholder={t('providers.leaveEmptyToKeep')} />
               <Input label={t('providers.formApiSecret')} type="password" value={formApiSecret} onChange={(e) => setFormApiSecret(e.target.value)} placeholder={t('providers.leaveEmptyToKeep')} />

@@ -17,6 +17,10 @@ import { useApiQuery } from '@/hooks/useApiQuery'
 import { useConfirmDialog } from '@/hooks/useConfirmDialog'
 import { getErrorMessage } from '@/lib/api-error'
 import type { Product, Service } from '@/lib/types'
+import { ActiveBadge } from '@/components/ui/StatusBadge'
+import { TableSkeleton } from '@/components/ui/Skeleton'
+import { ErrorState } from '@/components/ui/ErrorState'
+import { IconButton } from '@/components/ui/IconButton'
 
 export default function AdminProductsPage() {
   const t = useTranslations('admin')
@@ -29,7 +33,7 @@ export default function AdminProductsPage() {
   const productsUrl = filterService
     ? `/v1/admin/products?serviceId=${filterService}`
     : '/v1/admin/products'
-  const { data: products, loading, refetch } = useApiQuery<Product[]>(productsUrl)
+  const { data: products, loading, error, refetch } = useApiQuery<Product[]>(productsUrl)
   const { data: services } = useApiQuery<Service[]>('/v1/admin/services')
 
   const handleCreate = async (data: any) => {
@@ -66,7 +70,7 @@ export default function AdminProductsPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('products.title')}</h1>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('products.title')}</h1>
         <div className="flex gap-3">
           {servicesList.length > 0 && (
             <div className="w-48">
@@ -82,12 +86,14 @@ export default function AdminProductsPage() {
 
       <Card>
         {loading ? (
-          <div className="flex items-center gap-2 text-gray-500 py-4"><Loader2 className="w-5 h-5 animate-spin" /> {tc('loading')}</div>
+          <TableSkeleton />
+        ) : error ? (
+          <ErrorState message={error} onRetry={refetch} />
         ) : !products || products.length === 0 ? (
           <EmptyState icon={Package} title={t('products.noProducts')} />
         ) : (
           <>
-            <p className="text-sm text-gray-500 mb-3">{t('products.productCount', { count: products.length })}</p>
+            <p className="text-sm text-slate-500 mb-3">{t('products.productCount', { count: products.length })}</p>
             <Table>
               <Thead>
                 <tr><Th>{t('products.tableCode')}</Th><Th>{t('products.tableName')}</Th><Th>{t('products.tableType')}</Th><Th>{t('products.tableService')}</Th><Th>{t('products.tablePrices')}</Th><Th>{t('products.tableStatus')}</Th><Th>{t('products.tableActions')}</Th></tr>
@@ -97,20 +103,24 @@ export default function AdminProductsPage() {
                   <tr key={p.id}>
                     <Td className="font-mono text-sm">{p.code}</Td>
                     <Td className="font-semibold">{p.name}</Td>
-                    <Td><Badge>{p.type}</Badge></Td>
-                    <Td>{p.service?.name || <span className="text-gray-400">-</span>}</Td>
+                    <Td><Badge>{t.has(`products.types.${p.type}`) ? t(`products.types.${p.type}`) : p.type}</Badge></Td>
+                    <Td>{p.service?.name || <span className="text-slate-400">-</span>}</Td>
                     <Td>{p.prices?.length || 0}</Td>
-                    <Td><Badge>{p.isActive ? tc('status.active') : tc('status.inactive')}</Badge></Td>
+                    <Td><ActiveBadge active={p.isActive} /></Td>
                     <Td>
                       <div className="flex items-center gap-2">
-                        <button
+                        <IconButton
                           onClick={() => handleToggleActive(p.id, p.isActive)}
-                          className="text-gray-400 hover:text-blue-500"
-                          title={p.isActive ? tc('deactivate') : tc('activate')}
-                        >
-                          {p.isActive ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                        <button onClick={() => handleDelete(p.id)} className="text-gray-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
+                          tone="primary"
+                          label={p.isActive ? tc('deactivate') : tc('activate')}
+                          icon={p.isActive ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        />
+                        <IconButton
+                          onClick={() => handleDelete(p.id)}
+                          tone="danger"
+                          label={tc('delete')}
+                          icon={<Trash2 className="w-4 h-4" />}
+                        />
                       </div>
                     </Td>
                   </tr>

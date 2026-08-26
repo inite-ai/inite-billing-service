@@ -216,8 +216,8 @@ export default function AdminFunnelPage() {
       {/* Header */}
       <div className="mb-4 flex flex-col sm:flex-row sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('pipeline')}</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('subtitle')}</p>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('pipeline')}</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{t('subtitle')}</p>
         </div>
         <div className="ml-auto">
           <Select value={serviceId} onChange={e => setServiceId(e.target.value)} options={serviceOptions} />
@@ -236,7 +236,7 @@ export default function AdminFunnelPage() {
           <Loader2 className="w-6 h-6 animate-spin text-violet-500" />
         </div>
       ) : !pipeline ? (
-        <p className="text-gray-500 py-8">{t('noData')}</p>
+        <p className="text-slate-500 py-8">{t('noData')}</p>
       ) : (
         <div className="flex gap-0 flex-1 min-h-0 mt-4">
           {/* Left: Kanban (70%) */}
@@ -260,7 +260,7 @@ export default function AdminFunnelPage() {
               animate={{ width: '30%', opacity: 1 }}
               exit={{ width: 0, opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 min-w-[340px] overflow-y-auto rounded-r-2xl"
+              className="border-l border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 min-w-[340px] overflow-y-auto rounded-r-2xl"
             >
               <DetailPanel
                 item={selectedItem}
@@ -278,7 +278,7 @@ export default function AdminFunnelPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0 }}
-          className="fixed bottom-6 right-6 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-4 py-3 rounded-xl shadow-lg text-sm font-medium z-50"
+          className="fixed bottom-6 right-6 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 px-4 py-3 rounded-xl shadow-lg text-sm font-medium z-50"
         >
           {toastMessage}
         </motion.div>
@@ -312,8 +312,8 @@ function StatsBar({ stats }: { stats: PipelineStats }) {
               <Icon className={`w-4 h-4 ${item.color}`} />
             </div>
             <div className="min-w-0">
-              <p className="text-lg font-bold text-gray-900 dark:text-white leading-tight truncate">{item.value}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{item.label}</p>
+              <p className="text-lg font-bold text-slate-900 dark:text-white leading-tight truncate">{item.value}</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{item.label}</p>
             </div>
           </div>
         )
@@ -342,8 +342,8 @@ function KanbanColumn({ stage, selectedItemId, onSelectItem }: {
           <div className={`w-6 h-6 rounded-md ${config.bgColor} ${config.darkBgColor} flex items-center justify-center`}>
             <Icon className={`w-3.5 h-3.5 ${config.color}`} />
           </div>
-          <span className="text-sm font-semibold text-gray-900 dark:text-white truncate">{t(config.i18nKey)}</span>
-          <span className="ml-auto text-xs font-medium text-gray-400 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded-md">
+          <span className="text-sm font-semibold text-slate-900 dark:text-white truncate">{t(config.i18nKey)}</span>
+          <span className="ml-auto text-xs font-medium text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded-md">
             {stage.items.length}
           </span>
         </div>
@@ -352,7 +352,7 @@ function KanbanColumn({ stage, selectedItemId, onSelectItem }: {
       {/* Cards container */}
       <div className="flex-1 overflow-y-auto space-y-2 pt-2 pb-2 max-h-[calc(100vh-340px)]">
         {stage.items.length === 0 ? (
-          <div className="text-center py-6 text-xs text-gray-400">{t('noData')}</div>
+          <div className="text-center py-6 text-xs text-slate-400">{t('noData')}</div>
         ) : (
           stage.items.map(item => (
             <PipelineCard
@@ -385,15 +385,15 @@ function PipelineCard({ item, isSelected, onClick }: {
       transition={{ duration: 0.15 }}
       onClick={onClick}
       className={`
-        bg-white dark:bg-gray-800 border rounded-xl p-3 cursor-pointer transition-all duration-150
+        bg-white dark:bg-slate-800 border rounded-xl p-3 cursor-pointer transition-all duration-150
         ${isSelected
           ? 'border-violet-400 dark:border-violet-500 ring-2 ring-violet-200 dark:ring-violet-800/50 shadow-md'
-          : 'border-gray-200 dark:border-gray-700 hover:shadow-md hover:border-gray-300 dark:hover:border-gray-600'}
+          : 'border-slate-200 dark:border-slate-700 hover:shadow-md hover:border-slate-300 dark:hover:border-slate-600'}
       `}
     >
       {/* User ID */}
       <div className="flex items-center justify-between mb-1.5">
-        <span className="text-xs font-mono text-gray-600 dark:text-gray-300 truncate max-w-[140px]">
+        <span className="text-xs font-mono text-slate-600 dark:text-slate-300 truncate max-w-[140px]">
           {item.userId.length > 16 ? item.userId.slice(0, 16) + '...' : item.userId}
         </span>
         {item.hasFollowUp && (
@@ -405,17 +405,17 @@ function PipelineCard({ item, isSelected, onClick }: {
 
       {/* Product name */}
       {item.productName && (
-        <p className="text-sm font-medium text-gray-900 dark:text-white truncate mb-1">
+        <p className="text-sm font-medium text-slate-900 dark:text-white truncate mb-1">
           {item.productName}
         </p>
       )}
 
       {/* Amount + time */}
       <div className="flex items-center justify-between mt-2">
-        <span className="text-sm font-semibold text-gray-900 dark:text-white">
+        <span className="text-sm font-semibold text-slate-900 dark:text-white">
           {formatCurrency(item.amount, item.currency)}
         </span>
-        <span className="text-xs text-gray-400 flex items-center gap-1">
+        <span className="text-xs text-slate-400 flex items-center gap-1">
           <Clock className="w-3 h-3" />
           {t('cardTimeAgo', { time: timeAgo(item.createdAt) })}
         </span>
@@ -465,15 +465,15 @@ function DetailPanel({ item, onClose, onAction }: {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+      <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
         <div className="min-w-0">
-          <p className="text-sm font-mono text-gray-500 truncate">{item.userId}</p>
+          <p className="text-sm font-mono text-slate-500 truncate">{item.userId}</p>
           {item.productName && (
-            <p className="text-base font-semibold text-gray-900 dark:text-white truncate">{item.productName}</p>
+            <p className="text-base font-semibold text-slate-900 dark:text-white truncate">{item.productName}</p>
           )}
         </div>
-        <button onClick={onClose} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors">
-          <X className="w-4 h-4 text-gray-400" />
+        <button onClick={onClose} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+          <X className="w-4 h-4 text-slate-400" />
         </button>
       </div>
 
@@ -504,7 +504,7 @@ function OverviewTab({ item }: { item: PipelineItem }) {
     <div className="space-y-5">
       {/* Progress bar */}
       <div>
-        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-3 uppercase tracking-wider">{t('progressBar')}</p>
+        <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-3 uppercase tracking-wider">{t('progressBar')}</p>
         <div className="flex items-center gap-0">
           {STAGE_ORDER.map((stage, i) => {
             const sc = STAGE_CONFIG[stage]
@@ -515,7 +515,7 @@ function OverviewTab({ item }: { item: PipelineItem }) {
             return (
               <div key={stage} className="flex items-center">
                 {i > 0 && (
-                  <div className={`w-6 h-0.5 ${isCompleted ? sc.dotColor : 'bg-gray-200 dark:bg-gray-700'}`} />
+                  <div className={`w-6 h-0.5 ${isCompleted ? sc.dotColor : 'bg-slate-200 dark:bg-slate-700'}`} />
                 )}
                 <div
                   title={t(sc.i18nKey)}
@@ -525,7 +525,7 @@ function OverviewTab({ item }: { item: PipelineItem }) {
                       ? `${sc.dotColor} ring-4 ring-opacity-20 ${sc.bgColor}`
                       : isCompleted
                         ? sc.dotColor
-                        : 'bg-gray-200 dark:bg-gray-700'}
+                        : 'bg-slate-200 dark:bg-slate-700'}
                   `}
                 >
                   {(isCurrent || isChurned) && (
@@ -540,7 +540,7 @@ function OverviewTab({ item }: { item: PipelineItem }) {
           {STAGE_ORDER.map(stage => {
             const sc = STAGE_CONFIG[stage]
             return (
-              <span key={stage} className={`text-[9px] ${stage === item.stage ? sc.color + ' font-semibold' : 'text-gray-400'}`}>
+              <span key={stage} className={`text-[9px] ${stage === item.stage ? sc.color + ' font-semibold' : 'text-slate-400'}`}>
                 {t(sc.i18nKey).split(' ')[0]}
               </span>
             )
@@ -579,12 +579,12 @@ function OverviewTab({ item }: { item: PipelineItem }) {
       </div>
 
       {/* AI Management placeholder */}
-      <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-dashed border-gray-300 dark:border-gray-600">
+      <div className="mt-4 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-600">
         <div className="flex items-center gap-2 mb-1">
           <Bot className="w-4 h-4 text-violet-500" />
-          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('aiManagement')}</span>
+          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('aiManagement')}</span>
         </div>
-        <p className="text-xs text-gray-500">{t('aiManagementPlaceholder')}</p>
+        <p className="text-xs text-slate-500">{t('aiManagementPlaceholder')}</p>
       </div>
     </div>
   )
@@ -593,8 +593,8 @@ function OverviewTab({ item }: { item: PipelineItem }) {
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-start justify-between gap-3">
-      <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">{label}</span>
-      <span className="text-sm text-gray-900 dark:text-white text-right">{value}</span>
+      <span className="text-xs text-slate-500 dark:text-slate-400 shrink-0">{label}</span>
+      <span className="text-sm text-slate-900 dark:text-white text-right">{value}</span>
     </div>
   )
 }
@@ -621,7 +621,7 @@ function TimelineTab({ events, loading }: { events: JourneyEvent[]; loading: boo
   }
 
   if (events.length === 0) {
-    return <p className="text-sm text-gray-500 py-4">{t('noData')}</p>
+    return <p className="text-sm text-slate-500 py-4">{t('noData')}</p>
   }
 
   return (
@@ -634,7 +634,7 @@ function TimelineTab({ events, loading }: { events: JourneyEvent[]; loading: boo
             <div className="flex flex-col items-center">
               <div className={`w-3 h-3 rounded-full ${config.dotColor} mt-1 shrink-0 z-10`} />
               {i < events.length - 1 && (
-                <div className="w-0.5 flex-1 bg-gray-200 dark:bg-gray-700 mt-1" />
+                <div className="w-0.5 flex-1 bg-slate-200 dark:bg-slate-700 mt-1" />
               )}
             </div>
 
@@ -643,17 +643,17 @@ function TimelineTab({ events, loading }: { events: JourneyEvent[]; loading: boo
               <div className="flex items-center gap-2">
                 <span className={`text-sm font-medium ${config.color}`}>{event.eventType}</span>
               </div>
-              <span className="text-xs text-gray-400">
+              <span className="text-xs text-slate-400">
                 {event.stage}
               </span>
-              <p className="text-xs text-gray-500 mt-0.5">
+              <p className="text-xs text-slate-500 mt-0.5">
                 {new Date(event.createdAt).toLocaleString()}
               </p>
               {event.properties && Object.keys(event.properties).length > 0 && (
-                <div className="mt-1.5 p-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-                  <p className="text-[10px] text-gray-400 uppercase mb-1">{t('eventProperties')}</p>
+                <div className="mt-1.5 p-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+                  <p className="text-[10px] text-slate-400 uppercase mb-1">{t('eventProperties')}</p>
                   {Object.entries(event.properties).map(([key, val]) => (
-                    <p key={key} className="text-xs text-gray-600 dark:text-gray-400">
+                    <p key={key} className="text-xs text-slate-600 dark:text-slate-400">
                       <span className="font-medium">{key}:</span> {String(val)}
                     </p>
                   ))}
@@ -703,7 +703,7 @@ function ActionsTab({ item, onAction }: { item: PipelineItem; onAction: () => vo
     return (
       <div className="text-center py-8">
         <CheckCircle className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
-        <p className="text-sm text-gray-500">No actions available for this stage</p>
+        <p className="text-sm text-slate-500">No actions available for this stage</p>
       </div>
     )
   }
@@ -713,14 +713,14 @@ function ActionsTab({ item, onAction }: { item: PipelineItem; onAction: () => vo
       {actions.map(action => {
         const Icon = action.icon
         return (
-          <div key={action.labelKey} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+          <div key={action.labelKey} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
             <div className="flex items-start gap-3">
-              <div className="w-9 h-9 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center shrink-0">
-                <Icon className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+              <div className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
+                <Icon className="w-4 h-4 text-slate-600 dark:text-slate-300" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 dark:text-white">{t(action.labelKey)}</p>
-                <p className="text-xs text-gray-500 mt-0.5">{t(action.descKey)}</p>
+                <p className="text-sm font-medium text-slate-900 dark:text-white">{t(action.labelKey)}</p>
+                <p className="text-xs text-slate-500 mt-0.5">{t(action.descKey)}</p>
                 <div className="mt-3">
                   <Button
                     size="sm"

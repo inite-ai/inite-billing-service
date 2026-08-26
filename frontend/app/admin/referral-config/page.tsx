@@ -15,6 +15,10 @@ import { Plus, Trash2, Pencil, Check, X, GitBranch, Loader2, Zap } from 'lucide-
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import type { ReferralLevel, Service } from '@/lib/types'
+import { PageHeader } from '@/components/ui/PageHeader'
+import { ActiveBadge } from '@/components/ui/StatusBadge'
+import { TableSkeleton } from '@/components/ui/Skeleton'
+import { IconButton } from '@/components/ui/IconButton'
 
 interface Template {
   key: string
@@ -168,24 +172,32 @@ export default function AdminReferralConfigPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('referralConfig.title')}</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('referralConfig.subtitle')}</p>
-        </div>
-        <div className="flex gap-3">
-          {services.length > 0 && (
-            <div className="w-48">
-              <Select value={filterService} onChange={(e) => setFilterService(e.target.value)} options={[
-                { value: '', label: t('referralConfig.allServices') },
-                ...services.map((s) => ({ value: s.id, label: s.name })),
-              ]} />
-            </div>
-          )}
-          <Button size="sm" variant="secondary" icon={<Zap className="w-4 h-4" />} onClick={loadTemplates}>{t('referralConfig.templates')}</Button>
-          <Button size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setShowModal(true)}>{t('referralConfig.addLevel')}</Button>
-        </div>
-      </div>
+      <PageHeader
+        title={t('referralConfig.title')}
+        subtitle={t('referralConfig.subtitle')}
+        actions={
+          <>
+            {services.length > 0 && (
+              <div className="w-48">
+                <Select
+                  value={filterService}
+                  onChange={(e) => setFilterService(e.target.value)}
+                  options={[
+                    { value: '', label: t('referralConfig.allServices') },
+                    ...services.map((s) => ({ value: s.id, label: s.name })),
+                  ]}
+                />
+              </div>
+            )}
+            <Button size="sm" variant="secondary" icon={<Zap className="w-4 h-4" />} onClick={loadTemplates}>
+              {t('referralConfig.templates')}
+            </Button>
+            <Button size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setShowModal(true)}>
+              {t('referralConfig.addLevel')}
+            </Button>
+          </>
+        }
+      />
 
       {/* Total Rate Summary */}
       {filteredLevels.length > 0 && (
@@ -193,11 +205,11 @@ export default function AdminReferralConfigPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <GitBranch className="w-5 h-5 text-violet-500" />
-              <span className="font-semibold text-gray-900 dark:text-white">
+              <span className="font-semibold text-slate-900 dark:text-white">
                 {t('referralConfig.levelsConfigured', { count: filteredLevels.length })}
               </span>
             </div>
-            <span className="text-lg font-bold text-gray-900 dark:text-white">
+            <span className="text-lg font-bold text-slate-900 dark:text-white">
               {t('referralConfig.totalRate', { rate: (totalRate * 100).toFixed(1) })}
             </span>
           </div>
@@ -206,12 +218,12 @@ export default function AdminReferralConfigPage() {
 
       <Card>
         {loading ? (
-          <div className="flex items-center gap-2 text-gray-500 py-4"><Loader2 className="w-5 h-5 animate-spin" /> {tc('loading')}</div>
+          <TableSkeleton />
         ) : filteredLevels.length === 0 ? (
           <div className="text-center py-8">
-            <GitBranch className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-            <p className="text-gray-500 mb-2">{t('referralConfig.noLevels')}</p>
-            <p className="text-sm text-gray-400">{t('referralConfig.noLevelsHint')}</p>
+            <GitBranch className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+            <p className="text-slate-500 mb-2">{t('referralConfig.noLevels')}</p>
+            <p className="text-sm text-slate-400">{t('referralConfig.noLevelsHint')}</p>
           </div>
         ) : (
           <Table>
@@ -238,7 +250,7 @@ export default function AdminReferralConfigPage() {
                     {editingId === l.id ? (
                       <div className="flex items-center gap-1">
                         <Input type="number" step="0.1" value={editRate} onChange={(e) => setEditRate(e.target.value)} className="!py-1 !text-sm w-20" />
-                        <span className="text-gray-500">%</span>
+                        <span className="text-slate-500">%</span>
                       </div>
                     ) : (
                       <span className="font-semibold text-lg">{(Number(l.commissionRate) * 100).toFixed(1)}%</span>
@@ -247,7 +259,7 @@ export default function AdminReferralConfigPage() {
                   <Td>
                     {(() => {
                       const c = l.qualificationCriteria
-                      if (!c || Object.keys(c).length === 0) return <span className="text-gray-400 text-xs">{t('referralConfig.qualNone')}</span>
+                      if (!c || Object.keys(c).length === 0) return <span className="text-slate-400 text-xs">{t('referralConfig.qualNone')}</span>
                       const parts: string[] = []
                       if (c.minDirectReferrals) parts.push(t('referralConfig.qualRefs', { count: c.minDirectReferrals }))
                       if (c.minActiveReferrals) parts.push(t('referralConfig.qualActive', { count: c.minActiveReferrals }))
@@ -258,18 +270,18 @@ export default function AdminReferralConfigPage() {
                       return <span className="text-xs text-orange-600 dark:text-orange-400">{parts.join(', ')}</span>
                     })()}
                   </Td>
-                  <Td><Badge>{l.isActive ? tc('status.active') : tc('status.inactive')}</Badge></Td>
+                  <Td><ActiveBadge active={l.isActive} /></Td>
                   <Td>
                     <div className="flex items-center gap-2">
                       {editingId === l.id ? (
                         <>
-                          <button onClick={saveEdit} className="text-green-500 hover:text-green-700"><Check className="w-4 h-4" /></button>
-                          <button onClick={cancelEdit} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
+                          <IconButton onClick={saveEdit} tone="success" label={tc('save')} icon={<Check className="w-4 h-4" />} />
+                          <IconButton onClick={cancelEdit} label={tc('cancel')} icon={<X className="w-4 h-4" />} />
                         </>
                       ) : (
                         <>
-                          <button onClick={() => startEdit(l)} className="text-gray-400 hover:text-blue-500"><Pencil className="w-4 h-4" /></button>
-                          <button onClick={() => handleDelete(l.id)} className="text-gray-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
+                          <IconButton onClick={() => startEdit(l)} tone="primary" label={tc('edit')} icon={<Pencil className="w-4 h-4" />} />
+                          <IconButton onClick={() => handleDelete(l.id)} tone="danger" label={tc('delete')} icon={<Trash2 className="w-4 h-4" />} />
                         </>
                       )}
                     </div>
@@ -301,11 +313,11 @@ export default function AdminReferralConfigPage() {
             const targetId = templateServiceId || filterService
             const targetName = services.find((s) => s.id === targetId)?.name
             return (
-              <div key={tmpl.key} className="border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+              <div key={tmpl.key} className="border border-slate-200 dark:border-slate-700 rounded-xl p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                 <div className="flex items-start justify-between mb-2">
                   <div>
-                    <h4 className="font-semibold text-gray-900 dark:text-white">{tmpl.name}</h4>
-                    <p className="text-xs text-gray-500 mt-0.5">{tmpl.description}</p>
+                    <h4 className="font-semibold text-slate-900 dark:text-white">{tmpl.name}</h4>
+                    <p className="text-xs text-slate-500 mt-0.5">{tmpl.description}</p>
                   </div>
                   <span className="text-lg font-bold text-violet-600 dark:text-violet-400">
                     {(tmpl.totalRate * 100).toFixed(0)}%

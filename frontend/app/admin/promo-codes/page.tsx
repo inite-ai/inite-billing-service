@@ -17,6 +17,11 @@ import { useApiQuery } from '@/hooks/useApiQuery'
 import { useConfirmDialog } from '@/hooks/useConfirmDialog'
 import { getErrorMessage } from '@/lib/api-error'
 import type { PromoCode, Service } from '@/lib/types'
+import { PageHeader } from '@/components/ui/PageHeader'
+import { ActiveBadge } from '@/components/ui/StatusBadge'
+import { TableSkeleton } from '@/components/ui/Skeleton'
+import { ErrorState } from '@/components/ui/ErrorState'
+import { IconButton } from '@/components/ui/IconButton'
 
 interface PromoCodeFormData {
   code: string
@@ -210,7 +215,7 @@ export default function AdminPromoCodesPage() {
   const tf = useTranslations('forms')
   const { confirm, DialogElement } = useConfirmDialog()
 
-  const { data: promoCodes, loading, refetch } = useApiQuery<PromoCode[]>('/v1/admin/promo-codes')
+  const { data: promoCodes, loading, error, refetch } = useApiQuery<PromoCode[]>('/v1/admin/promo-codes')
   const { data: services } = useApiQuery<Service[]>('/v1/admin/services')
 
   const [showModal, setShowModal] = useState(false)
@@ -318,19 +323,20 @@ export default function AdminPromoCodesPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('promoCodes.title')}</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('promoCodes.subtitle')}</p>
-        </div>
-        <Button size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => { setEditing(undefined); setShowModal(true) }}>
-          {t('promoCodes.addPromoCode')}
-        </Button>
-      </div>
-
+      <PageHeader
+        title={t('promoCodes.title')}
+        subtitle={t('promoCodes.subtitle')}
+        actions={
+    <Button size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => { setEditing(undefined); setShowModal(true) }}>
+              {t('promoCodes.addPromoCode')}
+            </Button>
+        }
+      />
       <Card>
         {loading ? (
-          <div className="flex items-center gap-2 text-gray-500 py-4"><Loader2 className="w-5 h-5 animate-spin" /> {tc('loading')}</div>
+          <TableSkeleton />
+        ) : error ? (
+          <ErrorState message={error} onRetry={refetch} />
         ) : promoList.length === 0 ? (
           <EmptyState icon={Tag} title={t('promoCodes.noPromoCodes')} subtitle={t('promoCodes.noPromoCodesHint')} />
         ) : (
@@ -368,20 +374,24 @@ export default function AdminPromoCodesPage() {
                     {isExpired(promo) ? (
                       <Badge variant="error">{t('promoCodes.expired')}</Badge>
                     ) : (
-                      <Badge>{promo.isActive ? tc('status.active') : tc('status.inactive')}</Badge>
+                      <ActiveBadge active={promo.isActive} />
                     )}
                   </Td>
                   <Td>
                     <div className="flex gap-2">
-                      <button onClick={() => { setEditing(promo); setShowModal(true) }} className="text-gray-400 hover:text-blue-500" title={tc('edit')}>
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => handleToggleActive(promo.id, promo.isActive)} className="text-gray-400 hover:text-yellow-500" title={promo.isActive ? tc('deactivate') : tc('activate')}>
-                        {promo.isActive ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                      <button onClick={() => handleDelete(promo.id)} className="text-gray-400 hover:text-red-500" title={tc('delete')}>
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <IconButton onClick={() => { setEditing(promo); setShowModal(true) }} tone="primary" label={tc('edit')} icon={<Pencil className="w-4 h-4" />} />
+                      <IconButton
+                        onClick={() => handleToggleActive(promo.id, promo.isActive)}
+                        tone="warning"
+                        label={promo.isActive ? tc('deactivate') : tc('activate')}
+                        icon={promo.isActive ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      />
+                      <IconButton
+                        onClick={() => handleDelete(promo.id)}
+                        tone="danger"
+                        label={tc('delete')}
+                        icon={<Trash2 className="w-4 h-4" />}
+                      />
                     </div>
                   </Td>
                 </tr>

@@ -16,6 +16,9 @@ import { Plus, Search, Loader2, Key } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import type { Entitlement, PaginatedResponse } from '@/lib/types'
+import { StatusBadge } from '@/components/ui/StatusBadge'
+import { TableSkeleton } from '@/components/ui/Skeleton'
+import { ErrorState } from '@/components/ui/ErrorState'
 
 export default function AdminEntitlementsPage() {
   const t = useTranslations('admin')
@@ -34,6 +37,7 @@ export default function AdminEntitlementsPage() {
   const [userSearch, setUserSearch] = useState('')
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [confirmState, setConfirmState] = useState<{
     isOpen: boolean
     title: string
@@ -44,6 +48,7 @@ export default function AdminEntitlementsPage() {
 
   const load = async () => {
     setLoading(true)
+    setLoadError(null)
     try {
       const params: Record<string, string | number> = { page, limit: 20 }
       if (statusFilter) params.status = statusFilter
@@ -52,7 +57,9 @@ export default function AdminEntitlementsPage() {
       setData(res.data)
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } }
-      toast.error(err.response?.data?.message || 'Failed to load entitlements')
+      const message = err.response?.data?.message || 'Failed to load entitlements'
+      setLoadError(message)
+      toast.error(message)
     } finally {
       setLoading(false)
     }
@@ -92,7 +99,7 @@ export default function AdminEntitlementsPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('entitlements.title')}</h1>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('entitlements.title')}</h1>
         <Button size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setShowModal(true)}>{t('entitlements.addEntitlement')}</Button>
       </div>
 
@@ -108,15 +115,17 @@ export default function AdminEntitlementsPage() {
 
       <Card>
         {loading ? (
-          <div className="flex items-center gap-2 text-gray-500 py-4"><Loader2 className="w-5 h-5 animate-spin" /> {tc('loading')}</div>
+          <TableSkeleton />
+        ) : loadError ? (
+          <ErrorState message={loadError} onRetry={load} />
         ) : !data || data.items.length === 0 ? (
           <div className="text-center py-8">
-            <Key className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-            <p className="text-gray-500">{t('entitlements.noEntitlements')}</p>
+            <Key className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+            <p className="text-slate-500">{t('entitlements.noEntitlements')}</p>
           </div>
         ) : (
           <>
-            <p className="text-sm text-gray-500 mb-3">{t('entitlements.totalEntitlements', { count: data.total })}</p>
+            <p className="text-sm text-slate-500 mb-3">{t('entitlements.totalEntitlements', { count: data.total })}</p>
             <Table>
               <Thead>
                 <tr><Th>{t('entitlements.tableUser')}</Th><Th>{t('entitlements.tableKey')}</Th><Th>{t('entitlements.tableSource')}</Th><Th>{t('entitlements.tableStatus')}</Th><Th>{t('entitlements.tableExpires')}</Th><Th>{t('entitlements.tableActions')}</Th></tr>
@@ -127,8 +136,8 @@ export default function AdminEntitlementsPage() {
                     <Td className="font-mono text-xs">{e.userId.slice(0, 8)}...</Td>
                     <Td className="font-mono font-semibold">{e.key}</Td>
                     <Td><Badge variant={e.source === 'admin' ? 'warning' : 'default'}>{e.source}</Badge></Td>
-                    <Td><Badge>{e.status}</Badge></Td>
-                    <Td>{e.expiresAt ? new Date(e.expiresAt).toLocaleDateString() : <span className="text-gray-400">{tc('never')}</span>}</Td>
+                    <Td><StatusBadge status={e.status} /></Td>
+                    <Td>{e.expiresAt ? new Date(e.expiresAt).toLocaleDateString() : <span className="text-slate-400">{tc('never')}</span>}</Td>
                     <Td>
                       {e.status === 'active' && (
                         <Button size="sm" variant="danger" onClick={() => handleRevoke(e.id)}>{tc('revoke')}</Button>
