@@ -4,6 +4,7 @@ import * as request from 'supertest';
 import { TestAppModule } from './test-app.module';
 import { PrismaService } from '../src/common/services/prisma.service';
 import { PaymentOrchestratorService } from '../src/payment-orchestrator/payment-orchestrator.service';
+import { CommissionSettlementScheduler } from '../src/affiliates/commission-settlement.scheduler';
 import { JwtAuthGuard } from '../src/auth/guards/jwt-auth.guard';
 import { MockJwtAuthGuard } from './mocks/auth.mock';
 import { MockOneAdapter } from './mocks/one-adapter.mock';
@@ -14,6 +15,7 @@ describe('Affiliates E2E Tests', () => {
   let prisma: PrismaService;
   let orchestrator: PaymentOrchestratorService;
   let mockOneAdapter: MockOneAdapter;
+  let settlementScheduler: CommissionSettlementScheduler;
   let authToken: string;
   let userId: string;
   let affiliateId: string;
@@ -42,6 +44,7 @@ describe('Affiliates E2E Tests', () => {
     prisma = app.get<PrismaService>(PrismaService);
     orchestrator = app.get<PaymentOrchestratorService>(PaymentOrchestratorService);
     mockOneAdapter = app.get<MockOneAdapter>(MockOneAdapter);
+    settlementScheduler = app.get<CommissionSettlementScheduler>(CommissionSettlementScheduler);
 
     userId = MockJwtAuthGuard.testUserId;
     authToken = `Bearer mock-token-${userId}`;
@@ -286,7 +289,9 @@ describe('Affiliates E2E Tests', () => {
 
       expect(commission).toBeDefined();
       expect(Number(commission?.amount)).toBe(50.0); // 50% of 100
-      expect(commission?.status).toBe('earned');
+      // Commissions land 'pending' and only settle after the service's
+      // settlement window — a refund before then voids them instead.
+      expect(commission?.status).toBe('pending');
 
       // Verify referral updated
       const referral = await prisma.referral.findUnique({
@@ -295,7 +300,18 @@ describe('Affiliates E2E Tests', () => {
       expect(referral?.firstOrderPaid).toBe(true);
       expect(referral?.firstOrderId).toBe(order.id);
 
-      // Verify affiliate totals updated
+      // Nothing is withdrawable until settlement runs.
+      const beforeSettlement = await prisma.affiliate.findUnique({
+        where: { id: affiliateId },
+      });
+      expect(Number(beforeSettlement?.totalEarned)).toBe(0);
+
+      await prisma.affiliateCommission.updateMany({
+        where: { id: commission!.id },
+        data: { createdAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000) },
+      });
+      await settlementScheduler.settleCommissions();
+
       const affiliate = await prisma.affiliate.findUnique({
         where: { id: affiliateId },
       });

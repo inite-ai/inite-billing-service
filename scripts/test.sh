@@ -70,5 +70,16 @@ npx prisma db push --skip-generate --accept-data-loss 2>&1 | tail -3
 
 # ── Run tests ──
 echo ""
-echo "Running tests..."
+echo "Running unit tests..."
 npx jest --forceExit --runInBand "$@"
+
+# The e2e config is a separate jest project. It used to be run by nothing at
+# all — not this script, not CI — and silently rotted until every suite failed
+# to even load. Keep it wired in here.
+echo ""
+echo "Running e2e tests..."
+if [ "$#" -gt 0 ]; then
+  npx jest --config ./test/jest-e2e.json --forceExit --passWithNoTests "$@"
+else
+  npx jest --config ./test/jest-e2e.json --forceExit
+fi

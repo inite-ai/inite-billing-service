@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import * as request from 'supertest';
+import { createHmac } from 'crypto';
 import { TestAppModule } from './test-app.module';
 import { PrismaService } from '../src/common/services/prisma.service';
 import { JwtAuthGuard } from '../src/auth/guards/jwt-auth.guard';
@@ -17,6 +18,13 @@ describe('Webhooks E2E Tests', () => {
   let _paymentIntentId: string;
   let providerIntentId: string;
 
+  const ONE_API_SECRET = 'one-test-api-secret';
+  const CRYPTO_WEBHOOK_SECRET = 'crypto-test-webhook-secret';
+
+  /** Sign a payload the way the ONE rail expects (HMAC over the exact bytes sent). */
+  const signOne = (payload: unknown) =>
+    createHmac('sha256', ONE_API_SECRET).update(JSON.stringify(payload)).digest('hex');
+
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [TestAppModule],
@@ -25,7 +33,7 @@ describe('Webhooks E2E Tests', () => {
       .useClass(MockJwtAuthGuard)
       .compile();
 
-    app = moduleFixture.createNestApplication();
+    app = moduleFixture.createNestApplication({ rawBody: true });
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
@@ -39,6 +47,32 @@ describe('Webhooks E2E Tests', () => {
     mockOneAdapter = app.get<MockOneAdapter>(MockOneAdapter);
 
     userId = MockJwtAuthGuard.testUserId;
+
+    // Webhook verification is fail-closed and keyed on the provider's stored
+    // config, so both rails need an active provider row to accept anything.
+    await prisma.paymentProvider.upsert({
+      where: { code: 'ONE' },
+      update: { isActive: true, config: { apiSecret: ONE_API_SECRET } },
+      create: {
+        code: 'ONE',
+        name: 'ONE (test)',
+        isActive: true,
+        supportedModes: ['PAYMENT'],
+        config: { apiSecret: ONE_API_SECRET },
+      },
+    });
+
+    await prisma.paymentProvider.upsert({
+      where: { code: 'CRYPTO' },
+      update: { isActive: true, config: { webhookSecret: CRYPTO_WEBHOOK_SECRET } },
+      create: {
+        code: 'CRYPTO',
+        name: 'Crypto (test)',
+        isActive: true,
+        supportedModes: ['PAYMENT'],
+        config: { webhookSecret: CRYPTO_WEBHOOK_SECRET },
+      },
+    });
   });
 
   afterAll(async () => {
@@ -120,6 +154,7 @@ describe('Webhooks E2E Tests', () => {
       // First webhook
       const response1 = await request(app.getHttpServer())
         .post('/webhooks/one')
+        .set('x-signature', signOne(webhookPayload))
         .send(webhookPayload)
         .expect(200);
 
@@ -128,6 +163,7 @@ describe('Webhooks E2E Tests', () => {
       // Duplicate webhook (same webhook_id)
       const response2 = await request(app.getHttpServer())
         .post('/webhooks/one')
+        .set('x-signature', signOne(webhookPayload))
         .send(webhookPayload)
         .expect(200);
 
@@ -152,7 +188,11 @@ describe('Webhooks E2E Tests', () => {
         status: 'OPENED',
       };
 
-      await request(app.getHttpServer()).post('/webhooks/one').send(webhookPayload).expect(200);
+      await request(app.getHttpServer())
+        .post('/webhooks/one')
+        .set('x-signature', signOne(webhookPayload))
+        .send(webhookPayload)
+        .expect(200);
 
       const event = await prisma.webhookEvent.findUnique({
         where: {
@@ -171,17 +211,23 @@ describe('Webhooks E2E Tests', () => {
   });
 
   describe('POST /webhooks/crypto', () => {
-    it('should store crypto webhook', async () => {
+    it('should store a confirmed crypto transfer', async () => {
+      // Shape reported by the chain indexer. SOL needs 1 confirmation, so this
+      // one lands as fully paid.
       const webhookPayload = {
-        id: 'crypto-webhook-123',
-        event_type: 'transaction.confirmed',
-        tx_hash: '0x1234567890abcdef',
-        invoice_id: 'crypto-invoice-123',
+        chain: 'SOL',
+        txHash: 'tx-confirmed-1234567890abcdef',
+        from: 'SenderWallet111111111111111111111111111111',
+        to: 'ReceiverWallet1111111111111111111111111111',
+        token: 'USDC',
+        amount: '100',
         confirmations: 3,
+        memo: 'crypto-invoice-123',
       };
 
       const response = await request(app.getHttpServer())
         .post('/webhooks/crypto')
+        .set('x-webhook-secret', CRYPTO_WEBHOOK_SECRET)
         .send(webhookPayload)
         .expect(200);
 
@@ -191,13 +237,49 @@ describe('Webhooks E2E Tests', () => {
         where: {
           rail_webhookId: {
             rail: 'CRYPTO',
-            webhookId: 'crypto-webhook-123',
+            webhookId: `crypto_SOL_${webhookPayload.txHash}`,
           },
         },
       });
 
       expect(event).toBeDefined();
-      expect(event?.eventType).toBe('transaction.confirmed');
+      expect(event?.eventType).toBe('payment.paid');
+      // No intent matches this memo, so the transfer is filed under it.
+      expect(event?.entityId).toBe('crypto-invoice-123');
+    });
+
+    it('should reject an unsigned crypto webhook', async () => {
+      await request(app.getHttpServer())
+        .post('/webhooks/crypto')
+        .send({ chain: 'SOL', txHash: 'tx-unsigned-1', confirmations: 3 })
+        .expect(403);
+    });
+
+    it('should mark a transfer below the confirmation threshold as confirming', async () => {
+      // ETH needs 12 confirmations.
+      const webhookPayload = {
+        chain: 'ETH',
+        txHash: '0xnot-yet-final',
+        to: '0xReceiver',
+        token: 'USDC',
+        amount: '100',
+        confirmations: 2,
+        memo: 'crypto-invoice-456',
+      };
+
+      await request(app.getHttpServer())
+        .post('/webhooks/crypto')
+        .set('x-webhook-secret', CRYPTO_WEBHOOK_SECRET)
+        .send(webhookPayload)
+        .expect(200);
+
+      const event = await prisma.webhookEvent.findUnique({
+        where: {
+          rail_webhookId: { rail: 'CRYPTO', webhookId: `crypto_ETH_${webhookPayload.txHash}` },
+        },
+      });
+
+      expect(event?.eventType).toBe('payment.confirming');
     });
   });
 });
