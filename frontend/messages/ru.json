@@ -509,7 +509,7 @@
     },
     "orders": {
       "title": "Заказы",
-      "searchPlaceholder": "Поиск по ID пользователя...",
+      "searchPlaceholder": "Номер заказа, платёжная ссылка или ID пользователя",
       "tabAll": "Все",
       "tabPaid": "Оплаченные",
       "tabCreated": "Созданные",

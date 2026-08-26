@@ -509,7 +509,7 @@
     },
     "orders": {
       "title": "Orders",
-      "searchPlaceholder": "Search by User ID...",
+      "searchPlaceholder": "Order id, payment reference, or user id",
       "tabAll": "All",
       "tabPaid": "Paid",
       "tabCreated": "Created",

@@ -4,6 +4,8 @@ import { PaymentOrchestratorService } from '../../payment-orchestrator/payment-o
 import { Connector } from '../../common/connectors/connector.interface';
 import { paginate } from '../../common/helpers/paginate';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 @Injectable()
 export class AdminOrdersService {
   private readonly logger = new Logger(AdminOrdersService.name);
@@ -13,11 +15,35 @@ export class AdminOrdersService {
     private readonly paymentOrchestrator: PaymentOrchestratorService,
   ) {}
 
-  async getOrders(params: { status?: string; userId?: string; page?: number; limit?: number }) {
-    const { status, userId, page, limit } = params;
+  /**
+   * A support ticket carries an order number or a payment reference, not a
+   * UUID — but `userId` (exact match) was the only way in, so the admin could
+   * only find a record for someone who already knew the answer. `search`
+   * accepts what an operator actually has and matches it across the identifiers
+   * the order is reachable by. `userId` stays for existing callers.
+   */
+  async getOrders(params: {
+    status?: string;
+    userId?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const { status, userId, search, page, limit } = params;
     const where: any = {};
     if (status) where.status = status;
     if (userId) where.userId = userId;
+
+    const term = search?.trim();
+    if (term) {
+      where.OR = [
+        // A pasted UUID should hit its record exactly rather than by substring.
+        ...(UUID_RE.test(term) ? [{ id: term }, { userId: term }] : []),
+        { externalId: { contains: term, mode: 'insensitive' } },
+        { userId: { contains: term, mode: 'insensitive' } },
+        { paymentIntents: { some: { providerIntentId: { contains: term } } } },
+      ];
+    }
 
     return paginate(this.prisma.order, where, {
       page,

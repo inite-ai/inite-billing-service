@@ -15,6 +15,7 @@ import toast from 'react-hot-toast'
 import type { CreditBalance, CreditUsage, Service } from '@/lib/types'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { TableSkeleton } from '@/components/ui/Skeleton'
+import { CopyableId } from '@/components/ui/CopyableId'
 
 type UsageBadgeType = CreditUsage['type']
 
@@ -218,7 +219,7 @@ export default function AdminCreditsPage() {
                         <ChevronRight className="w-4 h-4 text-slate-400" />
                       )}
                     </Td>
-                    <Td className="font-mono text-xs">{bal.userId.slice(0, 8)}...</Td>
+                    <Td className="font-mono text-xs"><CopyableId value={bal.userId} /></Td>
                     <Td>{bal.service?.name || bal.serviceId || <span className="text-slate-400">{tc('na')}</span>}</Td>
                     <Td className="font-semibold">{bal.balance}</Td>
                     <Td>{bal.totalGranted}</Td>
