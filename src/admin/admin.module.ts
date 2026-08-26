@@ -8,6 +8,7 @@ import { AdminUsersService } from './services/admin-users.service';
 import { AdminAffiliatesService } from './services/admin-affiliates.service';
 import { AdminProvidersService } from './services/admin-providers.service';
 import { AdminStatsService } from './services/admin-stats.service';
+import { AdminExportService } from './services/admin-export.service';
 import { PrismaService } from '../common/services/prisma.service';
 import { ReferralLevelsService } from '../affiliates/referral-levels.service';
 import { PaymentOrchestratorModule } from '../payment-orchestrator/payment-orchestrator.module';
@@ -27,6 +28,7 @@ import { RagModule } from '../rag/rag.module';
     AdminAffiliatesService,
     AdminProvidersService,
     AdminStatsService,
+    AdminExportService,
     PrismaService,
     ReferralLevelsService,
   ],

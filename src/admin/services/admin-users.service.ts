@@ -88,6 +88,17 @@ export class AdminUsersService {
     });
   }
 
+  /**
+   * How many distinct customers a filter matches. `groupBy` has no count, so
+   * this is the row count of the grouping itself — kept next to the list it
+   * describes so the export and the table can never disagree on the total.
+   */
+  async countCustomers(params: { search?: string }): Promise<number> {
+    const where = params.search ? { userId: { contains: params.search } } : {};
+    const groups = await this.prisma.order.groupBy({ by: ['userId'], where });
+    return groups.length;
+  }
+
   async getCustomers(params: {
     page?: number;
     limit?: number;
@@ -125,10 +136,7 @@ export class AdminUsersService {
       _max: { createdAt: Date | null };
     }>;
 
-    const totalUsers = await this.prisma.order.groupBy({
-      by: ['userId'],
-      where: whereClause,
-    });
+    const totalCustomers = await this.countCustomers({ search });
 
     const userIds = orders.map((o) => o.userId);
 
@@ -169,10 +177,10 @@ export class AdminUsersService {
 
     return {
       items,
-      total: totalUsers.length,
+      total: totalCustomers,
       page,
       limit,
-      pages: Math.ceil(totalUsers.length / limit),
+      pages: Math.ceil(totalCustomers / limit),
     };
   }
 
