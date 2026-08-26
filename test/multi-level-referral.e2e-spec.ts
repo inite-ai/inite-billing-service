@@ -6,6 +6,7 @@ import { PrismaService } from '../src/common/services/prisma.service';
 import { PaymentOrchestratorService } from '../src/payment-orchestrator/payment-orchestrator.service';
 import { AffiliatesService } from '../src/affiliates/affiliates.service';
 import { ReferralLevelsService } from '../src/affiliates/referral-levels.service';
+import { CommissionSettlementScheduler } from '../src/affiliates/commission-settlement.scheduler';
 import { JwtAuthGuard } from '../src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../src/auth/guards/roles.guard';
 import { MockJwtAuthGuard } from './mocks/auth.mock';
@@ -41,6 +42,7 @@ describe('Multi-Level Referral System (7 levels, 30% total)', () => {
   let orchestrator: PaymentOrchestratorService;
   let _affiliatesService: AffiliatesService;
   let referralLevelsService: ReferralLevelsService;
+  let settlementScheduler: CommissionSettlementScheduler;
   let mockOneAdapter: MockOneAdapter;
 
   let serviceId: string;
@@ -91,6 +93,7 @@ describe('Multi-Level Referral System (7 levels, 30% total)', () => {
     orchestrator = app.get<PaymentOrchestratorService>(PaymentOrchestratorService);
     _affiliatesService = app.get<AffiliatesService>(AffiliatesService);
     referralLevelsService = app.get<ReferralLevelsService>(ReferralLevelsService);
+    settlementScheduler = app.get<CommissionSettlementScheduler>(CommissionSettlementScheduler);
     mockOneAdapter = app.get<MockOneAdapter>(MockOneAdapter);
   });
 
@@ -111,6 +114,7 @@ describe('Multi-Level Referral System (7 levels, 30% total)', () => {
         data: {
           code: 'test-mlm-service',
           name: 'Test MLM Service',
+          apiKey: `sk_test_mlm_${Date.now()}`,
         },
       });
       serviceId = service.id;
@@ -296,7 +300,7 @@ describe('Multi-Level Referral System (7 levels, 30% total)', () => {
         expect(commissions[i].level).toBe(expected[i].level);
         expect(commissions[i].affiliateId).toBe(expected[i].affiliateId);
         expect(Number(commissions[i].amount)).toBeCloseTo(expected[i].amount, 2);
-        expect(commissions[i].status).toBe('earned');
+        expect(commissions[i].status).toBe('pending');
         expect(commissions[i].currency).toBe('USD');
       }
 
@@ -316,8 +320,21 @@ describe('Multi-Level Referral System (7 levels, 30% total)', () => {
       expect(referral?.firstOrderPaid).toBe(true);
     });
 
-    it('should update totalEarned for each affiliate', async () => {
+    it('should credit totalEarned only after the settlement period', async () => {
       const expectedEarnings = [40, 35, 30, 20, 15, 10, 150]; // Aff1..Aff7
+
+      // Commissions start 'pending': nothing is withdrawable yet.
+      for (let i = 0; i < 7; i++) {
+        const before = await prisma.affiliate.findUnique({ where: { id: affiliateIds[i] } });
+        expect(Number(before?.totalEarned)).toBe(0);
+      }
+
+      // Age them past the default 15-day settlement window and settle.
+      await prisma.affiliateCommission.updateMany({
+        where: { affiliateId: { in: affiliateIds }, status: 'pending' },
+        data: { createdAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000) },
+      });
+      await settlementScheduler.settleCommissions();
 
       for (let i = 0; i < 7; i++) {
         const aff = await prisma.affiliate.findUnique({
@@ -325,6 +342,11 @@ describe('Multi-Level Referral System (7 levels, 30% total)', () => {
         });
         expect(Number(aff?.totalEarned)).toBeCloseTo(expectedEarnings[i], 2);
       }
+
+      const settled = await prisma.affiliateCommission.findMany({
+        where: { affiliateId: { in: affiliateIds } },
+      });
+      expect(settled.every((c) => c.status === 'earned')).toBe(true);
     });
 
     it('should NOT create commissions on second payment (first order only)', async () => {
@@ -584,7 +606,7 @@ describe('Multi-Level Referral System (7 levels, 30% total)', () => {
         },
       });
 
-      // Chain: QRoot (has 0 referrals) -> QMiddle (has 0 referrals) -> QDirect
+      // Chain: QRoot (qualifies for L2) -> QMiddle (0 referrals, fails L2) -> QDirect
       const qRoot = await prisma.affiliate.create({
         data: {
           userId: `30000000-0000-0000-0000-000000000001`,
@@ -594,6 +616,20 @@ describe('Multi-Level Referral System (7 levels, 30% total)', () => {
           commissionRate: 0.15,
         },
       });
+
+      // QRoot genuinely meets minDirectReferrals: 5 — otherwise it fails the very
+      // criterion that disqualified QMiddle and the shift would have nowhere to land.
+      for (let i = 0; i < 5; i++) {
+        await prisma.referral.create({
+          data: {
+            affiliateId: qRoot.id,
+            referredUserId: `30000000-0000-0000-0000-00000000001${i}`,
+            serviceId,
+            referralCode: qRoot.referralCode,
+            firstOrderPaid: false,
+          },
+        });
+      }
 
       const qMiddle = await prisma.affiliate.create({
         data: {

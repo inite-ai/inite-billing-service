@@ -73,6 +73,18 @@ jobs:
           JWT_SECRET: test-jwt-secret
           NODE_ENV: test
 
+      # The e2e config is a separate jest project that nothing used to run —
+      # it rotted until all 7 suites failed to load. Gate on it here.
+      - name: Run e2e tests
+        run: npm run test:e2e
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/inite_billing_test?schema=billing
+          TEST_REDIS_URL: redis://localhost:6381
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5433/inite_billing_test?schema=billing
+          REDIS_URL: redis://localhost:6381
+          JWT_SECRET: test-jwt-secret
+          NODE_ENV: test
+
       - name: Security audit
         run: npm audit --audit-level=critical
 

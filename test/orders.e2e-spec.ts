@@ -139,19 +139,30 @@ describe('Orders E2E Tests', () => {
   });
 
   describe('GET /v1/orders/me', () => {
-    it('should return user orders', async () => {
+    it('should hide untouched `created` orders (abandoned checkouts) by default', async () => {
       const response = await request(app.getHttpServer())
         .get('/v1/orders/me')
         .set('Authorization', authToken)
         .expect(200);
 
       expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.length).toBeGreaterThan(0);
+      expect(response.body.find((o: any) => o.id === orderId)).toBeUndefined();
+    });
+
+    it('should return the order once it leaves `created`', async () => {
+      await prisma.order.update({ where: { id: orderId }, data: { status: 'open' } });
+
+      const response = await request(app.getHttpServer())
+        .get('/v1/orders/me')
+        .set('Authorization', authToken)
+        .expect(200);
 
       const order = response.body.find((o: any) => o.id === orderId);
       expect(order).toBeDefined();
-      expect(order.status).toBe('created');
+      expect(order.status).toBe('open');
       expect(order.amount).toBe('100');
+
+      await prisma.order.update({ where: { id: orderId }, data: { status: 'created' } });
     });
 
     it('should filter orders by status', async () => {

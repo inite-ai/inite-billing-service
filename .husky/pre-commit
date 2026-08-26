@@ -1,5 +1,11 @@
 #!/bin/sh
 
+# Mirrors the CI `lint` gate exactly (prettier violations are errors there).
+# Without this, formatting-only failures were only discovered after pushing —
+# nine branches in one merge session died on CI for that reason alone.
+echo "Running lint check..."
+npx eslint "src/**/*.ts" "test/**/*.ts" || { echo "Lint failed — commit blocked. Try: npm run lint"; exit 1; }
+
 echo "Running backend build check..."
 npx nest build || { echo "Backend build failed — commit blocked."; exit 1; }
 

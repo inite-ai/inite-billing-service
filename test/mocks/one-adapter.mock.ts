@@ -1,4 +1,7 @@
 import { Injectable } from '@nestjs/common';
+import { createHmac } from 'crypto';
+import { WebhookVerifyInput } from '../../src/common/connectors/connector.interface';
+import { safeTimingSafeEqual } from '../../src/common/connectors/webhook-verify.util';
 import {
   PaymentRailAdapter,
   CreateIntentInput,
@@ -74,6 +77,19 @@ export class MockOneAdapter implements PaymentRailAdapter {
       },
       providerData: intent,
     };
+  }
+
+  /**
+   * Mirrors the real ONE adapter: HMAC-SHA256 over the exact request bytes,
+   * keyed on the provider's apiSecret. Kept faithful rather than always-true so
+   * the e2e actually covers the fail-closed path the controller depends on.
+   */
+  verifyWebhook({ rawBody, headers, config }: WebhookVerifyInput): boolean {
+    const apiSecret = config.apiSecret || '';
+    if (!apiSecret) return false;
+    const signature = headers['x-signature'];
+    const expected = createHmac('sha256', apiSecret).update(rawBody).digest('hex');
+    return !!signature && safeTimingSafeEqual(expected, signature);
   }
 
   async handleWebhook(rawPayload: any): Promise<WebhookParseResult> {

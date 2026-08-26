@@ -16,3 +16,12 @@ export class MockJwtAuthGuard extends AuthGuard('jwt') {
     return true;
   }
 }
+
+/**
+ * Stand-in for `JwtOrServiceGuard`. That guard accepts either a JWT or a
+ * service API key, so specs that only override `JwtAuthGuard` leave it live
+ * and every request to a dual-auth route 401s. It injects the same user as
+ * `MockJwtAuthGuard` — e2e specs drive the JWT-user path.
+ */
+@Injectable()
+export class MockJwtOrServiceGuard extends MockJwtAuthGuard {}
