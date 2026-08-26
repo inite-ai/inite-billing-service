@@ -13,6 +13,8 @@ import { Search, Loader2, Coins, ChevronDown, ChevronRight } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import type { CreditBalance, CreditUsage, Service } from '@/lib/types'
+import { ErrorState } from '@/components/ui/ErrorState'
+import { TableSkeleton } from '@/components/ui/Skeleton'
 
 type UsageBadgeType = CreditUsage['type']
 
@@ -33,6 +35,7 @@ export default function AdminCreditsPage() {
   const [userSearch, setUserSearch] = useState('')
   const [serviceFilter, setServiceFilter] = useState('')
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   // Expanded row state
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -47,14 +50,18 @@ export default function AdminCreditsPage() {
 
   const loadBalances = useCallback(async () => {
     setLoading(true)
+    setLoadError(null)
     try {
       const params: Record<string, string> = {}
       if (userSearch.trim()) params.userId = userSearch.trim()
       if (serviceFilter) params.serviceId = serviceFilter
       const res = await api.get('/v1/admin/credits', { params })
       setBalances(Array.isArray(res.data) ? res.data : res.data.items || [])
-    } catch {
-      setBalances([])
+    } catch (e: unknown) {
+      // Was `setBalances([])`: an outage rendered as an authoritative empty
+      // ledger, which is a different and worse claim than "this failed".
+      const err = e as { response?: { data?: { message?: string } } }
+      setLoadError(err.response?.data?.message || tc('loadFailed'))
     } finally {
       setLoading(false)
     }
@@ -174,9 +181,9 @@ export default function AdminCreditsPage() {
 
       <Card>
         {loading ? (
-          <div className="flex items-center gap-2 text-slate-500 py-4">
-            <Loader2 className="w-5 h-5 animate-spin" /> {tc('loading')}
-          </div>
+          <TableSkeleton />
+        ) : loadError ? (
+          <ErrorState message={loadError} onRetry={loadBalances} />
         ) : balances.length === 0 ? (
           <div className="text-center py-8">
             <Coins className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />

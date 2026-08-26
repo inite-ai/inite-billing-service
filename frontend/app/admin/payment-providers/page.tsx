@@ -136,7 +136,15 @@ export default function AdminPaymentProvidersPage() {
         countries: formCountries.split(',').map((s) => s.trim()).filter(Boolean),
         supportedModes: formModes.split(',').map((s) => s.trim()).filter(Boolean),
         webhookUrl: formWebhook || undefined,
-        config: formApiKey ? { apiKey: formApiKey, apiSecret: formApiSecret } : editing.config,
+        // Merge, never replace. Typing only the API key used to write
+        // `apiSecret: ''` and wipe the stored secret — while the field's own
+        // placeholder promised "leave empty to keep". The next webhook
+        // signature check then failed for no visible reason.
+        config: {
+          ...(editing.config as Record<string, unknown>),
+          ...(formApiKey ? { apiKey: formApiKey } : {}),
+          ...(formApiSecret ? { apiSecret: formApiSecret } : {}),
+        },
       })
       toast.success(t('providers.updated'))
       setEditing(null)
