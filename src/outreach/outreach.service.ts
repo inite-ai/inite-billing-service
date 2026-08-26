@@ -9,6 +9,7 @@ import { UserContactService } from '../notifications/user-contact.service';
 import { FunnelService } from '../funnel/funnel.service';
 import { renderTemplate, TemplateLocale, TemplateParams } from '../notifications/templates';
 import { OutreachGeneratorService, OutreachContext } from './outreach-generator.service';
+import { resolveFrontendUrl } from '../common/config/frontend-url';
 
 const OUTCOME_WINDOW_DAYS = 14;
 
@@ -36,10 +37,7 @@ export class OutreachService {
   }
 
   private frontendUrl(): string {
-    return (this.config.get<string>('FRONTEND_URL') || 'https://billing.inite.ai').replace(
-      /\/$/,
-      '',
-    );
+    return resolveFrontendUrl(this.config);
   }
 
   /**

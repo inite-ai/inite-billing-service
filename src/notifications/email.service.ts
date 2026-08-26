@@ -36,7 +36,16 @@ export class EmailService {
     if (!apiKey) {
       throw new UnrecoverableError('RESEND_API_KEY is not configured');
     }
-    const from = this.config.get<string>('EMAIL_FROM') || 'INITE Billing <billing@mail.inite.ai>';
+    // No default sender: it used to fall back to the INITE address, so a
+    // deployment that enabled email without configuring EMAIL_FROM tried to
+    // send from a domain it does not control — rejected downstream for a
+    // reason that points nowhere near the actual misconfiguration.
+    const from = this.config.get<string>('EMAIL_FROM');
+    if (!from) {
+      throw new UnrecoverableError(
+        'EMAIL_FROM is not configured (e.g. "Acme Billing <billing@acme.com>")',
+      );
+    }
     const replyTo = this.config.get<string>('EMAIL_REPLY_TO');
 
     const res = await fetch('https://api.resend.com/emails', {

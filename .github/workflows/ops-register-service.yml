@@ -48,8 +48,10 @@ jobs:
           ON CONFLICT (code) DO UPDATE
             SET api_key = EXCLUDED.api_key, is_active = true, updated_at = now();
           SQL
+          # Never echo any part of the key: workflow logs are public once the
+          # repository is. A prefix is still a fragment of a live credential.
           docker exec postgres psql -U "$PGUSER" -d inite_billing -tA \
-            -c "SELECT code || ' active=' || is_active || ' key=' || left(api_key, 6) || '…' FROM billing.services WHERE code = '$SVC_CODE'"
+            -c "SELECT code || ' active=' || is_active FROM billing.services WHERE code = '$SVC_CODE'"
 
       - name: Verify key against the live API
         env:

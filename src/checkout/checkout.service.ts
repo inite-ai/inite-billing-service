@@ -21,6 +21,7 @@ import {
   PaySessionResponseDto,
 } from '../common/dto/checkout.dto';
 import { v4 as uuidv4 } from 'uuid';
+import { resolveFrontendUrl } from '../common/config/frontend-url';
 
 @Injectable()
 export class CheckoutService {
@@ -225,7 +226,7 @@ export class CheckoutService {
       },
     });
 
-    const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://billing.inite.ai';
+    const frontendUrl = resolveFrontendUrl(this.configService);
     const response: CheckoutSessionResponseDto = {
       sessionId: order.id,
       checkoutUrl: `${frontendUrl}/checkout/${order.id}`,

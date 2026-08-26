@@ -18,6 +18,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../common/services/prisma.service';
 import { EmailService } from '../notifications/email.service';
 import { renderTemplate, isKnownTemplate } from '../notifications/templates';
+import { resolveFrontendUrl } from '../common/config/frontend-url';
 
 class TestEmailDto {
   @IsEmail()
@@ -158,7 +159,7 @@ export class AdminOutreachController {
   @ApiOperation({ summary: 'Send a template-rendered test email (ops smoke test)' })
   async testEmail(@Body() body: TestEmailDto) {
     const trigger = isKnownTemplate(body.trigger) ? body.trigger : 'abandoned_checkout';
-    const frontendUrl = this.config.get<string>('FRONTEND_URL') || 'https://billing.inite.ai';
+    const frontendUrl = resolveFrontendUrl(this.config);
     const rendered = renderTemplate(trigger, body.locale, {
       productName: body.productName || 'Test Product',
       ctaUrl: `${frontendUrl.replace(/\/$/, '')}/dashboard`,

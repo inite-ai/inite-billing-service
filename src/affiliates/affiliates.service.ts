@@ -12,6 +12,7 @@ import {
   AffiliateStatsDto,
 } from '../common/dto/affiliate.dto';
 import { ReferralLevelsService } from './referral-levels.service';
+import { resolveFrontendUrl } from '../common/config/frontend-url';
 
 @Injectable()
 export class AffiliatesService {
@@ -23,7 +24,7 @@ export class AffiliatesService {
     private readonly configService: ConfigService,
     private readonly referralLevelsService: ReferralLevelsService,
   ) {
-    this.baseUrl = this.configService.get<string>('FRONTEND_URL') || 'https://app.inite.ai';
+    this.baseUrl = resolveFrontendUrl(this.configService);
   }
 
   private generateReferralCode(): string {

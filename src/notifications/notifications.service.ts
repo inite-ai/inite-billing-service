@@ -4,6 +4,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { PrismaService } from '../common/services/prisma.service';
 import { UserContactService } from './user-contact.service';
+import { resolveFrontendUrl } from '../common/config/frontend-url';
 
 export const NOTIFICATION_CATEGORIES = [
   'dunning',
@@ -112,7 +113,7 @@ export class NotificationsService {
   }
 
   private buildUnsubscribeUrl(token: string, category: string): string {
-    const base = this.config.get<string>('FRONTEND_URL') || 'https://billing.inite.ai';
+    const base = resolveFrontendUrl(this.config);
     return `${base.replace(/\/$/, '')}/unsubscribe?token=${token}&category=${category}`;
   }
 

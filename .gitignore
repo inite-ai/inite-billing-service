@@ -43,3 +43,7 @@ lerna-debug.log*
 .env.local
 .env.*.local
 
+
+# Claude Code — machine-local permission grants. Holds host names and command
+# allowlists specific to one developer's machine; never part of the repo.
+.claude/settings.local.json
