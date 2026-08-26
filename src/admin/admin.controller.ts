@@ -12,9 +12,24 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
-import { CreatePromoCodeDto } from './dto/create-promo-code.dto';
+import { CreatePromoCodeDto, UpdatePromoCodeDto } from './dto/create-promo-code.dto';
 import { CreateReferralLevelDto, UpdateReferralLevelDto } from './dto/referral-level.dto';
 import { CreatePriceDto, UpdatePriceDto } from './dto/price.dto';
+import { CreateServiceDto, UpdateServiceDto } from './dto/service.dto';
+import { CreateProductDto, UpdateProductDto } from './dto/product.dto';
+import { CreateEntitlementDto, UpdateEntitlementDto } from './dto/entitlement.dto';
+import {
+  CreatePaymentProviderDto,
+  CreatePayoutProviderDto,
+  UpdatePaymentProviderDto,
+  UpdatePayoutProviderDto,
+} from './dto/provider.dto';
+import {
+  ApplyReferralTemplateDto,
+  FailPayoutDto,
+  UpdateAffiliateDto,
+} from './dto/affiliate-admin.dto';
+import { AdminAdjustCreditsDto } from './dto/credits-admin.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -58,16 +73,13 @@ export class AdminController {
   @Post('services')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a service' })
-  async createService(@Body() body: { code: string; name: string; metadata?: any }) {
+  async createService(@Body() body: CreateServiceDto) {
     return this.catalogService.createService(body);
   }
 
   @Put('services/:id')
   @ApiOperation({ summary: 'Update a service' })
-  async updateService(
-    @Param('id') id: string,
-    @Body() body: { name?: string; isActive?: boolean; metadata?: any },
-  ) {
+  async updateService(@Param('id') id: string, @Body() body: UpdateServiceDto) {
     return this.catalogService.updateService(id, body);
   }
 
@@ -101,33 +113,13 @@ export class AdminController {
   @Post('products')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a product' })
-  async createProduct(
-    @Body()
-    body: {
-      code: string;
-      name: string;
-      serviceId?: string;
-      moduleScope: string;
-      type: string;
-      metadata?: any;
-    },
-  ) {
+  async createProduct(@Body() body: CreateProductDto) {
     return this.catalogService.createProduct(body);
   }
 
   @Put('products/:id')
   @ApiOperation({ summary: 'Update a product' })
-  async updateProduct(
-    @Param('id') id: string,
-    @Body()
-    body: {
-      name?: string;
-      serviceId?: string;
-      moduleScope?: string;
-      isActive?: boolean;
-      metadata?: any;
-    },
-  ) {
+  async updateProduct(@Param('id') id: string, @Body() body: UpdateProductDto) {
     return this.catalogService.updateProduct(id, body);
   }
 
@@ -263,18 +255,13 @@ export class AdminController {
   @Post('entitlements')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create an entitlement manually' })
-  async createEntitlement(
-    @Body() body: { userId: string; key: string; value?: any; expiresAt?: string },
-  ) {
+  async createEntitlement(@Body() body: CreateEntitlementDto) {
     return this.usersService.createEntitlement(body);
   }
 
   @Put('entitlements/:id')
   @ApiOperation({ summary: 'Update an entitlement' })
-  async updateEntitlement(
-    @Param('id') id: string,
-    @Body() body: { key?: string; value?: any; expiresAt?: string },
-  ) {
+  async updateEntitlement(@Param('id') id: string, @Body() body: UpdateEntitlementDto) {
     return this.usersService.updateEntitlement(id, body);
   }
 
@@ -305,10 +292,7 @@ export class AdminController {
 
   @Put('affiliates/:id')
   @ApiOperation({ summary: 'Update an affiliate' })
-  async updateAffiliate(
-    @Param('id') id: string,
-    @Body() body: { status?: string; commissionRate?: number },
-  ) {
+  async updateAffiliate(@Param('id') id: string, @Body() body: UpdateAffiliateDto) {
     return this.affiliatesService.updateAffiliate(id, body);
   }
 
@@ -348,7 +332,7 @@ export class AdminController {
   @Post('referral-templates/apply')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Apply a referral template to a service' })
-  async applyReferralTemplate(@Body() body: { serviceId: string; templateKey: string }) {
+  async applyReferralTemplate(@Body() body: ApplyReferralTemplateDto) {
     return this.referralLevelsService.applyTemplate(body.serviceId, body.templateKey);
   }
 
@@ -378,7 +362,7 @@ export class AdminController {
   @Post('payouts/:id/fail')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Mark payout as failed' })
-  async failPayout(@Param('id') id: string, @Body() body: { reason?: string }) {
+  async failPayout(@Param('id') id: string, @Body() body: FailPayoutDto) {
     return this.affiliatesService.failPayout(id, body?.reason);
   }
 
@@ -393,40 +377,13 @@ export class AdminController {
   @Post('payout-providers')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a payout provider' })
-  async createPayoutProvider(
-    @Body()
-    body: {
-      code: string;
-      name: string;
-      currencies?: string[];
-      minAmount?: number;
-      maxAmount?: number;
-      feePercent?: number;
-      feeFixed?: number;
-      config?: any;
-      metadata?: any;
-    },
-  ) {
+  async createPayoutProvider(@Body() body: CreatePayoutProviderDto) {
     return this.providersService.createPayoutProvider(body);
   }
 
   @Put('payout-providers/:id')
   @ApiOperation({ summary: 'Update a payout provider' })
-  async updatePayoutProvider(
-    @Param('id') id: string,
-    @Body()
-    body: {
-      name?: string;
-      isActive?: boolean;
-      currencies?: string[];
-      minAmount?: number;
-      maxAmount?: number;
-      feePercent?: number;
-      feeFixed?: number;
-      config?: any;
-      metadata?: any;
-    },
-  ) {
+  async updatePayoutProvider(@Param('id') id: string, @Body() body: UpdatePayoutProviderDto) {
     return this.providersService.updatePayoutProvider(id, body);
   }
 
@@ -447,39 +404,13 @@ export class AdminController {
   @Post('payment-providers')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a payment provider' })
-  async createPaymentProvider(
-    @Body()
-    body: {
-      code: string;
-      name: string;
-      isActive?: boolean;
-      supportedModes?: string[];
-      currencies?: string[];
-      countries?: string[];
-      webhookUrl?: string;
-      config?: any;
-      metadata?: any;
-    },
-  ) {
+  async createPaymentProvider(@Body() body: CreatePaymentProviderDto) {
     return this.providersService.createPaymentProvider(body);
   }
 
   @Put('payment-providers/:id')
   @ApiOperation({ summary: 'Update a payment provider' })
-  async updatePaymentProvider(
-    @Param('id') id: string,
-    @Body()
-    body: {
-      name?: string;
-      isActive?: boolean;
-      supportedModes?: string[];
-      currencies?: string[];
-      countries?: string[];
-      webhookUrl?: string;
-      config?: any;
-      metadata?: any;
-    },
-  ) {
+  async updatePaymentProvider(@Param('id') id: string, @Body() body: UpdatePaymentProviderDto) {
     return this.providersService.updatePaymentProvider(id, body);
   }
 
@@ -523,25 +454,7 @@ export class AdminController {
 
   @Put('promo-codes/:id')
   @ApiOperation({ summary: 'Update a promo code' })
-  async updatePromoCode(
-    @Param('id') id: string,
-    @Body()
-    body: {
-      name?: string;
-      description?: string;
-      discountType?: string;
-      discountValue?: number;
-      serviceId?: string;
-      minPurchaseAmount?: number;
-      maxDiscountAmount?: number;
-      validFrom?: string;
-      validUntil?: string;
-      isActive?: boolean;
-      maxUsageCount?: number;
-      maxUsagePerUser?: number;
-      metadata?: any;
-    },
-  ) {
+  async updatePromoCode(@Param('id') id: string, @Body() body: UpdatePromoCodeDto) {
     return this.promoCodesService.update(id, body);
   }
 
@@ -631,16 +544,13 @@ export class AdminController {
   @Post('credits/adjust')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Manual credit adjustment' })
-  async adjustCredits(
-    @Body()
-    body: {
-      userId: string;
-      serviceId?: string;
-      amount: number;
-      description: string;
-    },
-  ) {
-    return this.creditsService.adminAdjust(body);
+  async adjustCredits(@Body() body: AdminAdjustCreditsDto) {
+    // The ledger row should always carry a justification; the operator's own
+    // wording when they gave one.
+    return this.creditsService.adminAdjust({
+      ...body,
+      description: body.description || 'admin adjustment',
+    });
   }
 
   @Get('credits/:userId/usage')

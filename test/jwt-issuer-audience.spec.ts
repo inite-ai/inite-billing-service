@@ -43,3 +43,31 @@ describe('buildJwtOptions issuer/audience pinning', () => {
     expect(typeof opts.secretOrKeyProvider).toBe('function');
   });
 });
+
+/**
+ * The JWKS endpoint used to default to the INITE identity provider, so a
+ * deployment that never set AUTH_SERVICE_URL validated its own users' tokens
+ * against someone else's signing keys — and nothing in the logs said so.
+ */
+describe('buildJwtOptions JWKS issuer requirement', () => {
+  const cfg = (env: Record<string, string | undefined>) => ({ get: (k: string) => env[k] }) as any;
+
+  it('fails loudly in production when AUTH_SERVICE_URL is missing', () => {
+    expect(() => buildJwtOptions(cfg({ NODE_ENV: 'production' }))).toThrow(/AUTH_SERVICE_URL/);
+  });
+
+  it('does not fall back to any hardcoded provider', () => {
+    let opts: any;
+    expect(() => {
+      opts = buildJwtOptions(
+        cfg({ NODE_ENV: 'production', AUTH_SERVICE_URL: 'https://auth.acme.example' }),
+      );
+    }).not.toThrow();
+    expect(opts.algorithms).toEqual(['RS256']);
+  });
+
+  it('still allows the dev HS256 path without an auth service', () => {
+    const opts = buildJwtOptions(cfg({ JWT_SECRET: 's', NODE_ENV: 'development' })) as any;
+    expect(opts.algorithms).toEqual(['HS256']);
+  });
+});

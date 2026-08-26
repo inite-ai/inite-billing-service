@@ -7,6 +7,11 @@ import {
   UpdateReferralLevelDto,
 } from '../src/admin/dto/referral-level.dto';
 import { CreatePriceDto, UpdatePriceDto } from '../src/admin/dto/price.dto';
+import { CreateServiceDto } from '../src/admin/dto/service.dto';
+import { CreateProductDto } from '../src/admin/dto/product.dto';
+import { UpdateAffiliateDto } from '../src/admin/dto/affiliate-admin.dto';
+import { AdminAdjustCreditsDto } from '../src/admin/dto/credits-admin.dto';
+import { CreatePayoutProviderDto } from '../src/admin/dto/provider.dto';
 
 /**
  * These admin bodies were inline TS interfaces, so the global ValidationPipe
@@ -150,4 +155,81 @@ describe('UpdatePriceDto', () => {
     fails(UpdatePriceDto, { amount: -5 });
     fails(UpdatePriceDto, { amount: 1.123456 });
   });
+});
+
+describe('CreateServiceDto', () => {
+  const valid = { code: 'club', name: 'INITE Club' };
+
+  it('accepts what the admin service form sends', () => ok(CreateServiceDto, valid));
+
+  it('rejects a code that is not a slug', () => {
+    // `code` is the identifier external modules scope against and that lands in
+    // URLs and log lines.
+    fails(CreateServiceDto, { ...valid, code: 'Club Service!' });
+    fails(CreateServiceDto, { ...valid, code: '' });
+  });
+});
+
+describe('CreateProductDto', () => {
+  const valid = { code: 'pro', name: 'Pro', moduleScope: 'club', type: 'subscription' };
+
+  it('accepts what the admin product form sends', () =>
+    ok(CreateProductDto, { ...valid, serviceId: '550e8400-e29b-41d4-a716-446655440000' }));
+
+  it('rejects a type outside the ProductType enum', () => {
+    // Prisma would reject it at write time; this turns that 500 into a 400.
+    fails(CreateProductDto, { ...valid, type: 'lifetime' });
+  });
+});
+
+describe('UpdateAffiliateDto', () => {
+  it('accepts the status toggle the affiliates page sends', () =>
+    ok(UpdateAffiliateDto, { status: 'active' }));
+
+  it('rejects an unknown status', () => fails(UpdateAffiliateDto, { status: 'vip' }));
+
+  it('rejects a commissionRate above 1', () => {
+    // 15 meaning "15%" would pay 1500% of every order.
+    fails(UpdateAffiliateDto, { commissionRate: 15 });
+    fails(UpdateAffiliateDto, { commissionRate: -0.1 });
+  });
+});
+
+describe('AdminAdjustCreditsDto', () => {
+  const valid = { userId: '550e8400-e29b-41d4-a716-446655440000', amount: 100 };
+
+  it('accepts what the admin credits page sends', () =>
+    ok(AdminAdjustCreditsDto, { ...valid, description: 'goodwill' }));
+
+  it('accepts a negative adjustment (a burn)', () =>
+    ok(AdminAdjustCreditsDto, { amount: -50, userId: valid.userId }));
+
+  it('rejects fractional credits', () => {
+    // Credits are integers on CreditBalance.
+    fails(AdminAdjustCreditsDto, { ...valid, amount: 10.5 });
+  });
+
+  it('rejects an operator typo of an extra digit', () =>
+    fails(AdminAdjustCreditsDto, { ...valid, amount: 100_000_000 }));
+});
+
+describe('CreatePayoutProviderDto', () => {
+  const valid = { code: 'wise', name: 'Wise' };
+
+  it('accepts what the payout-providers form sends', () =>
+    ok(CreatePayoutProviderDto, {
+      ...valid,
+      currencies: ['USD', 'EUR'],
+      minAmount: 10,
+      feePercent: 0.02,
+      feeFixed: 0.5,
+    }));
+
+  it('rejects a feePercent given as a percentage', () => {
+    // The UI divides by 100 before posting; 2 here would mean 200%.
+    fails(CreatePayoutProviderDto, { ...valid, feePercent: 2 });
+  });
+
+  it('rejects a negative minimum', () =>
+    fails(CreatePayoutProviderDto, { ...valid, minAmount: -1 }));
 });

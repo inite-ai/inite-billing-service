@@ -110,7 +110,9 @@ export default function AdminCreditsPage() {
         userId: adjustTarget.userId,
         serviceId: adjustTarget.serviceId,
         amount: Number(adjustAmount),
-        reason: adjustReason || undefined,
+        // The API records this on the CreditUsage ledger row as `description`;
+        // posting it as `reason` meant every manual adjustment stored nothing.
+        description: adjustReason || undefined,
       })
       toast.success(t('credits.adjustSuccess'))
       setAdjustTarget(null)

@@ -20,10 +20,11 @@ import { CheckoutService } from './checkout.service';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
 import { CatalogService } from '../catalog/catalog.service';
 import {
-  CreateCheckoutSessionDto,
   CheckoutSessionResponseDto,
+  CreateCheckoutSessionDto,
   PaySessionDto,
   PaySessionResponseDto,
+  ValidatePromoCodeDto,
 } from '../common/dto/checkout.dto';
 
 @ApiTags('Checkout')
@@ -95,10 +96,7 @@ export class CheckoutController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Validate a promo code before checkout' })
-  async validatePromoCode(
-    @User() user: RequestUser,
-    @Body() body: { promoCode: string; priceCode: string },
-  ) {
+  async validatePromoCode(@User() user: RequestUser, @Body() body: ValidatePromoCodeDto) {
     const price = await this.catalogService.getPriceByCode(body.priceCode);
     const result = await this.promoCodesService.validatePromoCode(
       body.promoCode,
