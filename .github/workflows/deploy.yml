@@ -110,6 +110,21 @@ jobs:
       && github.event.inputs.force_all != 'true'
     runs-on: self-hosted
     steps:
+    - name: Confirm this runner is the billing origin host
+      run: |
+        # Two self-hosted runners answer the bare `self-hosted` label and only
+        # one of them serves billing.inite.ai. A job that lands on the other
+        # pulled the image, recreated the container against a database that is
+        # not there, and reported a confusing "P1001: can't reach postgres"
+        # while production silently stayed on the previous image.
+        #
+        # The shared Postgres container is the precondition every step below
+        # already assumes (the migration baseline runs `docker exec postgres`),
+        # so check it explicitly instead of failing three steps later.
+        if ! docker ps --format '{{.Names}}' | grep -qx 'postgres'; then
+          echo "::error::Runner $(hostname) is not the billing origin: no 'postgres' container. Re-run so the job lands on the origin runner, or give that runner a dedicated label and pin runs-on to it."
+          exit 1
+        fi
     - uses: docker/login-action@v4
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -171,6 +186,21 @@ jobs:
       && github.event.inputs.force_all != 'true'
     runs-on: self-hosted
     steps:
+    - name: Confirm this runner is the billing origin host
+      run: |
+        # Two self-hosted runners answer the bare `self-hosted` label and only
+        # one of them serves billing.inite.ai. A job that lands on the other
+        # pulled the image, recreated the container against a database that is
+        # not there, and reported a confusing "P1001: can't reach postgres"
+        # while production silently stayed on the previous image.
+        #
+        # The shared Postgres container is the precondition every step below
+        # already assumes (the migration baseline runs `docker exec postgres`),
+        # so check it explicitly instead of failing three steps later.
+        if ! docker ps --format '{{.Names}}' | grep -qx 'postgres'; then
+          echo "::error::Runner $(hostname) is not the billing origin: no 'postgres' container. Re-run so the job lands on the origin runner, or give that runner a dedicated label and pin runs-on to it."
+          exit 1
+        fi
     - uses: docker/login-action@v4
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -211,6 +241,21 @@ jobs:
     if: needs.changes.outputs.infra == 'true' || github.event.inputs.force_all == 'true'
     runs-on: self-hosted
     steps:
+    - name: Confirm this runner is the billing origin host
+      run: |
+        # Two self-hosted runners answer the bare `self-hosted` label and only
+        # one of them serves billing.inite.ai. A job that lands on the other
+        # pulled the image, recreated the container against a database that is
+        # not there, and reported a confusing "P1001: can't reach postgres"
+        # while production silently stayed on the previous image.
+        #
+        # The shared Postgres container is the precondition every step below
+        # already assumes (the migration baseline runs `docker exec postgres`),
+        # so check it explicitly instead of failing three steps later.
+        if ! docker ps --format '{{.Names}}' | grep -qx 'postgres'; then
+          echo "::error::Runner $(hostname) is not the billing origin: no 'postgres' container. Re-run so the job lands on the origin runner, or give that runner a dedicated label and pin runs-on to it."
+          exit 1
+        fi
     - uses: docker/login-action@v4
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
