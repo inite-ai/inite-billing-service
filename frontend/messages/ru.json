@@ -457,7 +457,20 @@
       "manageProducts": "Управление продуктами",
       "viewOrders": "Просмотр заказов",
       "referralConfig": "Реферальные уровни",
-      "failedToLoadStats": "Не удалось загрузить статистику"
+      "failedToLoadStats": "Не удалось загрузить статистику",
+      "subtitle": "Что ждёт вас и как идут дела.",
+      "totals": "За всё время",
+      "triage": {
+        "title": "Требует внимания",
+        "allClear": "Ничего не ждёт",
+        "payouts": "Выплаты ожидают",
+        "risk": "На проверке риска",
+        "webhooks": "Вебхуки не прошли",
+        "pastDue": "Подписки просрочены",
+        "staleOrders": "Заказы не оплачены дольше {hours}ч",
+        "outbox": "Доставки outbox упали",
+        "outboxHint": "Экрана нет — смотрите логи воркера"
+      }
     },
     "services": {
       "title": "Сервисы",
@@ -670,7 +683,13 @@
       "statReferrals": "Рефералы",
       "statCommissions": "Комиссии",
       "updated": "Партнёр обновлён",
-      "rateUpdated": "Комиссионная ставка обновлена"
+      "rateUpdated": "Комиссионная ставка обновлена",
+      "status": {
+        "pending": "Ожидает",
+        "active": "Активен",
+        "suspended": "Приостановлен",
+        "terminated": "Отключён"
+      }
     },
     "referralConfig": {
       "title": "Реферальные уровни",
@@ -785,7 +804,11 @@
       "tableType": "Тип",
       "tableEntity": "Сущность",
       "tableStatus": "Статус",
-      "tableAttempts": "Попытки"
+      "tableAttempts": "Попытки",
+      "tabAll": "Все",
+      "tabFailed": "Не доставлены",
+      "tabReceived": "Получены",
+      "tabProcessed": "Обработаны"
     },
     "payouts": {
       "title": "Выплаты",
@@ -1037,6 +1060,15 @@
         "user": "Пользователь",
         "status": "Статус",
         "date": "Дата"
+      },
+      "filterStatus": "Статус",
+      "totalCount": "Оценок: {count}",
+      "statuses": {
+        "flagged": "На проверке",
+        "blocked": "Заблокировано",
+        "reviewed_ok": "Проверено, ок",
+        "reviewed_fraud": "Фрод",
+        "none": "Без флага"
       }
     }
   },

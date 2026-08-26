@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { Fragment, useCallback, useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Modal } from '@/components/ui/Modal'
-import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
+import { Table, Thead, Tbody, Tr, Th, Td } from '@/components/ui/Table'
 import { Search, Loader2, Coins, ChevronDown, ChevronRight } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
@@ -16,6 +16,9 @@ import type { CreditBalance, CreditUsage, Service } from '@/lib/types'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { CopyableId } from '@/components/ui/CopyableId'
+import { PageHeader } from '@/components/ui/PageHeader'
+import { Pagination } from '@/components/ui/Pagination'
+import { useTableState } from '@/hooks/useTableState'
 
 type UsageBadgeType = CreditUsage['type']
 
@@ -31,10 +34,12 @@ export default function AdminCreditsPage() {
   const t = useTranslations('admin')
   const tc = useTranslations('common')
 
+  const table = useTableState({ filters: { userId: '', serviceId: '' }, defaultSort: 'updatedAt' })
+
   const [balances, setBalances] = useState<CreditBalance[]>([])
+  const [pages, setPages] = useState(1)
   const [services, setServices] = useState<Service[]>([])
-  const [userSearch, setUserSearch] = useState('')
-  const [serviceFilter, setServiceFilter] = useState('')
+  const [searchDraft, setSearchDraft] = useState(table.filters.userId)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -49,15 +54,18 @@ export default function AdminCreditsPage() {
   const [adjustReason, setAdjustReason] = useState('')
   const [adjustSubmitting, setAdjustSubmitting] = useState(false)
 
+  const params = JSON.stringify(table.queryParams)
+
   const loadBalances = useCallback(async () => {
     setLoading(true)
     setLoadError(null)
     try {
-      const params: Record<string, string> = {}
-      if (userSearch.trim()) params.userId = userSearch.trim()
-      if (serviceFilter) params.serviceId = serviceFilter
-      const res = await api.get('/v1/admin/credits', { params })
-      setBalances(Array.isArray(res.data) ? res.data : res.data.items || [])
+      const res = await api.get('/v1/admin/credits', { params: JSON.parse(params) })
+      const payload = res.data
+      setBalances(Array.isArray(payload) ? payload : payload.items || [])
+      // The API returns twenty balances at a time. Without paging the page
+      // showed the first twenty as though they were the entire ledger.
+      setPages(Array.isArray(payload) ? 1 : payload.pages || 1)
     } catch (e: unknown) {
       // Was `setBalances([])`: an outage rendered as an authoritative empty
       // ledger, which is a different and worse claim than "this failed".
@@ -66,7 +74,7 @@ export default function AdminCreditsPage() {
     } finally {
       setLoading(false)
     }
-  }, [userSearch, serviceFilter])
+  }, [params, tc])
 
   const loadServices = async () => {
     try {
@@ -77,18 +85,9 @@ export default function AdminCreditsPage() {
     }
   }
 
-  useEffect(() => {
-    loadServices()
-    loadBalances()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    loadBalances()
-  }, [serviceFilter]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleSearch = () => {
-    loadBalances()
-  }
+  useEffect(() => { loadServices() }, [])
+  useEffect(() => { loadBalances() }, [loadBalances])
+  useEffect(() => { setSearchDraft(table.filters.userId) }, [table.filters.userId])
 
   const toggleExpand = async (balance: CreditBalance) => {
     if (expandedId === balance.id) {
@@ -152,32 +151,34 @@ export default function AdminCreditsPage() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('credits.title')}</h1>
-        <p className="text-sm text-slate-500 mt-1">{t('credits.subtitle')}</p>
-      </div>
+      <PageHeader title={t('credits.title')} subtitle={t('credits.subtitle')} />
 
       <div className="flex flex-wrap items-center gap-4 mb-4">
         <div className="w-48">
           <Select
+            aria-label={t('credits.allServices')}
             options={serviceOptions}
-            value={serviceFilter}
-            onChange={(e) => setServiceFilter(e.target.value)}
+            value={table.filters.serviceId}
+            onChange={(e) => table.setFilters({ serviceId: e.target.value })}
           />
         </div>
-        <div className="flex items-center gap-2 ml-auto">
+        <form
+          className="flex items-center gap-2 ml-auto"
+          onSubmit={(e) => { e.preventDefault(); table.setFilters({ userId: searchDraft.trim() }) }}
+        >
           <div className="w-64">
             <Input
+              type="search"
+              aria-label={t('credits.searchUser')}
               placeholder={t('credits.searchUser')}
-              value={userSearch}
-              onChange={(e) => setUserSearch(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              value={searchDraft}
+              onChange={(e) => setSearchDraft(e.target.value)}
             />
           </div>
-          <Button size="sm" variant="secondary" onClick={handleSearch} icon={<Search className="w-4 h-4" />}>
+          <Button size="sm" variant="secondary" type="submit" icon={<Search className="w-4 h-4" />}>
             {tc('search')}
           </Button>
-        </div>
+        </form>
       </div>
 
       <Card>
@@ -191,13 +192,14 @@ export default function AdminCreditsPage() {
             <p className="text-slate-500">{t('credits.noBalances')}</p>
           </div>
         ) : (
+          <>
           <Table>
             <Thead>
               <tr>
                 <Th>{' '}</Th>
-                <Th>{t('credits.userId')}</Th>
+                <Th sortKey="userId" sort={table.sort} onSort={table.toggleSort}>{t('credits.userId')}</Th>
                 <Th>{t('credits.service')}</Th>
-                <Th>{t('credits.balance')}</Th>
+                <Th sortKey="balance" sort={table.sort} onSort={table.toggleSort}>{t('credits.balance')}</Th>
                 <Th>{t('credits.totalGranted')}</Th>
                 <Th>{t('credits.totalUsed')}</Th>
                 <Th>{t('credits.resetsAt')}</Th>
@@ -206,11 +208,11 @@ export default function AdminCreditsPage() {
             </Thead>
             <Tbody>
               {balances.map((bal) => (
-                <>
-                  <tr
-                    key={bal.id}
-                    className="table-row-hover cursor-pointer"
+                <Fragment key={bal.id}>
+                  <Tr
+                    className="cursor-pointer"
                     onClick={() => toggleExpand(bal)}
+                    aria-expanded={expandedId === bal.id}
                   >
                     <Td>
                       {expandedId === bal.id ? (
@@ -241,9 +243,9 @@ export default function AdminCreditsPage() {
                         {t('credits.adjust')}
                       </Button>
                     </Td>
-                  </tr>
+                  </Tr>
                   {expandedId === bal.id && (
-                    <tr key={`${bal.id}-usage`}>
+                    <tr>
                       <td colSpan={8} className="px-4 py-3.5 text-sm text-slate-700 dark:text-slate-300">
                         <div className="py-2 px-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
                           <h4 className="font-semibold text-sm text-slate-700 dark:text-slate-300 mb-3">
@@ -287,10 +289,12 @@ export default function AdminCreditsPage() {
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               ))}
             </Tbody>
           </Table>
+          <Pagination page={table.page} pages={pages} onPageChange={table.setPage} />
+          </>
         )}
       </Card>
 

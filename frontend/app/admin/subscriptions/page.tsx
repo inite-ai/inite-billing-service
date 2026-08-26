@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -8,10 +8,10 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
-import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
+import { Table, Thead, Tbody, Tr, Th, Td } from '@/components/ui/Table'
 import { Pagination } from '@/components/ui/Pagination'
 import { Tabs } from '@/components/ui/Tabs'
-import { Search, Loader2, CreditCard } from 'lucide-react'
+import { CreditCard, Eye, Search } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import type { Subscription, PaginatedResponse } from '@/lib/types'
@@ -20,6 +20,9 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { CopyableId } from '@/components/ui/CopyableId'
+import { ExportButton } from '@/components/ui/ExportButton'
+import { IconButton } from '@/components/ui/IconButton'
+import { useTableState } from '@/hooks/useTableState'
 
 export default function AdminSubscriptionsPage() {
   const t = useTranslations('admin')
@@ -33,10 +36,10 @@ export default function AdminSubscriptionsPage() {
     { key: 'canceled', label: t('subscriptions.tabCanceled') },
   ]
 
+  const table = useTableState({ filters: { status: '', userId: '' }, defaultSort: 'createdAt' })
+
   const [data, setData] = useState<PaginatedResponse<Subscription> | null>(null)
-  const [statusFilter, setStatusFilter] = useState('')
-  const [userSearch, setUserSearch] = useState('')
-  const [page, setPage] = useState(1)
+  const [searchDraft, setSearchDraft] = useState(table.filters.userId)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [selected, setSelected] = useState<Subscription | null>(null)
@@ -49,14 +52,15 @@ export default function AdminSubscriptionsPage() {
     variant?: 'danger' | 'default'
   } | null>(null)
 
-  const load = async () => {
+  const params = JSON.stringify(table.queryParams)
+
+  const load = useCallback(async () => {
     setLoading(true)
     setLoadError(null)
     try {
-      const params: Record<string, string | number> = { page, limit: 20 }
-      if (statusFilter) params.status = statusFilter
-      if (userSearch.trim()) params.userId = userSearch.trim()
-      const res = await api.get('/v1/admin/subscriptions', { params })
+      const res = await api.get('/v1/admin/subscriptions', {
+        params: { ...JSON.parse(params), limit: 20 },
+      })
       setData(res.data)
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } }
@@ -66,11 +70,10 @@ export default function AdminSubscriptionsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [params])
 
-  useEffect(() => { load() }, [statusFilter, page])
-
-  const handleSearch = () => { setPage(1); load() }
+  useEffect(() => { load() }, [load])
+  useEffect(() => { setSearchDraft(table.filters.userId) }, [table.filters.userId])
 
   const handleCancel = (id: string) => {
     setConfirmState({
@@ -97,16 +100,32 @@ export default function AdminSubscriptionsPage() {
 
   return (
     <div>
-      <PageHeader title={t('subscriptions.title')} />
+      <PageHeader
+        title={t('subscriptions.title')}
+        actions={<ExportButton resource="subscriptions" params={table.queryParams} />}
+      />
 
       <div className="flex flex-wrap items-center gap-4 mb-4">
-        <Tabs tabs={statusTabs} activeTab={statusFilter} onChange={(v) => { setStatusFilter(v); setPage(1) }} />
-        <div className="flex items-center gap-2 ml-auto">
+        <Tabs
+          tabs={statusTabs}
+          activeTab={table.filters.status}
+          onChange={(status) => table.setFilters({ status })}
+        />
+        <form
+          className="flex items-center gap-2 ml-auto"
+          onSubmit={(e) => { e.preventDefault(); table.setFilters({ userId: searchDraft.trim() }) }}
+        >
           <div className="w-64">
-            <Input placeholder={t('subscriptions.searchPlaceholder')} value={userSearch} onChange={(e) => setUserSearch(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearch()} />
+            <Input
+              type="search"
+              aria-label={t('subscriptions.searchPlaceholder')}
+              placeholder={t('subscriptions.searchPlaceholder')}
+              value={searchDraft}
+              onChange={(e) => setSearchDraft(e.target.value)}
+            />
           </div>
-          <Button size="sm" variant="secondary" onClick={handleSearch} icon={<Search className="w-4 h-4" />}>{tc('search')}</Button>
-        </div>
+          <Button size="sm" variant="secondary" type="submit" icon={<Search className="w-4 h-4" />}>{tc('search')}</Button>
+        </form>
       </div>
 
       <Card>
@@ -124,11 +143,21 @@ export default function AdminSubscriptionsPage() {
             <p className="text-sm text-slate-500 mb-3">{t('subscriptions.totalSubscriptions', { count: data.total })}</p>
             <Table>
               <Thead>
-                <tr><Th>{t('subscriptions.tableUser')}</Th><Th>{t('subscriptions.tableProduct')}</Th><Th>{t('subscriptions.tablePrice')}</Th><Th>{t('subscriptions.tableStatus')}</Th><Th>{t('subscriptions.tablePeriodEnd')}</Th><Th>{t('subscriptions.tableDaysLeft')}</Th><Th>{t('subscriptions.tableActions')}</Th></tr>
+                <tr>
+                  <Th sortKey="userId" sort={table.sort} onSort={table.toggleSort}>{t('subscriptions.tableUser')}</Th>
+                  <Th>{t('subscriptions.tableProduct')}</Th>
+                  <Th>{t('subscriptions.tablePrice')}</Th>
+                  <Th sortKey="status" sort={table.sort} onSort={table.toggleSort}>{t('subscriptions.tableStatus')}</Th>
+                  <Th sortKey="currentPeriodEnd" sort={table.sort} onSort={table.toggleSort}>{t('subscriptions.tablePeriodEnd')}</Th>
+                  {/* Days left is period end read differently — one sortable
+                      header for the two of them, not two that fight. */}
+                  <Th>{t('subscriptions.tableDaysLeft')}</Th>
+                  <Th>{t('subscriptions.tableActions')}</Th>
+                </tr>
               </Thead>
               <Tbody>
                 {data.items.map((sub) => (
-                  <tr key={sub.id} className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50" onClick={() => setSelected(sub)}>
+                  <Tr key={sub.id} className="cursor-pointer" onClick={() => setSelected(sub)}>
                     <Td className="font-mono text-xs"><CopyableId value={sub.userId} /></Td>
                     <Td>{sub.productName || sub.productCode || '-'}</Td>
                     <Td>{sub.amount ? `${sub.amount} ${sub.currency}/${sub.interval || 'mo'}` : '-'}</Td>
@@ -136,17 +165,25 @@ export default function AdminSubscriptionsPage() {
                     <Td>{new Date(sub.currentPeriodEnd).toLocaleDateString()}</Td>
                     <Td>{daysUntil(sub.currentPeriodEnd)}d</Td>
                     <Td>
-                      <div onClick={(e) => e.stopPropagation()}>
+                      {/* A `tr` click is unreachable from a keyboard; this is
+                          the same detail, on a real control. */}
+                      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                        <IconButton
+                          label={t('subscriptions.detailTitle')}
+                          icon={<Eye className="w-4 h-4" />}
+                          tone="primary"
+                          onClick={() => setSelected(sub)}
+                        />
                         {(sub.status === 'active' || sub.status === 'trialing') && (
                           <Button size="sm" variant="danger" onClick={() => handleCancel(sub.id)}>{tc('cancel')}</Button>
                         )}
                       </div>
                     </Td>
-                  </tr>
+                  </Tr>
                 ))}
               </Tbody>
             </Table>
-            <Pagination page={data.page} pages={data.pages} onPageChange={setPage} />
+            <Pagination page={data.page} pages={data.pages} onPageChange={table.setPage} />
           </>
         )}
       </Card>

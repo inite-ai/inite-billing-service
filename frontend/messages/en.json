@@ -457,7 +457,20 @@
       "manageProducts": "Manage Products",
       "viewOrders": "View Orders",
       "referralConfig": "Referral Config",
-      "failedToLoadStats": "Failed to load stats"
+      "failedToLoadStats": "Failed to load stats",
+      "subtitle": "What is waiting, and how the account is doing.",
+      "totals": "All time",
+      "triage": {
+        "title": "Needs attention",
+        "allClear": "Nothing waiting",
+        "payouts": "Payouts pending",
+        "risk": "Flagged for review",
+        "webhooks": "Webhooks failed",
+        "pastDue": "Subscriptions past due",
+        "staleOrders": "Orders unpaid over {hours}h",
+        "outbox": "Outbox deliveries failed",
+        "outboxHint": "No screen for this — check the worker logs"
+      }
     },
     "services": {
       "title": "Services",
@@ -670,7 +683,13 @@
       "statReferrals": "Referrals",
       "statCommissions": "Commissions",
       "updated": "Affiliate updated",
-      "rateUpdated": "Commission rate updated"
+      "rateUpdated": "Commission rate updated",
+      "status": {
+        "pending": "Pending",
+        "active": "Active",
+        "suspended": "Suspended",
+        "terminated": "Terminated"
+      }
     },
     "referralConfig": {
       "title": "Referral Levels",
@@ -785,7 +804,11 @@
       "tableType": "Type",
       "tableEntity": "Entity",
       "tableStatus": "Status",
-      "tableAttempts": "Attempts"
+      "tableAttempts": "Attempts",
+      "tabAll": "All",
+      "tabFailed": "Failed",
+      "tabReceived": "Received",
+      "tabProcessed": "Processed"
     },
     "payouts": {
       "title": "Payouts",
@@ -1037,6 +1060,15 @@
         "user": "User",
         "status": "Status",
         "date": "Date"
+      },
+      "filterStatus": "Status",
+      "totalCount": "{count} assessments",
+      "statuses": {
+        "flagged": "Flagged",
+        "blocked": "Blocked",
+        "reviewed_ok": "Cleared",
+        "reviewed_fraud": "Fraud",
+        "none": "Not flagged"
       }
     }
   },

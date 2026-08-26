@@ -584,12 +584,16 @@ export class AdminController {
     @Query('serviceId') serviceId?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: string,
   ) {
     return this.creditsService.listBalances({
       userId,
       serviceId,
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
+      sortBy,
+      sortOrder,
     });
   }
 

@@ -3,6 +3,14 @@ import { PrismaService } from '../common/services/prisma.service';
 import { CreditBalance, CreditUsage, Prisma } from '@prisma/client';
 import { MeteringService } from './metering.service';
 
+import { resolveOrderBy, SortWhitelist } from '../common/helpers/sort';
+
+export const CREDIT_BALANCE_SORT: SortWhitelist = {
+  updatedAt: (dir) => ({ updatedAt: dir }),
+  balance: (dir) => ({ balance: dir }),
+  userId: (dir) => ({ userId: dir }),
+};
+
 @Injectable()
 export class CreditsService {
   private readonly logger = new Logger(CreditsService.name);
@@ -478,9 +486,17 @@ export class CreditsService {
     serviceId?: string;
     page?: number;
     limit?: number;
-  }): Promise<{ items: CreditBalance[]; total: number }> {
+    sortBy?: string;
+    sortOrder?: string;
+  }): Promise<{
+    items: CreditBalance[];
+    total: number;
+    page: number;
+    limit: number;
+    pages: number;
+  }> {
     const page = params.page || 1;
-    const limit = params.limit || 20;
+    const limit = Math.min(params.limit || 20, 100);
     const skip = (page - 1) * limit;
 
     const where: any = {};
@@ -490,7 +506,12 @@ export class CreditsService {
     const [items, total] = await Promise.all([
       this.prisma.creditBalance.findMany({
         where,
-        orderBy: { updatedAt: 'desc' },
+        orderBy: resolveOrderBy(
+          CREDIT_BALANCE_SORT,
+          { updatedAt: 'desc' },
+          params.sortBy,
+          params.sortOrder,
+        ),
         skip,
         take: limit,
         include: { service: true },
@@ -498,6 +519,8 @@ export class CreditsService {
       this.prisma.creditBalance.count({ where }),
     ]);
 
-    return { items, total };
+    // `pages` was missing, so the admin had no way to know the list was cut at
+    // twenty and rendered the first page as if it were the whole ledger.
+    return { items, total, page, limit, pages: Math.ceil(total / limit) };
   }
 }
