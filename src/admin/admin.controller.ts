@@ -14,6 +14,7 @@ import {
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { CreatePromoCodeDto } from './dto/create-promo-code.dto';
 import { CreateReferralLevelDto, UpdateReferralLevelDto } from './dto/referral-level.dto';
+import { CreatePriceDto, UpdatePriceDto } from './dto/price.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -147,35 +148,13 @@ export class AdminController {
   @Post('prices')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a price' })
-  async createPrice(
-    @Body()
-    body: {
-      productId: string;
-      code: string;
-      currency: string;
-      amount: number;
-      interval?: string;
-      trialDays?: number;
-      graceDays?: number;
-      metadata?: any;
-    },
-  ) {
+  async createPrice(@Body() body: CreatePriceDto) {
     return this.catalogService.createPrice(body);
   }
 
   @Put('prices/:id')
   @ApiOperation({ summary: 'Update a price' })
-  async updatePrice(
-    @Param('id') id: string,
-    @Body()
-    body: {
-      amount?: number;
-      isActive?: boolean;
-      trialDays?: number;
-      graceDays?: number;
-      metadata?: any;
-    },
-  ) {
+  async updatePrice(@Param('id') id: string, @Body() body: UpdatePriceDto) {
     return this.catalogService.updatePrice(id, body);
   }
 

@@ -14,6 +14,7 @@ import {
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { ServiceAuthGuard } from '../auth/guards/service-auth.guard';
 import { CatalogService } from './catalog.service';
+import { CreatePriceDto } from '../admin/dto/price.dto';
 
 /**
  * Service-level API for managing own products and prices.
@@ -78,20 +79,7 @@ export class ServiceCatalogController {
   @Post('prices')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a price for a product' })
-  async createPrice(
-    @Req() req: any,
-    @Body()
-    body: {
-      code: string;
-      productId: string;
-      amount: number;
-      currency: string;
-      interval?: string;
-      trialDays?: number;
-      graceDays?: number;
-      metadata?: any;
-    },
-  ) {
+  async createPrice(@Req() req: any, @Body() body: CreatePriceDto) {
     return this.catalogService.createServicePrice(req.user.serviceId, body);
   }
 

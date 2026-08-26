@@ -6,6 +6,7 @@ import {
   CreateReferralLevelDto,
   UpdateReferralLevelDto,
 } from '../src/admin/dto/referral-level.dto';
+import { CreatePriceDto, UpdatePriceDto } from '../src/admin/dto/price.dto';
 
 /**
  * These admin bodies were inline TS interfaces, so the global ValidationPipe
@@ -90,4 +91,63 @@ describe('UpdateReferralLevelDto', () => {
   it('accepts an empty body', () => ok(UpdateReferralLevelDto, {}));
   it('still rejects an out-of-range commissionRate', () =>
     fails(UpdateReferralLevelDto, { commissionRate: 2 }));
+});
+
+describe('CreatePriceDto', () => {
+  const valid = {
+    productId: '550e8400-e29b-41d4-a716-446655440000',
+    code: 'pro-monthly',
+    currency: 'USD',
+    amount: 19.99,
+    interval: 'month',
+  };
+
+  it('accepts exactly what the admin price form sends', () => {
+    ok(CreatePriceDto, { ...valid, trialDays: 14, graceDays: 3 });
+  });
+
+  it('accepts a one-time price with no interval', () => {
+    const { interval: _interval, ...oneTime } = valid;
+    ok(CreatePriceDto, oneTime);
+  });
+
+  it('rejects negative, non-numeric and over-precise money', () => {
+    fails(CreatePriceDto, { ...valid, amount: -1 });
+    fails(CreatePriceDto, { ...valid, amount: 'free' });
+    // Decimal(19,4) — anything finer is silently rounded on the way in.
+    fails(CreatePriceDto, { ...valid, amount: 1.123456 });
+  });
+
+  it('rejects an interval calculatePeriodEnd does not understand', () => {
+    // Its `default` branch bills monthly, so 'monthly' would turn a typo into a
+    // billing decision instead of an error.
+    fails(CreatePriceDto, { ...valid, interval: 'monthly' });
+    fails(CreatePriceDto, { ...valid, interval: 'forever' });
+  });
+
+  it('accepts every interval it does understand', () => {
+    for (const interval of ['day', 'week', 'month', 'year']) {
+      ok(CreatePriceDto, { ...valid, interval });
+    }
+  });
+
+  it('rejects a malformed productId or currency', () => {
+    fails(CreatePriceDto, { ...valid, productId: 'not-a-uuid' });
+    fails(CreatePriceDto, { ...valid, currency: 'DOLLARS' });
+  });
+
+  it('rejects mass-assigned fields', () => {
+    fails(CreatePriceDto, { ...valid, isActive: true });
+  });
+});
+
+describe('UpdatePriceDto', () => {
+  it('accepts an empty body', () => {
+    ok(UpdatePriceDto, {});
+  });
+
+  it('still bounds money', () => {
+    fails(UpdatePriceDto, { amount: -5 });
+    fails(UpdatePriceDto, { amount: 1.123456 });
+  });
 });
