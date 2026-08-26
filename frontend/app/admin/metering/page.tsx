@@ -11,6 +11,11 @@ import { Gauge, Loader2, Plus, Pencil, Trash2 } from 'lucide-react'
 import api from '@/lib/api'
 import { IconButton } from '@/components/ui/IconButton'
 import { Button } from '@/components/ui/Button'
+import { useConfirmDialog } from '@/hooks/useConfirmDialog'
+import toast from 'react-hot-toast'
+
+const errorMessage = (e: unknown, fallback: string) =>
+  (e as { response?: { data?: { message?: string } } }).response?.data?.message || fallback
 
 interface Feature {
   id: string
@@ -67,6 +72,7 @@ const emptyQuotaForm = {
 
 export default function AdminMeteringPage() {
   const t = useTranslations('admin.metering')
+  const { confirm, DialogElement } = useConfirmDialog()
   const tc = useTranslations('common')
   const [tab, setTab] = useState('features')
   const [loading, setLoading] = useState(true)
@@ -150,17 +156,36 @@ export default function AdminMeteringPage() {
     }
   }
 
+  // These three had no error path at all: a rejected request left the row
+  // exactly as it was and said nothing, so a failed delete looked like a
+  // delete that had not been clicked yet.
   const toggleFeature = async (feature: Feature) => {
-    await api.put(`/v1/admin/metering/features/${feature.id}`, {
-      isActive: !feature.isActive,
-    })
-    load()
+    try {
+      await api.put(`/v1/admin/metering/features/${feature.id}`, {
+        isActive: !feature.isActive,
+      })
+    } catch (e) {
+      toast.error(errorMessage(e, t('actionFailed')))
+    } finally {
+      load()
+    }
   }
 
   const deleteFeature = async (feature: Feature) => {
-    if (!confirm(t('confirmDelete', { name: feature.code }))) return
-    await api.delete(`/v1/admin/metering/features/${feature.id}`)
-    load()
+    const ok = await confirm({
+      title: t('confirmDelete', { name: feature.code }),
+      message: t('confirmDelete', { name: feature.code }),
+      record: `${feature.name} · ${feature.code}`,
+      variant: 'danger',
+    })
+    if (!ok) return
+    try {
+      await api.delete(`/v1/admin/metering/features/${feature.id}`)
+    } catch (e) {
+      toast.error(errorMessage(e, t('actionFailed')))
+    } finally {
+      load()
+    }
   }
 
   const saveQuota = async () => {
@@ -191,9 +216,20 @@ export default function AdminMeteringPage() {
   }
 
   const deleteQuota = async (quota: Quota) => {
-    if (!confirm(t('confirmDeleteQuota'))) return
-    await api.delete(`/v1/admin/metering/quotas/${quota.id}`)
-    load()
+    const ok = await confirm({
+      title: t('confirmDeleteQuota'),
+      message: t('confirmDeleteQuota'),
+      record: `${quota.feature?.code ?? t('allFeatures')} · ${quota.window}`,
+      variant: 'danger',
+    })
+    if (!ok) return
+    try {
+      await api.delete(`/v1/admin/metering/quotas/${quota.id}`)
+    } catch (e) {
+      toast.error(errorMessage(e, t('actionFailed')))
+    } finally {
+      load()
+    }
   }
 
   const maxCredits = Math.max(1, ...usage.map((u) => u.totalCredits))
@@ -583,6 +619,8 @@ export default function AdminMeteringPage() {
             </Button>
         </div>
       </Modal>
+
+      {DialogElement}
     </div>
   )
 }

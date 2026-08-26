@@ -54,7 +54,14 @@ export default function AdminProductsPage() {
   }
 
   const handleDelete = async (id: string) => {
-    const ok = await confirm({ title: t('products.deleteConfirm'), message: t('products.deleteConfirm'), variant: 'danger' })
+    // Deleting a product takes its prices with it; the dialog names which one.
+    const product = (products || []).find((p) => p.id === id)
+    const ok = await confirm({
+      title: t('products.deleteConfirm'),
+      message: t('products.deleteConfirm'),
+      record: product ? `${product.name} · ${product.code}` : id,
+      variant: 'danger',
+    })
     if (!ok) return
     try {
       await api.delete(`/v1/admin/products/${id}`)

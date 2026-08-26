@@ -283,7 +283,13 @@ export default function AdminPromoCodesPage() {
   }
 
   const handleDelete = async (id: string) => {
-    const ok = await confirm({ title: t('promoCodes.deleteConfirm'), message: t('promoCodes.deleteConfirm'), variant: 'danger' })
+    const promo = (promoCodes || []).find((p) => p.id === id)
+    const ok = await confirm({
+      title: t('promoCodes.deleteConfirm'),
+      message: t('promoCodes.deleteConfirm'),
+      record: promo ? promo.code : id,
+      variant: 'danger',
+    })
     if (!ok) return
     try {
       await api.delete(`/v1/admin/promo-codes/${id}`)

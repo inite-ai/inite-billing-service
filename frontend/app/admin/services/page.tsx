@@ -146,7 +146,15 @@ export default function AdminServicesPage() {
   }
 
   const handleRegenerateKey = async (id: string) => {
-    const ok = await confirm({ title: t('services.regenerateConfirm'), message: t('services.regenerateConfirm'), variant: 'danger' })
+    // Every external module authenticating with the old key stops working the
+    // moment this returns, so the dialog says whose key it is.
+    const service = (services || []).find((s) => s.id === id)
+    const ok = await confirm({
+      title: t('services.regenerateConfirm'),
+      message: t('services.regenerateConfirm'),
+      record: service ? `${service.name} · ${service.code}` : id,
+      variant: 'danger',
+    })
     if (!ok) return
     try {
       await api.post(`/v1/admin/services/${id}/regenerate-key`)
@@ -158,7 +166,13 @@ export default function AdminServicesPage() {
   }
 
   const handleDelete = async (id: string) => {
-    const ok = await confirm({ title: t('services.deleteConfirm'), message: t('services.deleteConfirm'), variant: 'danger' })
+    const service = (services || []).find((s) => s.id === id)
+    const ok = await confirm({
+      title: t('services.deleteConfirm'),
+      message: t('services.deleteConfirm'),
+      record: service ? `${service.name} · ${service.code}` : id,
+      variant: 'danger',
+    })
     if (!ok) return
     try {
       await api.delete(`/v1/admin/services/${id}`)

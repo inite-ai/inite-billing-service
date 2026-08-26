@@ -998,6 +998,14 @@
         "status": "Status",
         "outcome": "Outcome",
         "sentAt": "Sent at"
+      },
+      "loadFailed": "Could not load outreach",
+      "detailTitle": "Message",
+      "statuses": {
+        "sent": "Sent",
+        "pending": "Pending",
+        "skipped": "Skipped",
+        "failed": "Failed"
       }
     },
     "metering": {
@@ -1037,7 +1045,8 @@
         "limits": "Limits",
         "softCap": "Soft cap",
         "policy": "Policy"
-      }
+      },
+      "actionFailed": "That did not go through"
     },
     "risk": {
       "title": "Risk Review",

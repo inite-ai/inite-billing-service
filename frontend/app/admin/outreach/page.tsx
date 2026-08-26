@@ -5,9 +5,17 @@ import { useTranslations } from 'next-intl'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
-import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
-import { Send, Loader2, Bot, FileText } from 'lucide-react'
+import { Table, Thead, Tbody, Tr, Th, Td } from '@/components/ui/Table'
+import { Bot, Eye, FileText, Send } from 'lucide-react'
 import api from '@/lib/api'
+import { CopyableId } from '@/components/ui/CopyableId'
+import { Select } from '@/components/ui/Select'
+import { ErrorState } from '@/components/ui/ErrorState'
+import { IconButton } from '@/components/ui/IconButton'
+import { PageHeader } from '@/components/ui/PageHeader'
+import { Pagination } from '@/components/ui/Pagination'
+import { TableSkeleton } from '@/components/ui/Skeleton'
+import { useTableState } from '@/hooks/useTableState'
 
 interface OutreachRow {
   id: string
@@ -46,36 +54,37 @@ const STATUS_VARIANTS: Record<string, "default" | "success" | "warning" | "error
 
 export default function AdminOutreachPage() {
   const t = useTranslations('admin.outreach')
+  const table = useTableState({ filters: { trigger: '', status: '' }, defaultSort: 'createdAt' })
+
   const [rows, setRows] = useState<OutreachRow[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
-  const [page, setPage] = useState(1)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [totalPages, setTotalPages] = useState(1)
-  const [triggerFilter, setTriggerFilter] = useState('')
-  const [statusFilter, setStatusFilter] = useState('')
   const [selected, setSelected] = useState<OutreachRow | null>(null)
+
+  const params = JSON.stringify(table.queryParams)
 
   const load = useCallback(async () => {
     setLoading(true)
+    setLoadError(null)
     try {
       const [listRes, statsRes] = await Promise.all([
-        api.get('/v1/admin/outreach', {
-          params: {
-            page,
-            limit: 20,
-            trigger: triggerFilter || undefined,
-            status: statusFilter || undefined,
-          },
-        }),
+        api.get('/v1/admin/outreach', { params: { ...JSON.parse(params), limit: 20 } }),
         api.get('/v1/admin/outreach/stats'),
       ])
       setRows(listRes.data.items ?? [])
       setTotalPages(listRes.data.totalPages || 1)
       setStats(statsRes.data)
+    } catch (e: unknown) {
+      // There was no catch: a failed load rendered the empty state, so an
+      // outage read as "nothing was ever sent".
+      const err = e as { response?: { data?: { message?: string } } }
+      setLoadError(err.response?.data?.message || t('loadFailed'))
     } finally {
       setLoading(false)
     }
-  }, [page, triggerFilter, statusFilter])
+  }, [params, t])
 
   useEffect(() => {
     load()
@@ -83,10 +92,7 @@ export default function AdminOutreachPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold flex items-center gap-2">
-        <Send className="w-6 h-6 text-violet-500" />
-        {t('title')}
-      </h1>
+      <PageHeader title={t('title')} icon={<Send className="w-6 h-6 text-violet-500" />} />
 
       {stats && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -118,45 +124,41 @@ export default function AdminOutreachPage() {
       )}
 
       <Card>
-        <div className="flex flex-wrap items-center gap-2 mb-4">
-          <select
-            value={triggerFilter}
-            onChange={(e) => {
-              setPage(1)
-              setTriggerFilter(e.target.value)
-            }}
-            className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
-          >
-            <option value="">{t('allTriggers')}</option>
-            {['abandoned_checkout', 'dunning', 'winback', 'trial_ending'].map(
-              (tr) => (
-                <option key={tr} value={tr}>
-                  {t(`triggers.${tr}`)}
-                </option>
-              ),
-            )}
-          </select>
-          <select
-            value={statusFilter}
-            onChange={(e) => {
-              setPage(1)
-              setStatusFilter(e.target.value)
-            }}
-            className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
-          >
-            <option value="">{t('allStatuses')}</option>
-            {['sent', 'pending', 'skipped', 'failed'].map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <div className="w-56">
+            <Select
+              aria-label={t('allTriggers')}
+              value={table.filters.trigger}
+              onChange={(e) => table.setFilters({ trigger: e.target.value })}
+              options={[
+                { value: '', label: t('allTriggers') },
+                ...['abandoned_checkout', 'dunning', 'winback', 'trial_ending'].map((tr) => ({
+                  value: tr,
+                  label: t(`triggers.${tr}`),
+                })),
+              ]}
+            />
+          </div>
+          <div className="w-44">
+            <Select
+              aria-label={t('allStatuses')}
+              value={table.filters.status}
+              onChange={(e) => table.setFilters({ status: e.target.value })}
+              options={[
+                { value: '', label: t('allStatuses') },
+                ...['sent', 'pending', 'skipped', 'failed'].map((v) => ({
+                  value: v,
+                  label: t(`statuses.${v}`),
+                })),
+              ]}
+            />
+          </div>
         </div>
 
         {loading ? (
-          <div className="py-12 flex justify-center">
-            <Loader2 className="w-6 h-6 animate-spin text-violet-500" />
-          </div>
+          <TableSkeleton />
+        ) : loadError ? (
+          <ErrorState message={loadError} onRetry={load} />
         ) : (
           <Table>
             <Thead>
@@ -168,20 +170,17 @@ export default function AdminOutreachPage() {
                 <Th>{t('columns.status')}</Th>
                 <Th>{t('columns.outcome')}</Th>
                 <Th>{t('columns.sentAt')}</Th>
+                <Th>{''}</Th>
               </tr>
             </Thead>
             <Tbody>
               {rows.map((row) => (
-                <tr
-                  key={row.id}
-                  onClick={() => setSelected(row)}
-                  className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50"
-                >
+                <Tr key={row.id} onClick={() => setSelected(row)} className="cursor-pointer">
                   <Td>
                     {t(`triggers.${row.trigger}`)}
                     {row.trigger === 'dunning' && ` (d${row.step})`}
                   </Td>
-                  <Td className="font-mono text-xs">{row.userId.slice(0, 12)}…</Td>
+                  <Td><CopyableId value={row.userId} chars={12} /></Td>
                   <Td className="max-w-[240px] truncate">{row.subject || '—'}</Td>
                   <Td>
                     {row.source === 'llm' ? (
@@ -206,11 +205,22 @@ export default function AdminOutreachPage() {
                   <Td className="text-xs text-slate-500">
                     {row.sentAt ? new Date(row.sentAt).toLocaleString() : '—'}
                   </Td>
-                </tr>
+                  <Td>
+                    {/* The row opens the message; a keyboard needs a control. */}
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <IconButton
+                        label={t('detailTitle')}
+                        icon={<Eye className="w-4 h-4" />}
+                        tone="primary"
+                        onClick={() => setSelected(row)}
+                      />
+                    </div>
+                  </Td>
+                </Tr>
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-sm text-center text-slate-500">
+                  <td colSpan={8} className="px-4 py-8 text-sm text-center text-slate-500">
                     {t('empty')}
                   </td>
                 </tr>
@@ -219,27 +229,9 @@ export default function AdminOutreachPage() {
           </Table>
         )}
 
-        {totalPages > 1 && (
-          <div className="pt-4 flex items-center justify-center gap-3 text-sm">
-            <button
-              disabled={page <= 1}
-              onClick={() => setPage((p) => p - 1)}
-              className="px-3 py-1 rounded-lg border border-slate-300 dark:border-slate-700 disabled:opacity-40"
-            >
-              ←
-            </button>
-            <span>
-              {page} / {totalPages}
-            </span>
-            <button
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
-              className="px-3 py-1 rounded-lg border border-slate-300 dark:border-slate-700 disabled:opacity-40"
-            >
-              →
-            </button>
-          </div>
-        )}
+        {/* Was a hand-rolled pair of unlabelled arrows; the shared control is
+            labelled and announces the page count. */}
+        <Pagination page={table.page} pages={totalPages} onPageChange={table.setPage} />
       </Card>
 
       <Modal

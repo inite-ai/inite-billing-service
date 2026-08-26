@@ -15,6 +15,7 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { ActiveBadge } from '@/components/ui/StatusBadge'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { IconButton } from '@/components/ui/IconButton'
+import { useConfirmDialog } from '@/hooks/useConfirmDialog'
 
 interface PayoutProvider {
   id: string
@@ -34,6 +35,7 @@ interface PayoutProvider {
 export default function AdminPayoutProvidersPage() {
   const t = useTranslations('admin')
   const tc = useTranslations('common')
+  const { confirm, DialogElement } = useConfirmDialog()
 
   const [providers, setProviders] = useState<PayoutProvider[]>([])
   const [loading, setLoading] = useState(true)
@@ -84,7 +86,16 @@ export default function AdminPayoutProvidersPage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm(t('payoutProviders.deleteConfirm'))) return
+    // Was a bare window.confirm naming nothing — on a table of providers that
+    // differ by one word, that is a coin toss.
+    const provider = providers.find((p) => p.id === id)
+    const ok = await confirm({
+      title: t('payoutProviders.deleteConfirm'),
+      message: t('payoutProviders.deleteConfirm'),
+      record: provider ? `${provider.name} · ${provider.code}` : id,
+      variant: 'danger',
+    })
+    if (!ok) return
     try {
       await api.delete(`/v1/admin/payout-providers/${id}`)
       toast.success(t('payoutProviders.deleted'))
@@ -195,6 +206,8 @@ export default function AdminPayoutProvidersPage() {
           </div>
         </div>
       </Modal>
+
+      {DialogElement}
     </div>
   )
 }
