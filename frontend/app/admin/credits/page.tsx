@@ -304,6 +304,41 @@ export default function AdminCreditsPage() {
         title={t('credits.adjust')}
       >
         <div className="space-y-4">
+          {/* The modal used to show an amount box and nothing else: no whose
+              balance, no current value, no result. A wrong row click credited a
+              stranger with no way to tell afterwards. */}
+          {adjustTarget && (
+            <div className="rounded-lg bg-slate-50 px-3 py-2.5 dark:bg-slate-800">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-xs text-slate-500 dark:text-slate-400">
+                  {t('credits.tableUser')}
+                </span>
+                <CopyableId value={adjustTarget.userId} chars={12} />
+              </div>
+              <div className="mt-1.5 flex items-baseline justify-between gap-3">
+                <span className="text-xs text-slate-500 dark:text-slate-400">
+                  {t('credits.adjustNewBalance')}
+                </span>
+                <span className="font-mono text-sm text-slate-900 tabular-nums dark:text-slate-100">
+                  {adjustTarget.balance}
+                  {adjustAmount && !Number.isNaN(Number(adjustAmount)) && (
+                    <>
+                      {' → '}
+                      <strong
+                        className={
+                          Number(adjustTarget.balance) + Number(adjustAmount) < 0
+                            ? 'text-red-600 dark:text-red-400'
+                            : 'text-emerald-600 dark:text-emerald-400'
+                        }
+                      >
+                        {Number(adjustTarget.balance) + Number(adjustAmount)}
+                      </strong>
+                    </>
+                  )}
+                </span>
+              </div>
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">
               {t('credits.adjustAmount')}
@@ -339,7 +374,7 @@ export default function AdminCreditsPage() {
             </Button>
             <Button
               onClick={handleAdjust}
-              disabled={!adjustAmount || adjustSubmitting}
+              disabled={!adjustAmount || !adjustReason.trim() || adjustSubmitting}
             >
               {adjustSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : tc('confirm')}
             </Button>

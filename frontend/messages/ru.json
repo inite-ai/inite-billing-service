@@ -807,7 +807,8 @@
       "adjustSuccess": "Кредиты скорректированы",
       "adjustError": "Ошибка корректировки кредитов",
       "searchUser": "Поиск по ID пользователя...",
-      "allServices": "Все сервисы"
+      "allServices": "Все сервисы",
+      "adjustNewBalance": "Баланс после корректировки"
     },
     "customers": {
       "title": "Покупатели",

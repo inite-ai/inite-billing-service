@@ -807,7 +807,8 @@
       "adjustSuccess": "Credits adjusted",
       "adjustError": "Failed to adjust credits",
       "searchUser": "Search by User ID...",
-      "allServices": "All Services"
+      "allServices": "All Services",
+      "adjustNewBalance": "Balance after adjustment"
     },
     "customers": {
       "title": "Customers",
