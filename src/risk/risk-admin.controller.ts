@@ -19,6 +19,14 @@ import { User, RequestUser } from '../auth/decorators/user.decorator';
 import { PrismaService } from '../common/services/prisma.service';
 import { AdminOrdersService } from '../admin/services/admin-orders.service';
 import { ReviewAssessmentDto } from './dto/review-assessment.dto';
+import { resolveOrderBy, SortWhitelist } from '../common/helpers/sort';
+
+export const RISK_SORT: SortWhitelist = {
+  createdAt: (dir) => ({ createdAt: dir }),
+  score: (dir) => ({ score: dir }),
+  level: (dir) => ({ level: dir }),
+  status: (dir) => ({ status: dir }),
+};
 
 @ApiTags('Admin')
 @Controller('v1/admin/risk')
@@ -36,6 +44,8 @@ export class RiskAdminController {
     @Query('status') status?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: string,
   ) {
     const pageNum = Math.max(parseInt(page || '1', 10) || 1, 1);
     const limitNum = Math.min(Math.max(parseInt(limit || '20', 10) || 20, 1), 100);
@@ -47,7 +57,7 @@ export class RiskAdminController {
         include: {
           order: { include: { price: { include: { product: true } } } },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: resolveOrderBy(RISK_SORT, { createdAt: 'desc' }, sortBy, sortOrder),
         take: limitNum,
         skip: (pageNum - 1) * limitNum,
       }),

@@ -164,11 +164,15 @@ export class AdminController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('search') search?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: string,
   ) {
     return this.usersService.getCustomers({
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
       search: search || undefined,
+      sortBy,
+      sortOrder,
     });
   }
 
@@ -188,6 +192,8 @@ export class AdminController {
     @Query('search') search?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: string,
   ) {
     return this.ordersService.getOrders({
       status,
@@ -195,6 +201,8 @@ export class AdminController {
       search,
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
+      sortBy,
+      sortOrder,
     });
   }
 
@@ -220,12 +228,16 @@ export class AdminController {
     @Query('userId') userId?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: string,
   ) {
     return this.ordersService.getSubscriptions({
       status,
       userId,
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
+      sortBy,
+      sortOrder,
     });
   }
 
@@ -245,12 +257,16 @@ export class AdminController {
     @Query('status') status?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: string,
   ) {
     return this.usersService.getEntitlements({
       userId,
       status,
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
+      sortBy,
+      sortOrder,
     });
   }
 
@@ -283,12 +299,16 @@ export class AdminController {
     @Query('serviceId') serviceId?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: string,
   ) {
     return this.affiliatesService.getAffiliates({
       status,
       serviceId,
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
+      sortBy,
+      sortOrder,
     });
   }
 
@@ -346,11 +366,15 @@ export class AdminController {
     @Query('status') status?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: string,
   ) {
     return this.affiliatesService.getPayouts({
       status,
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
+      sortBy,
+      sortOrder,
     });
   }
 
@@ -426,10 +450,19 @@ export class AdminController {
 
   @Get('webhooks')
   @ApiOperation({ summary: 'List webhook events' })
-  async getWebhooks(@Query('page') page?: string, @Query('limit') limit?: string) {
+  async getWebhooks(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('status') status?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: string,
+  ) {
     return this.statsService.getWebhooks({
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
+      status,
+      sortBy,
+      sortOrder,
     });
   }
 

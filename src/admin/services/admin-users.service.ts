@@ -1,6 +1,32 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/services/prisma.service';
 import { paginate } from '../../common/helpers/paginate';
+import { resolveOrderBy, SortWhitelist } from '../../common/helpers/sort';
+
+/**
+ * The customer list is a `groupBy` over orders, so its sort keys are
+ * aggregates, not columns: `orderBy: { totalSpent: ... }` is not a thing
+ * Prisma can express here. Kept separate from {@link resolveOrderBy} for that
+ * reason, and the keys match what the table's headers offer.
+ */
+const CUSTOMER_SORT: Record<
+  string,
+  (dir: 'asc' | 'desc') => Prisma.OrderOrderByWithAggregationInput
+> = {
+  lastOrderAt: (dir) => ({ _max: { createdAt: dir } }),
+  totalSpent: (dir) => ({ _sum: { amount: dir } }),
+  totalOrders: (dir) => ({ _count: { id: dir } }),
+  userId: (dir) => ({ userId: dir }),
+};
+
+export const ENTITLEMENT_SORT: SortWhitelist = {
+  createdAt: (dir) => ({ createdAt: dir }),
+  key: (dir) => ({ key: dir }),
+  status: (dir) => ({ status: dir }),
+  expiresAt: (dir) => ({ expiresAt: dir }),
+  userId: (dir) => ({ userId: dir }),
+};
 
 @Injectable()
 export class AdminUsersService {
@@ -11,8 +37,10 @@ export class AdminUsersService {
     status?: string;
     page?: number;
     limit?: number;
+    sortBy?: string;
+    sortOrder?: string;
   }) {
-    const { userId, status, page, limit } = params;
+    const { userId, status, page, limit, sortBy, sortOrder } = params;
     const where: any = {};
     if (userId) where.userId = userId;
     if (status) where.status = status;
@@ -20,7 +48,7 @@ export class AdminUsersService {
     return paginate(this.prisma.entitlement, where, {
       page,
       limit,
-      orderBy: { createdAt: 'desc' },
+      orderBy: resolveOrderBy(ENTITLEMENT_SORT, { createdAt: 'desc' }, sortBy, sortOrder),
     });
   }
 
@@ -60,21 +88,42 @@ export class AdminUsersService {
     });
   }
 
-  async getCustomers(params: { page?: number; limit?: number; search?: string }) {
-    const { page = 1, limit = 20, search } = params;
+  async getCustomers(params: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    sortBy?: string;
+    sortOrder?: string;
+  }) {
+    const { page = 1, limit = 20, search, sortBy, sortOrder } = params;
 
     const whereClause: any = search ? { userId: { contains: search } } : {};
 
-    const orders = await this.prisma.order.groupBy({
+    const sortDir: 'asc' | 'desc' = sortOrder?.trim().toLowerCase() === 'asc' ? 'asc' : 'desc';
+    const buildSort =
+      sortBy && Object.prototype.hasOwnProperty.call(CUSTOMER_SORT, sortBy)
+        ? CUSTOMER_SORT[sortBy]
+        : null;
+
+    // `groupBy` types its `orderBy` as a union of literal error strings unless
+    // the sort is written inline, which a runtime-chosen sort cannot be. The
+    // result shape is spelled out instead of inferred so the mapping below
+    // stays type-checked.
+    const orders = (await (this.prisma.order.groupBy as any)({
       by: ['userId'],
       _count: { id: true },
       _sum: { amount: true },
       _max: { createdAt: true },
-      orderBy: { _max: { createdAt: 'desc' } },
+      orderBy: buildSort ? buildSort(sortDir) : { _max: { createdAt: 'desc' } },
       where: whereClause,
       skip: (page - 1) * limit,
       take: limit,
-    });
+    })) as Array<{
+      userId: string;
+      _count: { id: number };
+      _sum: { amount: Prisma.Decimal | null };
+      _max: { createdAt: Date | null };
+    }>;
 
     const totalUsers = await this.prisma.order.groupBy({
       by: ['userId'],

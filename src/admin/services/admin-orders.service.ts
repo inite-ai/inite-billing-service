@@ -3,6 +3,27 @@ import { PrismaService } from '../../common/services/prisma.service';
 import { PaymentOrchestratorService } from '../../payment-orchestrator/payment-orchestrator.service';
 import { Connector } from '../../common/connectors/connector.interface';
 import { paginate } from '../../common/helpers/paginate';
+import { resolveOrderBy, SortWhitelist } from '../../common/helpers/sort';
+
+/**
+ * Columns an operator can sort the order list by. Ordering happens in the
+ * database over the whole filtered set — sorting the twenty rows of the current
+ * page would present a page-local ranking as a global one.
+ */
+export const ORDER_SORT: SortWhitelist = {
+  createdAt: (dir) => ({ createdAt: dir }),
+  amount: (dir) => ({ amount: dir }),
+  status: (dir) => ({ status: dir }),
+  userId: (dir) => ({ userId: dir }),
+  product: (dir) => ({ price: { product: { name: dir } } }),
+};
+
+export const SUBSCRIPTION_SORT: SortWhitelist = {
+  createdAt: (dir) => ({ createdAt: dir }),
+  status: (dir) => ({ status: dir }),
+  currentPeriodEnd: (dir) => ({ currentPeriodEnd: dir }),
+  userId: (dir) => ({ userId: dir }),
+};
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -28,8 +49,10 @@ export class AdminOrdersService {
     search?: string;
     page?: number;
     limit?: number;
+    sortBy?: string;
+    sortOrder?: string;
   }) {
-    const { status, userId, search, page, limit } = params;
+    const { status, userId, search, page, limit, sortBy, sortOrder } = params;
     const where: any = {};
     if (status) where.status = status;
     if (userId) where.userId = userId;
@@ -48,7 +71,7 @@ export class AdminOrdersService {
     return paginate(this.prisma.order, where, {
       page,
       limit,
-      orderBy: { createdAt: 'desc' },
+      orderBy: resolveOrderBy(ORDER_SORT, { createdAt: 'desc' }, sortBy, sortOrder),
       include: { price: { include: { product: true } }, paymentIntents: true },
     });
   }
@@ -151,8 +174,10 @@ export class AdminOrdersService {
     userId?: string;
     page?: number;
     limit?: number;
+    sortBy?: string;
+    sortOrder?: string;
   }) {
-    const { status, userId, page, limit } = params;
+    const { status, userId, page, limit, sortBy, sortOrder } = params;
     const where: any = {};
     if (status) where.status = status;
     if (userId) where.userId = userId;
@@ -160,7 +185,7 @@ export class AdminOrdersService {
     return paginate(this.prisma.subscription, where, {
       page,
       limit,
-      orderBy: { createdAt: 'desc' },
+      orderBy: resolveOrderBy(SUBSCRIPTION_SORT, { createdAt: 'desc' }, sortBy, sortOrder),
       include: { price: { include: { product: true } } },
     });
   }

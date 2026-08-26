@@ -1,6 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../common/services/prisma.service';
 import { paginate } from '../../common/helpers/paginate';
+import { resolveOrderBy, SortWhitelist } from '../../common/helpers/sort';
+
+export const WEBHOOK_SORT: SortWhitelist = {
+  receivedAt: (dir) => ({ receivedAt: dir }),
+  status: (dir) => ({ status: dir }),
+  rail: (dir) => ({ rail: dir }),
+  eventType: (dir) => ({ eventType: dir }),
+  attempts: (dir) => ({ attempts: dir }),
+};
 
 @Injectable()
 export class AdminStatsService {
@@ -41,17 +50,19 @@ export class AdminStatsService {
     };
   }
 
-  async getWebhooks(params: { page?: number; limit?: number }) {
-    const { page, limit } = params;
+  async getWebhooks(params: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    sortBy?: string;
+    sortOrder?: string;
+  }) {
+    const { page, limit, status, sortBy, sortOrder } = params;
 
-    return paginate(
-      this.prisma.webhookEvent,
-      {},
-      {
-        page,
-        limit,
-        orderBy: { receivedAt: 'desc' },
-      },
-    );
+    return paginate(this.prisma.webhookEvent, status ? { status } : {}, {
+      page,
+      limit,
+      orderBy: resolveOrderBy(WEBHOOK_SORT, { receivedAt: 'desc' }, sortBy, sortOrder),
+    });
   }
 }

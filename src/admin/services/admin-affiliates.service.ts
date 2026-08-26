@@ -1,6 +1,28 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../common/services/prisma.service';
 import { paginate } from '../../common/helpers/paginate';
+import { resolveOrderBy, SortWhitelist } from '../../common/helpers/sort';
+
+export const AFFILIATE_SORT: SortWhitelist = {
+  createdAt: (dir) => ({ createdAt: dir }),
+  referralCode: (dir) => ({ referralCode: dir }),
+  status: (dir) => ({ status: dir }),
+  totalEarned: (dir) => ({ totalEarned: dir }),
+  totalPaid: (dir) => ({ totalPaid: dir }),
+  referrals: (dir) => ({ referrals: { _count: dir } }),
+};
+
+/**
+ * A payout run is worked by size and by age, not by insertion order: the
+ * operator clearing tonight's queue wants the largest amounts checked first.
+ */
+export const PAYOUT_SORT: SortWhitelist = {
+  createdAt: (dir) => ({ createdAt: dir }),
+  totalAmount: (dir) => ({ totalAmount: dir }),
+  status: (dir) => ({ status: dir }),
+  periodStart: (dir) => ({ periodStart: dir }),
+  affiliate: (dir) => ({ affiliate: { referralCode: dir } }),
+};
 
 @Injectable()
 export class AdminAffiliatesService {
@@ -11,8 +33,10 @@ export class AdminAffiliatesService {
     serviceId?: string;
     page?: number;
     limit?: number;
+    sortBy?: string;
+    sortOrder?: string;
   }) {
-    const { status, serviceId, page, limit } = params;
+    const { status, serviceId, page, limit, sortBy, sortOrder } = params;
     const where: any = {};
     if (status) where.status = status;
     if (serviceId) where.serviceId = serviceId;
@@ -20,7 +44,7 @@ export class AdminAffiliatesService {
     return paginate(this.prisma.affiliate, where, {
       page,
       limit,
-      orderBy: { createdAt: 'desc' },
+      orderBy: resolveOrderBy(AFFILIATE_SORT, { createdAt: 'desc' }, sortBy, sortOrder),
       include: {
         _count: { select: { referrals: true, commissions: true } },
       },
@@ -44,15 +68,21 @@ export class AdminAffiliatesService {
     });
   }
 
-  async getPayouts(params: { status?: string; page?: number; limit?: number }) {
-    const { status, page, limit } = params;
+  async getPayouts(params: {
+    status?: string;
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortOrder?: string;
+  }) {
+    const { status, page, limit, sortBy, sortOrder } = params;
     const where: any = {};
     if (status) where.status = status;
 
     return paginate(this.prisma.affiliatePayout, where, {
       page,
       limit,
-      orderBy: { createdAt: 'desc' },
+      orderBy: resolveOrderBy(PAYOUT_SORT, { createdAt: 'desc' }, sortBy, sortOrder),
       include: { affiliate: true },
     });
   }
