@@ -972,7 +972,8 @@
       "openOrderDesc": "Find the order and inspect its payment intents",
       "openPromoCodes": "Open promo codes",
       "openPromoCodesDesc": "Create a retention offer this customer can redeem",
-      "noActions": "Nothing to act on at this stage"
+      "noActions": "Nothing to act on at this stage",
+      "journeyLoadFailed": "Could not load this journey"
     },
     "outreach": {
       "title": "AI Outreach",

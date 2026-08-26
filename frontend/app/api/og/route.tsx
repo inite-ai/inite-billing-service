@@ -6,7 +6,6 @@ import type { NextRequest } from 'next/server'
 export const runtime = 'nodejs'
 
 const INK = '#0A0A0B'
-const PANEL = '#101012'
 const LIME = '#CCFF00'
 const TEXT = '#ECECEA'
 const DIM = '#83837C'

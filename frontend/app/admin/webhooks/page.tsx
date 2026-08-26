@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { Card } from '@/components/ui/Card'
-import { Badge } from '@/components/ui/Badge'
 import { Table, Thead, Tbody, Tr, Th, Td } from '@/components/ui/Table'
 import { Pagination } from '@/components/ui/Pagination'
 import api from '@/lib/api'
