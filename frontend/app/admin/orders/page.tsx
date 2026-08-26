@@ -45,6 +45,7 @@ export default function AdminOrdersPage() {
     isOpen: boolean
     title: string
     message: string
+    record?: string
     onConfirm: () => Promise<void>
     variant?: 'danger' | 'default'
   } | null>(null)
@@ -85,10 +86,14 @@ export default function AdminOrdersPage() {
   }
 
   const handleRefund = (id: string) => {
+    // The amount is one column away in the table the operator is looking at;
+    // the dialog used to ask "Refund this order?" without carrying any of it.
+    const order = data?.items.find((o) => o.id === id) ?? selected
     setConfirmState({
       isOpen: true,
       title: t('orders.refundConfirm'),
       message: t('orders.refundConfirm'),
+      record: order ? `${order.amount} ${order.currency} · ${order.id}` : id,
       variant: 'danger',
       onConfirm: async () => {
         try {
@@ -227,6 +232,7 @@ export default function AdminOrdersPage() {
           onConfirm={confirmState.onConfirm}
           title={confirmState.title}
           message={confirmState.message}
+          record={confirmState.record}
           variant={confirmState.variant}
         />
       )}

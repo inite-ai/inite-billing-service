@@ -45,6 +45,7 @@ export default function AdminPaymentProvidersPage() {
     isOpen: boolean
     title: string
     message: string
+    record?: string
     onConfirm: () => Promise<void>
     variant?: 'danger' | 'default'
   } | null>(null)
@@ -326,6 +327,7 @@ export default function AdminPaymentProvidersPage() {
           onConfirm={confirmState.onConfirm}
           title={confirmState.title}
           message={confirmState.message}
+          record={confirmState.record}
           variant={confirmState.variant}
         />
       )}

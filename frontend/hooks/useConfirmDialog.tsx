@@ -5,6 +5,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 interface ConfirmOptions {
   title: string
   message: string
+  record?: string
   variant?: 'danger' | 'default'
   confirmLabel?: string
 }
@@ -35,6 +36,7 @@ export function useConfirmDialog() {
       onConfirm={handleConfirm}
       title={state.title}
       message={state.message}
+      record={state.record}
       variant={state.variant}
       confirmLabel={state.confirmLabel}
     />

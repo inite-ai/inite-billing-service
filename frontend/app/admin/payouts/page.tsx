@@ -25,6 +25,7 @@ export default function AdminPayoutsPage() {
     isOpen: boolean
     title: string
     message: string
+    record?: string
     onConfirm: () => Promise<void>
     variant?: 'danger' | 'default'
   } | null>(null)
@@ -45,11 +46,15 @@ export default function AdminPayoutsPage() {
   useEffect(() => { load() }, [page])
 
   const handleProcess = (id: string) => {
+    // Marking a payout processed sends money out. It was a violet primary
+    // button behind a dialog that named neither the affiliate nor the amount.
+    const payout = data?.items.find((p) => p.id === id)
     setConfirmState({
       isOpen: true,
       title: t('payouts.processConfirm'),
       message: t('payouts.processConfirm'),
-      variant: 'default',
+      record: payout ? `${payout.totalAmount} ${payout.currency} · ${payout.id}` : id,
+      variant: 'danger',
       onConfirm: async () => {
         try {
           await api.post(`/v1/admin/payouts/${id}/process`)
@@ -118,6 +123,7 @@ export default function AdminPayoutsPage() {
           onConfirm={confirmState.onConfirm}
           title={confirmState.title}
           message={confirmState.message}
+          record={confirmState.record}
           variant={confirmState.variant}
         />
       )}
