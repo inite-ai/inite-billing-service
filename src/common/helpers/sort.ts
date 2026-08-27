@@ -1,9 +1,45 @@
 export type SortDirection = 'asc' | 'desc';
 
-/** Builds a Prisma `orderBy` fragment for one whitelisted sort key. */
-export type SortBuilder = (dir: SortDirection) => any;
+/**
+ * Where a sort key lives, as a path into Prisma's `orderBy`.
+ *
+ * `['amount']` becomes `{ amount: dir }`; `['price', 'product', 'name']`
+ * becomes `{ price: { product: { name: dir } } }`; `['referrals', '_count']`
+ * becomes `{ referrals: { _count: dir } }`.
+ *
+ * Deliberately data rather than a builder function. A whitelist of callables
+ * means a name from a query string chooses which function runs, and both the
+ * reader and the scanner then have to prove the choice is closed. Paths cannot
+ * do anything when selected — they are just names to nest.
+ */
+export type SortPath = readonly string[];
 
-export type SortWhitelist = Record<string, SortBuilder>;
+export type SortWhitelist = Record<string, SortPath>;
+
+/** `['a','b']` + `'asc'` → `{ a: { b: 'asc' } }`. */
+function nest(path: SortPath, dir: SortDirection): any {
+  return path.reduceRight<any>((inner, segment) => ({ [segment]: inner }), dir);
+}
+
+/**
+ * Whitelists are written as object literals because that is the readable way to
+ * declare them, but a client-supplied key is never used to index one: the
+ * entries are copied into a `Map` (own enumerable properties only) and looked
+ * up there. Indexing an object by an untrusted name reaches `constructor`,
+ * `toString` and everything else on the prototype.
+ *
+ * Cached per whitelist, since each one is a module-level constant.
+ */
+const lookupTables = new WeakMap<SortWhitelist, Map<string, SortPath>>();
+
+function lookup(allowed: SortWhitelist, key: string): SortPath | undefined {
+  let table = lookupTables.get(allowed);
+  if (!table) {
+    table = new Map(Object.entries(allowed));
+    lookupTables.set(allowed, table);
+  }
+  return table.get(key);
+}
 
 /**
  * Turn a client-supplied `sortBy`/`sortOrder` pair into a Prisma `orderBy`.
@@ -20,27 +56,6 @@ export type SortWhitelist = Record<string, SortBuilder>;
  * order for each OFFSET, so a record can appear on both page 1 and page 2 while
  * another is never shown at all.
  */
-/**
- * Whitelists are written as object literals because that is the readable way to
- * declare them, but a client-supplied key is never used to index one: the
- * entries are copied into a `Map` (own enumerable properties only) and looked
- * up there. Indexing an object by an untrusted name reaches `constructor`,
- * `toString` and everything else on the prototype, and no `hasOwnProperty`
- * guard makes that obvious to a reader — or to a scanner.
- *
- * Cached per whitelist, since each one is a module-level constant.
- */
-const lookupTables = new WeakMap<SortWhitelist, Map<string, SortBuilder>>();
-
-function lookup(allowed: SortWhitelist, key: string): SortBuilder | undefined {
-  let table = lookupTables.get(allowed);
-  if (!table) {
-    table = new Map(Object.entries(allowed));
-    lookupTables.set(allowed, table);
-  }
-  return table.get(key);
-}
-
 export function resolveOrderBy(
   allowed: SortWhitelist,
   fallback: any,
@@ -48,11 +63,11 @@ export function resolveOrderBy(
   sortOrder?: string,
 ): any[] {
   const key = sortBy?.trim();
-  const build = key ? lookup(allowed, key) : undefined;
+  const path = key ? lookup(allowed, key) : undefined;
   const dir: SortDirection = sortOrder?.trim().toLowerCase() === 'asc' ? 'asc' : 'desc';
 
-  const primary = build ? build(dir) : fallback;
-  const tiebreak = { id: build ? dir : 'desc' };
+  const primary = path ? nest(path, dir) : fallback;
+  const tiebreak = { id: path ? dir : 'desc' };
 
   return Array.isArray(primary) ? [...primary, tiebreak] : [primary, tiebreak];
 }

@@ -11,18 +11,18 @@ import { resolveOrderBy, SortWhitelist } from '../../common/helpers/sort';
  * page would present a page-local ranking as a global one.
  */
 export const ORDER_SORT: SortWhitelist = {
-  createdAt: (dir) => ({ createdAt: dir }),
-  amount: (dir) => ({ amount: dir }),
-  status: (dir) => ({ status: dir }),
-  userId: (dir) => ({ userId: dir }),
-  product: (dir) => ({ price: { product: { name: dir } } }),
+  createdAt: ['createdAt'],
+  amount: ['amount'],
+  status: ['status'],
+  userId: ['userId'],
+  product: ['price', 'product', 'name'],
 };
 
 export const SUBSCRIPTION_SORT: SortWhitelist = {
-  createdAt: (dir) => ({ createdAt: dir }),
-  status: (dir) => ({ status: dir }),
-  currentPeriodEnd: (dir) => ({ currentPeriodEnd: dir }),
-  userId: (dir) => ({ userId: dir }),
+  createdAt: ['createdAt'],
+  status: ['status'],
+  currentPeriodEnd: ['currentPeriodEnd'],
+  userId: ['userId'],
 };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

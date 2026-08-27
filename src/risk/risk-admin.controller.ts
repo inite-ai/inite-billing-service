@@ -22,10 +22,10 @@ import { BulkReviewAssessmentDto, ReviewAssessmentDto } from './dto/review-asses
 import { resolveOrderBy, SortWhitelist } from '../common/helpers/sort';
 
 export const RISK_SORT: SortWhitelist = {
-  createdAt: (dir) => ({ createdAt: dir }),
-  score: (dir) => ({ score: dir }),
-  level: (dir) => ({ level: dir }),
-  status: (dir) => ({ status: dir }),
+  createdAt: ['createdAt'],
+  score: ['score'],
+  level: ['level'],
+  status: ['status'],
 };
 
 @ApiTags('Admin')

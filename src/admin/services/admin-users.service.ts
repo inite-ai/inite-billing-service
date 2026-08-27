@@ -10,22 +10,19 @@ import { resolveOrderBy, SortWhitelist } from '../../common/helpers/sort';
  * Prisma can express here. Kept separate from {@link resolveOrderBy} for that
  * reason, and the keys match what the table's headers offer.
  */
-const CUSTOMER_SORT = new Map<
-  string,
-  (dir: 'asc' | 'desc') => Prisma.OrderOrderByWithAggregationInput
->([
-  ['lastOrderAt', (dir) => ({ _max: { createdAt: dir } })],
-  ['totalSpent', (dir) => ({ _sum: { amount: dir } })],
-  ['totalOrders', (dir) => ({ _count: { id: dir } })],
-  ['userId', (dir) => ({ userId: dir })],
-]);
+const CUSTOMER_SORT: SortWhitelist = {
+  lastOrderAt: ['_max', 'createdAt'],
+  totalSpent: ['_sum', 'amount'],
+  totalOrders: ['_count', 'id'],
+  userId: ['userId'],
+};
 
 export const ENTITLEMENT_SORT: SortWhitelist = {
-  createdAt: (dir) => ({ createdAt: dir }),
-  key: (dir) => ({ key: dir }),
-  status: (dir) => ({ status: dir }),
-  expiresAt: (dir) => ({ expiresAt: dir }),
-  userId: (dir) => ({ userId: dir }),
+  createdAt: ['createdAt'],
+  key: ['key'],
+  status: ['status'],
+  expiresAt: ['expiresAt'],
+  userId: ['userId'],
 };
 
 @Injectable()
@@ -110,10 +107,11 @@ export class AdminUsersService {
 
     const whereClause: any = search ? { userId: { contains: search } } : {};
 
-    const sortDir: 'asc' | 'desc' = sortOrder?.trim().toLowerCase() === 'asc' ? 'asc' : 'desc';
-    // A `Map`, not an object indexed by the query string: indexing by an
-    // untrusted name reaches the prototype whatever guard sits in front of it.
-    const buildSort = sortBy ? CUSTOMER_SORT.get(sortBy) : undefined;
+    // Only the resolved key, without the `id` tiebreaker `resolveOrderBy`
+    // appends: `groupBy` may only order by columns it grouped on, and `id` is
+    // not one of them. A `null` fallback means "no recognised sort", which the
+    // default below then answers.
+    const customerSort = resolveOrderBy(CUSTOMER_SORT, null, sortBy, sortOrder)[0];
 
     // `groupBy` types its `orderBy` as a union of literal error strings unless
     // the sort is written inline, which a runtime-chosen sort cannot be. The
@@ -124,7 +122,7 @@ export class AdminUsersService {
       _count: { id: true },
       _sum: { amount: true },
       _max: { createdAt: true },
-      orderBy: buildSort ? buildSort(sortDir) : { _max: { createdAt: 'desc' } },
+      orderBy: customerSort ?? { _max: { createdAt: 'desc' } },
       where: whereClause,
       skip: (page - 1) * limit,
       take: limit,

@@ -6,9 +6,9 @@ import { MeteringService } from './metering.service';
 import { resolveOrderBy, SortWhitelist } from '../common/helpers/sort';
 
 export const CREDIT_BALANCE_SORT: SortWhitelist = {
-  updatedAt: (dir) => ({ updatedAt: dir }),
-  balance: (dir) => ({ balance: dir }),
-  userId: (dir) => ({ userId: dir }),
+  updatedAt: ['updatedAt'],
+  balance: ['balance'],
+  userId: ['userId'],
 };
 
 @Injectable()

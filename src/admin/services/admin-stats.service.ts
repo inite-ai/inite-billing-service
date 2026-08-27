@@ -4,11 +4,11 @@ import { paginate } from '../../common/helpers/paginate';
 import { resolveOrderBy, SortWhitelist } from '../../common/helpers/sort';
 
 export const WEBHOOK_SORT: SortWhitelist = {
-  receivedAt: (dir) => ({ receivedAt: dir }),
-  status: (dir) => ({ status: dir }),
-  rail: (dir) => ({ rail: dir }),
-  eventType: (dir) => ({ eventType: dir }),
-  attempts: (dir) => ({ attempts: dir }),
+  receivedAt: ['receivedAt'],
+  status: ['status'],
+  rail: ['rail'],
+  eventType: ['eventType'],
+  attempts: ['attempts'],
 };
 
 @Injectable()

@@ -4,12 +4,12 @@ import { paginate } from '../../common/helpers/paginate';
 import { resolveOrderBy, SortWhitelist } from '../../common/helpers/sort';
 
 export const AFFILIATE_SORT: SortWhitelist = {
-  createdAt: (dir) => ({ createdAt: dir }),
-  referralCode: (dir) => ({ referralCode: dir }),
-  status: (dir) => ({ status: dir }),
-  totalEarned: (dir) => ({ totalEarned: dir }),
-  totalPaid: (dir) => ({ totalPaid: dir }),
-  referrals: (dir) => ({ referrals: { _count: dir } }),
+  createdAt: ['createdAt'],
+  referralCode: ['referralCode'],
+  status: ['status'],
+  totalEarned: ['totalEarned'],
+  totalPaid: ['totalPaid'],
+  referrals: ['referrals', '_count'],
 };
 
 /**
@@ -17,11 +17,11 @@ export const AFFILIATE_SORT: SortWhitelist = {
  * operator clearing tonight's queue wants the largest amounts checked first.
  */
 export const PAYOUT_SORT: SortWhitelist = {
-  createdAt: (dir) => ({ createdAt: dir }),
-  totalAmount: (dir) => ({ totalAmount: dir }),
-  status: (dir) => ({ status: dir }),
-  periodStart: (dir) => ({ periodStart: dir }),
-  affiliate: (dir) => ({ affiliate: { referralCode: dir } }),
+  createdAt: ['createdAt'],
+  totalAmount: ['totalAmount'],
+  status: ['status'],
+  periodStart: ['periodStart'],
+  affiliate: ['affiliate', 'referralCode'],
 };
 
 @Injectable()
