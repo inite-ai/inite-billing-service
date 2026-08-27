@@ -4,6 +4,7 @@ import { Logger } from '@nestjs/common';
 import { OutboxService } from '../outbox/outbox.service';
 import { PrismaService } from '../common/services/prisma.service';
 import { assertPublicUrl } from './ssrf-guard';
+import { postToPinnedAddress } from './pinned-post';
 import { signOutboxDelivery } from './outbox-signature';
 
 /**
@@ -74,11 +75,13 @@ export class OutboxProcessor extends WorkerHost {
         const signature = signOutboxDelivery((service as any).apiKey, timestamp, body);
 
         try {
-          const res = await fetch(webhookUrl, {
-            method: 'POST',
-            // Don't follow redirects — a public URL could 3xx into a private
-            // target, sidestepping the SSRF guard above.
-            redirect: 'manual',
+          // Deliver to the address the guard just vetted rather than to the
+          // hostname. Resolving a second time inside the HTTP client left a
+          // window where a record with a short TTL could answer the check with
+          // a public address and the connection with 169.254.169.254.
+          const res = await postToPinnedAddress({
+            url: webhookUrl,
+            addresses: guard.addresses!,
             headers: {
               'Content-Type': 'application/json',
               'x-service-code': service.code,
@@ -88,11 +91,11 @@ export class OutboxProcessor extends WorkerHost {
               'x-billing-signature': signature,
             },
             body,
-            signal: AbortSignal.timeout(10_000),
+            timeoutMs: 10_000,
           });
 
-          // With redirect:'manual' a 3xx surfaces as a non-ok response; treat it
-          // (and any non-2xx) as a failed delivery to retry.
+          // Redirects are not followed, so a 3xx surfaces as a non-ok response;
+          // treat it (and any non-2xx) as a failed delivery to retry.
           if (!res.ok) {
             const note = res.status >= 300 && res.status < 400 ? ' (redirect not followed)' : '';
             this.logger.warn(

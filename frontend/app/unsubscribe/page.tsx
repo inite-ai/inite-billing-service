@@ -9,15 +9,16 @@ import { API_URL } from '@/lib/config'
 function UnsubscribeContent() {
   const params = useSearchParams()
   const t = useTranslations('notifications.unsubscribe')
-  const [state, setState] = useState<'loading' | 'done' | 'error'>('loading')
+  const token = params.get('token')
+  const category = params.get('category')
+
+  // A missing token is known at first render — deciding it inside the effect
+  // meant painting the spinner for a frame and then setting state during that
+  // same commit, which is what makes the render cascade.
+  const [state, setState] = useState<'loading' | 'done' | 'error'>(token ? 'loading' : 'error')
 
   useEffect(() => {
-    const token = params.get('token')
-    const category = params.get('category')
-    if (!token) {
-      setState('error')
-      return
-    }
+    if (!token) return
     fetch(`${API_URL}/v1/notifications/unsubscribe`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -25,7 +26,7 @@ function UnsubscribeContent() {
     })
       .then((res) => setState(res.ok ? 'done' : 'error'))
       .catch(() => setState('error'))
-  }, [params])
+  }, [token, category])
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4">

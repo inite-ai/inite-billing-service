@@ -1,15 +1,14 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { Card } from '@/components/ui/Card'
-import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
 import { Select } from '@/components/ui/Select'
-import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
+import { Table, Thead, Tbody, Tr, Th, Td } from '@/components/ui/Table'
 import { Pagination } from '@/components/ui/Pagination'
-import { Loader2, Users, DollarSign, GitBranch, Copy } from 'lucide-react'
+import { Users, DollarSign, GitBranch, Copy, Eye } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import type { PaginatedResponse } from '@/lib/types'
@@ -18,6 +17,13 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { CopyableId } from '@/components/ui/CopyableId'
+import { ExportButton } from '@/components/ui/ExportButton'
+import { IconButton } from '@/components/ui/IconButton'
+import { Tabs } from '@/components/ui/Tabs'
+import { useTableState } from '@/hooks/useTableState'
+
+/** The states the API accepts. `inactive` was offered here and rejected there. */
+const AFFILIATE_STATUSES = ['pending', 'active', 'suspended', 'terminated'] as const
 
 interface AffiliateWithCount {
   id: string
@@ -37,18 +43,23 @@ export default function AdminAffiliatesPage() {
   const t = useTranslations('admin')
   const tc = useTranslations('common')
 
+  const table = useTableState({ filters: { status: '' }, defaultSort: 'createdAt' })
+
   const [data, setData] = useState<PaginatedResponse<AffiliateWithCount> | null>(null)
-  const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [selected, setSelected] = useState<AffiliateWithCount | null>(null)
   const [, setDetailLoading] = useState(false)
 
-  const load = async () => {
+  const params = JSON.stringify(table.queryParams)
+
+  const load = useCallback(async () => {
     setLoading(true)
     setLoadError(null)
     try {
-      const res = await api.get('/v1/admin/affiliates', { params: { page, limit: 20 } })
+      const res = await api.get('/v1/admin/affiliates', {
+        params: { ...JSON.parse(params), limit: 20 },
+      })
       setData(res.data)
     } catch (e: unknown) {
       // A rejected request used to leave `loading` true forever: the operator
@@ -58,14 +69,23 @@ export default function AdminAffiliatesPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [params, tc])
 
-  useEffect(() => { load() }, [page])
+  useEffect(() => { load() }, [load])
 
   const handleStatusChange = async (id: string, status: string) => {
-    await api.put(`/v1/admin/affiliates/${id}`, { status })
-    toast.success(t('affiliates.updated'))
-    load()
+    // Unhandled before: a rejected PUT left the select showing the new status
+    // with nothing changed and nothing said. Reloading puts the row back to
+    // what the server actually holds.
+    try {
+      await api.put(`/v1/admin/affiliates/${id}`, { status })
+      toast.success(t('affiliates.updated'))
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } }
+      toast.error(err.response?.data?.message || tc('loadFailed'))
+    } finally {
+      load()
+    }
   }
 
   const handleDetail = async (aff: AffiliateWithCount) => {
@@ -78,7 +98,21 @@ export default function AdminAffiliatesPage() {
 
   return (
     <div>
-      <PageHeader title={t('affiliates.title')} />
+      <PageHeader
+        title={t('affiliates.title')}
+        actions={<ExportButton resource="affiliates" params={table.queryParams} />}
+      />
+
+      <div className="mb-4">
+        <Tabs
+          tabs={[
+            { key: '', label: tc('all') },
+            ...AFFILIATE_STATUSES.map((s) => ({ key: s, label: t(`affiliates.status.${s}`) })),
+          ]}
+          activeTab={table.filters.status}
+          onChange={(status) => table.setFilters({ status })}
+        />
+      </div>
 
       <Card>
         {loading ? (
@@ -95,11 +129,21 @@ export default function AdminAffiliatesPage() {
             <p className="text-sm text-slate-500 mb-3">{t('affiliates.totalAffiliates', { count: data.total })}</p>
             <Table>
               <Thead>
-                <tr><Th>{t('affiliates.tableUser')}</Th><Th>{t('affiliates.tableCode')}</Th><Th>{t('affiliates.tableReferrals')}</Th><Th>{t('affiliates.tableCommissions')}</Th><Th>{t('affiliates.tableEarned')}</Th><Th>{t('affiliates.tablePaid')}</Th><Th>{t('affiliates.tableRate')}</Th><Th>{t('affiliates.tableStatus')}</Th></tr>
+                <tr>
+                  <Th>{t('affiliates.tableUser')}</Th>
+                  <Th sortKey="referralCode" sort={table.sort} onSort={table.toggleSort}>{t('affiliates.tableCode')}</Th>
+                  <Th sortKey="referrals" sort={table.sort} onSort={table.toggleSort}>{t('affiliates.tableReferrals')}</Th>
+                  <Th>{t('affiliates.tableCommissions')}</Th>
+                  <Th sortKey="totalEarned" sort={table.sort} onSort={table.toggleSort}>{t('affiliates.tableEarned')}</Th>
+                  <Th sortKey="totalPaid" sort={table.sort} onSort={table.toggleSort}>{t('affiliates.tablePaid')}</Th>
+                  <Th>{t('affiliates.tableRate')}</Th>
+                  <Th sortKey="status" sort={table.sort} onSort={table.toggleSort}>{t('affiliates.tableStatus')}</Th>
+                  <Th>{tc('actions')}</Th>
+                </tr>
               </Thead>
               <Tbody>
                 {data.items.map((a) => (
-                  <tr key={a.id} className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50" onClick={() => handleDetail(a)}>
+                  <Tr key={a.id} className="cursor-pointer" onClick={() => handleDetail(a)}>
                     <Td className="font-mono text-xs"><CopyableId value={a.userId} /></Td>
                     <Td>
                       <span className="font-mono text-sm font-semibold text-violet-600 dark:text-violet-400">{a.referralCode}</span>
@@ -110,23 +154,33 @@ export default function AdminAffiliatesPage() {
                     <Td>${a.totalPaid}</Td>
                     <Td>{(Number(a.commissionRate) * 100).toFixed(0)}%</Td>
                     <Td>
-                      <div className="w-28" onClick={(e) => e.stopPropagation()}>
+                      <div className="w-32" onClick={(e) => e.stopPropagation()}>
                         <Select
+                          aria-label={t('affiliates.tableStatus')}
                           value={a.status}
                           onChange={(e) => handleStatusChange(a.id, e.target.value)}
-                          options={[
-                            { value: 'active', label: t('affiliates.statusActive') },
-                            { value: 'inactive', label: t('affiliates.statusInactive') },
-                            { value: 'suspended', label: t('affiliates.statusSuspended') },
-                          ]}
+                          options={AFFILIATE_STATUSES.map((s) => ({
+                            value: s,
+                            label: t(`affiliates.status.${s}`),
+                          }))}
                         />
                       </div>
                     </Td>
-                  </tr>
+                    <Td>
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <IconButton
+                          label={t('affiliates.detailTitle')}
+                          icon={<Eye className="w-4 h-4" />}
+                          tone="primary"
+                          onClick={() => handleDetail(a)}
+                        />
+                      </div>
+                    </Td>
+                  </Tr>
                 ))}
               </Tbody>
             </Table>
-            <Pagination page={data.page} pages={data.pages} onPageChange={setPage} />
+            <Pagination page={data.page} pages={data.pages} onPageChange={table.setPage} />
           </>
         )}
       </Card>

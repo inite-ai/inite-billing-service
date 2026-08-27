@@ -1,6 +1,29 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/services/prisma.service';
 import { paginate } from '../../common/helpers/paginate';
+import { resolveOrderBy, SortWhitelist } from '../../common/helpers/sort';
+
+/**
+ * The customer list is a `groupBy` over orders, so its sort keys are
+ * aggregates, not columns: `orderBy: { totalSpent: ... }` is not a thing
+ * Prisma can express here. Kept separate from {@link resolveOrderBy} for that
+ * reason, and the keys match what the table's headers offer.
+ */
+const CUSTOMER_SORT: SortWhitelist = {
+  lastOrderAt: ['_max', 'createdAt'],
+  totalSpent: ['_sum', 'amount'],
+  totalOrders: ['_count', 'id'],
+  userId: ['userId'],
+};
+
+export const ENTITLEMENT_SORT: SortWhitelist = {
+  createdAt: ['createdAt'],
+  key: ['key'],
+  status: ['status'],
+  expiresAt: ['expiresAt'],
+  userId: ['userId'],
+};
 
 @Injectable()
 export class AdminUsersService {
@@ -11,8 +34,10 @@ export class AdminUsersService {
     status?: string;
     page?: number;
     limit?: number;
+    sortBy?: string;
+    sortOrder?: string;
   }) {
-    const { userId, status, page, limit } = params;
+    const { userId, status, page, limit, sortBy, sortOrder } = params;
     const where: any = {};
     if (userId) where.userId = userId;
     if (status) where.status = status;
@@ -20,7 +45,7 @@ export class AdminUsersService {
     return paginate(this.prisma.entitlement, where, {
       page,
       limit,
-      orderBy: { createdAt: 'desc' },
+      orderBy: resolveOrderBy(ENTITLEMENT_SORT, { createdAt: 'desc' }, sortBy, sortOrder),
     });
   }
 
@@ -60,26 +85,55 @@ export class AdminUsersService {
     });
   }
 
-  async getCustomers(params: { page?: number; limit?: number; search?: string }) {
-    const { page = 1, limit = 20, search } = params;
+  /**
+   * How many distinct customers a filter matches. `groupBy` has no count, so
+   * this is the row count of the grouping itself — kept next to the list it
+   * describes so the export and the table can never disagree on the total.
+   */
+  async countCustomers(params: { search?: string }): Promise<number> {
+    const where = params.search ? { userId: { contains: params.search } } : {};
+    const groups = await this.prisma.order.groupBy({ by: ['userId'], where });
+    return groups.length;
+  }
+
+  async getCustomers(params: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    sortBy?: string;
+    sortOrder?: string;
+  }) {
+    const { page = 1, limit = 20, search, sortBy, sortOrder } = params;
 
     const whereClause: any = search ? { userId: { contains: search } } : {};
 
-    const orders = await this.prisma.order.groupBy({
+    // Only the resolved key, without the `id` tiebreaker `resolveOrderBy`
+    // appends: `groupBy` may only order by columns it grouped on, and `id` is
+    // not one of them. A `null` fallback means "no recognised sort", which the
+    // default below then answers.
+    const customerSort = resolveOrderBy(CUSTOMER_SORT, null, sortBy, sortOrder)[0];
+
+    // `groupBy` types its `orderBy` as a union of literal error strings unless
+    // the sort is written inline, which a runtime-chosen sort cannot be. The
+    // result shape is spelled out instead of inferred so the mapping below
+    // stays type-checked.
+    const orders = (await (this.prisma.order.groupBy as any)({
       by: ['userId'],
       _count: { id: true },
       _sum: { amount: true },
       _max: { createdAt: true },
-      orderBy: { _max: { createdAt: 'desc' } },
+      orderBy: customerSort ?? { _max: { createdAt: 'desc' } },
       where: whereClause,
       skip: (page - 1) * limit,
       take: limit,
-    });
+    })) as Array<{
+      userId: string;
+      _count: { id: number };
+      _sum: { amount: Prisma.Decimal | null };
+      _max: { createdAt: Date | null };
+    }>;
 
-    const totalUsers = await this.prisma.order.groupBy({
-      by: ['userId'],
-      where: whereClause,
-    });
+    const totalCustomers = await this.countCustomers({ search });
 
     const userIds = orders.map((o) => o.userId);
 
@@ -120,10 +174,10 @@ export class AdminUsersService {
 
     return {
       items,
-      total: totalUsers.length,
+      total: totalCustomers,
       page,
       limit,
-      pages: Math.ceil(totalUsers.length / limit),
+      pages: Math.ceil(totalCustomers / limit),
     };
   }
 

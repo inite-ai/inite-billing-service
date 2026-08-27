@@ -10,7 +10,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
-import { Plus, Pencil, Trash2, EyeOff, Eye, Tag, Loader2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, EyeOff, Eye, Tag } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import { useApiQuery } from '@/hooks/useApiQuery'
@@ -283,7 +283,13 @@ export default function AdminPromoCodesPage() {
   }
 
   const handleDelete = async (id: string) => {
-    const ok = await confirm({ title: t('promoCodes.deleteConfirm'), message: t('promoCodes.deleteConfirm'), variant: 'danger' })
+    const promo = (promoCodes || []).find((p) => p.id === id)
+    const ok = await confirm({
+      title: t('promoCodes.deleteConfirm'),
+      message: t('promoCodes.deleteConfirm'),
+      record: promo ? promo.code : id,
+      variant: 'danger',
+    })
     if (!ok) return
     try {
       await api.delete(`/v1/admin/promo-codes/${id}`)

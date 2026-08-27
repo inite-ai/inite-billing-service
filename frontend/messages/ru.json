@@ -88,7 +88,25 @@
     "retry": "Повторить",
     "copy": "Копировать",
     "expand": "Показать подробности",
-    "collapse": "Скрыть подробности"
+    "collapse": "Скрыть подробности",
+    "bulk": {
+      "label": "Массовые действия",
+      "selected": "{count, plural, one {выбрана # строка} few {выбрано # строки} many {выбрано # строк} other {выбрано # строк}}",
+      "clear": "Снять выделение",
+      "selectRow": "Выбрать эту строку",
+      "selectAll": "Выбрать все строки на странице",
+      "applying": "Обрабатываем выбранные строки…",
+      "allDone": "{count, plural, one {обработана # строка} few {обработано # строки} many {обработано # строк} other {обработано # строк}}",
+      "partial": "Обработано: {done}, не удалось: {failed}",
+      "failuresTitle": "Эти строки не изменились",
+      "confirmTitle": "Применить к выбранным строкам?"
+    },
+    "export": {
+      "label": "Экспорт CSV",
+      "done": "{count, plural, one {Выгружена # строка} few {Выгружено # строки} many {Выгружено # строк} other {Выгружено # строк}}",
+      "doneUnknown": "Файл выгружен",
+      "failed": "Не удалось выгрузить"
+    }
   },
   "nav": {
     "dashboard": "Панель управления",
@@ -439,7 +457,20 @@
       "manageProducts": "Управление продуктами",
       "viewOrders": "Просмотр заказов",
       "referralConfig": "Реферальные уровни",
-      "failedToLoadStats": "Не удалось загрузить статистику"
+      "failedToLoadStats": "Не удалось загрузить статистику",
+      "subtitle": "Что ждёт вас и как идут дела.",
+      "totals": "За всё время",
+      "triage": {
+        "title": "Требует внимания",
+        "allClear": "Ничего не ждёт",
+        "payouts": "Выплаты ожидают",
+        "risk": "На проверке риска",
+        "webhooks": "Вебхуки не прошли",
+        "pastDue": "Подписки просрочены",
+        "staleOrders": "Заказы не оплачены дольше {hours}ч",
+        "outbox": "Доставки outbox упали",
+        "outboxHint": "Экрана нет — смотрите логи воркера"
+      }
     },
     "services": {
       "title": "Сервисы",
@@ -652,7 +683,13 @@
       "statReferrals": "Рефералы",
       "statCommissions": "Комиссии",
       "updated": "Партнёр обновлён",
-      "rateUpdated": "Комиссионная ставка обновлена"
+      "rateUpdated": "Комиссионная ставка обновлена",
+      "status": {
+        "pending": "Ожидает",
+        "active": "Активен",
+        "suspended": "Приостановлен",
+        "terminated": "Отключён"
+      }
     },
     "referralConfig": {
       "title": "Реферальные уровни",
@@ -767,7 +804,11 @@
       "tableType": "Тип",
       "tableEntity": "Сущность",
       "tableStatus": "Статус",
-      "tableAttempts": "Попытки"
+      "tableAttempts": "Попытки",
+      "tabAll": "Все",
+      "tabFailed": "Не доставлены",
+      "tabReceived": "Получены",
+      "tabProcessed": "Обработаны"
     },
     "payouts": {
       "title": "Выплаты",
@@ -779,7 +820,16 @@
       "processConfirm": "Отметить эту выплату как обработанную?",
       "processed": "Выплата обработана",
       "failReason": "Причина отказа:",
-      "markedFailed": "Выплата отмечена как неуспешная"
+      "markedFailed": "Выплата отмечена как неуспешная",
+      "tabPending": "Ожидают",
+      "tabPaid": "Выплачены",
+      "tabFailed": "Не прошли",
+      "tabAll": "Все",
+      "empty": "В этой очереди пусто",
+      "failTitle": "Отметить выплату как неудачную",
+      "failReasonPlaceholder": "например: банк отклонил перевод",
+      "bulkMixedCurrencies": "разные валюты",
+      "bulkRecordMixed": "Выплат: {count}, в разных валютах"
     },
     "credits": {
       "title": "Кредиты",
@@ -922,7 +972,8 @@
       "openOrderDesc": "Найти заказ и посмотреть его платёжные намерения",
       "openPromoCodes": "Открыть промокоды",
       "openPromoCodesDesc": "Создать удерживающее предложение для этого клиента",
-      "noActions": "На этом этапе делать нечего"
+      "noActions": "На этом этапе делать нечего",
+      "journeyLoadFailed": "Не удалось загрузить историю"
     },
     "outreach": {
       "title": "AI-рассылки",
@@ -948,6 +999,14 @@
         "status": "Статус",
         "outcome": "Результат",
         "sentAt": "Отправлено"
+      },
+      "loadFailed": "Не удалось загрузить рассылки",
+      "detailTitle": "Письмо",
+      "statuses": {
+        "sent": "Отправлено",
+        "pending": "В очереди",
+        "skipped": "Пропущено",
+        "failed": "Ошибка"
       }
     },
     "metering": {
@@ -987,7 +1046,8 @@
         "limits": "Лимиты",
         "softCap": "Мягкий лимит",
         "policy": "Политика"
-      }
+      },
+      "actionFailed": "Не удалось выполнить"
     },
     "risk": {
       "title": "Проверка рисков",
@@ -1010,6 +1070,15 @@
         "user": "Пользователь",
         "status": "Статус",
         "date": "Дата"
+      },
+      "filterStatus": "Статус",
+      "totalCount": "Оценок: {count}",
+      "statuses": {
+        "flagged": "На проверке",
+        "blocked": "Заблокировано",
+        "reviewed_ok": "Проверено, ок",
+        "reviewed_fraud": "Фрод",
+        "none": "Без флага"
       }
     }
   },

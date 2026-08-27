@@ -4,9 +4,16 @@ jest.mock('dns/promises', () => ({
   lookup: jest.fn().mockResolvedValue([{ address: '93.184.216.34', family: 4 }]),
 }));
 
+// Delivery goes through node:http with the resolved address pinned, so the
+// transport is stubbed here rather than `global.fetch`.
+jest.mock('../src/workers/pinned-post', () => ({
+  postToPinnedAddress: jest.fn(),
+}));
+
 import { OutboxService } from '../src/outbox/outbox.service';
 import { OutboxProcessor } from '../src/workers/outbox.processor';
 import { OutboxScheduler } from '../src/workers/outbox.scheduler';
+import { postToPinnedAddress } from '../src/workers/pinned-post';
 
 /**
  * Regression coverage for the outbox delivery path. Before this, the `outbox`
@@ -20,7 +27,7 @@ describe('Outbox delivery', () => {
   let mockPrisma: any;
   let service: OutboxService;
   let processor: OutboxProcessor;
-  let fetchMock: jest.Mock;
+  const deliver = postToPinnedAddress as jest.Mock;
 
   const event = {
     id: 'evt-1',
@@ -44,8 +51,7 @@ describe('Outbox delivery', () => {
     };
     service = new OutboxService(mockPrisma);
     processor = new OutboxProcessor(service, mockPrisma);
-    fetchMock = jest.fn();
-    (global as any).fetch = fetchMock;
+    deliver.mockReset();
   });
 
   afterEach(() => jest.restoreAllMocks());
@@ -60,18 +66,20 @@ describe('Outbox delivery', () => {
         webhookUrl: 'https://club.inite.ai/hooks/billing',
       },
     ]);
-    fetchMock.mockResolvedValue({ ok: true, status: 200, statusText: 'OK' });
+    deliver.mockResolvedValue({ ok: true, status: 200, statusText: 'OK' });
 
     await processor.process({} as any);
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe('https://club.inite.ai/hooks/billing');
-    expect(init.method).toBe('POST');
-    expect(init.headers['x-event-id']).toBe('evt-1');
-    expect(init.headers['x-event-type']).toBe('billing.payment.succeeded');
-    expect(init.headers['x-service-code']).toBe('club');
-    expect(JSON.parse(init.body)).toMatchObject({
+    expect(deliver).toHaveBeenCalledTimes(1);
+    const [call] = deliver.mock.calls[0];
+    expect(call.url).toBe('https://club.inite.ai/hooks/billing');
+    // Delivered to the address the guard vetted, not to the name — resolving
+    // again inside the client is the DNS-rebinding window this closes.
+    expect(call.addresses).toEqual(['93.184.216.34']);
+    expect(call.headers['x-event-id']).toBe('evt-1');
+    expect(call.headers['x-event-type']).toBe('billing.payment.succeeded');
+    expect(call.headers['x-service-code']).toBe('club');
+    expect(JSON.parse(call.body)).toMatchObject({
       type: 'billing.payment.succeeded',
       eventId: 'evt-1',
       data: { order_id: 'o1' },
@@ -96,7 +104,7 @@ describe('Outbox delivery', () => {
 
     await processor.process({} as any);
 
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(deliver).not.toHaveBeenCalled();
   });
 
   it('marks an event failed (with attempt increment) when delivery fails', async () => {
@@ -109,7 +117,7 @@ describe('Outbox delivery', () => {
         webhookUrl: 'https://club.inite.ai/hooks/billing',
       },
     ]);
-    fetchMock.mockResolvedValue({ ok: false, status: 500, statusText: 'Server Error' });
+    deliver.mockResolvedValue({ ok: false, status: 500, statusText: 'Server Error' });
 
     await processor.process({} as any);
 

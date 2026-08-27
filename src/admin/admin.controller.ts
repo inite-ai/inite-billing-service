@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Get,
   Post,
@@ -7,10 +8,12 @@ import {
   Body,
   Param,
   Query,
+  Res,
   UseGuards,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { CreatePromoCodeDto, UpdatePromoCodeDto } from './dto/create-promo-code.dto';
 import { CreateReferralLevelDto, UpdateReferralLevelDto } from './dto/referral-level.dto';
@@ -26,6 +29,7 @@ import {
 } from './dto/provider.dto';
 import {
   ApplyReferralTemplateDto,
+  BulkPayoutDto,
   FailPayoutDto,
   UpdateAffiliateDto,
 } from './dto/affiliate-admin.dto';
@@ -39,6 +43,11 @@ import { AdminUsersService } from './services/admin-users.service';
 import { AdminAffiliatesService } from './services/admin-affiliates.service';
 import { AdminProvidersService } from './services/admin-providers.service';
 import { AdminStatsService } from './services/admin-stats.service';
+import {
+  AdminExportService,
+  EXPORT_RESOURCES,
+  ExportResource,
+} from './services/admin-export.service';
 import { ReferralLevelsService } from '../affiliates/referral-levels.service';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
 import { FunnelService } from '../funnel/funnel.service';
@@ -56,6 +65,7 @@ export class AdminController {
     private readonly affiliatesService: AdminAffiliatesService,
     private readonly providersService: AdminProvidersService,
     private readonly statsService: AdminStatsService,
+    private readonly exportService: AdminExportService,
     private readonly referralLevelsService: ReferralLevelsService,
     private readonly promoCodesService: PromoCodesService,
     private readonly funnelService: FunnelService,
@@ -164,11 +174,15 @@ export class AdminController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('search') search?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: string,
   ) {
     return this.usersService.getCustomers({
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
       search: search || undefined,
+      sortBy,
+      sortOrder,
     });
   }
 
@@ -188,6 +202,8 @@ export class AdminController {
     @Query('search') search?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: string,
   ) {
     return this.ordersService.getOrders({
       status,
@@ -195,6 +211,8 @@ export class AdminController {
       search,
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
+      sortBy,
+      sortOrder,
     });
   }
 
@@ -220,12 +238,16 @@ export class AdminController {
     @Query('userId') userId?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: string,
   ) {
     return this.ordersService.getSubscriptions({
       status,
       userId,
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
+      sortBy,
+      sortOrder,
     });
   }
 
@@ -245,12 +267,16 @@ export class AdminController {
     @Query('status') status?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: string,
   ) {
     return this.usersService.getEntitlements({
       userId,
       status,
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
+      sortBy,
+      sortOrder,
     });
   }
 
@@ -283,12 +309,16 @@ export class AdminController {
     @Query('serviceId') serviceId?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: string,
   ) {
     return this.affiliatesService.getAffiliates({
       status,
       serviceId,
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
+      sortBy,
+      sortOrder,
     });
   }
 
@@ -346,12 +376,23 @@ export class AdminController {
     @Query('status') status?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: string,
   ) {
     return this.affiliatesService.getPayouts({
       status,
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
+      sortBy,
+      sortOrder,
     });
+  }
+
+  @Post('payouts/bulk')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Process or fail a selection of payouts, reporting each outcome' })
+  async bulkPayouts(@Body() body: BulkPayoutDto) {
+    return this.affiliatesService.bulkPayoutAction(body);
   }
 
   @Post('payouts/:id/process')
@@ -426,10 +467,19 @@ export class AdminController {
 
   @Get('webhooks')
   @ApiOperation({ summary: 'List webhook events' })
-  async getWebhooks(@Query('page') page?: string, @Query('limit') limit?: string) {
+  async getWebhooks(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('status') status?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: string,
+  ) {
     return this.statsService.getWebhooks({
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
+      status,
+      sortBy,
+      sortOrder,
     });
   }
 
@@ -534,12 +584,16 @@ export class AdminController {
     @Query('serviceId') serviceId?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: string,
   ) {
     return this.creditsService.listBalances({
       userId,
       serviceId,
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
+      sortBy,
+      sortOrder,
     });
   }
 
@@ -572,11 +626,62 @@ export class AdminController {
     });
   }
 
+  // ─── Export ────────────────────────────────────────────────
+
+  /**
+   * One route for every exportable list. The filters and sort are the list's
+   * own, so the file matches the screen the operator pressed the button on;
+   * anything larger than the row cap is refused with a message rather than
+   * quietly truncated into a file that looks complete.
+   */
+  @Get('export/:resource')
+  @ApiOperation({
+    summary: 'Export a list as CSV (orders, subscriptions, payouts, affiliates, customers)',
+  })
+  async exportCsv(
+    @Param('resource') resource: string,
+    @Res() res: Response,
+    @Query('status') status?: string,
+    @Query('userId') userId?: string,
+    @Query('serviceId') serviceId?: string,
+    @Query('search') search?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: string,
+  ) {
+    if (!EXPORT_RESOURCES.includes(resource as ExportResource)) {
+      throw new BadRequestException(
+        `Unknown export resource "${resource}". Expected one of: ${EXPORT_RESOURCES.join(', ')}`,
+      );
+    }
+
+    const { filename, csv, rows } = await this.exportService.toCsvFile(resource as ExportResource, {
+      status,
+      userId,
+      serviceId,
+      search,
+      sortBy,
+      sortOrder,
+    });
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    // Read by the UI to tell the operator how many rows they just downloaded.
+    res.setHeader('X-Export-Rows', String(rows));
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Export-Rows');
+    res.send(csv);
+  }
+
   // ─── Stats ─────────────────────────────────────────────────
 
   @Get('stats')
   @ApiOperation({ summary: 'Get overall statistics' })
   async getStats() {
     return this.statsService.getStats();
+  }
+
+  @Get('stats/triage')
+  @ApiOperation({ summary: 'Counts of everything currently waiting for an operator' })
+  async getTriage() {
+    return this.statsService.getTriage();
   }
 }

@@ -3,8 +3,52 @@ import { PrismaService } from '../../common/services/prisma.service';
 import { PaymentOrchestratorService } from '../../payment-orchestrator/payment-orchestrator.service';
 import { Connector } from '../../common/connectors/connector.interface';
 import { paginate } from '../../common/helpers/paginate';
+import { resolveOrderBy, SortWhitelist } from '../../common/helpers/sort';
+
+/**
+ * Columns an operator can sort the order list by. Ordering happens in the
+ * database over the whole filtered set — sorting the twenty rows of the current
+ * page would present a page-local ranking as a global one.
+ */
+export const ORDER_SORT: SortWhitelist = {
+  createdAt: ['createdAt'],
+  amount: ['amount'],
+  status: ['status'],
+  userId: ['userId'],
+  product: ['price', 'product', 'name'],
+};
+
+export const SUBSCRIPTION_SORT: SortWhitelist = {
+  createdAt: ['createdAt'],
+  status: ['status'],
+  currentPeriodEnd: ['currentPeriodEnd'],
+  userId: ['userId'],
+};
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The order list's filter, shared with the CSV export so an exported file is
+ * the same set of records the operator was looking at — an export that quietly
+ * dropped the filter would be worse than no export.
+ */
+export function buildOrderWhere(params: { status?: string; userId?: string; search?: string }) {
+  const where: any = {};
+  if (params.status) where.status = params.status;
+  if (params.userId) where.userId = params.userId;
+
+  const term = params.search?.trim();
+  if (term) {
+    where.OR = [
+      // A pasted UUID should hit its record exactly rather than by substring.
+      ...(UUID_RE.test(term) ? [{ id: term }, { userId: term }] : []),
+      { externalId: { contains: term, mode: 'insensitive' } },
+      { userId: { contains: term, mode: 'insensitive' } },
+      { paymentIntents: { some: { providerIntentId: { contains: term } } } },
+    ];
+  }
+  return where;
+}
 
 @Injectable()
 export class AdminOrdersService {
@@ -28,27 +72,16 @@ export class AdminOrdersService {
     search?: string;
     page?: number;
     limit?: number;
+    sortBy?: string;
+    sortOrder?: string;
   }) {
-    const { status, userId, search, page, limit } = params;
-    const where: any = {};
-    if (status) where.status = status;
-    if (userId) where.userId = userId;
-
-    const term = search?.trim();
-    if (term) {
-      where.OR = [
-        // A pasted UUID should hit its record exactly rather than by substring.
-        ...(UUID_RE.test(term) ? [{ id: term }, { userId: term }] : []),
-        { externalId: { contains: term, mode: 'insensitive' } },
-        { userId: { contains: term, mode: 'insensitive' } },
-        { paymentIntents: { some: { providerIntentId: { contains: term } } } },
-      ];
-    }
+    const { status, userId, search, page, limit, sortBy, sortOrder } = params;
+    const where = buildOrderWhere({ status, userId, search });
 
     return paginate(this.prisma.order, where, {
       page,
       limit,
-      orderBy: { createdAt: 'desc' },
+      orderBy: resolveOrderBy(ORDER_SORT, { createdAt: 'desc' }, sortBy, sortOrder),
       include: { price: { include: { product: true } }, paymentIntents: true },
     });
   }
@@ -151,8 +184,10 @@ export class AdminOrdersService {
     userId?: string;
     page?: number;
     limit?: number;
+    sortBy?: string;
+    sortOrder?: string;
   }) {
-    const { status, userId, page, limit } = params;
+    const { status, userId, page, limit, sortBy, sortOrder } = params;
     const where: any = {};
     if (status) where.status = status;
     if (userId) where.userId = userId;
@@ -160,7 +195,7 @@ export class AdminOrdersService {
     return paginate(this.prisma.subscription, where, {
       page,
       limit,
-      orderBy: { createdAt: 'desc' },
+      orderBy: resolveOrderBy(SUBSCRIPTION_SORT, { createdAt: 'desc' }, sortBy, sortOrder),
       include: { price: { include: { product: true } } },
     });
   }

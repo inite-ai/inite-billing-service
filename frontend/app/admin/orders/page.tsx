@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -8,10 +8,10 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
-import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
+import { Table, Thead, Tbody, Tr, Th, Td } from '@/components/ui/Table'
 import { Pagination } from '@/components/ui/Pagination'
 import { Tabs } from '@/components/ui/Tabs'
-import { Search, Loader2, Receipt } from 'lucide-react'
+import { Eye, Receipt, Search } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import type { Order, PaginatedResponse } from '@/lib/types'
@@ -20,6 +20,9 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { CopyableId } from '@/components/ui/CopyableId'
+import { ExportButton } from '@/components/ui/ExportButton'
+import { IconButton } from '@/components/ui/IconButton'
+import { useTableState } from '@/hooks/useTableState'
 
 export default function AdminOrdersPage() {
   const t = useTranslations('admin')
@@ -33,10 +36,13 @@ export default function AdminOrdersPage() {
     { key: 'refunded', label: t('orders.tabRefunded') },
   ]
 
+  // Filters, page and sort are in the URL: an order found once should be
+  // findable again from history, and the query that found it is what a
+  // colleague needs when the ticket gets handed over.
+  const table = useTableState({ filters: { status: '', search: '' }, defaultSort: 'createdAt' })
+
   const [data, setData] = useState<PaginatedResponse<Order> | null>(null)
-  const [statusFilter, setStatusFilter] = useState('')
-  const [userSearch, setUserSearch] = useState('')
-  const [page, setPage] = useState(1)
+  const [searchDraft, setSearchDraft] = useState(table.filters.search)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [selected, setSelected] = useState<Order | null>(null)
@@ -50,14 +56,15 @@ export default function AdminOrdersPage() {
     variant?: 'danger' | 'default'
   } | null>(null)
 
-  const load = async () => {
+  const params = JSON.stringify(table.queryParams)
+
+  const load = useCallback(async () => {
     setLoading(true)
     setLoadError(null)
     try {
-      const params: Record<string, string | number> = { page, limit: 20 }
-      if (statusFilter) params.status = statusFilter
-      if (userSearch.trim()) params.search = userSearch.trim()
-      const res = await api.get('/v1/admin/orders', { params })
+      const res = await api.get('/v1/admin/orders', {
+        params: { ...JSON.parse(params), limit: 20 },
+      })
       setData(res.data)
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } }
@@ -67,11 +74,13 @@ export default function AdminOrdersPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [params])
 
-  useEffect(() => { load() }, [statusFilter, page])
+  useEffect(() => { load() }, [load])
 
-  const handleSearch = () => { setPage(1); load() }
+  // The draft follows the URL so Back, or a pasted link, refills the box with
+  // the term that produced the list on screen.
+  useEffect(() => { setSearchDraft(table.filters.search) }, [table.filters.search])
 
   const handleDetail = async (id: string) => {
     setDetailLoading(true)
@@ -112,21 +121,32 @@ export default function AdminOrdersPage() {
 
   return (
     <div>
-      <PageHeader title={t('orders.title')} />
+      <PageHeader
+        title={t('orders.title')}
+        actions={<ExportButton resource="orders" params={table.queryParams} />}
+      />
 
       <div className="flex flex-wrap items-center gap-4 mb-4">
-        <Tabs tabs={statusTabs} activeTab={statusFilter} onChange={(v) => { setStatusFilter(v); setPage(1) }} />
-        <div className="flex items-center gap-2 ml-auto">
+        <Tabs
+          tabs={statusTabs}
+          activeTab={table.filters.status}
+          onChange={(status) => table.setFilters({ status })}
+        />
+        <form
+          className="flex items-center gap-2 ml-auto"
+          onSubmit={(e) => { e.preventDefault(); table.setFilters({ search: searchDraft.trim() }) }}
+        >
           <div className="w-64">
             <Input
+              type="search"
+              aria-label={t('orders.searchPlaceholder')}
               placeholder={t('orders.searchPlaceholder')}
-              value={userSearch}
-              onChange={(e) => setUserSearch(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              value={searchDraft}
+              onChange={(e) => setSearchDraft(e.target.value)}
             />
           </div>
-          <Button size="sm" variant="secondary" onClick={handleSearch} icon={<Search className="w-4 h-4" />}>{tc('search')}</Button>
-        </div>
+          <Button size="sm" variant="secondary" type="submit" icon={<Search className="w-4 h-4" />}>{tc('search')}</Button>
+        </form>
       </div>
 
       <Card>
@@ -144,11 +164,19 @@ export default function AdminOrdersPage() {
             <p className="text-sm text-slate-500 mb-3">{t('orders.totalOrders', { count: data.total })}</p>
             <Table>
               <Thead>
-                <tr><Th>{t('orders.tableDate')}</Th><Th>{t('orders.tableUser')}</Th><Th>{t('orders.tableProduct')}</Th><Th>{t('orders.tableAmount')}</Th><Th>{t('orders.tableMode')}</Th><Th>{t('orders.tableStatus')}</Th><Th>{t('orders.tableActions')}</Th></tr>
+                <tr>
+                  <Th sortKey="createdAt" sort={table.sort} onSort={table.toggleSort}>{t('orders.tableDate')}</Th>
+                  <Th sortKey="userId" sort={table.sort} onSort={table.toggleSort}>{t('orders.tableUser')}</Th>
+                  <Th sortKey="product" sort={table.sort} onSort={table.toggleSort}>{t('orders.tableProduct')}</Th>
+                  <Th sortKey="amount" sort={table.sort} onSort={table.toggleSort}>{t('orders.tableAmount')}</Th>
+                  <Th>{t('orders.tableMode')}</Th>
+                  <Th sortKey="status" sort={table.sort} onSort={table.toggleSort}>{t('orders.tableStatus')}</Th>
+                  <Th>{t('orders.tableActions')}</Th>
+                </tr>
               </Thead>
               <Tbody>
                 {data.items.map((order) => (
-                  <tr key={order.id} className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50" onClick={() => handleDetail(order.id)}>
+                  <Tr key={order.id} className="cursor-pointer" onClick={() => handleDetail(order.id)}>
                     <Td>{new Date(order.createdAt).toLocaleDateString()}</Td>
                     <Td className="font-mono text-xs"><CopyableId value={order.userId} /></Td>
                     <Td>{(order as any).price?.product?.name || '-'}</Td>
@@ -156,17 +184,27 @@ export default function AdminOrdersPage() {
                     <Td><Badge variant={order.mode === 'SUBSCRIPTION' ? 'info' : 'default'}>{order.mode}</Badge></Td>
                     <Td><StatusBadge status={order.status} /></Td>
                     <Td>
-                      <div onClick={(e) => e.stopPropagation()}>
+                      {/* The row's click target is a `tr`, which a keyboard
+                          cannot reach. This button is how the detail opens
+                          without a mouse — the row click is the shortcut, not
+                          the only way in. */}
+                      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                        <IconButton
+                          label={t('orders.detailTitle')}
+                          icon={<Eye className="w-4 h-4" />}
+                          tone="primary"
+                          onClick={() => handleDetail(order.id)}
+                        />
                         {order.status === 'paid' && (
                           <Button size="sm" variant="danger" onClick={() => handleRefund(order.id)}>{tc('refund')}</Button>
                         )}
                       </div>
                     </Td>
-                  </tr>
+                  </Tr>
                 ))}
               </Tbody>
             </Table>
-            <Pagination page={data.page} pages={data.pages} onPageChange={setPage} />
+            <Pagination page={data.page} pages={data.pages} onPageChange={table.setPage} />
           </>
         )}
       </Card>

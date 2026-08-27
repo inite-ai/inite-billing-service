@@ -5,8 +5,11 @@ on:
   workflow_call:
   push:
     branches: [main, develop]
+  # Every pull request, not only the ones targeting main. Stacked branches —
+  # a review PR based on a design PR based on main — were opening, being
+  # reviewed and merging without CI ever running on them; the suite first saw
+  # that code as a push to main, which is after the decision, not before it.
   pull_request:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -107,6 +110,12 @@ jobs:
       - name: Typecheck
         working-directory: frontend
         run: npx tsc --noEmit -p tsconfig.json
+
+      # The frontend had no lint step and no ESLint config: `next lint` was
+      # removed in Next 16, so nothing had been linting this app at all.
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
 
       - name: Build
         working-directory: frontend

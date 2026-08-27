@@ -9,5 +9,8 @@ npx eslint "src/**/*.ts" "test/**/*.ts" || { echo "Lint failed — commit blocke
 echo "Running backend build check..."
 npx nest build || { echo "Backend build failed — commit blocked."; exit 1; }
 
+echo "Running frontend lint check..."
+cd frontend && npm run lint || { echo "Frontend lint failed — commit blocked."; exit 1; }
+
 echo "Running frontend build check..."
-cd frontend && npx next build || { echo "Frontend build failed — commit blocked."; exit 1; }
+npx next build || { echo "Frontend build failed — commit blocked."; exit 1; }

@@ -18,7 +18,15 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { User, RequestUser } from '../auth/decorators/user.decorator';
 import { PrismaService } from '../common/services/prisma.service';
 import { AdminOrdersService } from '../admin/services/admin-orders.service';
-import { ReviewAssessmentDto } from './dto/review-assessment.dto';
+import { BulkReviewAssessmentDto, ReviewAssessmentDto } from './dto/review-assessment.dto';
+import { resolveOrderBy, SortWhitelist } from '../common/helpers/sort';
+
+export const RISK_SORT: SortWhitelist = {
+  createdAt: ['createdAt'],
+  score: ['score'],
+  level: ['level'],
+  status: ['status'],
+};
 
 @ApiTags('Admin')
 @Controller('v1/admin/risk')
@@ -36,6 +44,8 @@ export class RiskAdminController {
     @Query('status') status?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: string,
   ) {
     const pageNum = Math.max(parseInt(page || '1', 10) || 1, 1);
     const limitNum = Math.min(Math.max(parseInt(limit || '20', 10) || 20, 1), 100);
@@ -47,7 +57,7 @@ export class RiskAdminController {
         include: {
           order: { include: { price: { include: { product: true } } } },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: resolveOrderBy(RISK_SORT, { createdAt: 'desc' }, sortBy, sortOrder),
         take: limitNum,
         skip: (pageNum - 1) * limitNum,
       }),
@@ -92,6 +102,39 @@ export class RiskAdminController {
     };
   }
 
+  /**
+   * Clear a selection of assessments with one verdict.
+   *
+   * A fraud review can issue a refund, so this is not atomic and does not
+   * pretend to be: each id is reviewed on its own and the response says what
+   * happened to each. One order that cannot be refunded must not abandon the
+   * other nineteen halfway through, and the operator has to be able to see
+   * which ones those were.
+   */
+  @Post('bulk-review')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Review a selection of assessments, reporting each outcome' })
+  async bulkReview(@User() user: RequestUser, @Body() body: BulkReviewAssessmentDto) {
+    const results: Array<{ id: string; ok: boolean; refunded?: boolean; error?: string }> = [];
+
+    for (const id of body.ids) {
+      try {
+        const outcome = await this.reviewOne(user, id, body);
+        results.push({ id, ok: true, refunded: outcome.refunded });
+      } catch (e: any) {
+        results.push({ id, ok: false, error: e?.message ?? 'Failed' });
+      }
+    }
+
+    return {
+      requested: body.ids.length,
+      succeeded: results.filter((r) => r.ok).length,
+      failed: results.filter((r) => !r.ok).length,
+      refunded: results.filter((r) => r.refunded).length,
+      results,
+    };
+  }
+
   @Post(':id/review')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Review a flagged assessment (ok or fraud, optional refund)' })
@@ -100,6 +143,10 @@ export class RiskAdminController {
     @Param('id') id: string,
     @Body() body: ReviewAssessmentDto,
   ) {
+    return this.reviewOne(user, id, body);
+  }
+
+  private async reviewOne(user: RequestUser, id: string, body: ReviewAssessmentDto) {
     if (!['ok', 'fraud'].includes(body.resolution)) {
       throw new BadRequestException('resolution must be "ok" or "fraud"');
     }

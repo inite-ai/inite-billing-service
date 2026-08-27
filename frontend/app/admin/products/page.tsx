@@ -10,7 +10,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { Select } from '@/components/ui/Select'
 import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
 import { ProductForm } from '@/components/admin/ProductForm'
-import { Plus, Trash2, Eye, EyeOff, Package, Loader2 } from 'lucide-react'
+import { Plus, Trash2, Eye, EyeOff, Package } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import { useApiQuery } from '@/hooks/useApiQuery'
@@ -54,7 +54,14 @@ export default function AdminProductsPage() {
   }
 
   const handleDelete = async (id: string) => {
-    const ok = await confirm({ title: t('products.deleteConfirm'), message: t('products.deleteConfirm'), variant: 'danger' })
+    // Deleting a product takes its prices with it; the dialog names which one.
+    const product = (products || []).find((p) => p.id === id)
+    const ok = await confirm({
+      title: t('products.deleteConfirm'),
+      message: t('products.deleteConfirm'),
+      record: product ? `${product.name} · ${product.code}` : id,
+      variant: 'danger',
+    })
     if (!ok) return
     try {
       await api.delete(`/v1/admin/products/${id}`)

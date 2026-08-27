@@ -70,7 +70,7 @@ export function ReferralLevelConfig({ services, nextLevel, onSubmit, onCancel }:
           Qualification Criteria (optional)
         </p>
         <p className="text-xs text-gray-400 mb-3">
-          If an affiliate doesn't meet these conditions, they are ejected and levels shift upward.
+          If an affiliate doesn&apos;t meet these conditions, they are ejected and levels shift upward.
         </p>
         <div className="grid grid-cols-2 gap-3">
           <Input label="Min Direct Referrals" type="number" value={minDirectReferrals} onChange={(e) => setMinDirectReferrals(e.target.value)} placeholder="0" />

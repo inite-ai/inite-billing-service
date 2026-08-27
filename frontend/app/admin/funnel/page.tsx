@@ -3,14 +3,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslations } from 'next-intl'
 import { motion } from 'framer-motion'
-import { Button } from '@/components/ui/Button'
 import { Tabs } from '@/components/ui/Tabs'
 import { Select } from '@/components/ui/Select'
 import {
   Loader2, ShoppingCart, CreditCard, CheckCircle, Users,
   XCircle, TrendingDown, DollarSign, BarChart3, Clock,
-  Bot, Send, Tag, Mail, AlertTriangle,
-  X, Play, Eye, ChevronRight,
+  Bot, Send, Tag, AlertTriangle,
+  X, Eye, ChevronRight,
 } from 'lucide-react'
 import api from '@/lib/api'
 import type { Service } from '@/lib/types'
@@ -437,8 +436,14 @@ function DetailPanel({ item, onClose }: {
 }) {
   const t = useTranslations('admin.funnel')
   const [activeTab, setActiveTab] = useState('overview')
-  const [journeyEvents, setJourneyEvents] = useState<JourneyEvent[]>([])
-  const [journeyLoading, setJourneyLoading] = useState(false)
+  // Keyed by the user whose journey it holds, so "still loading" is a
+  // comparison rather than a flag set from inside the effect — and a failure
+  // is an error, not an empty timeline that reads as "this user did nothing".
+  const [journey, setJourney] = useState<{
+    userId: string
+    events: JourneyEvent[]
+    error?: string
+  } | null>(null)
 
   const tabItems = [
     { key: 'overview', label: t('detailOverview') },
@@ -446,16 +451,34 @@ function DetailPanel({ item, onClose }: {
     { key: 'actions', label: t('detailActions') },
   ]
 
+  const journeyUserId = activeTab === 'timeline' ? item.userId : ''
+  const journeyLoading = !!journeyUserId && journey?.userId !== journeyUserId
+  const journeyEvents = journey?.userId === journeyUserId ? journey.events : []
+
   /* Load journey when timeline tab is selected */
   useEffect(() => {
-    if (activeTab === 'timeline' && item.userId) {
-      setJourneyLoading(true)
-      api.get(`/v1/admin/funnel/user/${item.userId}`)
-        .then(r => setJourneyEvents(r.data?.items || r.data || []))
-        .catch(() => setJourneyEvents([]))
-        .finally(() => setJourneyLoading(false))
+    if (!journeyUserId) return
+    let cancelled = false
+    api
+      .get(`/v1/admin/funnel/user/${journeyUserId}`)
+      .then((r) => {
+        if (!cancelled) {
+          setJourney({ userId: journeyUserId, events: r.data?.items || r.data || [] })
+        }
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return
+        const err = e as { response?: { data?: { message?: string } } }
+        setJourney({
+          userId: journeyUserId,
+          events: [],
+          error: err.response?.data?.message || t('journeyLoadFailed'),
+        })
+      })
+    return () => {
+      cancelled = true
     }
-  }, [activeTab, item.userId])
+  }, [journeyUserId, t])
 
   return (
     <div className="flex flex-col h-full">
@@ -480,7 +503,13 @@ function DetailPanel({ item, onClose }: {
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto p-4">
         {activeTab === 'overview' && <OverviewTab item={item} />}
-        {activeTab === 'timeline' && <TimelineTab events={journeyEvents} loading={journeyLoading} />}
+        {activeTab === 'timeline' && (
+          <TimelineTab
+            events={journeyEvents}
+            loading={journeyLoading}
+            error={journey?.userId === journeyUserId ? journey.error : undefined}
+          />
+        )}
         {activeTab === 'actions' && <ActionsTab item={item} />}
       </div>
     </div>
@@ -597,7 +626,15 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
 /* ====================================================================
    Timeline Tab
    ==================================================================== */
-function TimelineTab({ events, loading }: { events: JourneyEvent[]; loading: boolean }) {
+function TimelineTab({
+  events,
+  loading,
+  error,
+}: {
+  events: JourneyEvent[]
+  loading: boolean
+  error?: string
+}) {
   const t = useTranslations('admin.funnel')
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -613,6 +650,12 @@ function TimelineTab({ events, loading }: { events: JourneyEvent[]; loading: boo
         <Loader2 className="w-5 h-5 animate-spin text-violet-500" />
       </div>
     )
+  }
+
+  // A failed request used to land here as "no data", which claims the user has
+  // no journey rather than that we could not read it.
+  if (error) {
+    return <p className="py-4 text-sm text-red-600 dark:text-red-400">{error}</p>
   }
 
   if (events.length === 0) {

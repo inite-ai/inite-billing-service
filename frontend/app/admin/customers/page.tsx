@@ -7,13 +7,20 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
-import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
+import { Table, Thead, Tbody, Tr, Th, Td } from '@/components/ui/Table'
 import { Pagination } from '@/components/ui/Pagination'
 import { Tabs } from '@/components/ui/Tabs'
-import { Search, Loader2, Users } from 'lucide-react'
+import { Eye, Loader2, Search, Users } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import { StatusBadge } from '@/components/ui/StatusBadge'
+import { CopyableId } from '@/components/ui/CopyableId'
+import { ErrorState } from '@/components/ui/ErrorState'
+import { ExportButton } from '@/components/ui/ExportButton'
+import { IconButton } from '@/components/ui/IconButton'
+import { PageHeader } from '@/components/ui/PageHeader'
+import { TableSkeleton } from '@/components/ui/Skeleton'
+import { useTableState } from '@/hooks/useTableState'
 
 interface CustomerItem {
   userId: string
@@ -81,31 +88,40 @@ export default function AdminCustomersPage() {
   const t = useTranslations('admin')
   const tc = useTranslations('common')
 
+  const table = useTableState({ filters: { search: '' }, defaultSort: 'lastOrderAt' })
+
   const [data, setData] = useState<PaginatedCustomers | null>(null)
-  const [search, setSearch] = useState('')
-  const [page, setPage] = useState(1)
+  const [searchDraft, setSearchDraft] = useState(table.filters.search)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [selected, setSelected] = useState<CustomerDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('summary')
 
+  const params = JSON.stringify(table.queryParams)
+
   const load = useCallback(async () => {
     setLoading(true)
+    setLoadError(null)
     try {
-      const params: Record<string, string | number> = { page, limit: 20 }
-      if (search.trim()) params.search = search.trim()
-      const res = await api.get('/v1/admin/customers', { params })
+      const res = await api.get('/v1/admin/customers', {
+        params: { ...JSON.parse(params), limit: 20 },
+      })
       setData(res.data)
-    } catch {
-      toast.error(tc('errors.loadFailed'))
+    } catch (e: unknown) {
+      // An unreachable API used to render as an empty customer list, which
+      // reads as "this account has no customers".
+      const err = e as { response?: { data?: { message?: string } } }
+      const message = err.response?.data?.message || tc('errors.loadFailed')
+      setLoadError(message)
+      toast.error(message)
     } finally {
       setLoading(false)
     }
-  }, [page, search, tc])
+  }, [params, tc])
 
-  useEffect(() => { load() }, [page]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleSearch = () => { setPage(1); load() }
+  useEffect(() => { load() }, [load])
+  useEffect(() => { setSearchDraft(table.filters.search) }, [table.filters.search])
 
   const handleDetail = async (userId: string) => {
     setDetailLoading(true)
@@ -130,30 +146,35 @@ export default function AdminCustomersPage() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('customers.title')}</h1>
-        <p className="text-sm text-slate-500 mt-1">{t('customers.subtitle')}</p>
-      </div>
+      <PageHeader
+        title={t('customers.title')}
+        subtitle={t('customers.subtitle')}
+        actions={<ExportButton resource="customers" params={table.queryParams} />}
+      />
 
-      <div className="flex items-center gap-2 mb-4">
+      <form
+        className="flex items-center gap-2 mb-4"
+        onSubmit={(e) => { e.preventDefault(); table.setFilters({ search: searchDraft.trim() }) }}
+      >
         <div className="w-72">
           <Input
+            type="search"
+            aria-label={t('customers.searchPlaceholder')}
             placeholder={t('customers.searchPlaceholder')}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+            value={searchDraft}
+            onChange={(e) => setSearchDraft(e.target.value)}
           />
         </div>
-        <Button size="sm" variant="secondary" onClick={handleSearch} icon={<Search className="w-4 h-4" />}>
+        <Button size="sm" variant="secondary" type="submit" icon={<Search className="w-4 h-4" />}>
           {tc('search')}
         </Button>
-      </div>
+      </form>
 
       <Card>
         {loading ? (
-          <div className="flex items-center gap-2 text-slate-500 py-4">
-            <Loader2 className="w-5 h-5 animate-spin" /> {tc('loading')}
-          </div>
+          <TableSkeleton />
+        ) : loadError ? (
+          <ErrorState message={loadError} onRetry={load} />
         ) : !data || data.items.length === 0 ? (
           <div className="text-center py-8">
             <Users className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
@@ -167,23 +188,24 @@ export default function AdminCustomersPage() {
             <Table>
               <Thead>
                 <tr>
-                  <Th>{t('customers.userId')}</Th>
-                  <Th>{t('customers.totalOrders')}</Th>
-                  <Th>{t('customers.totalSpent')}</Th>
+                  <Th sortKey="userId" sort={table.sort} onSort={table.toggleSort}>{t('customers.userId')}</Th>
+                  <Th sortKey="totalOrders" sort={table.sort} onSort={table.toggleSort}>{t('customers.totalOrders')}</Th>
+                  <Th sortKey="totalSpent" sort={table.sort} onSort={table.toggleSort}>{t('customers.totalSpent')}</Th>
                   <Th>{t('customers.activeSubscriptions')}</Th>
                   <Th>{t('customers.creditBalance')}</Th>
-                  <Th>{t('customers.lastOrder')}</Th>
+                  <Th sortKey="lastOrderAt" sort={table.sort} onSort={table.toggleSort}>{t('customers.lastOrder')}</Th>
                   <Th>{t('customers.affiliate')}</Th>
+                  <Th>{tc('actions')}</Th>
                 </tr>
               </Thead>
               <Tbody>
                 {data.items.map((customer) => (
-                  <tr
+                  <Tr
                     key={customer.userId}
-                    className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                    className="cursor-pointer"
                     onClick={() => handleDetail(customer.userId)}
                   >
-                    <Td className="font-mono text-xs">{customer.userId.slice(0, 12)}...</Td>
+                    <Td><CopyableId value={customer.userId} chars={12} /></Td>
                     <Td>{customer.totalOrders}</Td>
                     <Td className="font-semibold">{Number(customer.totalSpent).toFixed(2)}</Td>
                     <Td>{customer.activeSubscriptions}</Td>
@@ -200,11 +222,21 @@ export default function AdminCustomersPage() {
                         <span className="text-slate-400">-</span>
                       )}
                     </Td>
-                  </tr>
+                    <Td>
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <IconButton
+                          label={t('customers.customerDetail')}
+                          icon={<Eye className="w-4 h-4" />}
+                          tone="primary"
+                          onClick={() => handleDetail(customer.userId)}
+                        />
+                      </div>
+                    </Td>
+                  </Tr>
                 ))}
               </Tbody>
             </Table>
-            <Pagination page={data.page} pages={data.pages} onPageChange={setPage} />
+            <Pagination page={data.page} pages={data.pages} onPageChange={table.setPage} />
           </>
         )}
       </Card>

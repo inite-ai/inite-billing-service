@@ -251,10 +251,18 @@ export default function ChatPanel() {
   const [isOpen, setIsOpen] = useState(false)
   const [input, setInput] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  // The transport is built once and its request callback runs long after that
+  // render, so it reads the id through a ref. Rendering needs the same id as
+  // state: read from the ref, the feedback control below only appeared once
+  // something unrelated re-rendered the panel.
   const conversationIdRef = useRef<string | null>(null)
+  const [conversationId, setConversationId] = useState<string | null>(null)
   const t = useTranslations('assistant')
 
   const [transport] = useState(
+    // The ref below is read when a message is sent, not while rendering — the
+    // transport instance is built once and outlives this render.
+    // eslint-disable-next-line react-hooks/refs
     () =>
       new DefaultChatTransport<UIMessage>({
         api: `${API_URL}/v1/assistant/chat`,
@@ -282,7 +290,10 @@ export default function ChatPanel() {
     onData: (dataPart) => {
       if (dataPart.type === 'data-conversation') {
         const data = dataPart.data as { conversationId?: string }
-        if (data?.conversationId) conversationIdRef.current = data.conversationId
+        if (data?.conversationId) {
+          conversationIdRef.current = data.conversationId
+          setConversationId(data.conversationId)
+        }
       }
     },
   })
@@ -394,9 +405,9 @@ export default function ChatPanel() {
                     {actions.map((action) => (
                       <ActionConfirmCard key={action.id} action={action} />
                     ))}
-                    {dbMessageId && conversationIdRef.current && !isLoading && (
+                    {dbMessageId && conversationId && !isLoading && (
                       <FeedbackRow
-                        conversationId={conversationIdRef.current}
+                        conversationId={conversationId}
                         messageId={dbMessageId}
                       />
                     )}

@@ -1,6 +1,28 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../common/services/prisma.service';
 import { paginate } from '../../common/helpers/paginate';
+import { resolveOrderBy, SortWhitelist } from '../../common/helpers/sort';
+
+export const AFFILIATE_SORT: SortWhitelist = {
+  createdAt: ['createdAt'],
+  referralCode: ['referralCode'],
+  status: ['status'],
+  totalEarned: ['totalEarned'],
+  totalPaid: ['totalPaid'],
+  referrals: ['referrals', '_count'],
+};
+
+/**
+ * A payout run is worked by size and by age, not by insertion order: the
+ * operator clearing tonight's queue wants the largest amounts checked first.
+ */
+export const PAYOUT_SORT: SortWhitelist = {
+  createdAt: ['createdAt'],
+  totalAmount: ['totalAmount'],
+  status: ['status'],
+  periodStart: ['periodStart'],
+  affiliate: ['affiliate', 'referralCode'],
+};
 
 @Injectable()
 export class AdminAffiliatesService {
@@ -11,8 +33,10 @@ export class AdminAffiliatesService {
     serviceId?: string;
     page?: number;
     limit?: number;
+    sortBy?: string;
+    sortOrder?: string;
   }) {
-    const { status, serviceId, page, limit } = params;
+    const { status, serviceId, page, limit, sortBy, sortOrder } = params;
     const where: any = {};
     if (status) where.status = status;
     if (serviceId) where.serviceId = serviceId;
@@ -20,7 +44,7 @@ export class AdminAffiliatesService {
     return paginate(this.prisma.affiliate, where, {
       page,
       limit,
-      orderBy: { createdAt: 'desc' },
+      orderBy: resolveOrderBy(AFFILIATE_SORT, { createdAt: 'desc' }, sortBy, sortOrder),
       include: {
         _count: { select: { referrals: true, commissions: true } },
       },
@@ -44,15 +68,21 @@ export class AdminAffiliatesService {
     });
   }
 
-  async getPayouts(params: { status?: string; page?: number; limit?: number }) {
-    const { status, page, limit } = params;
+  async getPayouts(params: {
+    status?: string;
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortOrder?: string;
+  }) {
+    const { status, page, limit, sortBy, sortOrder } = params;
     const where: any = {};
     if (status) where.status = status;
 
     return paginate(this.prisma.affiliatePayout, where, {
       page,
       limit,
-      orderBy: { createdAt: 'desc' },
+      orderBy: resolveOrderBy(PAYOUT_SORT, { createdAt: 'desc' }, sortBy, sortOrder),
       include: { affiliate: true },
     });
   }
@@ -70,6 +100,41 @@ export class AdminAffiliatesService {
       where: { id },
       data: { status: 'paid', processedAt: new Date() },
     });
+  }
+
+  /**
+   * Apply one action to a selection of payouts.
+   *
+   * Not atomic, and deliberately not presented as such: each payout is its own
+   * transaction and the response carries a per-id verdict, so a payout that is
+   * already paid or already failed stops itself without taking the other
+   * nineteen down with it. The caller shows the operator exactly which ones
+   * went through and why the rest did not.
+   *
+   * Sequential on purpose — `failPayout` reverses an affiliate's balance, and
+   * running a batch in parallel would have several of those contending for the
+   * same affiliate row.
+   */
+  async bulkPayoutAction(params: { ids: string[]; action: 'process' | 'fail'; reason?: string }) {
+    const { ids, action, reason } = params;
+    const results: Array<{ id: string; ok: boolean; status?: string; error?: string }> = [];
+
+    for (const id of ids) {
+      try {
+        const payout =
+          action === 'process' ? await this.processPayout(id) : await this.failPayout(id, reason);
+        results.push({ id, ok: true, status: payout.status });
+      } catch (e: any) {
+        results.push({ id, ok: false, error: e?.message ?? 'Failed' });
+      }
+    }
+
+    return {
+      requested: ids.length,
+      succeeded: results.filter((r) => r.ok).length,
+      failed: results.filter((r) => !r.ok).length,
+      results,
+    };
   }
 
   async failPayout(id: string, reason?: string) {

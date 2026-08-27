@@ -1,4 +1,14 @@
-import { IsBoolean, IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  ArrayMaxSize,
+  ArrayNotEmpty,
+  IsArray,
+  IsBoolean,
+  IsIn,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+} from 'class-validator';
 
 /**
  * Body for POST /v1/admin/risk/:id/review. `refund` moves money, so the
@@ -17,4 +27,20 @@ export class ReviewAssessmentDto {
   @IsOptional()
   @IsBoolean()
   refund?: boolean;
+}
+
+/** The most assessments one bulk review may carry. */
+export const BULK_REVIEW_MAX = 200;
+
+/**
+ * Body for POST /v1/admin/risk/bulk-review. Same resolution for every id in
+ * the selection — clearing a run of false positives is one decision applied
+ * many times, not many decisions.
+ */
+export class BulkReviewAssessmentDto extends ReviewAssessmentDto {
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(BULK_REVIEW_MAX)
+  @IsUUID('4', { each: true })
+  ids!: string[];
 }
