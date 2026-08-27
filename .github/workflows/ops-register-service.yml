@@ -27,7 +27,7 @@ on:
 
 jobs:
   register:
-    runs-on: self-hosted
+    runs-on: [self-hosted, sfo]
     steps:
       - name: Register service row (idempotent upsert)
         env:
