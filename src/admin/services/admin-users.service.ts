@@ -10,15 +10,15 @@ import { resolveOrderBy, SortWhitelist } from '../../common/helpers/sort';
  * Prisma can express here. Kept separate from {@link resolveOrderBy} for that
  * reason, and the keys match what the table's headers offer.
  */
-const CUSTOMER_SORT: Record<
+const CUSTOMER_SORT = new Map<
   string,
   (dir: 'asc' | 'desc') => Prisma.OrderOrderByWithAggregationInput
-> = {
-  lastOrderAt: (dir) => ({ _max: { createdAt: dir } }),
-  totalSpent: (dir) => ({ _sum: { amount: dir } }),
-  totalOrders: (dir) => ({ _count: { id: dir } }),
-  userId: (dir) => ({ userId: dir }),
-};
+>([
+  ['lastOrderAt', (dir) => ({ _max: { createdAt: dir } })],
+  ['totalSpent', (dir) => ({ _sum: { amount: dir } })],
+  ['totalOrders', (dir) => ({ _count: { id: dir } })],
+  ['userId', (dir) => ({ userId: dir })],
+]);
 
 export const ENTITLEMENT_SORT: SortWhitelist = {
   createdAt: (dir) => ({ createdAt: dir }),
@@ -111,10 +111,9 @@ export class AdminUsersService {
     const whereClause: any = search ? { userId: { contains: search } } : {};
 
     const sortDir: 'asc' | 'desc' = sortOrder?.trim().toLowerCase() === 'asc' ? 'asc' : 'desc';
-    const buildSort =
-      sortBy && Object.prototype.hasOwnProperty.call(CUSTOMER_SORT, sortBy)
-        ? CUSTOMER_SORT[sortBy]
-        : null;
+    // A `Map`, not an object indexed by the query string: indexing by an
+    // untrusted name reaches the prototype whatever guard sits in front of it.
+    const buildSort = sortBy ? CUSTOMER_SORT.get(sortBy) : undefined;
 
     // `groupBy` types its `orderBy` as a union of literal error strings unless
     // the sort is written inline, which a runtime-chosen sort cannot be. The

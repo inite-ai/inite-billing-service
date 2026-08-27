@@ -20,6 +20,27 @@ export type SortWhitelist = Record<string, SortBuilder>;
  * order for each OFFSET, so a record can appear on both page 1 and page 2 while
  * another is never shown at all.
  */
+/**
+ * Whitelists are written as object literals because that is the readable way to
+ * declare them, but a client-supplied key is never used to index one: the
+ * entries are copied into a `Map` (own enumerable properties only) and looked
+ * up there. Indexing an object by an untrusted name reaches `constructor`,
+ * `toString` and everything else on the prototype, and no `hasOwnProperty`
+ * guard makes that obvious to a reader — or to a scanner.
+ *
+ * Cached per whitelist, since each one is a module-level constant.
+ */
+const lookupTables = new WeakMap<SortWhitelist, Map<string, SortBuilder>>();
+
+function lookup(allowed: SortWhitelist, key: string): SortBuilder | undefined {
+  let table = lookupTables.get(allowed);
+  if (!table) {
+    table = new Map(Object.entries(allowed));
+    lookupTables.set(allowed, table);
+  }
+  return table.get(key);
+}
+
 export function resolveOrderBy(
   allowed: SortWhitelist,
   fallback: any,
@@ -27,11 +48,11 @@ export function resolveOrderBy(
   sortOrder?: string,
 ): any[] {
   const key = sortBy?.trim();
-  const known = !!key && Object.prototype.hasOwnProperty.call(allowed, key);
+  const build = key ? lookup(allowed, key) : undefined;
   const dir: SortDirection = sortOrder?.trim().toLowerCase() === 'asc' ? 'asc' : 'desc';
 
-  const primary = known ? allowed[key as string](dir) : fallback;
-  const tiebreak = { id: known ? dir : 'desc' };
+  const primary = build ? build(dir) : fallback;
+  const tiebreak = { id: build ? dir : 'desc' };
 
   return Array.isArray(primary) ? [...primary, tiebreak] : [primary, tiebreak];
 }

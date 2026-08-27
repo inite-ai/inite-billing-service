@@ -29,10 +29,14 @@ describe('resolveOrderBy', () => {
   });
 
   it('does not treat inherited object properties as sort keys', () => {
-    expect(resolveOrderBy(ORDER_SORT, { createdAt: 'desc' }, 'constructor')).toEqual([
-      { createdAt: 'desc' },
-      { id: 'desc' },
-    ]);
+    // The whitelist is read through a Map built from its own entries, so a
+    // prototype name is simply absent rather than a function to be called.
+    for (const key of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) {
+      expect(resolveOrderBy(ORDER_SORT, { createdAt: 'desc' }, key)).toEqual([
+        { createdAt: 'desc' },
+        { id: 'desc' },
+      ]);
+    }
   });
 
   it('honours a whitelisted column in both directions', () => {
