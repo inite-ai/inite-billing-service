@@ -108,21 +108,20 @@ jobs:
       needs.changes.outputs.backend == 'true'
       && needs.changes.outputs.infra != 'true'
       && github.event.inputs.force_all != 'true'
-    runs-on: self-hosted
+    runs-on: [self-hosted, sfo]
     steps:
     - name: Confirm this runner is the billing origin host
       run: |
-        # Two self-hosted runners answer the bare `self-hosted` label and only
-        # one of them serves billing.inite.ai. A job that lands on the other
-        # pulled the image, recreated the container against a database that is
-        # not there, and reported a confusing "P1001: can't reach postgres"
-        # while production silently stayed on the previous image.
-        #
-        # The shared Postgres container is the precondition every step below
-        # already assumes (the migration baseline runs `docker exec postgres`),
-        # so check it explicitly instead of failing three steps later.
+        # `runs-on` pins this to the `sfo` runner, which is the box that serves
+        # billing.inite.ai. This check stays as the backstop: the shared
+        # Postgres container is the precondition every step below already
+        # assumes (the migration baseline runs `docker exec postgres`), so if
+        # the pin is ever loosened or the label lands on a second machine, the
+        # job says so here instead of failing three steps later — or, as it did
+        # on 2026-08-09, reporting success while production stayed on the old
+        # image.
         if ! docker ps --format '{{.Names}}' | grep -qx 'postgres'; then
-          echo "::error::Runner $(hostname) is not the billing origin: no 'postgres' container. Re-run so the job lands on the origin runner, or give that runner a dedicated label and pin runs-on to it."
+          echo "::error::Runner $(hostname) is not the billing origin: no 'postgres' container. Check that the 'sfo' label is on the billing origin runner only."
           exit 1
         fi
     - uses: docker/login-action@v4
@@ -184,21 +183,20 @@ jobs:
       needs.changes.outputs.frontend == 'true'
       && needs.changes.outputs.infra != 'true'
       && github.event.inputs.force_all != 'true'
-    runs-on: self-hosted
+    runs-on: [self-hosted, sfo]
     steps:
     - name: Confirm this runner is the billing origin host
       run: |
-        # Two self-hosted runners answer the bare `self-hosted` label and only
-        # one of them serves billing.inite.ai. A job that lands on the other
-        # pulled the image, recreated the container against a database that is
-        # not there, and reported a confusing "P1001: can't reach postgres"
-        # while production silently stayed on the previous image.
-        #
-        # The shared Postgres container is the precondition every step below
-        # already assumes (the migration baseline runs `docker exec postgres`),
-        # so check it explicitly instead of failing three steps later.
+        # `runs-on` pins this to the `sfo` runner, which is the box that serves
+        # billing.inite.ai. This check stays as the backstop: the shared
+        # Postgres container is the precondition every step below already
+        # assumes (the migration baseline runs `docker exec postgres`), so if
+        # the pin is ever loosened or the label lands on a second machine, the
+        # job says so here instead of failing three steps later — or, as it did
+        # on 2026-08-09, reporting success while production stayed on the old
+        # image.
         if ! docker ps --format '{{.Names}}' | grep -qx 'postgres'; then
-          echo "::error::Runner $(hostname) is not the billing origin: no 'postgres' container. Re-run so the job lands on the origin runner, or give that runner a dedicated label and pin runs-on to it."
+          echo "::error::Runner $(hostname) is not the billing origin: no 'postgres' container. Check that the 'sfo' label is on the billing origin runner only."
           exit 1
         fi
     - uses: docker/login-action@v4
@@ -239,21 +237,20 @@ jobs:
   deploy-infra:
     needs: [tests, changes, build-backend, build-frontend]
     if: needs.changes.outputs.infra == 'true' || github.event.inputs.force_all == 'true'
-    runs-on: self-hosted
+    runs-on: [self-hosted, sfo]
     steps:
     - name: Confirm this runner is the billing origin host
       run: |
-        # Two self-hosted runners answer the bare `self-hosted` label and only
-        # one of them serves billing.inite.ai. A job that lands on the other
-        # pulled the image, recreated the container against a database that is
-        # not there, and reported a confusing "P1001: can't reach postgres"
-        # while production silently stayed on the previous image.
-        #
-        # The shared Postgres container is the precondition every step below
-        # already assumes (the migration baseline runs `docker exec postgres`),
-        # so check it explicitly instead of failing three steps later.
+        # `runs-on` pins this to the `sfo` runner, which is the box that serves
+        # billing.inite.ai. This check stays as the backstop: the shared
+        # Postgres container is the precondition every step below already
+        # assumes (the migration baseline runs `docker exec postgres`), so if
+        # the pin is ever loosened or the label lands on a second machine, the
+        # job says so here instead of failing three steps later — or, as it did
+        # on 2026-08-09, reporting success while production stayed on the old
+        # image.
         if ! docker ps --format '{{.Names}}' | grep -qx 'postgres'; then
-          echo "::error::Runner $(hostname) is not the billing origin: no 'postgres' container. Re-run so the job lands on the origin runner, or give that runner a dedicated label and pin runs-on to it."
+          echo "::error::Runner $(hostname) is not the billing origin: no 'postgres' container. Check that the 'sfo' label is on the billing origin runner only."
           exit 1
         fi
     - uses: docker/login-action@v4
