@@ -19,6 +19,7 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { ErrorState } from '@/components/ui/ErrorState'
+import { CopyableId } from '@/components/ui/CopyableId'
 
 export default function AdminSubscriptionsPage() {
   const t = useTranslations('admin')
@@ -43,6 +44,7 @@ export default function AdminSubscriptionsPage() {
     isOpen: boolean
     title: string
     message: string
+    record?: string
     onConfirm: () => Promise<void>
     variant?: 'danger' | 'default'
   } | null>(null)
@@ -127,7 +129,7 @@ export default function AdminSubscriptionsPage() {
               <Tbody>
                 {data.items.map((sub) => (
                   <tr key={sub.id} className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50" onClick={() => setSelected(sub)}>
-                    <Td className="font-mono text-xs">{sub.userId.slice(0, 8)}...</Td>
+                    <Td className="font-mono text-xs"><CopyableId value={sub.userId} /></Td>
                     <Td>{sub.productName || sub.productCode || '-'}</Td>
                     <Td>{sub.amount ? `${sub.amount} ${sub.currency}/${sub.interval || 'mo'}` : '-'}</Td>
                     <Td><StatusBadge status={sub.status} /></Td>
@@ -188,6 +190,7 @@ export default function AdminSubscriptionsPage() {
           onConfirm={confirmState.onConfirm}
           title={confirmState.title}
           message={confirmState.message}
+          record={confirmState.record}
           variant={confirmState.variant}
         />
       )}

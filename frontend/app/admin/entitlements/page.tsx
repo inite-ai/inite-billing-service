@@ -19,6 +19,7 @@ import type { Entitlement, PaginatedResponse } from '@/lib/types'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { ErrorState } from '@/components/ui/ErrorState'
+import { CopyableId } from '@/components/ui/CopyableId'
 
 export default function AdminEntitlementsPage() {
   const t = useTranslations('admin')
@@ -42,6 +43,7 @@ export default function AdminEntitlementsPage() {
     isOpen: boolean
     title: string
     message: string
+    record?: string
     onConfirm: () => Promise<void>
     variant?: 'danger' | 'default'
   } | null>(null)
@@ -133,7 +135,7 @@ export default function AdminEntitlementsPage() {
               <Tbody>
                 {data.items.map((e) => (
                   <tr key={e.id}>
-                    <Td className="font-mono text-xs">{e.userId.slice(0, 8)}...</Td>
+                    <Td className="font-mono text-xs"><CopyableId value={e.userId} /></Td>
                     <Td className="font-mono font-semibold">{e.key}</Td>
                     <Td><Badge variant={e.source === 'admin' ? 'warning' : 'default'}>{e.source}</Badge></Td>
                     <Td><StatusBadge status={e.status} /></Td>
@@ -163,6 +165,7 @@ export default function AdminEntitlementsPage() {
           onConfirm={confirmState.onConfirm}
           title={confirmState.title}
           message={confirmState.message}
+          record={confirmState.record}
           variant={confirmState.variant}
         />
       )}

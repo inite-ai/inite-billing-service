@@ -13,6 +13,9 @@ import { Search, Loader2, Coins, ChevronDown, ChevronRight } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import type { CreditBalance, CreditUsage, Service } from '@/lib/types'
+import { ErrorState } from '@/components/ui/ErrorState'
+import { TableSkeleton } from '@/components/ui/Skeleton'
+import { CopyableId } from '@/components/ui/CopyableId'
 
 type UsageBadgeType = CreditUsage['type']
 
@@ -33,6 +36,7 @@ export default function AdminCreditsPage() {
   const [userSearch, setUserSearch] = useState('')
   const [serviceFilter, setServiceFilter] = useState('')
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   // Expanded row state
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -47,14 +51,18 @@ export default function AdminCreditsPage() {
 
   const loadBalances = useCallback(async () => {
     setLoading(true)
+    setLoadError(null)
     try {
       const params: Record<string, string> = {}
       if (userSearch.trim()) params.userId = userSearch.trim()
       if (serviceFilter) params.serviceId = serviceFilter
       const res = await api.get('/v1/admin/credits', { params })
       setBalances(Array.isArray(res.data) ? res.data : res.data.items || [])
-    } catch {
-      setBalances([])
+    } catch (e: unknown) {
+      // Was `setBalances([])`: an outage rendered as an authoritative empty
+      // ledger, which is a different and worse claim than "this failed".
+      const err = e as { response?: { data?: { message?: string } } }
+      setLoadError(err.response?.data?.message || tc('loadFailed'))
     } finally {
       setLoading(false)
     }
@@ -174,9 +182,9 @@ export default function AdminCreditsPage() {
 
       <Card>
         {loading ? (
-          <div className="flex items-center gap-2 text-slate-500 py-4">
-            <Loader2 className="w-5 h-5 animate-spin" /> {tc('loading')}
-          </div>
+          <TableSkeleton />
+        ) : loadError ? (
+          <ErrorState message={loadError} onRetry={loadBalances} />
         ) : balances.length === 0 ? (
           <div className="text-center py-8">
             <Coins className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
@@ -211,7 +219,7 @@ export default function AdminCreditsPage() {
                         <ChevronRight className="w-4 h-4 text-slate-400" />
                       )}
                     </Td>
-                    <Td className="font-mono text-xs">{bal.userId.slice(0, 8)}...</Td>
+                    <Td className="font-mono text-xs"><CopyableId value={bal.userId} /></Td>
                     <Td>{bal.service?.name || bal.serviceId || <span className="text-slate-400">{tc('na')}</span>}</Td>
                     <Td className="font-semibold">{bal.balance}</Td>
                     <Td>{bal.totalGranted}</Td>
@@ -296,6 +304,41 @@ export default function AdminCreditsPage() {
         title={t('credits.adjust')}
       >
         <div className="space-y-4">
+          {/* The modal used to show an amount box and nothing else: no whose
+              balance, no current value, no result. A wrong row click credited a
+              stranger with no way to tell afterwards. */}
+          {adjustTarget && (
+            <div className="rounded-lg bg-slate-50 px-3 py-2.5 dark:bg-slate-800">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-xs text-slate-500 dark:text-slate-400">
+                  {t('credits.tableUser')}
+                </span>
+                <CopyableId value={adjustTarget.userId} chars={12} />
+              </div>
+              <div className="mt-1.5 flex items-baseline justify-between gap-3">
+                <span className="text-xs text-slate-500 dark:text-slate-400">
+                  {t('credits.adjustNewBalance')}
+                </span>
+                <span className="font-mono text-sm text-slate-900 tabular-nums dark:text-slate-100">
+                  {adjustTarget.balance}
+                  {adjustAmount && !Number.isNaN(Number(adjustAmount)) && (
+                    <>
+                      {' → '}
+                      <strong
+                        className={
+                          Number(adjustTarget.balance) + Number(adjustAmount) < 0
+                            ? 'text-red-600 dark:text-red-400'
+                            : 'text-emerald-600 dark:text-emerald-400'
+                        }
+                      >
+                        {Number(adjustTarget.balance) + Number(adjustAmount)}
+                      </strong>
+                    </>
+                  )}
+                </span>
+              </div>
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">
               {t('credits.adjustAmount')}
@@ -331,7 +374,7 @@ export default function AdminCreditsPage() {
             </Button>
             <Button
               onClick={handleAdjust}
-              disabled={!adjustAmount || adjustSubmitting}
+              disabled={!adjustAmount || !adjustReason.trim() || adjustSubmitting}
             >
               {adjustSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : tc('confirm')}
             </Button>

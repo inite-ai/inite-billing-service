@@ -19,6 +19,7 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { ErrorState } from '@/components/ui/ErrorState'
+import { CopyableId } from '@/components/ui/CopyableId'
 
 export default function AdminOrdersPage() {
   const t = useTranslations('admin')
@@ -44,6 +45,7 @@ export default function AdminOrdersPage() {
     isOpen: boolean
     title: string
     message: string
+    record?: string
     onConfirm: () => Promise<void>
     variant?: 'danger' | 'default'
   } | null>(null)
@@ -54,7 +56,7 @@ export default function AdminOrdersPage() {
     try {
       const params: Record<string, string | number> = { page, limit: 20 }
       if (statusFilter) params.status = statusFilter
-      if (userSearch.trim()) params.userId = userSearch.trim()
+      if (userSearch.trim()) params.search = userSearch.trim()
       const res = await api.get('/v1/admin/orders', { params })
       setData(res.data)
     } catch (e: unknown) {
@@ -84,10 +86,14 @@ export default function AdminOrdersPage() {
   }
 
   const handleRefund = (id: string) => {
+    // The amount is one column away in the table the operator is looking at;
+    // the dialog used to ask "Refund this order?" without carrying any of it.
+    const order = data?.items.find((o) => o.id === id) ?? selected
     setConfirmState({
       isOpen: true,
       title: t('orders.refundConfirm'),
       message: t('orders.refundConfirm'),
+      record: order ? `${order.amount} ${order.currency} · ${order.id}` : id,
       variant: 'danger',
       onConfirm: async () => {
         try {
@@ -144,7 +150,7 @@ export default function AdminOrdersPage() {
                 {data.items.map((order) => (
                   <tr key={order.id} className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50" onClick={() => handleDetail(order.id)}>
                     <Td>{new Date(order.createdAt).toLocaleDateString()}</Td>
-                    <Td className="font-mono text-xs">{order.userId.slice(0, 8)}...</Td>
+                    <Td className="font-mono text-xs"><CopyableId value={order.userId} /></Td>
                     <Td>{(order as any).price?.product?.name || '-'}</Td>
                     <Td className="font-semibold">{order.amount} {order.currency}</Td>
                     <Td><Badge variant={order.mode === 'SUBSCRIPTION' ? 'info' : 'default'}>{order.mode}</Badge></Td>
@@ -226,6 +232,7 @@ export default function AdminOrdersPage() {
           onConfirm={confirmState.onConfirm}
           title={confirmState.title}
           message={confirmState.message}
+          record={confirmState.record}
           variant={confirmState.variant}
         />
       )}

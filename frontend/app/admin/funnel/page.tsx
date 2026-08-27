@@ -10,11 +10,12 @@ import {
   Loader2, ShoppingCart, CreditCard, CheckCircle, Users,
   XCircle, TrendingDown, DollarSign, BarChart3, Clock,
   Bot, Send, Tag, Mail, AlertTriangle,
-  X, Play, Eye,
+  X, Play, Eye, ChevronRight,
 } from 'lucide-react'
 import api from '@/lib/api'
 import type { Service } from '@/lib/types'
 import AiInsightsCard from '@/components/admin/AiInsightsCard'
+import Link from 'next/link'
 
 /* ---------- types ---------- */
 interface PipelineItem {
@@ -207,10 +208,6 @@ export default function AdminFunnelPage() {
     ...services.map(s => ({ value: s.id, label: s.name || s.code })),
   ]
 
-  const triggerAction = () => {
-    setToastMessage(t('actionTriggered'))
-  }
-
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
@@ -265,7 +262,6 @@ export default function AdminFunnelPage() {
               <DetailPanel
                 item={selectedItem}
                 onClose={() => setSelectedItem(null)}
-                onAction={triggerAction}
               />
             </motion.div>
           )}
@@ -435,10 +431,9 @@ function PipelineCard({ item, isSelected, onClick }: {
 /* ====================================================================
    Detail Panel
    ==================================================================== */
-function DetailPanel({ item, onClose, onAction }: {
+function DetailPanel({ item, onClose }: {
   item: PipelineItem
   onClose: () => void
-  onAction: () => void
 }) {
   const t = useTranslations('admin.funnel')
   const [activeTab, setActiveTab] = useState('overview')
@@ -486,7 +481,7 @@ function DetailPanel({ item, onClose, onAction }: {
       <div className="flex-1 overflow-y-auto p-4">
         {activeTab === 'overview' && <OverviewTab item={item} />}
         {activeTab === 'timeline' && <TimelineTab events={journeyEvents} loading={journeyLoading} />}
-        {activeTab === 'actions' && <ActionsTab item={item} onAction={onAction} />}
+        {activeTab === 'actions' && <ActionsTab item={item} />}
       </div>
     </div>
   )
@@ -670,72 +665,65 @@ function TimelineTab({ events, loading }: { events: JourneyEvent[]; loading: boo
 /* ====================================================================
    Actions Tab
    ==================================================================== */
-function ActionsTab({ item, onAction }: { item: PipelineItem; onAction: () => void }) {
+function ActionsTab({ item }: { item: PipelineItem }) {
   const t = useTranslations('admin.funnel')
 
-  const stageActions: Record<string, Array<{
-    labelKey: string
-    descKey: string
-    icon: typeof Send
-    variant: 'primary' | 'secondary' | 'danger' | 'outline'
-  }>> = {
+  // These buttons used to call `triggerAction`, which showed a success toast
+  // and made no request at all — an operator clicked "Send reminder", was told
+  // it worked, and the customer heard nothing. There is no on-demand outreach
+  // endpoint: `OutreachTriggersScheduler` enqueues abandoned-checkout, dunning,
+  // trial-ending and win-back messages on a schedule. So the tab now says what
+  // is actually true and links to the places where an operator can act.
+  const destinations: Record<string, Array<{ labelKey: string; descKey: string; href: string; icon: typeof Send }>> = {
     checkout: [
-      { labelKey: 'actionSendReminder', descKey: 'sendReminderDesc', icon: Send, variant: 'primary' },
-      { labelKey: 'actionMarkLost', descKey: 'markLostDesc', icon: XCircle, variant: 'danger' },
+      { labelKey: 'openOutreach', descKey: 'openOutreachDesc', href: '/admin/outreach', icon: Send },
+      { labelKey: 'openOrder', descKey: 'openOrderDesc', href: '/admin/orders', icon: Eye },
     ],
-    payment: [
-      { labelKey: 'actionCheckPayment', descKey: 'checkPaymentDesc', icon: Eye, variant: 'primary' },
-    ],
+    payment: [{ labelKey: 'openOrder', descKey: 'openOrderDesc', href: '/admin/orders', icon: Eye }],
     conversion: [],
     retention: [],
     churning: [
-      { labelKey: 'actionRetentionOffer', descKey: 'retentionOfferDesc', icon: Mail, variant: 'primary' },
-      { labelKey: 'actionCreatePromo', descKey: 'createPromoDesc', icon: Tag, variant: 'outline' },
+      { labelKey: 'openOutreach', descKey: 'openOutreachDesc', href: '/admin/outreach', icon: Send },
+      { labelKey: 'openPromoCodes', descKey: 'openPromoCodesDesc', href: '/admin/promo-codes', icon: Tag },
     ],
-    churned: [
-      { labelKey: 'actionWinBack', descKey: 'winBackDesc', icon: Mail, variant: 'primary' },
-    ],
+    churned: [{ labelKey: 'openOutreach', descKey: 'openOutreachDesc', href: '/admin/outreach', icon: Send }],
   }
 
-  const actions = stageActions[item.stage] || []
-
-  if (actions.length === 0) {
-    return (
-      <div className="text-center py-8">
-        <CheckCircle className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
-        <p className="text-sm text-slate-500">No actions available for this stage</p>
-      </div>
-    )
-  }
+  const links = destinations[item.stage] || []
 
   return (
     <div className="space-y-3">
-      {actions.map(action => {
-        const Icon = action.icon
-        return (
-          <div key={action.labelKey} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
-            <div className="flex items-start gap-3">
-              <div className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
-                <Icon className="w-4 h-4 text-slate-600 dark:text-slate-300" />
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/50">
+        <p className="text-sm font-medium text-slate-900 dark:text-white">{t('automatedTitle')}</p>
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t('automatedBody')}</p>
+      </div>
+
+      {links.length === 0 ? (
+        <div className="py-6 text-center">
+          <CheckCircle className="mx-auto mb-2 h-8 w-8 text-emerald-400" />
+          <p className="text-sm text-slate-500">{t('noActions')}</p>
+        </div>
+      ) : (
+        links.map((link) => {
+          const Icon = link.icon
+          return (
+            <Link
+              key={link.labelKey}
+              href={link.href}
+              className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 transition-colors hover:border-violet-300 hover:bg-violet-50/40 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-violet-700 dark:hover:bg-violet-900/10"
+            >
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-700">
+                <Icon className="h-4 w-4 text-slate-600 dark:text-slate-300" />
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-slate-900 dark:text-white">{t(action.labelKey)}</p>
-                <p className="text-xs text-slate-500 mt-0.5">{t(action.descKey)}</p>
-                <div className="mt-3">
-                  <Button
-                    size="sm"
-                    variant={action.variant}
-                    onClick={onAction}
-                    icon={<Play className="w-3 h-3" />}
-                  >
-                    {t(action.labelKey)}
-                  </Button>
-                </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-slate-900 dark:text-white">{t(link.labelKey)}</p>
+                <p className="mt-0.5 text-xs text-slate-500">{t(link.descKey)}</p>
               </div>
-            </div>
-          </div>
-        )
-      })}
+              <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+            </Link>
+          )
+        })
+      )}
     </div>
   )
 }

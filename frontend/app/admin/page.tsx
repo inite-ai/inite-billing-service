@@ -15,6 +15,7 @@ import api from '@/lib/api'
 import type { AdminStats, Order, PaginatedResponse } from '@/lib/types'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { StatusBadge } from '@/components/ui/StatusBadge'
+import { CopyableId } from '@/components/ui/CopyableId'
 
 export default function AdminDashboardPage() {
   const t = useTranslations('admin')
@@ -104,7 +105,7 @@ export default function AdminDashboardPage() {
                   {recentOrders.map((o) => (
                     <tr key={o.id}>
                       <Td>{new Date(o.createdAt).toLocaleDateString()}</Td>
-                      <Td className="font-mono text-xs">{o.userId.slice(0, 8)}...</Td>
+                      <Td className="font-mono text-xs"><CopyableId value={o.userId} /></Td>
                       <Td className="font-semibold">{o.amount} {o.currency}</Td>
                       <Td><StatusBadge status={o.status} /></Td>
                     </tr>

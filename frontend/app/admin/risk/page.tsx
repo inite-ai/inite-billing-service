@@ -9,6 +9,8 @@ import { ShieldAlert, Loader2, ChevronDown, ChevronUp } from 'lucide-react'
 import toast from 'react-hot-toast'
 import api from '@/lib/api'
 import { IconButton } from '@/components/ui/IconButton'
+import { ErrorState } from '@/components/ui/ErrorState'
+import { TableSkeleton } from '@/components/ui/Skeleton'
 
 interface RiskRow {
   id: string
@@ -47,12 +49,14 @@ export default function AdminRiskPage() {
   const [rows, setRows] = useState<RiskRow[]>([])
   const [stats, setStats] = useState<RiskStats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState('')
   const [expanded, setExpanded] = useState<string | null>(null)
   const [reviewing, setReviewing] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
+    setLoadError(null)
     try {
       const [listRes, statsRes] = await Promise.all([
         api.get('/v1/admin/risk/flagged', {
@@ -62,6 +66,12 @@ export default function AdminRiskPage() {
       ])
       setRows(listRes.data.items ?? [])
       setStats(statsRes.data)
+    } catch (e: unknown) {
+      // Without this the fraud queue answered "nothing flagged" whenever the
+      // API was down — a false all-clear on the one screen that must not give
+      // one.
+      const err = e as { response?: { data?: { message?: string } } }
+      setLoadError(err.response?.data?.message || tc('loadFailed'))
     } finally {
       setLoading(false)
     }
@@ -140,9 +150,9 @@ export default function AdminRiskPage() {
         </div>
 
         {loading ? (
-          <div className="py-12 flex justify-center">
-            <Loader2 className="w-6 h-6 animate-spin text-violet-500" />
-          </div>
+          <TableSkeleton />
+        ) : loadError ? (
+          <ErrorState message={loadError} onRetry={load} />
         ) : (
           <Table>
             <Thead>

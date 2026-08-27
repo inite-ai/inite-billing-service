@@ -185,12 +185,14 @@ export class AdminController {
   async getOrders(
     @Query('status') status?: string,
     @Query('userId') userId?: string,
+    @Query('search') search?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
     return this.ordersService.getOrders({
       status,
       userId,
+      search,
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
     });

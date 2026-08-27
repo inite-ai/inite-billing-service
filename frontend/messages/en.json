@@ -509,7 +509,7 @@
     },
     "orders": {
       "title": "Orders",
-      "searchPlaceholder": "Search by User ID...",
+      "searchPlaceholder": "Order id, payment reference, or user id",
       "tabAll": "All",
       "tabPaid": "Paid",
       "tabCreated": "Created",
@@ -807,7 +807,8 @@
       "adjustSuccess": "Credits adjusted",
       "adjustError": "Failed to adjust credits",
       "searchUser": "Search by User ID...",
-      "allServices": "All Services"
+      "allServices": "All Services",
+      "adjustNewBalance": "Balance after adjustment"
     },
     "customers": {
       "title": "Customers",
@@ -888,7 +889,6 @@
       "actionRetentionOffer": "Send Retention Offer",
       "actionCreatePromo": "Create Promo Code",
       "actionWinBack": "Send Win-Back",
-      "actionTriggered": "Action triggered",
       "totalInPipeline": "In Pipeline",
       "pipelineValue": "Pipeline Value",
       "churningCount": "Churning",
@@ -913,7 +913,16 @@
         "justNow": "just now",
         "hoursAgo": "{hours}h ago",
         "error": "Failed to generate insights"
-      }
+      },
+      "automatedTitle": "These campaigns run automatically",
+      "automatedBody": "Abandoned-checkout, dunning, trial-ending and win-back messages are queued on a schedule. There is no send-now action; open the outreach log to see what went out.",
+      "openOutreach": "Open outreach log",
+      "openOutreachDesc": "See which messages were queued, sent, or skipped for this stage",
+      "openOrder": "Open orders",
+      "openOrderDesc": "Find the order and inspect its payment intents",
+      "openPromoCodes": "Open promo codes",
+      "openPromoCodesDesc": "Create a retention offer this customer can redeem",
+      "noActions": "Nothing to act on at this stage"
     },
     "outreach": {
       "title": "AI Outreach",

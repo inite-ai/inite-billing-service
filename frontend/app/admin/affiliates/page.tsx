@@ -16,6 +16,8 @@ import type { PaginatedResponse } from '@/lib/types'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { TableSkeleton } from '@/components/ui/Skeleton'
+import { ErrorState } from '@/components/ui/ErrorState'
+import { CopyableId } from '@/components/ui/CopyableId'
 
 interface AffiliateWithCount {
   id: string
@@ -38,14 +40,24 @@ export default function AdminAffiliatesPage() {
   const [data, setData] = useState<PaginatedResponse<AffiliateWithCount> | null>(null)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [selected, setSelected] = useState<AffiliateWithCount | null>(null)
   const [, setDetailLoading] = useState(false)
 
   const load = async () => {
     setLoading(true)
-    const res = await api.get('/v1/admin/affiliates', { params: { page, limit: 20 } })
-    setData(res.data)
-    setLoading(false)
+    setLoadError(null)
+    try {
+      const res = await api.get('/v1/admin/affiliates', { params: { page, limit: 20 } })
+      setData(res.data)
+    } catch (e: unknown) {
+      // A rejected request used to leave `loading` true forever: the operator
+      // watched a skeleton that would never resolve.
+      const err = e as { response?: { data?: { message?: string } } }
+      setLoadError(err.response?.data?.message || tc('loadFailed'))
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { load() }, [page])
@@ -71,6 +83,8 @@ export default function AdminAffiliatesPage() {
       <Card>
         {loading ? (
           <TableSkeleton />
+        ) : loadError ? (
+          <ErrorState message={loadError} onRetry={load} />
         ) : !data || data.items.length === 0 ? (
           <div className="text-center py-8">
             <Users className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
@@ -86,7 +100,7 @@ export default function AdminAffiliatesPage() {
               <Tbody>
                 {data.items.map((a) => (
                   <tr key={a.id} className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50" onClick={() => handleDetail(a)}>
-                    <Td className="font-mono text-xs">{a.userId.slice(0, 8)}...</Td>
+                    <Td className="font-mono text-xs"><CopyableId value={a.userId} /></Td>
                     <Td>
                       <span className="font-mono text-sm font-semibold text-violet-600 dark:text-violet-400">{a.referralCode}</span>
                     </Td>
@@ -130,7 +144,7 @@ export default function AdminAffiliatesPage() {
               <div className="flex justify-between"><span className="text-slate-500">{t('affiliates.detailAffiliateId')}</span><span className="font-mono text-xs">{selected.id}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">{t('affiliates.detailUserId')}</span><span className="font-mono text-xs">{selected.userId}</span></div>
               {selected.parentAffiliateId && (
-                <div className="flex justify-between"><span className="text-slate-500">{t('affiliates.detailParentAffiliate')}</span><span className="font-mono text-xs">{selected.parentAffiliateId.slice(0, 8)}...</span></div>
+                <div className="flex justify-between"><span className="text-slate-500">{t('affiliates.detailParentAffiliate')}</span><span className="font-mono text-xs"><CopyableId value={selected.parentAffiliateId} /></span></div>
               )}
               <div className="flex justify-between"><span className="text-slate-500">{t('affiliates.detailCommissionRate')}</span><span className="font-semibold">{(Number(selected.commissionRate) * 100).toFixed(1)}%</span></div>
               <div className="flex justify-between"><span className="text-slate-500">{t('affiliates.detailCreated')}</span><span>{new Date(selected.createdAt).toLocaleString()}</span></div>
