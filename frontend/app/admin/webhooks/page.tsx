@@ -8,6 +8,8 @@ import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
 import { Pagination } from '@/components/ui/Pagination'
 import api from '@/lib/api'
 import type { WebhookEvent, PaginatedResponse } from '@/lib/types'
+import { PageHeader } from '@/components/ui/PageHeader'
+import { StatusBadge } from '@/components/ui/StatusBadge'
 
 export default function AdminWebhooksPage() {
   const t = useTranslations('admin')
@@ -29,9 +31,9 @@ export default function AdminWebhooksPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">{t('webhooks.title')}</h1>
+      <PageHeader title={t('webhooks.title')} />
       <Card>
-        {loading ? <div className="text-gray-500 py-4">{tc('loading')}</div> : !data ? null : (
+        {loading ? <div className="text-slate-500 py-4">{tc('loading')}</div> : !data ? null : (
           <>
             <Table>
               <Thead>
@@ -44,7 +46,7 @@ export default function AdminWebhooksPage() {
                     <Td>{w.rail}</Td>
                     <Td className="font-mono text-xs">{w.eventType}</Td>
                     <Td className="font-mono text-xs">{w.entityId.slice(0, 12)}...</Td>
-                    <Td><Badge>{w.status}</Badge></Td>
+                    <Td><StatusBadge status={w.status} /></Td>
                     <Td>{w.attempts}</Td>
                   </tr>
                 ))}

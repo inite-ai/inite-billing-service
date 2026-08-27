@@ -13,6 +13,8 @@ import { Plus, Trash2 } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import type { Price, Product } from '@/lib/types'
+import { ActiveBadge } from '@/components/ui/StatusBadge'
+import { IconButton } from '@/components/ui/IconButton'
 
 export default function AdminPricesPage() {
   const t = useTranslations('admin')
@@ -78,12 +80,12 @@ export default function AdminPricesPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('prices.title')}</h1>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('prices.title')}</h1>
         <Button size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setShowModal(true)}>{t('prices.addPrice')}</Button>
       </div>
 
       <Card>
-        {loading ? <div className="text-gray-500 py-4">{tc('loading')}</div> : (
+        {loading ? <div className="text-slate-500 py-4">{tc('loading')}</div> : (
           <Table>
             <Thead>
               <tr><Th>{t('prices.tableCode')}</Th><Th>{t('prices.tableProduct')}</Th><Th>{t('prices.tableAmount')}</Th><Th>{t('prices.tableInterval')}</Th><Th>{t('prices.tableStatus')}</Th><Th>{t('prices.tableActions')}</Th></tr>
@@ -95,8 +97,15 @@ export default function AdminPricesPage() {
                   <Td>{p.product?.name || p.productId}</Td>
                   <Td className="font-semibold">{p.amount} {p.currency}</Td>
                   <Td>{p.interval || t('prices.oneTime')}</Td>
-                  <Td><Badge>{p.isActive ? tc('status.active') : tc('status.inactive')}</Badge></Td>
-                  <Td><button onClick={() => handleDelete(p.id)} className="text-gray-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button></Td>
+                  <Td><ActiveBadge active={p.isActive} /></Td>
+                  <Td>
+                    <IconButton
+                      onClick={() => handleDelete(p.id)}
+                      tone="danger"
+                      label={tc('delete')}
+                      icon={<Trash2 className="w-4 h-4" />}
+                    />
+                  </Td>
                 </tr>
               ))}
             </Tbody>

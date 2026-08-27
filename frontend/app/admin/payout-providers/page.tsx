@@ -11,6 +11,10 @@ import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
 import { Plus, Trash2, Wallet, Loader2, Power, PowerOff } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
+import { PageHeader } from '@/components/ui/PageHeader'
+import { ActiveBadge } from '@/components/ui/StatusBadge'
+import { TableSkeleton } from '@/components/ui/Skeleton'
+import { IconButton } from '@/components/ui/IconButton'
 
 interface PayoutProvider {
   id: string
@@ -92,24 +96,23 @@ export default function AdminPayoutProvidersPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('payoutProviders.title')}</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('payoutProviders.subtitle')}</p>
-        </div>
-        <Button size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setShowCreate(true)}>
-          {t('payoutProviders.addProvider')}
-        </Button>
-      </div>
-
+      <PageHeader
+        title={t('payoutProviders.title')}
+        subtitle={t('payoutProviders.subtitle')}
+        actions={
+    <Button size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setShowCreate(true)}>
+              {t('payoutProviders.addProvider')}
+            </Button>
+        }
+      />
       <Card>
         {loading ? (
-          <div className="flex items-center gap-2 text-gray-500 py-4"><Loader2 className="w-5 h-5 animate-spin" /> {tc('loading')}</div>
+          <TableSkeleton />
         ) : providers.length === 0 ? (
           <div className="text-center py-8">
-            <Wallet className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-            <p className="text-gray-500 mb-2">{t('payoutProviders.noProviders')}</p>
-            <p className="text-sm text-gray-400">{t('payoutProviders.noProvidersHint')}</p>
+            <Wallet className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+            <p className="text-slate-500 mb-2">{t('payoutProviders.noProviders')}</p>
+            <p className="text-sm text-slate-400">{t('payoutProviders.noProvidersHint')}</p>
           </div>
         ) : (
           <Table>
@@ -140,28 +143,30 @@ export default function AdminPayoutProvidersPage() {
                     {p.feePercent ? `${(Number(p.feePercent) * 100).toFixed(1)}%` : ''}
                     {p.feePercent && p.feeFixed ? ' + ' : ''}
                     {p.feeFixed ? `$${Number(p.feeFixed).toFixed(2)}` : ''}
-                    {!p.feePercent && !p.feeFixed ? <span className="text-gray-400">—</span> : ''}
+                    {!p.feePercent && !p.feeFixed ? <span className="text-slate-400">—</span> : ''}
                   </Td>
                   <Td>
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-slate-500">
                       {p.minAmount ? `$${Number(p.minAmount).toFixed(0)}` : '—'}
                       {' — '}
                       {p.maxAmount ? `$${Number(p.maxAmount).toFixed(0)}` : '∞'}
                     </span>
                   </Td>
-                  <Td><Badge>{p.isActive ? tc('status.active') : tc('status.inactive')}</Badge></Td>
+                  <Td><ActiveBadge active={p.isActive} /></Td>
                   <Td>
                     <div className="flex gap-2">
-                      <button
+                      <IconButton
                         onClick={() => handleToggle(p.id, p.isActive)}
-                        className={p.isActive ? 'text-green-500 hover:text-yellow-500' : 'text-gray-400 hover:text-green-500'}
-                        title={p.isActive ? tc('deactivate') : tc('activate')}
-                      >
-                        {p.isActive ? <Power className="w-4 h-4" /> : <PowerOff className="w-4 h-4" />}
-                      </button>
-                      <button onClick={() => handleDelete(p.id)} className="text-gray-400 hover:text-red-500" title={tc('delete')}>
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                        tone={p.isActive ? 'warning' : 'success'}
+                        label={p.isActive ? tc('deactivate') : tc('activate')}
+                        icon={p.isActive ? <Power className="w-4 h-4" /> : <PowerOff className="w-4 h-4" />}
+                      />
+                      <IconButton
+                        onClick={() => handleDelete(p.id)}
+                        tone="danger"
+                        label={tc('delete')}
+                        icon={<Trash2 className="w-4 h-4" />}
+                      />
                     </div>
                   </Td>
                 </tr>

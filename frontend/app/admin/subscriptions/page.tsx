@@ -15,6 +15,10 @@ import { Search, Loader2, CreditCard } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import type { Subscription, PaginatedResponse } from '@/lib/types'
+import { PageHeader } from '@/components/ui/PageHeader'
+import { StatusBadge } from '@/components/ui/StatusBadge'
+import { TableSkeleton } from '@/components/ui/Skeleton'
+import { ErrorState } from '@/components/ui/ErrorState'
 
 export default function AdminSubscriptionsPage() {
   const t = useTranslations('admin')
@@ -33,6 +37,7 @@ export default function AdminSubscriptionsPage() {
   const [userSearch, setUserSearch] = useState('')
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [selected, setSelected] = useState<Subscription | null>(null)
   const [confirmState, setConfirmState] = useState<{
     isOpen: boolean
@@ -44,6 +49,7 @@ export default function AdminSubscriptionsPage() {
 
   const load = async () => {
     setLoading(true)
+    setLoadError(null)
     try {
       const params: Record<string, string | number> = { page, limit: 20 }
       if (statusFilter) params.status = statusFilter
@@ -52,7 +58,9 @@ export default function AdminSubscriptionsPage() {
       setData(res.data)
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } }
-      toast.error(err.response?.data?.message || 'Failed to load subscriptions')
+      const message = err.response?.data?.message || 'Failed to load subscriptions'
+      setLoadError(message)
+      toast.error(message)
     } finally {
       setLoading(false)
     }
@@ -87,7 +95,7 @@ export default function AdminSubscriptionsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">{t('subscriptions.title')}</h1>
+      <PageHeader title={t('subscriptions.title')} />
 
       <div className="flex flex-wrap items-center gap-4 mb-4">
         <Tabs tabs={statusTabs} activeTab={statusFilter} onChange={(v) => { setStatusFilter(v); setPage(1) }} />
@@ -101,26 +109,28 @@ export default function AdminSubscriptionsPage() {
 
       <Card>
         {loading ? (
-          <div className="flex items-center gap-2 text-gray-500 py-4"><Loader2 className="w-5 h-5 animate-spin" /> {tc('loading')}</div>
+          <TableSkeleton />
+        ) : loadError ? (
+          <ErrorState message={loadError} onRetry={load} />
         ) : !data || data.items.length === 0 ? (
           <div className="text-center py-8">
-            <CreditCard className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-            <p className="text-gray-500">{t('subscriptions.noSubscriptions')}</p>
+            <CreditCard className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+            <p className="text-slate-500">{t('subscriptions.noSubscriptions')}</p>
           </div>
         ) : (
           <>
-            <p className="text-sm text-gray-500 mb-3">{t('subscriptions.totalSubscriptions', { count: data.total })}</p>
+            <p className="text-sm text-slate-500 mb-3">{t('subscriptions.totalSubscriptions', { count: data.total })}</p>
             <Table>
               <Thead>
                 <tr><Th>{t('subscriptions.tableUser')}</Th><Th>{t('subscriptions.tableProduct')}</Th><Th>{t('subscriptions.tablePrice')}</Th><Th>{t('subscriptions.tableStatus')}</Th><Th>{t('subscriptions.tablePeriodEnd')}</Th><Th>{t('subscriptions.tableDaysLeft')}</Th><Th>{t('subscriptions.tableActions')}</Th></tr>
               </Thead>
               <Tbody>
                 {data.items.map((sub) => (
-                  <tr key={sub.id} className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50" onClick={() => setSelected(sub)}>
+                  <tr key={sub.id} className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50" onClick={() => setSelected(sub)}>
                     <Td className="font-mono text-xs">{sub.userId.slice(0, 8)}...</Td>
                     <Td>{sub.productName || sub.productCode || '-'}</Td>
                     <Td>{sub.amount ? `${sub.amount} ${sub.currency}/${sub.interval || 'mo'}` : '-'}</Td>
-                    <Td><Badge>{sub.status}</Badge></Td>
+                    <Td><StatusBadge status={sub.status} /></Td>
                     <Td>{new Date(sub.currentPeriodEnd).toLocaleDateString()}</Td>
                     <Td>{daysUntil(sub.currentPeriodEnd)}d</Td>
                     <Td>
@@ -143,25 +153,25 @@ export default function AdminSubscriptionsPage() {
         {selected && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <Badge>{selected.status}</Badge>
+              <StatusBadge status={selected.status} />
               {selected.cancelAtPeriodEnd && <Badge variant="warning">{tc('status.canceling')}</Badge>}
             </div>
 
-            <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4 space-y-2 text-sm">
-              <div className="flex justify-between"><span className="text-gray-500">{t('subscriptions.detailSubscriptionId')}</span><span className="font-mono text-xs">{selected.id}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">{t('subscriptions.detailUserId')}</span><span className="font-mono text-xs">{selected.userId}</span></div>
-              {selected.serviceName && <div className="flex justify-between"><span className="text-gray-500">{t('subscriptions.detailService') || 'Service'}</span><span className="font-semibold">{selected.serviceName}</span></div>}
-              {selected.productName && <div className="flex justify-between"><span className="text-gray-500">{t('subscriptions.detailProduct')}</span><span className="font-semibold">{selected.productName}</span></div>}
+            <div className="bg-slate-50 dark:bg-slate-900 rounded-xl p-4 space-y-2 text-sm">
+              <div className="flex justify-between"><span className="text-slate-500">{t('subscriptions.detailSubscriptionId')}</span><span className="font-mono text-xs">{selected.id}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">{t('subscriptions.detailUserId')}</span><span className="font-mono text-xs">{selected.userId}</span></div>
+              {selected.serviceName && <div className="flex justify-between"><span className="text-slate-500">{t('subscriptions.detailService') || 'Service'}</span><span className="font-semibold">{selected.serviceName}</span></div>}
+              {selected.productName && <div className="flex justify-between"><span className="text-slate-500">{t('subscriptions.detailProduct')}</span><span className="font-semibold">{selected.productName}</span></div>}
               {selected.amount && (
                 <div className="flex justify-between">
-                  <span className="text-gray-500">{t('subscriptions.detailPrice')}</span>
+                  <span className="text-slate-500">{t('subscriptions.detailPrice')}</span>
                   <span className="font-semibold">{selected.amount} {selected.currency}/{selected.interval || 'month'}</span>
                 </div>
               )}
-              <div className="flex justify-between"><span className="text-gray-500">{t('subscriptions.detailPeriodStart')}</span><span>{new Date(selected.currentPeriodStart).toLocaleDateString()}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">{t('subscriptions.detailPeriodEnd')}</span><span>{new Date(selected.currentPeriodEnd).toLocaleDateString()} ({t('subscriptions.detailDaysLeft', { count: daysUntil(selected.currentPeriodEnd) })})</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">{t('subscriptions.detailAutoRenew')}</span><span>{selected.cancelAtPeriodEnd ? tc('no') : tc('yes')}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">{t('subscriptions.detailCreated')}</span><span>{new Date(selected.createdAt).toLocaleString()}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">{t('subscriptions.detailPeriodStart')}</span><span>{new Date(selected.currentPeriodStart).toLocaleDateString()}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">{t('subscriptions.detailPeriodEnd')}</span><span>{new Date(selected.currentPeriodEnd).toLocaleDateString()} ({t('subscriptions.detailDaysLeft', { count: daysUntil(selected.currentPeriodEnd) })})</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">{t('subscriptions.detailAutoRenew')}</span><span>{selected.cancelAtPeriodEnd ? tc('no') : tc('yes')}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">{t('subscriptions.detailCreated')}</span><span>{new Date(selected.createdAt).toLocaleString()}</span></div>
             </div>
 
             {(selected.status === 'active' || selected.status === 'trialing') && !selected.cancelAtPeriodEnd && (

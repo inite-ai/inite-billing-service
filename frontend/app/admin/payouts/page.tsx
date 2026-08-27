@@ -11,6 +11,8 @@ import { Pagination } from '@/components/ui/Pagination'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import type { Payout, PaginatedResponse } from '@/lib/types'
+import { PageHeader } from '@/components/ui/PageHeader'
+import { StatusBadge } from '@/components/ui/StatusBadge'
 
 export default function AdminPayoutsPage() {
   const t = useTranslations('admin')
@@ -77,9 +79,9 @@ export default function AdminPayoutsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">{t('payouts.title')}</h1>
+      <PageHeader title={t('payouts.title')} />
       <Card>
-        {loading ? <div className="text-gray-500 py-4">{tc('loading')}</div> : !data ? null : (
+        {loading ? <div className="text-slate-500 py-4">{tc('loading')}</div> : !data ? null : (
           <>
             <Table>
               <Thead>
@@ -91,7 +93,7 @@ export default function AdminPayoutsPage() {
                     <Td className="font-mono">{(p as any).affiliate?.referralCode || tc('na')}</Td>
                     <Td>{new Date(p.periodStart).toLocaleDateString()} - {new Date(p.periodEnd).toLocaleDateString()}</Td>
                     <Td className="font-semibold">${p.totalAmount} {p.currency}</Td>
-                    <Td><Badge>{p.status}</Badge></Td>
+                    <Td><StatusBadge status={p.status} /></Td>
                     <Td>
                       {p.status === 'pending' && (
                         <div className="flex gap-2">

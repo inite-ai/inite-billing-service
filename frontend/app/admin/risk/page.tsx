@@ -8,6 +8,7 @@ import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
 import { ShieldAlert, Loader2, ChevronDown, ChevronUp } from 'lucide-react'
 import toast from 'react-hot-toast'
 import api from '@/lib/api'
+import { IconButton } from '@/components/ui/IconButton'
 
 interface RiskRow {
   id: string
@@ -42,6 +43,7 @@ const LEVEL_VARIANTS: Record<string, 'success' | 'warning' | 'error'> = {
 
 export default function AdminRiskPage() {
   const t = useTranslations('admin.risk')
+  const tc = useTranslations('common')
   const [rows, setRows] = useState<RiskRow[]>([])
   const [stats, setStats] = useState<RiskStats | null>(null)
   const [loading, setLoading] = useState(true)
@@ -189,18 +191,19 @@ export default function AdminRiskPage() {
                       {new Date(row.createdAt).toLocaleString()}
                     </Td>
                     <Td>
-                      <button
-                        onClick={() =>
-                          setExpanded(expanded === row.id ? null : row.id)
+                      <IconButton
+                        onClick={() => setExpanded(expanded === row.id ? null : row.id)}
+                        tone="primary"
+                        label={expanded === row.id ? tc('collapse') : tc('expand')}
+                        aria-expanded={expanded === row.id}
+                        icon={
+                          expanded === row.id ? (
+                            <ChevronUp className="w-4 h-4" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4" />
+                          )
                         }
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-violet-500"
-                      >
-                        {expanded === row.id ? (
-                          <ChevronUp className="w-4 h-4" />
-                        ) : (
-                          <ChevronDown className="w-4 h-4" />
-                        )}
-                      </button>
+                      />
                     </Td>
                   </tr>
                   {expanded === row.id && (

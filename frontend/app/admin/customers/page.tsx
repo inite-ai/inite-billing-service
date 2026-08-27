@@ -13,6 +13,7 @@ import { Tabs } from '@/components/ui/Tabs'
 import { Search, Loader2, Users } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
+import { StatusBadge } from '@/components/ui/StatusBadge'
 
 interface CustomerItem {
   userId: string
@@ -130,8 +131,8 @@ export default function AdminCustomersPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('customers.title')}</h1>
-        <p className="text-sm text-gray-500 mt-1">{t('customers.subtitle')}</p>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('customers.title')}</h1>
+        <p className="text-sm text-slate-500 mt-1">{t('customers.subtitle')}</p>
       </div>
 
       <div className="flex items-center gap-2 mb-4">
@@ -150,17 +151,17 @@ export default function AdminCustomersPage() {
 
       <Card>
         {loading ? (
-          <div className="flex items-center gap-2 text-gray-500 py-4">
+          <div className="flex items-center gap-2 text-slate-500 py-4">
             <Loader2 className="w-5 h-5 animate-spin" /> {tc('loading')}
           </div>
         ) : !data || data.items.length === 0 ? (
           <div className="text-center py-8">
-            <Users className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-            <p className="text-gray-500">{t('customers.noCustomers')}</p>
+            <Users className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+            <p className="text-slate-500">{t('customers.noCustomers')}</p>
           </div>
         ) : (
           <>
-            <p className="text-sm text-gray-500 mb-3">
+            <p className="text-sm text-slate-500 mb-3">
               {t('customers.totalCount', { count: data.total })}
             </p>
             <Table>
@@ -179,7 +180,7 @@ export default function AdminCustomersPage() {
                 {data.items.map((customer) => (
                   <tr
                     key={customer.userId}
-                    className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                    className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50"
                     onClick={() => handleDetail(customer.userId)}
                   >
                     <Td className="font-mono text-xs">{customer.userId.slice(0, 12)}...</Td>
@@ -196,7 +197,7 @@ export default function AdminCustomersPage() {
                       {customer.affiliate ? (
                         <Badge variant="info">{customer.affiliate.status}</Badge>
                       ) : (
-                        <span className="text-gray-400">-</span>
+                        <span className="text-slate-400">-</span>
                       )}
                     </Td>
                   </tr>
@@ -215,7 +216,7 @@ export default function AdminCustomersPage() {
         title={t('customers.customerDetail')}
       >
         {detailLoading ? (
-          <div className="flex items-center gap-2 text-gray-500 py-4">
+          <div className="flex items-center gap-2 text-slate-500 py-4">
             <Loader2 className="w-5 h-5 animate-spin" /> {tc('loading')}
           </div>
         ) : selected && (
@@ -224,39 +225,39 @@ export default function AdminCustomersPage() {
 
             {activeTab === 'summary' && (
               <div className="space-y-3">
-                <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4 space-y-2 text-sm">
+                <div className="bg-slate-50 dark:bg-slate-900 rounded-xl p-4 space-y-2 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-gray-500">{t('customers.userId')}</span>
+                    <span className="text-slate-500">{t('customers.userId')}</span>
                     <span className="font-mono text-xs">{selected.userId}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-500">{t('customers.totalOrders')}</span>
+                    <span className="text-slate-500">{t('customers.totalOrders')}</span>
                     <span className="font-semibold">{selected.totalOrders}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-500">{t('customers.totalSpent')}</span>
+                    <span className="text-slate-500">{t('customers.totalSpent')}</span>
                     <span className="font-semibold">{Number(selected.totalSpent).toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-500">{t('customers.activeSubscriptions')}</span>
+                    <span className="text-slate-500">{t('customers.activeSubscriptions')}</span>
                     <span>{selected.subscriptions.filter((s) => s.status === 'active' || s.status === 'trialing').length}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-500">{t('customers.creditBalance')}</span>
+                    <span className="text-slate-500">{t('customers.creditBalance')}</span>
                     <span>{selected.credits.reduce((sum, c) => sum + c.balance, 0)}</span>
                   </div>
                 </div>
 
                 {selected.affiliate && (
-                  <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4 text-sm space-y-2">
-                    <h5 className="font-semibold text-gray-700 dark:text-gray-300">{t('customers.affiliate')}</h5>
+                  <div className="bg-slate-50 dark:bg-slate-900 rounded-xl p-4 text-sm space-y-2">
+                    <h5 className="font-semibold text-slate-700 dark:text-slate-300">{t('customers.affiliate')}</h5>
                     <div className="flex justify-between">
-                      <span className="text-gray-500">Code</span>
+                      <span className="text-slate-500">Code</span>
                       <span className="font-mono text-xs">{selected.affiliate.referralCode}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-500">Status</span>
-                      <Badge>{selected.affiliate.status}</Badge>
+                      <span className="text-slate-500">Status</span>
+                      <StatusBadge status={selected.affiliate.status} />
                     </div>
                   </div>
                 )}
@@ -266,7 +267,7 @@ export default function AdminCustomersPage() {
             {activeTab === 'orders' && (
               <div>
                 {selected.orders.length === 0 ? (
-                  <p className="text-gray-500 text-sm py-4 text-center">{t('orders.noOrders')}</p>
+                  <p className="text-slate-500 text-sm py-4 text-center">{t('orders.noOrders')}</p>
                 ) : (
                   <Table>
                     <Thead>
@@ -283,7 +284,7 @@ export default function AdminCustomersPage() {
                           <Td>{new Date(order.createdAt).toLocaleDateString()}</Td>
                           <Td>{order.price?.product?.name || '-'}</Td>
                           <Td className="font-semibold">{order.amount} {order.currency}</Td>
-                          <Td><Badge>{order.status}</Badge></Td>
+                          <Td><StatusBadge status={order.status} /></Td>
                         </tr>
                       ))}
                     </Tbody>
@@ -295,7 +296,7 @@ export default function AdminCustomersPage() {
             {activeTab === 'subscriptions' && (
               <div>
                 {selected.subscriptions.length === 0 ? (
-                  <p className="text-gray-500 text-sm py-4 text-center">{t('subscriptions.noSubscriptions')}</p>
+                  <p className="text-slate-500 text-sm py-4 text-center">{t('subscriptions.noSubscriptions')}</p>
                 ) : (
                   <Table>
                     <Thead>
@@ -309,7 +310,7 @@ export default function AdminCustomersPage() {
                       {selected.subscriptions.map((sub) => (
                         <tr key={sub.id}>
                           <Td>{(sub as any).productName || (sub as any).productCode || '-'}</Td>
-                          <Td><Badge>{sub.status}</Badge></Td>
+                          <Td><StatusBadge status={sub.status} /></Td>
                           <Td>{new Date(sub.currentPeriodEnd).toLocaleDateString()}</Td>
                         </tr>
                       ))}
@@ -322,21 +323,21 @@ export default function AdminCustomersPage() {
             {activeTab === 'timeline' && (
               <div>
                 {selected.funnelEvents.length === 0 ? (
-                  <p className="text-gray-500 text-sm py-4 text-center">{t('funnel.noData')}</p>
+                  <p className="text-slate-500 text-sm py-4 text-center">{t('funnel.noData')}</p>
                 ) : (
                   <div className="space-y-2 max-h-80 overflow-y-auto">
                     {selected.funnelEvents.map((event) => (
                       <div
                         key={event.id}
-                        className="flex items-center justify-between bg-gray-50 dark:bg-gray-900 rounded-lg px-3 py-2 text-sm"
+                        className="flex items-center justify-between bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2 text-sm"
                       >
                         <div>
-                          <span className="font-medium text-gray-700 dark:text-gray-300">{event.event}</span>
+                          <span className="font-medium text-slate-700 dark:text-slate-300">{event.event}</span>
                           {event.stage && (
                             <Badge variant="default" className="ml-2">{event.stage}</Badge>
                           )}
                         </div>
-                        <span className="text-gray-400 text-xs">
+                        <span className="text-slate-400 text-xs">
                           {new Date(event.createdAt).toLocaleString()}
                         </span>
                       </div>

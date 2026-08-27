@@ -145,8 +145,8 @@ export default function AdminCreditsPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('credits.title')}</h1>
-        <p className="text-sm text-gray-500 mt-1">{t('credits.subtitle')}</p>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('credits.title')}</h1>
+        <p className="text-sm text-slate-500 mt-1">{t('credits.subtitle')}</p>
       </div>
 
       <div className="flex flex-wrap items-center gap-4 mb-4">
@@ -174,13 +174,13 @@ export default function AdminCreditsPage() {
 
       <Card>
         {loading ? (
-          <div className="flex items-center gap-2 text-gray-500 py-4">
+          <div className="flex items-center gap-2 text-slate-500 py-4">
             <Loader2 className="w-5 h-5 animate-spin" /> {tc('loading')}
           </div>
         ) : balances.length === 0 ? (
           <div className="text-center py-8">
-            <Coins className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-            <p className="text-gray-500">{t('credits.noBalances')}</p>
+            <Coins className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+            <p className="text-slate-500">{t('credits.noBalances')}</p>
           </div>
         ) : (
           <Table>
@@ -206,20 +206,20 @@ export default function AdminCreditsPage() {
                   >
                     <Td>
                       {expandedId === bal.id ? (
-                        <ChevronDown className="w-4 h-4 text-gray-400" />
+                        <ChevronDown className="w-4 h-4 text-slate-400" />
                       ) : (
-                        <ChevronRight className="w-4 h-4 text-gray-400" />
+                        <ChevronRight className="w-4 h-4 text-slate-400" />
                       )}
                     </Td>
                     <Td className="font-mono text-xs">{bal.userId.slice(0, 8)}...</Td>
-                    <Td>{bal.service?.name || bal.serviceId || <span className="text-gray-400">{tc('na')}</span>}</Td>
+                    <Td>{bal.service?.name || bal.serviceId || <span className="text-slate-400">{tc('na')}</span>}</Td>
                     <Td className="font-semibold">{bal.balance}</Td>
                     <Td>{bal.totalGranted}</Td>
                     <Td>{bal.totalUsed}</Td>
                     <Td>
                       {bal.resetsAt
                         ? new Date(bal.resetsAt).toLocaleDateString()
-                        : <span className="text-gray-400">{tc('na')}</span>}
+                        : <span className="text-slate-400">{tc('na')}</span>}
                     </Td>
                     <Td>
                       <Button
@@ -238,15 +238,15 @@ export default function AdminCreditsPage() {
                     <tr key={`${bal.id}-usage`}>
                       <td colSpan={8} className="px-4 py-3.5 text-sm text-slate-700 dark:text-slate-300">
                         <div className="py-2 px-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
-                          <h4 className="font-semibold text-sm text-gray-700 dark:text-gray-300 mb-3">
+                          <h4 className="font-semibold text-sm text-slate-700 dark:text-slate-300 mb-3">
                             {t('credits.usageHistory')}
                           </h4>
                           {usageLoading ? (
-                            <div className="flex items-center gap-2 text-gray-500 py-2">
+                            <div className="flex items-center gap-2 text-slate-500 py-2">
                               <Loader2 className="w-4 h-4 animate-spin" /> {tc('loading')}
                             </div>
                           ) : usageHistory.length === 0 ? (
-                            <p className="text-sm text-gray-500 py-2">{tc('noData')}</p>
+                            <p className="text-sm text-slate-500 py-2">{tc('noData')}</p>
                           ) : (
                             <Table>
                               <Thead>
@@ -268,7 +268,7 @@ export default function AdminCreditsPage() {
                                     <Td className="font-semibold">
                                       {u.type === 'consume' ? '-' : '+'}{Math.abs(u.amount)}
                                     </Td>
-                                    <Td>{u.description || <span className="text-gray-400">{tc('na')}</span>}</Td>
+                                    <Td>{u.description || <span className="text-slate-400">{tc('na')}</span>}</Td>
                                     <Td>{new Date(u.createdAt).toLocaleString()}</Td>
                                   </tr>
                                 ))}

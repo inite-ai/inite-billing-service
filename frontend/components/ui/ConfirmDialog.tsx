@@ -33,7 +33,7 @@ export function ConfirmDialog({ isOpen, onClose, onConfirm, title, message, conf
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title}>
-      <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">{message}</p>
+      <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">{message}</p>
       <div className="flex gap-3 justify-end">
         <Button variant="ghost" onClick={onClose} disabled={loading}>{tc('cancel')}</Button>
         <Button

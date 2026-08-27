@@ -16,8 +16,27 @@ import { useApiQuery } from '@/hooks/useApiQuery'
 import { useConfirmDialog } from '@/hooks/useConfirmDialog'
 import { getErrorMessage } from '@/lib/api-error'
 import type { Service } from '@/lib/types'
+import { PageHeader } from '@/components/ui/PageHeader'
+import { ActiveBadge } from '@/components/ui/StatusBadge'
+import { TableSkeleton } from '@/components/ui/Skeleton'
+import { ErrorState } from '@/components/ui/ErrorState'
+import { IconButton } from '@/components/ui/IconButton'
 
-function ApiKeyCell({ service, onRegenerate, showLabel, hideLabel }: { service: Service; onRegenerate: () => void; showLabel: string; hideLabel: string }) {
+function ApiKeyCell({
+  service,
+  onRegenerate,
+  showLabel,
+  hideLabel,
+  copyLabel,
+  regenerateLabel,
+}: {
+  service: Service
+  onRegenerate: () => void
+  showLabel: string
+  hideLabel: string
+  copyLabel: string
+  regenerateLabel: string
+}) {
   const [visible, setVisible] = useState(false)
   const [fullKey, setFullKey] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
@@ -66,18 +85,27 @@ function ApiKeyCell({ service, onRegenerate, showLabel, hideLabel }: { service: 
 
   return (
     <div className="flex items-center gap-1.5">
-      <code className="text-xs bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded font-mono">
+      <code className="text-xs bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded font-mono">
         {displayKey}
       </code>
-      <button onClick={handleReveal} className="text-gray-400 hover:text-gray-600" title={visible ? hideLabel : showLabel} disabled={loading}>
-        {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : visible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-      </button>
-      <button onClick={handleCopy} className="text-gray-400 hover:text-blue-500" title="Copy">
-        {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
-      </button>
-      <button onClick={onRegenerate} className="text-gray-400 hover:text-orange-500" title={service.name}>
-        <RefreshCw className="w-3.5 h-3.5" />
-      </button>
+      <IconButton
+        onClick={handleReveal}
+        label={visible ? hideLabel : showLabel}
+        loading={loading}
+        icon={visible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+      />
+      <IconButton
+        onClick={handleCopy}
+        tone="primary"
+        label={copyLabel}
+        icon={copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+      />
+      <IconButton
+        onClick={onRegenerate}
+        tone="warning"
+        label={regenerateLabel}
+        icon={<RefreshCw className="w-3.5 h-3.5" />}
+      />
     </div>
   )
 }
@@ -86,7 +114,7 @@ export default function AdminServicesPage() {
   const t = useTranslations('admin')
   const tc = useTranslations('common')
   const { confirm, DialogElement } = useConfirmDialog()
-  const { data: services, loading, refetch } = useApiQuery<Service[]>('/v1/admin/services')
+  const { data: services, loading, error, refetch } = useApiQuery<Service[]>('/v1/admin/services')
 
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState<Service | undefined>()
@@ -143,19 +171,20 @@ export default function AdminServicesPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('services.title')}</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('services.subtitle')}</p>
-        </div>
-        <Button size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => { setEditing(undefined); setShowModal(true) }}>
-          {t('services.addService')}
-        </Button>
-      </div>
-
+      <PageHeader
+        title={t('services.title')}
+        subtitle={t('services.subtitle')}
+        actions={
+    <Button size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => { setEditing(undefined); setShowModal(true) }}>
+              {t('services.addService')}
+            </Button>
+        }
+      />
       <Card>
         {loading ? (
-          <div className="flex items-center gap-2 text-gray-500 py-4"><Loader2 className="w-5 h-5 animate-spin" /> {tc('loading')}</div>
+          <TableSkeleton />
+        ) : error ? (
+          <ErrorState message={error} onRetry={refetch} />
         ) : !services || services.length === 0 ? (
           <EmptyState icon={Server} title={t('services.noServices')} subtitle={t('services.noServicesHint')} />
         ) : (
@@ -168,20 +197,34 @@ export default function AdminServicesPage() {
                 <tr key={s.id}>
                   <Td className="font-mono font-semibold">{s.code}</Td>
                   <Td>{s.name}</Td>
-                  <Td><ApiKeyCell service={s} onRegenerate={() => handleRegenerateKey(s.id)} showLabel={tc('show')} hideLabel={tc('hide')} /></Td>
-                  <Td><Badge>{s.isActive ? tc('status.active') : tc('status.inactive')}</Badge></Td>
+                  <Td><ApiKeyCell
+                      service={s}
+                      onRegenerate={() => handleRegenerateKey(s.id)}
+                      showLabel={tc('show')}
+                      hideLabel={tc('hide')}
+                      copyLabel={tc('copy')}
+                      regenerateLabel={t('services.regenerateKey')}
+                    /></Td>
+                  <Td><ActiveBadge active={s.isActive} /></Td>
                   <Td>{new Date(s.createdAt).toLocaleDateString()}</Td>
                   <Td>
                     <div className="flex gap-2">
-                      <button onClick={() => { setEditing(s); setShowModal(true) }} className="text-gray-400 hover:text-blue-500" title={tc('edit')}>
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => handleToggleActive(s.id, s.isActive)} className={s.isActive ? 'text-green-500 hover:text-yellow-500' : 'text-gray-400 hover:text-green-500'} title={s.isActive ? tc('deactivate') : tc('activate')}>
-                        {s.isActive ? <Power className="w-4 h-4" /> : <PowerOff className="w-4 h-4" />}
-                      </button>
-                      <button onClick={() => handleDelete(s.id)} className="text-gray-400 hover:text-red-500" title={tc('delete')}>
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <IconButton onClick={() => { setEditing(s); setShowModal(true) }} tone="primary" label={tc('edit')} icon={<Pencil className="w-4 h-4" />} />
+                      {/* One tone per outcome: this control used to be green
+                          when active and hover-yellow, which read as a warning
+                          about the thing it was reporting as healthy. */}
+                      <IconButton
+                        onClick={() => handleToggleActive(s.id, s.isActive)}
+                        tone={s.isActive ? 'warning' : 'success'}
+                        label={s.isActive ? tc('deactivate') : tc('activate')}
+                        icon={s.isActive ? <Power className="w-4 h-4" /> : <PowerOff className="w-4 h-4" />}
+                      />
+                      <IconButton
+                        onClick={() => handleDelete(s.id)}
+                        tone="danger"
+                        label={tc('delete')}
+                        icon={<Trash2 className="w-4 h-4" />}
+                      />
                     </div>
                   </Td>
                 </tr>
