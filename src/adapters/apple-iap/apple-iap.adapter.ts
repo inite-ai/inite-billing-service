@@ -229,6 +229,10 @@ export class AppleIAPAdapter implements Connector {
 
       return {
         status,
+        // The App Store charges the price configured for the product; the
+        // customer cannot settle a different amount. Stating it explicitly,
+        // because the reconciler no longer treats a missing amount as fine.
+        amountVerifiedByAdapter: true,
         metadata: {
           apple_product_id: transaction.productId,
           apple_transaction_id: transaction.transactionId,

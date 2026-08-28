@@ -66,16 +66,28 @@ export class CheckoutController {
     }
     // Strip userId from dto so it never leaks into metadata or downstream logic
     delete dto.userId;
-    return this.checkoutService.createSession(userId, dto, idempotencyKey, req.ip);
+    return this.checkoutService.createSession(
+      userId,
+      dto,
+      idempotencyKey,
+      req.ip,
+      req.user?.isService ? req.user.serviceId : undefined,
+    );
   }
 
   @Get('sessions/:id')
   @UseGuards(JwtOrServiceGuard)
   @ApiOperation({ summary: 'Get checkout session details' })
   async getCheckoutSession(@Param('id') id: string, @Req() req: any) {
-    // If service API key, no user ownership check
-    const userId = req.user?.isService ? undefined : req.user?.userId;
-    return this.checkoutService.getSession(id, userId);
+    // A user sees their own session; a service sees its own service's sessions.
+    // "No check at all for service keys" made every checkout in the platform
+    // readable by any registered module.
+    const isService = !!req.user?.isService;
+    return this.checkoutService.getSession(
+      id,
+      isService ? undefined : req.user?.userId,
+      isService ? req.user.serviceId : undefined,
+    );
   }
 
   @Post('sessions/:id/pay')
