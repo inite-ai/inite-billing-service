@@ -26,12 +26,32 @@ export function buildJwtOptions(configService: ConfigService): StrategyOptionsWi
   const jwtSecret = configService.get<string>('JWT_SECRET');
   const authServiceUrl = configService.get<string>('AUTH_SERVICE_URL');
 
-  // Pin the token issuer and audience when configured. Without these, a valid
-  // token the identity provider minted for a DIFFERENT audience (another service
-  // sharing the same JWKS/issuer) would be accepted here — token confusion.
-  // Opt-in via env so existing deployments aren't broken; passport-jwt forwards
-  // them to jsonwebtoken.verify, which enforces the `iss` / `aud` claims.
+  // Pin the token issuer. Without it any token this JWKS can verify is accepted,
+  // including one minted by a different issuer that happens to publish keys we
+  // trust. passport-jwt forwards it to jsonwebtoken.verify, which enforces `iss`.
+  //
+  // Required in production, for the same reason AUTH_SERVICE_URL is: an
+  // unpinned issuer is a configuration mistake, and the failure it produces is
+  // silent acceptance rather than a visible error.
   const issuer = configService.get<string>('JWT_ISSUER') || undefined;
+  const isProduction = configService.get<string>('NODE_ENV') === 'production';
+  if (isProduction && !issuer) {
+    throw new Error(
+      'JWT_ISSUER is required in production: it is the `iss` claim this service ' +
+        'will accept. Unset, any token the configured JWKS can verify is accepted, ' +
+        "whoever issued it. Set it to the identity provider's issuer URL — note " +
+        'that this is the value in the token, which is not necessarily the same ' +
+        'host as AUTH_SERVICE_URL.',
+    );
+  }
+
+  // Audience stays optional on purpose, and is NOT enforced by default.
+  //
+  // The INITE identity provider does not put an `aud` claim on user access
+  // tokens — it carries `client_id` instead — and jsonwebtoken rejects a token
+  // with no `aud` when an audience is configured. Requiring it here would lock
+  // out every real user rather than tighten anything. Deployments whose IdP
+  // does set `aud` can opt in.
   const audience = configService.get<string>('JWT_AUDIENCE') || undefined;
   if (issuer) logger.log(`Pinning JWT issuer: ${issuer}`);
   if (audience) logger.log(`Pinning JWT audience: ${audience}`);
