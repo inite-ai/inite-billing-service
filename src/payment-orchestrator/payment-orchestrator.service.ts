@@ -7,6 +7,7 @@ import {
   Optional,
   OnModuleInit,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/services/prisma.service';
 import { PaymentRailAdapter } from '../common/interfaces/payment-rail-adapter.interface';
 import { ConnectorRegistry } from '../common/connectors/connector-registry.service';
@@ -123,6 +124,18 @@ export class PaymentOrchestratorService implements OnModuleInit {
     providerData?: Record<string, any>,
   ): Promise<void> {
     return this.prisma.$transaction(async (tx) => {
+      // Serialize transitions on this intent before reading it. The idempotency
+      // check below is read-then-write, and at Read Committed two concurrent
+      // deliveries of the same webhook — a provider retry racing the original,
+      // or two workers on one queue — both read `created`, both pass the check,
+      // and both run the full fulfilment chain: two invoices, two credit
+      // grants, two entitlements, two commissions, two events. The lock makes
+      // the loser wait and re-read the state the winner committed, where the
+      // idempotency check finally does its job.
+      await tx.$queryRaw(
+        Prisma.sql`SELECT id FROM billing.payment_intents WHERE id = ${paymentIntentId}::uuid FOR UPDATE`,
+      );
+
       const intent = await tx.paymentIntent.findUnique({
         where: { id: paymentIntentId },
         include: { order: { include: { price: { include: { product: true } } } } },

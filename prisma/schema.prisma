@@ -314,7 +314,10 @@ model Invoice {
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
-  @@index([orderId])
+  // One invoice per order, enforced by the database. A renewal creates its own
+  // order, so this constrains the same order being fulfilled twice — which is
+  // exactly what a webhook delivered twice used to do.
+  @@unique([orderId])
   @@index([status])
   @@map("invoices")
   @@schema("billing")

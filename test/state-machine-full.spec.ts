@@ -71,6 +71,8 @@ describe('State Machine — orchestrator side effects', () => {
   beforeEach(async () => {
     mockPrisma = {
       $transaction: jest.fn((cb: any) => cb(mockPrisma)),
+      // The transition row-locks the intent before reading it.
+      $queryRaw: jest.fn().mockResolvedValue([]),
       paymentIntent: {
         findUnique: jest.fn(),
         update: jest.fn(),
