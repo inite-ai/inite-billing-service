@@ -146,15 +146,20 @@ export class AffiliatePayoutProcessor extends WorkerHost {
               `Created payout ${payout.id} for affiliate ${affiliate.id}: ${amount} ${currency}`,
             );
 
-            // Emit event
-            await this.outboxService.emit('billing.affiliate.payout.created', {
-              payout_id: payout.id,
-              affiliate_id: affiliate.id,
-              amount: amount.toString(),
-              currency,
-              period_start: lastMonth.toISOString(),
-              period_end: lastMonthEnd.toISOString(),
-            });
+            // Emit event — addressed to the service the affiliate belongs to.
+            // Payout amounts are that programme's numbers and no one else's.
+            await this.outboxService.emit(
+              'billing.affiliate.payout.created',
+              {
+                payout_id: payout.id,
+                affiliate_id: affiliate.id,
+                amount: amount.toString(),
+                currency,
+                period_start: lastMonth.toISOString(),
+                period_end: lastMonthEnd.toISOString(),
+              },
+              { serviceId: affiliate.serviceId ?? null },
+            );
           }
         });
       } catch (error: any) {

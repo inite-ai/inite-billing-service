@@ -46,7 +46,12 @@ describe('handleSubscriptionEvent', () => {
       $transaction: jest.fn((cb: any) => cb(prisma)),
       subscription: {
         findFirst: jest.fn(),
-        findUnique: jest.fn(),
+        // Also answers the owner lookup: outbox events are addressed to the
+        // service that sold the plan.
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'sub-1',
+          price: { product: { serviceId: 'svc-1' } },
+        }),
         update: jest.fn(),
         create: jest.fn(),
       },
@@ -81,7 +86,7 @@ describe('handleSubscriptionEvent', () => {
         { provide: FunnelService, useValue: { track: jest.fn() } },
         {
           provide: CreditsService,
-          useValue: { grant: jest.fn(), resetForPeriod: jest.fn(), refund: jest.fn() },
+          useValue: { grant: jest.fn(), resetForPeriod: jest.fn(), revokeGrant: jest.fn() },
         },
       ],
     }).compile();
@@ -247,8 +252,7 @@ describe('handleSubscriptionEvent', () => {
           subscription_id: 'sub-1',
           provider_error: 'card_declined',
         }),
-        undefined,
-        prisma,
+        expect.objectContaining({ tx: prisma }),
       );
     });
 
@@ -336,6 +340,13 @@ describe('revokeSubscriptionEntitlements', () => {
         findMany: jest.fn(),
         updateMany: jest.fn(),
       },
+      // The revoked events are addressed to the service that sold the plan.
+      subscription: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'sub-target',
+          price: { product: { serviceId: 'svc-1' } },
+        }),
+      },
     };
     outbox = { emit: jest.fn().mockResolvedValue(undefined) };
 
@@ -348,7 +359,7 @@ describe('revokeSubscriptionEntitlements', () => {
         { provide: FunnelService, useValue: { track: jest.fn() } },
         {
           provide: CreditsService,
-          useValue: { grant: jest.fn(), resetForPeriod: jest.fn(), refund: jest.fn() },
+          useValue: { grant: jest.fn(), resetForPeriod: jest.fn(), revokeGrant: jest.fn() },
         },
       ],
     }).compile();

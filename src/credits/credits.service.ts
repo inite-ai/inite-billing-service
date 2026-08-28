@@ -285,7 +285,11 @@ export class CreditsService {
   }
 
   /**
-   * Reset credits (on subscription renewal)
+   * Reset credits (on subscription renewal).
+   *
+   * `orderId` is stamped on the ledger rows so a later refund of that order can
+   * find what this period granted. Without it the subscription grant was
+   * anonymous, and refunding a subscription payment took back nothing at all.
    */
   async resetForPeriod(
     data: {
@@ -293,6 +297,7 @@ export class CreditsService {
       serviceId?: string;
       newBalance: number;
       resetsAt: Date;
+      orderId?: string;
     },
     tx?: Prisma.TransactionClient,
   ): Promise<CreditBalance> {
@@ -308,6 +313,7 @@ export class CreditsService {
             amount: -balance.balance,
             type: 'reset',
             description: `Period reset: ${balance.balance} credits expired`,
+            orderId: data.orderId ?? null,
           },
         });
       }
@@ -330,6 +336,7 @@ export class CreditsService {
           amount: data.newBalance,
           type: 'grant',
           description: `Period reset: ${data.newBalance} credits granted`,
+          orderId: data.orderId ?? null,
         },
       });
 
@@ -435,14 +442,30 @@ export class CreditsService {
   }
 
   /**
-   * Refund credits (on order refund)
+   * Take back credits that an order paid for, because that order was refunded.
+   *
+   * This replaces a method called `refund`, which incremented the balance. The
+   * name was read as "refund the credits to the user" while its only caller was
+   * the order-refund path, where the money is going back to the customer and
+   * the credits have to go the other way. A customer who bought 100 credits and
+   * asked for their money back was left with 200.
+   *
+   * `totalGranted` comes down with the balance so that
+   * `balance = totalGranted - totalUsed` still holds; incrementing it, as the
+   * old method did, corrupted that identity as well.
+   *
+   * The balance is allowed to go negative when the credits have already been
+   * spent. That is the true state — the customer consumed value they no longer
+   * paid for — and `consume` refuses to spend from it, so the debt has to be
+   * settled by a grant before they can continue.
    */
-  async refund(
+  async revokeGrant(
     data: {
       userId: string;
       serviceId?: string;
       amount: number;
       orderId: string;
+      reason?: string;
     },
     tx?: Prisma.TransactionClient,
   ): Promise<CreditBalance> {
@@ -452,8 +475,8 @@ export class CreditsService {
       const updated = await db.creditBalance.update({
         where: { id: balance.id },
         data: {
-          balance: { increment: data.amount },
-          totalGranted: { increment: data.amount },
+          balance: { decrement: data.amount },
+          totalGranted: { decrement: data.amount },
         },
       });
 
@@ -461,16 +484,24 @@ export class CreditsService {
         data: {
           creditBalanceId: balance.id,
           userId: data.userId,
-          amount: data.amount,
-          type: 'refund',
-          description: `Refund for order ${data.orderId}`,
+          // Negative, like `reset`: the ledger reads as a running total, and a
+          // positive number here would sum as if credits had been added.
+          amount: -data.amount,
+          type: 'purchase_reversal',
+          description: data.reason ?? `Revoked: order ${data.orderId} refunded`,
           orderId: data.orderId,
         },
       });
 
-      this.logger.log(
-        `Refunded ${data.amount} credits to user ${data.userId} for order ${data.orderId}`,
-      );
+      if (updated.balance < 0) {
+        this.logger.warn(
+          `Revoked ${data.amount} credits from user ${data.userId} for refunded order ${data.orderId}: balance is now ${updated.balance} (they had already been spent)`,
+        );
+      } else {
+        this.logger.log(
+          `Revoked ${data.amount} credits from user ${data.userId} for refunded order ${data.orderId}`,
+        );
+      }
 
       return updated;
     };

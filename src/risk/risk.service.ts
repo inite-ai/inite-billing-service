@@ -254,12 +254,23 @@ export class RiskService {
   }
 
   private notifyAdmins(orderId: string, score: number, status: string): void {
-    void this.outboxService
-      .emit(
-        'billing.risk.flagged',
-        { orderId, score, status },
-        { type: 'risk_assessment', id: orderId },
+    void this.serviceIdForOrder(orderId)
+      .then((serviceId) =>
+        this.outboxService.emit(
+          'billing.risk.flagged',
+          { orderId, score, status },
+          { serviceId, aggregate: { type: 'risk_assessment', id: orderId } },
+        ),
       )
       .catch((error: any) => this.logger.warn(`Risk outbox emit failed: ${error.message}`));
+  }
+
+  /** The consumer that sold this order — outbox deliveries are addressed by it. */
+  private async serviceIdForOrder(orderId: string): Promise<string | null> {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { price: { include: { product: true } } },
+    });
+    return order?.price?.product?.serviceId ?? null;
   }
 }

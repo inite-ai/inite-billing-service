@@ -7,6 +7,7 @@ import {
   Optional,
   OnModuleInit,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/services/prisma.service';
 import { PaymentRailAdapter } from '../common/interfaces/payment-rail-adapter.interface';
 import { ConnectorRegistry } from '../common/connectors/connector-registry.service';
@@ -123,6 +124,18 @@ export class PaymentOrchestratorService implements OnModuleInit {
     providerData?: Record<string, any>,
   ): Promise<void> {
     return this.prisma.$transaction(async (tx) => {
+      // Serialize transitions on this intent before reading it. The idempotency
+      // check below is read-then-write, and at Read Committed two concurrent
+      // deliveries of the same webhook — a provider retry racing the original,
+      // or two workers on one queue — both read `created`, both pass the check,
+      // and both run the full fulfilment chain: two invoices, two credit
+      // grants, two entitlements, two commissions, two events. The lock makes
+      // the loser wait and re-read the state the winner committed, where the
+      // idempotency check finally does its job.
+      await tx.$queryRaw(
+        Prisma.sql`SELECT id FROM billing.payment_intents WHERE id = ${paymentIntentId}::uuid FOR UPDATE`,
+      );
+
       const intent = await tx.paymentIntent.findUnique({
         where: { id: paymentIntentId },
         include: { order: { include: { price: { include: { product: true } } } } },
@@ -188,8 +201,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
           status: newStatus,
           previous_status: intent.status,
         },
-        undefined,
-        tx,
+        { serviceId: intent.order.price?.product?.serviceId ?? null, tx: tx },
       );
 
       // Track funnel events based on status transitions
@@ -266,8 +278,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
         amount: order.amount.toString(),
         currency: order.currency,
       },
-      undefined,
-      tx,
+      { serviceId: order.price?.product?.serviceId ?? null, tx: tx },
     );
   }
 
@@ -292,6 +303,15 @@ export class PaymentOrchestratorService implements OnModuleInit {
 
     // Refund credits if they were granted for this order
     await this.handleCreditsRefund(order, tx);
+
+    // A refunded subscription payment used to leave the subscription running
+    // and its entitlements active: only `source: 'order'` entitlements were
+    // revoked below, and subscription access is granted with
+    // `source: 'subscription'`. The customer kept the product after getting
+    // their money back, and the next period would have billed them again.
+    if (order.mode === 'SUBSCRIPTION') {
+      await this.endSubscriptionForRefundedOrder(order, tx);
+    }
 
     // Revoke entitlements scoped to this order only (H7)
     const activeEntitlements = await tx.entitlement.findMany({
@@ -325,8 +345,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
         order_id: order.id,
         user_id: order.userId,
       },
-      undefined,
-      tx,
+      { serviceId: order.price?.product?.serviceId ?? null, tx: tx },
     );
 
     await this.outboxService.emit(
@@ -336,8 +355,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
         source: 'order',
         order_id: order.id,
       },
-      undefined,
-      tx,
+      { serviceId: order.price?.product?.serviceId ?? null, tx: tx },
     );
   }
 
@@ -361,8 +379,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
         order_id: order.id,
         user_id: order.userId,
       },
-      undefined,
-      tx,
+      { serviceId: order.price?.product?.serviceId ?? null, tx: tx },
     );
   }
 
@@ -397,8 +414,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
           source: 'order',
           order_id: order.id,
         },
-        undefined,
-        tx,
+        { serviceId: product.serviceId ?? null, tx: tx },
       );
     }
   }
@@ -525,8 +541,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
           subscription_id: subscription.id,
           expires_at: expiresAt.toISOString(),
         },
-        undefined,
-        tx,
+        { serviceId: product.serviceId ?? null, tx: tx },
       );
     }
 
@@ -538,8 +553,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
         status: subscription.status,
         current_period_end: periodEnd.toISOString(),
       },
-      undefined,
-      tx,
+      { serviceId: product.serviceId ?? null, tx: tx },
     );
   }
 
@@ -676,8 +690,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
         current_period_end: subscription.currentPeriodEnd.toISOString(),
         provider_error: providerData?.errorMessage || providerData?.failure_message || null,
       },
-      undefined,
-      tx,
+      { serviceId: await this.serviceIdForSubscription(subscription.id, tx), tx: tx },
     );
   }
 
@@ -706,8 +719,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
         user_id: subscription.userId,
         cancel_at_period_end: !periodPassed,
       },
-      undefined,
-      tx,
+      { serviceId: await this.serviceIdForSubscription(subscription.id, tx), tx: tx },
     );
   }
 
@@ -716,6 +728,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
    * Used by the expirer cron and provider-cancellation handler.
    */
   async revokeSubscriptionEntitlements(subscriptionId: string, tx: any): Promise<void> {
+    const serviceId = await this.serviceIdForSubscription(subscriptionId, tx);
     const entitlements = await tx.entitlement.findMany({
       where: {
         source: 'subscription',
@@ -740,8 +753,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
           source: 'subscription',
           subscription_id: subscriptionId,
         },
-        undefined,
-        tx,
+        { serviceId, tx },
       );
     }
   }
@@ -772,11 +784,26 @@ export class PaymentOrchestratorService implements OnModuleInit {
           status: newStatus,
           reason,
         },
-        undefined,
-        txInner,
+        { serviceId: await this.serviceIdForSubscription(subscriptionId, txInner), tx: txInner },
       );
     };
     return tx ? run(tx) : this.prisma.$transaction(run);
+  }
+
+  /**
+   * Which consumer an event about this subscription belongs to.
+   *
+   * Outbox deliveries are addressed by service now, and the subscription
+   * lifecycle paths only carry an id — so the owner is read back through
+   * price → product. Returns null when the chain is incomplete, and a null
+   * owner is delivered to nobody rather than to everybody.
+   */
+  private async serviceIdForSubscription(subscriptionId: string, tx: any): Promise<string | null> {
+    const sub = await tx.subscription.findUnique({
+      where: { id: subscriptionId },
+      include: { price: { include: { product: true } } },
+    });
+    return sub?.price?.product?.serviceId ?? null;
   }
 
   private extractEntitlementKeys(product: any): string[] {
@@ -899,6 +926,8 @@ export class PaymentOrchestratorService implements OnModuleInit {
           serviceId,
           newBalance: creditsPerPeriod,
           resetsAt: periodEnd,
+          // Stamped so a refund of this order can find what it granted.
+          orderId: order.id,
         },
         tx,
       );
@@ -919,25 +948,83 @@ export class PaymentOrchestratorService implements OnModuleInit {
   /**
    * Refund credits that were granted for an order
    */
-  private async handleCreditsRefund(order: any, tx: any): Promise<void> {
-    // Look up credit usages tied to this order
-    const creditUsages = await tx.creditUsage.findMany({
+  /**
+   * Take back the credits this order paid for.
+   *
+   * Two things were wrong here. The call was `creditsService.refund`, which
+   * *added* credits — so refunding a 100-credit purchase left the customer with
+   * 200 and their money back. And subscription grants were written by
+   * `resetForPeriod` without an `orderId`, so this lookup found nothing and a
+   * refunded subscription payment took back none of its credits at all.
+   *
+   * Reversals are skipped for grants already reversed, so a second refund
+   * attempt on the same order cannot double-debit.
+   */
+  /**
+   * End the subscription this order paid for.
+   *
+   * Orders carry no subscription id, so the period is matched the same way the
+   * payment path creates it: by (userId, priceId). Only a live subscription is
+   * touched — refunding an old order for a subscription that has since ended
+   * must not resurrect and re-end it, and must not emit a second
+   * `subscription.ended`.
+   */
+  private async endSubscriptionForRefundedOrder(order: any, tx: any): Promise<void> {
+    const subscription = await tx.subscription.findFirst({
       where: {
-        orderId: order.id,
-        type: 'grant',
+        userId: order.userId,
+        priceId: order.priceId,
+        status: { in: ['trialing', 'active', 'past_due'] },
       },
+      orderBy: { updatedAt: 'desc' },
+    });
+    if (!subscription) return;
+
+    await tx.subscription.update({
+      where: { id: subscription.id },
+      data: { status: 'ended', updatedAt: new Date() },
+    });
+    await this.revokeSubscriptionEntitlements(subscription.id, tx);
+    await this.outboxService.emit(
+      'billing.subscription.ended',
+      {
+        subscription_id: subscription.id,
+        user_id: order.userId,
+        status: 'ended',
+        reason: 'payment_refunded',
+        order_id: order.id,
+      },
+      { serviceId: order.price?.product?.serviceId ?? null, tx },
+    );
+
+    this.logger.log(`Ended subscription ${subscription.id}: order ${order.id} was refunded`);
+  }
+
+  private async handleCreditsRefund(order: any, tx: any): Promise<void> {
+    const grants = await tx.creditUsage.findMany({
+      where: { orderId: order.id, type: 'grant' },
       include: { creditBalance: true },
     });
+    if (grants.length === 0) return;
 
-    // Refund on the same tx as the order refund so they commit atomically —
-    // don't swallow, or a paid order could be marked refunded while the credits
-    // it granted stay spent.
-    for (const usage of creditUsages) {
-      await this.creditsService.refund(
+    const alreadyReversed = await tx.creditUsage.count({
+      where: { orderId: order.id, type: 'purchase_reversal' },
+    });
+    if (alreadyReversed > 0) {
+      this.logger.warn(
+        `Credits for order ${order.id} were already revoked — skipping (refund replayed?)`,
+      );
+      return;
+    }
+
+    // On the same tx as the order refund so they commit together: a paid order
+    // must not be marked refunded while the credits it bought stay in place.
+    for (const grant of grants) {
+      await this.creditsService.revokeGrant(
         {
-          userId: usage.userId,
-          serviceId: usage.creditBalance.serviceId ?? undefined,
-          amount: usage.amount,
+          userId: grant.userId,
+          serviceId: grant.creditBalance.serviceId ?? undefined,
+          amount: grant.amount,
           orderId: order.id,
         },
         tx,

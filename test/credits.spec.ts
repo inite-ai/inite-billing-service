@@ -341,40 +341,44 @@ describe('CreditsService', () => {
     );
   });
 
-  // --- refund() ---
+  // --- revokeGrant() ---
 
-  it('refund() adds back to balance with type=refund', async () => {
-    const existing = { ...baseBalance, balance: 50 };
+  // The test this replaces asserted `balance: { increment: 50 }` and called it
+  // "refund() adds back to balance" — it was pinning the defect: the only
+  // caller is the order-refund path, where the money goes back to the customer
+  // and the credits have to come back to us.
+  it('revokeGrant() takes the credits back off the balance', async () => {
+    const existing = { ...baseBalance, balance: 100, totalGranted: 100 };
     mockTx.creditBalance.findUnique.mockResolvedValue(existing);
     mockTx.creditBalance.update.mockResolvedValue({
       ...existing,
-      balance: 100,
+      balance: 50,
       totalGranted: 50,
     });
     mockTx.creditUsage.create.mockResolvedValue({});
 
-    const result = await service.refund({
+    const result = await service.revokeGrant({
       userId: 'user-1',
       amount: 50,
       orderId: 'order-123',
     });
 
-    expect(result.balance).toBe(100);
+    expect(result.balance).toBe(50);
     expect(mockTx.creditBalance.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          balance: { increment: 50 },
-          totalGranted: { increment: 50 },
+          balance: { decrement: 50 },
+          // Down with the balance, so `balance = totalGranted - totalUsed` holds.
+          totalGranted: { decrement: 50 },
         }),
       }),
     );
     expect(mockTx.creditUsage.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          type: 'refund',
-          amount: 50,
+          type: 'purchase_reversal',
+          amount: -50,
           orderId: 'order-123',
-          description: 'Refund for order order-123',
         }),
       }),
     );

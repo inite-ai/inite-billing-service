@@ -237,8 +237,7 @@ export class SubscriptionsService {
             trial: true,
             expires_at: entitlementExpiry.toISOString(),
           },
-          undefined,
-          tx,
+          { serviceId: product.serviceId ?? null, tx },
         );
       }
 
@@ -277,8 +276,7 @@ export class SubscriptionsService {
           price_code: priceCode,
           trial_ends_at: trialEnd.toISOString(),
         },
-        undefined,
-        tx,
+        { serviceId: product.serviceId ?? null, tx },
       );
 
       return {

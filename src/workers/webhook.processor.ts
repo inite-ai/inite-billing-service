@@ -6,6 +6,14 @@ import { PaymentOrchestratorService } from '../payment-orchestrator/payment-orch
 import { RiskService } from '../risk/risk.service';
 import { reconcileAmount } from './reconcile-amount';
 
+/**
+ * How long a worker may hold a webhook before another may take it over. Long
+ * enough that the fulfilment chain (payment → order → subscription →
+ * entitlements → credits → commissions, budgeted at 30s) never loses its claim
+ * mid-flight; short enough that a killed worker does not strand the event.
+ */
+const PROCESSING_LEASE_MS = 5 * 60 * 1000;
+
 interface WebhookJobData {
   rail: string;
   webhookId: string;
@@ -49,28 +57,39 @@ export class WebhookProcessor extends WorkerHost {
       return;
     }
 
-    // Recovery: if stuck in 'processing' for >5 min, allow retry
-    if (webhookEvent.status === 'processing') {
-      const stuckThreshold = 5 * 60 * 1000; // 5 minutes
-      const lastActivity = new Date(webhookEvent.processedAt || webhookEvent.receivedAt).getTime();
-      if (Date.now() - lastActivity < stuckThreshold) {
-        this.logger.debug(`Webhook still processing: ${rail}/${webhookId}`);
-        return;
-      }
-      this.logger.warn(`Recovering stuck webhook: ${rail}/${webhookId}`);
-    }
-
-    // Atomic: only claim if still in received/failed/stuck-processing state
+    // Claim the event exclusively, or leave it to whoever holds it.
+    //
+    // The previous version allowed `processing` in the claim, so two workers
+    // that read the row at the same time both matched and both proceeded to
+    // fulfil the payment. The stuck-recovery check that was supposed to guard
+    // it ran as a separate read beforehand, which is exactly the window the
+    // race lives in.
+    //
+    // This is one statement: take it if nobody has it, or take it over if the
+    // holder's lease has expired. `processedAt` doubles as the lease stamp —
+    // the recovery path already read it as "last activity" — so the winner's
+    // write moves the deadline and the loser's identical claim matches zero
+    // rows.
+    const leaseExpiry = new Date(Date.now() - PROCESSING_LEASE_MS);
     const claimed = await this.prisma.webhookEvent.updateMany({
       where: {
         id: webhookEvent.id,
-        status: { in: ['received', 'failed', 'processing'] },
+        OR: [
+          { status: { in: ['received', 'failed'] } },
+          { status: 'processing', processedAt: { lt: leaseExpiry } },
+          // A row claimed before this deploy has no lease stamp at all; fall
+          // back to when it arrived so it cannot be stranded forever.
+          { status: 'processing', processedAt: null, receivedAt: { lt: leaseExpiry } },
+        ],
       },
-      data: { status: 'processing' },
+      data: { status: 'processing', processedAt: new Date() },
     });
     if (claimed.count === 0) {
-      this.logger.debug(`Webhook already claimed: ${rail}/${webhookId}`);
+      this.logger.debug(`Webhook held by another worker: ${rail}/${webhookId}`);
       return;
+    }
+    if (webhookEvent.status === 'processing') {
+      this.logger.warn(`Recovered stuck webhook: ${rail}/${webhookId}`);
     }
 
     try {

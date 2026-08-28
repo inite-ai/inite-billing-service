@@ -71,6 +71,8 @@ describe('State Machine — orchestrator side effects', () => {
   beforeEach(async () => {
     mockPrisma = {
       $transaction: jest.fn((cb: any) => cb(mockPrisma)),
+      // The transition row-locks the intent before reading it.
+      $queryRaw: jest.fn().mockResolvedValue([]),
       paymentIntent: {
         findUnique: jest.fn(),
         update: jest.fn(),
@@ -219,14 +221,12 @@ describe('State Machine — orchestrator side effects', () => {
     expect(mockOutbox.emit).toHaveBeenCalledWith(
       'billing.payment.status_changed',
       expect.objectContaining({ status: 'paid' }),
-      undefined,
-      expect.anything(),
+      expect.objectContaining({ tx: expect.anything() }),
     );
     expect(mockOutbox.emit).toHaveBeenCalledWith(
       'billing.payment.succeeded',
       expect.objectContaining({ order_id: 'order-1' }),
-      undefined,
-      expect.anything(),
+      expect.objectContaining({ tx: expect.anything() }),
     );
   });
 

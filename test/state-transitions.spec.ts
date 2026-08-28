@@ -14,6 +14,9 @@ describe('State Transitions', () => {
   beforeEach(async () => {
     const mockPrisma: any = {
       $transaction: jest.fn((callback: any) => callback(mockPrisma)),
+      // The transition row-locks the intent before reading it, so the fake
+      // transaction has to answer the lock as well as the reads.
+      $queryRaw: jest.fn().mockResolvedValue([]),
       paymentIntent: {
         findUnique: jest.fn(),
         update: jest.fn(),

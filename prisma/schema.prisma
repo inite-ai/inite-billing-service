@@ -314,7 +314,10 @@ model Invoice {
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
-  @@index([orderId])
+  // One invoice per order, enforced by the database. A renewal creates its own
+  // order, so this constrains the same order being fulfilled twice — which is
+  // exactly what a webhook delivered twice used to do.
+  @@unique([orderId])
   @@index([status])
   @@map("invoices")
   @@schema("billing")
@@ -351,8 +354,16 @@ model OutboxEvent {
   createdAt DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
   sentAt    DateTime?         @map("sent_at") @db.Timestamptz(6)
 
+  /// Which consumer this event belongs to. Payloads carry user ids, order ids,
+  /// amounts and entitlement keys, and the publisher used to POST every event
+  /// to every registered service — so each module received the others' billing
+  /// data. Delivery is now addressed by this column, and an event without one
+  /// is delivered to nobody rather than to everybody.
+  serviceId String?           @map("service_id") @db.Uuid
+
   @@index([status, createdAt(sort: Asc)])
   @@index([eventType])
+  @@index([serviceId, status])
   @@map("outbox_events")
   @@schema("billing")
 }
