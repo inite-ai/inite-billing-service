@@ -1,7 +1,7 @@
 import { CreditsService } from '../src/credits/credits.service';
 
 /**
- * Credit grant/reset/refund must run INSIDE the caller's transaction when one is
+ * Credit grant/reset/revoke must run INSIDE the caller's transaction when one is
  * passed (the payment-fulfilment tx), so credits commit or roll back atomically
  * with the order. Previously they always opened their own separate $transaction,
  * so a payment rollback left phantom credits and a grant failure was invisible
@@ -51,7 +51,10 @@ describe('CreditsService transaction threading', () => {
           outerTx,
         ),
     ],
-    ['refund', () => service.refund({ userId: 'user-1', amount: 100, orderId: 'o1' }, outerTx)],
+    [
+      'revokeGrant',
+      () => service.revokeGrant({ userId: 'user-1', amount: 100, orderId: 'o1' }, outerTx),
+    ],
   ])('%s(data, tx)', (_name, call) => {
     it('runs on the passed tx and does NOT open its own transaction', async () => {
       await call();

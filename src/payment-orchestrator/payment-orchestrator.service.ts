@@ -293,6 +293,15 @@ export class PaymentOrchestratorService implements OnModuleInit {
     // Refund credits if they were granted for this order
     await this.handleCreditsRefund(order, tx);
 
+    // A refunded subscription payment used to leave the subscription running
+    // and its entitlements active: only `source: 'order'` entitlements were
+    // revoked below, and subscription access is granted with
+    // `source: 'subscription'`. The customer kept the product after getting
+    // their money back, and the next period would have billed them again.
+    if (order.mode === 'SUBSCRIPTION') {
+      await this.endSubscriptionForRefundedOrder(order, tx);
+    }
+
     // Revoke entitlements scoped to this order only (H7)
     const activeEntitlements = await tx.entitlement.findMany({
       where: {
@@ -899,6 +908,8 @@ export class PaymentOrchestratorService implements OnModuleInit {
           serviceId,
           newBalance: creditsPerPeriod,
           resetsAt: periodEnd,
+          // Stamped so a refund of this order can find what it granted.
+          orderId: order.id,
         },
         tx,
       );
@@ -919,25 +930,84 @@ export class PaymentOrchestratorService implements OnModuleInit {
   /**
    * Refund credits that were granted for an order
    */
-  private async handleCreditsRefund(order: any, tx: any): Promise<void> {
-    // Look up credit usages tied to this order
-    const creditUsages = await tx.creditUsage.findMany({
+  /**
+   * Take back the credits this order paid for.
+   *
+   * Two things were wrong here. The call was `creditsService.refund`, which
+   * *added* credits — so refunding a 100-credit purchase left the customer with
+   * 200 and their money back. And subscription grants were written by
+   * `resetForPeriod` without an `orderId`, so this lookup found nothing and a
+   * refunded subscription payment took back none of its credits at all.
+   *
+   * Reversals are skipped for grants already reversed, so a second refund
+   * attempt on the same order cannot double-debit.
+   */
+  /**
+   * End the subscription this order paid for.
+   *
+   * Orders carry no subscription id, so the period is matched the same way the
+   * payment path creates it: by (userId, priceId). Only a live subscription is
+   * touched — refunding an old order for a subscription that has since ended
+   * must not resurrect and re-end it, and must not emit a second
+   * `subscription.ended`.
+   */
+  private async endSubscriptionForRefundedOrder(order: any, tx: any): Promise<void> {
+    const subscription = await tx.subscription.findFirst({
       where: {
-        orderId: order.id,
-        type: 'grant',
+        userId: order.userId,
+        priceId: order.priceId,
+        status: { in: ['trialing', 'active', 'past_due'] },
       },
+      orderBy: { updatedAt: 'desc' },
+    });
+    if (!subscription) return;
+
+    await tx.subscription.update({
+      where: { id: subscription.id },
+      data: { status: 'ended', updatedAt: new Date() },
+    });
+    await this.revokeSubscriptionEntitlements(subscription.id, tx);
+    await this.outboxService.emit(
+      'billing.subscription.ended',
+      {
+        subscription_id: subscription.id,
+        user_id: order.userId,
+        status: 'ended',
+        reason: 'payment_refunded',
+        order_id: order.id,
+      },
+      undefined,
+      tx,
+    );
+
+    this.logger.log(`Ended subscription ${subscription.id}: order ${order.id} was refunded`);
+  }
+
+  private async handleCreditsRefund(order: any, tx: any): Promise<void> {
+    const grants = await tx.creditUsage.findMany({
+      where: { orderId: order.id, type: 'grant' },
       include: { creditBalance: true },
     });
+    if (grants.length === 0) return;
 
-    // Refund on the same tx as the order refund so they commit atomically —
-    // don't swallow, or a paid order could be marked refunded while the credits
-    // it granted stay spent.
-    for (const usage of creditUsages) {
-      await this.creditsService.refund(
+    const alreadyReversed = await tx.creditUsage.count({
+      where: { orderId: order.id, type: 'purchase_reversal' },
+    });
+    if (alreadyReversed > 0) {
+      this.logger.warn(
+        `Credits for order ${order.id} were already revoked — skipping (refund replayed?)`,
+      );
+      return;
+    }
+
+    // On the same tx as the order refund so they commit together: a paid order
+    // must not be marked refunded while the credits it bought stay in place.
+    for (const grant of grants) {
+      await this.creditsService.revokeGrant(
         {
-          userId: usage.userId,
-          serviceId: usage.creditBalance.serviceId ?? undefined,
-          amount: usage.amount,
+          userId: grant.userId,
+          serviceId: grant.creditBalance.serviceId ?? undefined,
+          amount: grant.amount,
           orderId: order.id,
         },
         tx,

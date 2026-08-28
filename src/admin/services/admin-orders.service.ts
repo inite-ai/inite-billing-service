@@ -112,6 +112,21 @@ export class AdminOrdersService {
 
     // Find the successful payment intent and transition it to refunded
     // This will revoke entitlements and update invoices via the orchestrator
+    // Read the live subscription before the transition ends it: the orchestrator
+    // sets status to `ended`, and stopping the provider's billing afterwards
+    // needs the rail and the provider's own subscription id from that row.
+    const liveSubscription =
+      order.mode === 'SUBSCRIPTION'
+        ? await this.prisma.subscription.findFirst({
+            where: {
+              userId: order.userId,
+              priceId: order.priceId,
+              status: { in: ['trialing', 'active', 'past_due'] },
+            },
+            orderBy: { updatedAt: 'desc' },
+          })
+        : null;
+
     const paidIntent = order.paymentIntents.find((pi) => pi.status === 'paid');
     if (paidIntent) {
       // Issue the provider refund BEFORE the DB transition: applyStateTransition
@@ -128,6 +143,29 @@ export class AdminOrdersService {
         where: { id },
         data: { status: 'refunded' },
       });
+    }
+
+    // Outside the fulfilment transaction on purpose: this is a network call to
+    // the provider, and holding a money transaction open across it is how a
+    // slow rail turns into lock contention on every paid order. Failing here
+    // must not undo the refund either — the money is already back — so it is
+    // logged loudly for someone to finish by hand.
+    if (liveSubscription) {
+      try {
+        const stopped = await this.paymentOrchestrator.cancelProviderSubscription(
+          liveSubscription,
+          false,
+        );
+        if (!stopped) {
+          this.logger.warn(
+            `Order ${id} refunded and subscription ${liveSubscription.id} ended, but the rail did not confirm cancellation — check ${liveSubscription.rail ?? 'the provider'} before the next billing date`,
+          );
+        }
+      } catch (error: any) {
+        this.logger.error(
+          `Order ${id} refunded and subscription ${liveSubscription.id} ended, but cancelling it at the provider failed: ${error.message}. It will bill again unless cancelled manually.`,
+        );
+      }
     }
 
     return this.prisma.order.findUnique({
