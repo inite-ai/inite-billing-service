@@ -63,19 +63,31 @@ export class RecommendationsService {
       limit?: number;
       explain?: boolean;
       locale?: string;
+      /**
+       * Confine both the signals and the catalogue to one service. Set when a
+       * module asks on a user's behalf: without it, the answer was assembled
+       * from everything that user had ever bought anywhere on the platform and
+       * drawn from every service's catalogue, so a module learned its
+       * neighbours' products, prices and this customer's history with them.
+       * Unset for the user's own dashboard, where seeing across services is the
+       * point.
+       */
+      serviceId?: string;
     } = {},
   ): Promise<Offer[]> {
     const limit = Math.min(Math.max(options.limit ?? 3, 1), 10);
+    const tenant = options.serviceId;
+    const ownedByTenant = tenant ? { price: { product: { serviceId: tenant } } } : {};
 
     const [paidOrders, subscriptions, entitlements, recentEvents, catalog] = await Promise.all([
       this.prisma.order.findMany({
-        where: { userId, status: 'paid' },
+        where: { userId, status: 'paid', ...ownedByTenant },
         include: { price: { include: { product: true } } },
         orderBy: { createdAt: 'desc' },
         take: 50,
       }),
       this.prisma.subscription.findMany({
-        where: { userId, status: { in: ['active', 'trialing'] } },
+        where: { userId, status: { in: ['active', 'trialing'] }, ...ownedByTenant },
         include: { price: { include: { product: true } } },
       }),
       this.prisma.entitlement.findMany({
@@ -84,6 +96,7 @@ export class RecommendationsService {
       this.prisma.funnelEvent.findMany({
         where: {
           userId,
+          ...(tenant ? { serviceId: tenant } : {}),
           eventType: { in: ['catalog_view', 'checkout_abandoned'] },
           createdAt: { gte: new Date(Date.now() - 30 * 86_400_000) },
         },
@@ -91,7 +104,7 @@ export class RecommendationsService {
         take: 50,
       }),
       this.prisma.product.findMany({
-        where: { isActive: true },
+        where: { isActive: true, ...(tenant ? { serviceId: tenant } : {}) },
         include: {
           prices: { where: { isActive: true } },
           service: { select: { id: true, name: true } },

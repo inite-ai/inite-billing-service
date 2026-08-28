@@ -1,22 +1,71 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../common/services/prisma.service';
 import { Conversation, ChatMessage } from '@prisma/client';
+
+/** Who is asking — a platform user over a JWT, or a module over its API key. */
+export interface ConversationCaller {
+  userId: string;
+  isService?: boolean;
+  serviceId?: string;
+}
 
 @Injectable()
 export class ConversationsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getOrCreate(userId: string, mode: string): Promise<Conversation> {
+  /**
+   * The active conversation between this user and this service's assistant.
+   *
+   * Scoped by service, so two modules talking to the same user do not land in
+   * one shared thread — and so the ownership check below has something to check.
+   */
+  async getOrCreate(
+    userId: string,
+    mode: string,
+    serviceId: string | null = null,
+  ): Promise<Conversation> {
     const existing = await this.prisma.conversation.findFirst({
-      where: { userId, mode, status: 'active' },
+      where: { userId, mode, status: 'active', serviceId },
       orderBy: { updatedAt: 'desc' },
     });
 
     if (existing) return existing;
 
     return this.prisma.conversation.create({
-      data: { userId, mode, status: 'active' },
+      data: { userId, mode, status: 'active', serviceId },
     });
+  }
+
+  /**
+   * Load a conversation the caller is entitled to, or refuse.
+   *
+   * Every endpoint used to run this check only `if (!user.isService)`, so a
+   * service key skipped it: any registered module could read, and write into,
+   * any user's conversation on the platform. A service is now confined to the
+   * conversations its own key created, and a user to their own.
+   */
+  async requireAccess(conversationId: string, caller: ConversationCaller): Promise<Conversation> {
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+    });
+
+    // Same message either way: whether a conversation exists is not something
+    // an unauthorised caller gets to learn.
+    const denied = new ForbiddenException('You do not have access to this conversation');
+    if (!conversation) throw denied;
+
+    if (caller.isService) {
+      if (!caller.serviceId || conversation.serviceId !== caller.serviceId) throw denied;
+      return conversation;
+    }
+
+    if (conversation.userId !== caller.userId) throw denied;
+    return conversation;
   }
 
   async getConversationById(id: string): Promise<Conversation | null> {
@@ -58,16 +107,24 @@ export class ConversationsService {
     });
   }
 
-  async listConversations(userId: string): Promise<Conversation[]> {
+  /**
+   * A user sees every conversation they own, across services. A service sees
+   * only the ones it started — including when it asks on a user's behalf.
+   */
+  async listConversations(userId: string, caller?: ConversationCaller): Promise<Conversation[]> {
     return this.prisma.conversation.findMany({
-      where: { userId },
+      where: caller?.isService ? { userId, serviceId: caller.serviceId ?? null } : { userId },
       orderBy: { updatedAt: 'desc' },
     });
   }
 
-  async resolveConversation(conversationId: string, userId: string): Promise<Conversation> {
+  async resolveConversation(
+    conversationId: string,
+    caller: ConversationCaller,
+  ): Promise<Conversation> {
+    await this.requireAccess(conversationId, caller);
     return this.prisma.conversation.update({
-      where: { id: conversationId, userId },
+      where: { id: conversationId },
       data: { status: 'resolved' },
     });
   }
