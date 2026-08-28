@@ -305,6 +305,10 @@ export class CryptoAdapter implements Connector {
       if (confirmations >= required) {
         return {
           status: 'paid',
+          // This adapter checks the on-chain transfer against the intent —
+          // receiver, token and amount — before reporting paid, so the
+          // settlement is verified even though no fiat amount is reported.
+          amountVerifiedByAdapter: true,
           metadata: { txHash: observed.txHash, confirmations, chain },
           providerData: { ...observed, validated: true },
         };
@@ -324,6 +328,7 @@ export class CryptoAdapter implements Connector {
     if (snapshot.txHash && snapshot.confirmations >= (snapshot.requiredConfirmations || 1)) {
       return {
         status: 'paid',
+        amountVerifiedByAdapter: true,
         metadata: {
           txHash: snapshot.txHash,
           confirmations: snapshot.confirmations,

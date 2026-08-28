@@ -42,8 +42,22 @@ describe('reconcileAmount', () => {
     expect(reconcileAmount(order, { amount: 10, currency: 'usd' }).ok).toBe(true);
   });
 
-  it('skips (does not falsely fail) when the adapter gives no normalized amount', () => {
-    expect(reconcileAmount(order, {})).toEqual({ ok: true, reconciled: false });
+  it('refuses to settle when nothing establishes the amount', () => {
+    // This used to pass: no amount meant "skip the check", so on any rail that
+    // does not report one, an underpayment settled in full. Silence is not
+    // evidence of payment.
+    const res = reconcileAmount({ amount: '20.0000', currency: 'USD' }, { status: 'paid' } as any);
+    expect(res).toMatchObject({ ok: false, reason: 'amount_unverifiable', reconciled: false });
+  });
+
+  it('accepts when the adapter states it verified the amount itself', () => {
+    // The app stores charge their own configured price and the crypto adapter
+    // checks the transfer against the intent — but they have to say so.
+    const res = reconcileAmount({ amount: '20.0000', currency: 'USD' }, {
+      status: 'paid',
+      amountVerifiedByAdapter: true,
+    } as any);
+    expect(res).toMatchObject({ ok: true, reconciled: true });
   });
 
   it('handles a Decimal-like order amount', () => {

@@ -6,6 +6,7 @@ import { OutboxScheduler } from './outbox.scheduler';
 import { NotificationEmailProcessor } from './notification-email.processor';
 import { OutreachProcessor } from './outreach.processor';
 import { SubscriptionExpirerScheduler } from './subscription-expirer.scheduler';
+import { WebhookRecoveryScheduler } from './webhook-recovery.scheduler';
 import { PaymentOrchestratorModule } from '../payment-orchestrator/payment-orchestrator.module';
 import { OutboxModule } from '../outbox/outbox.module';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -58,6 +59,7 @@ import { PrismaService } from '../common/services/prisma.service';
     NotificationEmailProcessor,
     OutreachProcessor,
     SubscriptionExpirerScheduler,
+    WebhookRecoveryScheduler,
     PrismaService,
   ],
 })

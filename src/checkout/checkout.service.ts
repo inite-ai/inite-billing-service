@@ -114,6 +114,13 @@ export class CheckoutService {
     dto: CreateCheckoutSessionDto,
     idempotencyKey?: string,
     clientIp?: string,
+    /**
+     * The service whose API key made this call, when one did. A service may
+     * only sell its own catalogue: without this, any module's key could open a
+     * checkout for another module's product, and the resulting order, revenue
+     * and affiliate commission would land in the other module's books.
+     */
+    callerServiceId?: string,
   ): Promise<CheckoutSessionResponseDto> {
     // Idempotency check (Redis-backed so it survives restarts and is shared
     // across instances; falls back to an in-process Map if Redis is absent).
@@ -134,6 +141,13 @@ export class CheckoutService {
 
     if (!product) {
       throw new NotFoundException(`Product not found for price: ${dto.priceCode}`);
+    }
+
+    if (callerServiceId && product.serviceId !== callerServiceId) {
+      // Deliberately the same message as an unknown price: a service key should
+      // not be able to enumerate another service's catalogue by watching which
+      // codes come back "wrong tenant" versus "not found".
+      throw new NotFoundException(`Price not found: ${dto.priceCode}`);
     }
 
     // Reject checkout if the product is inactive
@@ -244,7 +258,7 @@ export class CheckoutService {
    * Get session details for the checkout page.
    * Returns order info, product, price, and available payment methods.
    */
-  async getSession(sessionId: string, userId?: string) {
+  async getSession(sessionId: string, userId?: string, callerServiceId?: string) {
     const order = await this.prisma.order.findUnique({
       where: { id: sessionId },
       include: {
@@ -263,6 +277,13 @@ export class CheckoutService {
     // If userId provided, verify ownership
     if (userId && order.userId !== userId) {
       throw new ForbiddenException('You do not have access to this session');
+    }
+
+    // A service key used to skip the ownership check entirely, which made every
+    // checkout session in the platform readable by any registered module —
+    // user id, product, amount and all. A service sees its own sessions.
+    if (callerServiceId && order.price?.product?.serviceId !== callerServiceId) {
+      throw new NotFoundException('Checkout session not found');
     }
 
     // Get available payment methods

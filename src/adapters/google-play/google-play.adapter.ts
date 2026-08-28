@@ -256,6 +256,11 @@ export class GooglePlayAdapter implements Connector {
 
       return {
         status: statusMap[sub.subscriptionState] || 'created',
+        // Play bills the price configured against the product in the Play
+        // Console; there is no path by which the customer pays a different
+        // amount, so the settlement is verified even though no amount is
+        // reported. Without saying so, the reconciler now refuses it.
+        amountVerifiedByAdapter: true,
         metadata: {
           google_state: sub.subscriptionState,
           expiry_time: sub.lineItems?.[0]?.expiryTime,
@@ -321,6 +326,7 @@ export class GooglePlayAdapter implements Connector {
 
       return {
         status: stateMap[product.purchaseState] ?? 'created',
+        amountVerifiedByAdapter: true,
         metadata: {
           google_purchase_token: purchaseToken,
           google_product_id: productId,

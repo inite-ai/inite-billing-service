@@ -21,6 +21,9 @@ describe('Webhook Idempotency', () => {
           useValue: {
             webhookEvent: {
               create: jest.fn(),
+              // The duplicate branch now asks what the existing row is doing
+              // before deciding whether to re-queue it.
+              findUnique: jest.fn().mockResolvedValue({ status: 'processed' }),
             },
           },
         },

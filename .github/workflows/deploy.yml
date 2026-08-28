@@ -262,14 +262,26 @@ jobs:
         mkdir -p /opt/projects/${{ env.PROJECT_NAME }}
         cd /opt/projects/${{ env.PROJECT_NAME }}
 
-        # Recreate .env
-        {
-          echo "DATABASE_URL=postgresql://${{ secrets.ORCH_POSTGRES_USER }}:${{ secrets.ORCH_POSTGRES_PASSWORD }}@postgres:5432/inite_billing?schema=billing"
-          echo "REDIS_URL=redis://redis:6379"
-          echo "OAUTH_CLIENT_SECRET=${{ secrets.BILLING_OAUTH_CLIENT_SECRET }}"
-          echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}"
-          echo "DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}"
-        } > .env
+        # Write the values this deploy owns, and keep everything else that is
+        # already there. This used to be `> .env`, which meant a full deploy
+        # silently deleted anything an operator had added — feature flags, mail
+        # credentials, a temporary override — with no trace of what was lost.
+        set_env() {
+          local key="$1" value="$2"
+          touch .env
+          # `grep -v` then append, so the key keeps one definition and the rest
+          # of the file keeps its order.
+          grep -v "^${key}=" .env > .env.next || true
+          echo "${key}=${value}" >> .env.next
+          mv .env.next .env
+        }
+
+        set_env DATABASE_URL "postgresql://${{ secrets.ORCH_POSTGRES_USER }}:${{ secrets.ORCH_POSTGRES_PASSWORD }}@postgres:5432/inite_billing?schema=billing"
+        set_env REDIS_URL "redis://redis:6379"
+        set_env OAUTH_CLIENT_SECRET "${{ secrets.BILLING_OAUTH_CLIENT_SECRET }}"
+        set_env ANTHROPIC_API_KEY "${{ secrets.ANTHROPIC_API_KEY }}"
+        set_env DOCKERHUB_USERNAME "${{ secrets.DOCKERHUB_USERNAME }}"
+        chmod 600 .env
 
         # Recreate docker-compose.yml
         cat > docker-compose.yml << COMPOSE_EOF
@@ -288,6 +300,11 @@ jobs:
               - "traefik.http.routers.billing-api.tls.certresolver=letsencrypt"
               - "traefik.http.routers.billing-api.priority=100"
               - "traefik.http.routers.billing-api.service=billing-api-service"
+            # Everything in .env reaches the app; the pinned values below still
+            # win. Without this, a flag an operator sets in .env is read by
+            # compose for substitution and then never passed to the container.
+            env_file:
+              - .env
             environment:
               - NODE_ENV=production
               - PORT=3000
@@ -295,6 +312,10 @@ jobs:
               - DATABASE_URL=\${DATABASE_URL}
               - REDIS_URL=\${REDIS_URL}
               - AUTH_SERVICE_URL=https://auth.inite.ai
+              # The `iss` inside the token, which is NOT the JWKS host: the
+              # identity provider signs with auth-api. Unset, this service
+              # accepts any token those keys can verify, whoever issued it.
+              - JWT_ISSUER=https://auth-api.inite.ai
               - CORS_ORIGINS=https://${{ env.DOMAIN }}
               - ANTHROPIC_API_KEY=\${ANTHROPIC_API_KEY}
             networks:

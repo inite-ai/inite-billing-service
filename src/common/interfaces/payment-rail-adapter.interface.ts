@@ -35,6 +35,18 @@ export interface IntentStatusResult {
   amount?: number;
   /** ISO currency of {@link amount} (case-insensitive), for reconciliation. */
   currency?: string;
+  /**
+   * Set when the adapter has itself established that the settled amount is the
+   * one that was owed — an app store that only ever charges its own configured
+   * price, or a rail whose adapter checks the on-chain transfer against the
+   * intent before reporting `paid`.
+   *
+   * It exists so that "no amount" stops meaning "amount is fine". Without a
+   * normalized {@link amount} and without this flag, the processor has no
+   * evidence the customer paid what the order says, and marking it paid on that
+   * basis is how an underpayment settles in full.
+   */
+  amountVerifiedByAdapter?: boolean;
 }
 
 export interface PaymentMethod {
