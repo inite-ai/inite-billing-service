@@ -271,6 +271,93 @@ describe('handleSubscriptionEvent', () => {
     });
   });
 
+  describe('store lifecycle events beyond the original three', () => {
+    // These used to fall through to the payment-intent lookup, which matches on
+    // a charge id while the event carries a subscription id: nothing matched,
+    // the event was marked failed, retried, and abandoned. An Apple or Google
+    // subscription that expired or went on hold therefore never ended here, and
+    // the customer kept entitlements the store had stopped billing for.
+
+    it('subscription.expired ends the subscription and revokes its access', async () => {
+      const sub = mockSub();
+      prisma.subscription.findFirst.mockResolvedValue(sub);
+      prisma.subscription.findUnique.mockResolvedValue(sub);
+      prisma.entitlement.findMany.mockResolvedValue([]);
+
+      await orchestrator.handleSubscriptionEvent(
+        'APPLE_IAP',
+        'subscription.expired',
+        'apple-original-tx-1',
+        {},
+      );
+
+      expect(prisma.subscription.update).toHaveBeenCalledWith({
+        where: { id: 'sub-1' },
+        data: expect.objectContaining({ status: 'ended' }),
+      });
+    });
+
+    it.each(['subscription.on_hold', 'subscription.grace_period'])(
+      '%s puts the subscription in past_due, which is what the store means',
+      async (eventType) => {
+        const sub = mockSub();
+        prisma.subscription.findFirst.mockResolvedValue(sub);
+
+        await orchestrator.handleSubscriptionEvent(
+          'GOOGLE_PLAY',
+          eventType as any,
+          'google-purchase-token-1',
+          {},
+        );
+
+        expect(prisma.subscription.update).toHaveBeenCalledWith({
+          where: { id: 'sub-1' },
+          data: expect.objectContaining({ status: 'past_due' }),
+        });
+      },
+    );
+
+    it.each(['subscription.recovered', 'subscription.restarted'])(
+      '%s advances the period, because the store is charging again',
+      async (eventType) => {
+        const sub = mockSub();
+        prisma.subscription.findFirst.mockResolvedValue(sub);
+        prisma.paymentIntent.findFirst.mockResolvedValue(null);
+        prisma.order.create.mockResolvedValue({ id: 'renewal-order-1' });
+        prisma.paymentIntent.create.mockResolvedValue({ id: 'renewal-intent-1' });
+        prisma.order.findUnique.mockResolvedValue(null);
+
+        await orchestrator.handleSubscriptionEvent(
+          'GOOGLE_PLAY',
+          eventType as any,
+          'google-purchase-token-1',
+          {},
+        );
+
+        expect(prisma.order.create).toHaveBeenCalled();
+      },
+    );
+
+    it.each(['subscription.created', 'subscription.updated'])(
+      '%s is acknowledged without touching the subscription',
+      async (eventType) => {
+        const sub = mockSub();
+        prisma.subscription.findFirst.mockResolvedValue(sub);
+
+        await orchestrator.handleSubscriptionEvent(
+          'STRIPE',
+          eventType as any,
+          'sub_stripe_xyz',
+          {},
+        );
+
+        // No action — but handled here rather than retried down the payment
+        // path until the event was given up on.
+        expect(prisma.subscription.update).not.toHaveBeenCalled();
+      },
+    );
+  });
+
   describe('subscription.cancelled', () => {
     it('with period still in future: only flips cancelAtPeriodEnd, keeps access', async () => {
       const sub = mockSub({

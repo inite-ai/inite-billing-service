@@ -25,7 +25,18 @@ export class WebhooksService {
   }
 
   /**
-   * Store webhook event idempotently and enqueue processing
+   * Store a webhook event and queue it for processing.
+   *
+   * The write and the enqueue are two steps and cannot be made one, so the
+   * failure between them has to be survivable. It was not: if the enqueue threw
+   * (Redis down, say) the row stayed at `received`, the provider retried, the
+   * insert came back P2002, and the duplicate branch returned — quietly, having
+   * queued nothing. A paid order's webhook was gone for good.
+   *
+   * Now the duplicate branch checks what that existing row is actually doing
+   * and re-queues it when nobody has taken it. The job id is derived from the
+   * event, so a re-queue collapses onto any job already waiting instead of
+   * stacking up.
    */
   async storeWebhookEvent(
     rail: string,
@@ -46,21 +57,39 @@ export class WebhooksService {
           status: 'received',
         },
       });
+    } catch (error: any) {
+      if (error.code !== 'P2002') throw error;
 
-      // Enqueue processing job
-      await this.webhooksQueue.add('process-webhook', {
-        rail,
-        webhookId,
+      const existing = await this.prisma.webhookEvent.findUnique({
+        where: { rail_webhookId: { rail, webhookId } },
+        select: { status: true },
       });
 
-      this.logger.debug(`Webhook event stored and enqueued: ${rail}/${webhookId}`);
-    } catch (error: any) {
-      // If unique constraint violation, webhook already processed
-      if (error.code === 'P2002') {
-        this.logger.debug(`Webhook event already exists: ${rail}/${webhookId}`);
+      if (existing && (existing.status === 'processed' || existing.status === 'processing')) {
+        this.logger.debug(`Webhook event already handled: ${rail}/${webhookId}`);
         return;
       }
-      throw error;
+
+      // Stored but never queued, or queued and failed: the provider's retry is
+      // the second chance, so take it.
+      this.logger.warn(
+        `Webhook ${rail}/${webhookId} exists as '${existing?.status ?? 'unknown'}' but was not being processed — re-queueing`,
+      );
     }
+
+    await this.enqueue(rail, webhookId);
+    this.logger.debug(`Webhook event stored and enqueued: ${rail}/${webhookId}`);
+  }
+
+  /**
+   * A deterministic job id per webhook, so a re-queue of the same event
+   * collapses onto the one already waiting rather than adding another.
+   */
+  private async enqueue(rail: string, webhookId: string): Promise<void> {
+    await this.webhooksQueue.add(
+      'process-webhook',
+      { rail, webhookId },
+      { jobId: `webhook:${rail}:${webhookId}`, removeOnComplete: true, removeOnFail: 1000 },
+    );
   }
 }

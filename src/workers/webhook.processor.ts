@@ -5,6 +5,7 @@ import { PrismaService } from '../common/services/prisma.service';
 import { PaymentOrchestratorService } from '../payment-orchestrator/payment-orchestrator.service';
 import { RiskService } from '../risk/risk.service';
 import { reconcileAmount } from './reconcile-amount';
+import { isSubscriptionEvent } from '../payment-orchestrator/payment-orchestrator.service';
 
 /**
  * How long a worker may hold a webhook before another may take it over. Long
@@ -96,20 +97,19 @@ export class WebhookProcessor extends WorkerHost {
       // Get adapter
       const adapter = this.paymentOrchestrator.getAdapter(rail);
 
-      // Subscription lifecycle events — renewal / renewal_failed / cancelled —
-      // are anchored to the provider's *subscription* ID, not a PaymentIntent.
-      // Route them through the orchestrator's subscription handler instead of
-      // trying to look up an existing PaymentIntent (which won't match: each
-      // renewal carries a new charge/contract ID).
-      const subLifecycleEvents = new Set([
-        'subscription.renewed',
-        'subscription.renewal_failed',
-        'subscription.cancelled',
-      ]);
-      if (subLifecycleEvents.has(webhookEvent.eventType)) {
+      // Subscription lifecycle events are anchored to the provider's
+      // *subscription* ID, not a PaymentIntent, so they go to the subscription
+      // handler rather than the charge lookup (which would match nothing: each
+      // renewal carries a new charge id, and an expiry carries none at all).
+      //
+      // The set used to be three entries long while the rails emit ten. The
+      // other seven — expired, on_hold, grace_period, recovered, restarted,
+      // created, updated — took the payment path, failed to match, and were
+      // retried until abandoned.
+      if (isSubscriptionEvent(webhookEvent.eventType)) {
         await this.paymentOrchestrator.handleSubscriptionEvent(
           rail,
-          webhookEvent.eventType as any,
+          webhookEvent.eventType,
           webhookEvent.entityId,
           (webhookEvent.payload as Record<string, any>) || {},
         );

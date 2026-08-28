@@ -32,6 +32,35 @@ import { CreditsService } from '../credits/credits.service';
  */
 const FULFILMENT_TX_OPTIONS = { maxWait: 10_000, timeout: 30_000 } as const;
 
+/**
+ * Subscription lifecycle events the rails actually emit.
+ *
+ * Only the first three used to be routed here; every other one fell through to
+ * the payment-intent path, where the lookup is by charge id and the event
+ * carries a *subscription* id. It matched nothing, was marked failed, retried,
+ * and abandoned — so an Apple or Google subscription that expired or went on
+ * hold never ended on our side, and the customer kept access the store had
+ * already stopped billing for.
+ */
+export const SUBSCRIPTION_EVENT_TYPES = [
+  'subscription.renewed',
+  'subscription.renewal_failed',
+  'subscription.cancelled',
+  'subscription.expired',
+  'subscription.on_hold',
+  'subscription.grace_period',
+  'subscription.recovered',
+  'subscription.restarted',
+  'subscription.created',
+  'subscription.updated',
+] as const;
+
+export type SubscriptionEventType = (typeof SUBSCRIPTION_EVENT_TYPES)[number];
+
+export function isSubscriptionEvent(eventType: string): eventType is SubscriptionEventType {
+  return (SUBSCRIPTION_EVENT_TYPES as readonly string[]).includes(eventType);
+}
+
 @Injectable()
 export class PaymentOrchestratorService implements OnModuleInit {
   private readonly logger = new Logger(PaymentOrchestratorService.name);
@@ -568,7 +597,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
    */
   async handleSubscriptionEvent(
     rail: string,
-    eventType: 'subscription.renewed' | 'subscription.renewal_failed' | 'subscription.cancelled',
+    eventType: SubscriptionEventType,
     providerSubscriptionId: string,
     providerData: Record<string, any>,
   ): Promise<void> {
@@ -585,12 +614,47 @@ export class PaymentOrchestratorService implements OnModuleInit {
         return;
       }
 
-      if (eventType === 'subscription.renewed') {
-        await this.advanceSubscriptionPeriodFromWebhook(subscription, providerData, tx);
-      } else if (eventType === 'subscription.renewal_failed') {
-        await this.markSubscriptionPastDue(subscription, providerData, tx);
-      } else if (eventType === 'subscription.cancelled') {
-        await this.handleProviderCancellation(subscription, tx);
+      switch (eventType) {
+        case 'subscription.renewed':
+        // Google Play's word for "the hold ended and billing resumed"; Apple's
+        // for "the customer re-subscribed within the same period". Both mean
+        // the provider is charging again, which is a renewal to us.
+        case 'subscription.recovered':
+        case 'subscription.restarted':
+          await this.advanceSubscriptionPeriodFromWebhook(subscription, providerData, tx);
+          break;
+
+        case 'subscription.renewal_failed':
+        // `on_hold` and `grace_period` are the store's dunning states: the
+        // customer's payment method failed and they have not fixed it yet.
+        // That is what `past_due` means here, and the grace window is the
+        // expirer's job from there.
+        case 'subscription.on_hold':
+        case 'subscription.grace_period':
+          await this.markSubscriptionPastDue(subscription, providerData, tx);
+          break;
+
+        case 'subscription.cancelled':
+          await this.handleProviderCancellation(subscription, tx);
+          break;
+
+        // The store has stopped billing and the period is over. Anything else
+        // would leave the customer holding entitlements nobody is paying for.
+        case 'subscription.expired':
+          await this.endSubscription(subscription.id, 'grace_period_exhausted', tx);
+          break;
+
+        // `created` is the subscription we just made ourselves from the
+        // purchase, and `updated` carries provider-side plan changes we do not
+        // model. Both are acknowledged rather than acted on — but they are
+        // acknowledged *here*, not sent down the payment-intent path where
+        // they matched nothing and were retried until they were abandoned.
+        case 'subscription.created':
+        case 'subscription.updated':
+          this.logger.log(
+            `Subscription ${eventType} for ${subscription.id} (${rail}) — no action needed`,
+          );
+          break;
       }
     }, FULFILMENT_TX_OPTIONS);
   }
