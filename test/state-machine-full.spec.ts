@@ -86,7 +86,8 @@ describe('State Machine — orchestrator side effects', () => {
         findMany: jest.fn().mockResolvedValue([]),
       },
       subscription: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
-      affiliateCommission: { updateMany: jest.fn() },
+      affiliate: { update: jest.fn() },
+      affiliateCommission: { updateMany: jest.fn(), count: jest.fn().mockResolvedValue(0) },
       creditUsage: { findMany: jest.fn().mockResolvedValue([]) },
     };
     mockOutbox = { emit: jest.fn().mockResolvedValue(undefined) };
@@ -257,16 +258,16 @@ describe('State Machine — orchestrator side effects', () => {
 
     await orchestrator.applyStateTransition('intent-1', 'refunded', {});
 
-    // Voids commissions
+    // Voids commissions. Settled ones go through an `UPDATE ... RETURNING` so
+    // the credit they added to totalEarned can be taken back off it; unsettled
+    // ones were never credited, so voiding them is the whole job.
     expect(mockPrisma.affiliateCommission.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({
-          orderId: 'order-1',
-          status: { in: ['pending', 'earned'] },
-        }),
+        where: expect.objectContaining({ orderId: 'order-1', status: 'pending' }),
         data: { status: 'voided' },
       }),
     );
+    expect(mockPrisma.$queryRaw).toHaveBeenCalled();
 
     // Revokes only entitlements for THIS order
     expect(mockPrisma.entitlement.updateMany).toHaveBeenCalledWith(

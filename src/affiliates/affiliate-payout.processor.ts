@@ -1,6 +1,7 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { Logger } from '@nestjs/common';
+import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../common/services/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
 
@@ -91,22 +92,19 @@ export class AffiliatePayoutProcessor extends WorkerHost {
             return;
           }
 
-          // Calculate total payout amount
-          const totalAmount = commissions.reduce((sum, c) => sum + Number(c.amount), 0);
-
-          if (totalAmount <= 0) {
-            return;
-          }
-
-          // Group by currency
-          const byCurrency = new Map<string, number>();
+          // One payout per currency. Adding the amounts up first and testing the
+          // sum was meaningless — a euro and a dollar are not the same unit —
+          // and a currency whose commissions net to nothing is skipped on its
+          // own terms below.
+          const byCurrency = new Map<string, Decimal>();
           for (const commission of commissions) {
-            const current = byCurrency.get(commission.currency) || 0;
-            byCurrency.set(commission.currency, current + Number(commission.amount));
+            const current = byCurrency.get(commission.currency) ?? new Decimal(0);
+            byCurrency.set(commission.currency, current.plus(commission.amount));
           }
 
-          // Create payout for each currency
           for (const [currency, amount] of byCurrency.entries()) {
+            if (amount.lte(0)) continue;
+
             const payout = await tx.affiliatePayout.create({
               data: {
                 affiliateId: affiliate.id,
@@ -143,11 +141,15 @@ export class AffiliatePayoutProcessor extends WorkerHost {
             });
 
             this.logger.log(
-              `Created payout ${payout.id} for affiliate ${affiliate.id}: ${amount} ${currency}`,
+              `Created payout ${payout.id} for affiliate ${affiliate.id}: ${amount.toString()} ${currency}`,
             );
 
             // Emit event — addressed to the service the affiliate belongs to.
             // Payout amounts are that programme's numbers and no one else's.
+            // Emitted through `tx`. Without it the event was written on a
+            // different connection than the payout it announces: a rollback
+            // anywhere later in this transaction left subscribers told about a
+            // payout that does not exist.
             await this.outboxService.emit(
               'billing.affiliate.payout.created',
               {
@@ -158,7 +160,7 @@ export class AffiliatePayoutProcessor extends WorkerHost {
                 period_start: lastMonth.toISOString(),
                 period_end: lastMonthEnd.toISOString(),
               },
-              { serviceId: affiliate.serviceId ?? null },
+              { serviceId: affiliate.serviceId ?? null, tx },
             );
           }
         });

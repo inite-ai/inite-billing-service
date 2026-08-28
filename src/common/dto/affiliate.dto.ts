@@ -103,6 +103,23 @@ export class CreateAffiliateDto {
   referralCode?: string;
 }
 
+export class CurrencyBalanceDto {
+  @ApiProperty({ example: 'USD' })
+  currency: string;
+
+  @ApiProperty({ description: 'Awaiting settlement — still inside the refund window' })
+  pending: string;
+
+  @ApiProperty({ description: 'Settled and not covered by a payout — withdrawable now' })
+  available: string;
+
+  @ApiProperty({ description: 'Settled ever, in this currency' })
+  earned: string;
+
+  @ApiProperty({ description: 'Covered by a payout' })
+  paid: string;
+}
+
 export class AffiliateStatsDto {
   @ApiProperty()
   totalReferrals: number;
@@ -115,6 +132,13 @@ export class AffiliateStatsDto {
 
   @ApiProperty()
   paidCommissions: string;
+
+  @ApiProperty({
+    type: [CurrencyBalanceDto],
+    description:
+      'Per-currency ledger balances. The flat totals above add currencies together and are kept for backwards compatibility only.',
+  })
+  balances: CurrencyBalanceDto[];
 
   @ApiProperty()
   upcomingPayout?: PayoutResponseDto;

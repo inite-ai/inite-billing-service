@@ -21,24 +21,38 @@ describe('Affiliate payout reconciliation', () => {
   const configService = { get: () => 'https://app.inite.ai' } as any;
   const referralLevels = {} as any;
 
-  const makeTx = (overrides: any = {}) => ({
-    $queryRaw: jest.fn().mockResolvedValue([]),
-    affiliate: {
-      findUnique: jest.fn(),
-      update: jest.fn().mockResolvedValue({}),
-    },
-    affiliatePayout: {
-      findFirst: jest.fn().mockResolvedValue(null),
-      findUnique: jest.fn(),
-      create: jest.fn(),
-      update: jest.fn(),
-    },
-    affiliateCommission: {
-      findMany: jest.fn().mockResolvedValue([]),
-      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
-    },
-    ...overrides,
-  });
+  const makeTx = (overrides: any = {}) => {
+    const tx: any = {
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      affiliate: {
+        findUnique: jest.fn(),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      affiliatePayout: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        findUnique: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+      },
+      affiliateCommission: {
+        findMany: jest.fn().mockResolvedValue([]),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+      ...overrides,
+    };
+    // The withdrawable balance is now read off the commission ledger rather than
+    // `totalEarned - totalPaid`, so the commissions a test sets up are what it
+    // can withdraw — which is the point of the change.
+    tx.affiliateCommission.aggregate = jest.fn(async () => {
+      const rows = await tx.affiliateCommission.findMany({});
+      return {
+        _sum: {
+          amount: rows.reduce((sum: Decimal, c: any) => sum.plus(c.amount), new Decimal(0)),
+        },
+      };
+    });
+    return tx;
+  };
 
   const prismaWith = (tx: any) => ({ $transaction: jest.fn((fn: any) => fn(tx)) }) as any;
 
@@ -117,6 +131,9 @@ describe('Affiliate payout reconciliation', () => {
     it('rejects when the requested amount exceeds the available balance', async () => {
       const tx = makeTx();
       tx.affiliate.findUnique.mockResolvedValue(activeAffiliate(15, 0));
+      tx.affiliateCommission.findMany.mockResolvedValue([
+        { id: 'c1', amount: new Decimal(15), earnedAt: new Date('2026-01-01'), currency: 'USD' },
+      ]);
 
       const svc = new AffiliatesService(prismaWith(tx), configService, referralLevels);
       await expect(svc.requestWithdrawal('aff-1', 1000)).rejects.toThrow(/Insufficient balance/);
