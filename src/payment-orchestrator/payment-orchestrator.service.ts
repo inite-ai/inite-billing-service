@@ -201,8 +201,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
           status: newStatus,
           previous_status: intent.status,
         },
-        undefined,
-        tx,
+        { serviceId: intent.order.price?.product?.serviceId ?? null, tx: tx },
       );
 
       // Track funnel events based on status transitions
@@ -279,8 +278,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
         amount: order.amount.toString(),
         currency: order.currency,
       },
-      undefined,
-      tx,
+      { serviceId: order.price?.product?.serviceId ?? null, tx: tx },
     );
   }
 
@@ -347,8 +345,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
         order_id: order.id,
         user_id: order.userId,
       },
-      undefined,
-      tx,
+      { serviceId: order.price?.product?.serviceId ?? null, tx: tx },
     );
 
     await this.outboxService.emit(
@@ -358,8 +355,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
         source: 'order',
         order_id: order.id,
       },
-      undefined,
-      tx,
+      { serviceId: order.price?.product?.serviceId ?? null, tx: tx },
     );
   }
 
@@ -383,8 +379,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
         order_id: order.id,
         user_id: order.userId,
       },
-      undefined,
-      tx,
+      { serviceId: order.price?.product?.serviceId ?? null, tx: tx },
     );
   }
 
@@ -419,8 +414,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
           source: 'order',
           order_id: order.id,
         },
-        undefined,
-        tx,
+        { serviceId: product.serviceId ?? null, tx: tx },
       );
     }
   }
@@ -547,8 +541,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
           subscription_id: subscription.id,
           expires_at: expiresAt.toISOString(),
         },
-        undefined,
-        tx,
+        { serviceId: product.serviceId ?? null, tx: tx },
       );
     }
 
@@ -560,8 +553,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
         status: subscription.status,
         current_period_end: periodEnd.toISOString(),
       },
-      undefined,
-      tx,
+      { serviceId: product.serviceId ?? null, tx: tx },
     );
   }
 
@@ -698,8 +690,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
         current_period_end: subscription.currentPeriodEnd.toISOString(),
         provider_error: providerData?.errorMessage || providerData?.failure_message || null,
       },
-      undefined,
-      tx,
+      { serviceId: await this.serviceIdForSubscription(subscription.id, tx), tx: tx },
     );
   }
 
@@ -728,8 +719,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
         user_id: subscription.userId,
         cancel_at_period_end: !periodPassed,
       },
-      undefined,
-      tx,
+      { serviceId: await this.serviceIdForSubscription(subscription.id, tx), tx: tx },
     );
   }
 
@@ -738,6 +728,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
    * Used by the expirer cron and provider-cancellation handler.
    */
   async revokeSubscriptionEntitlements(subscriptionId: string, tx: any): Promise<void> {
+    const serviceId = await this.serviceIdForSubscription(subscriptionId, tx);
     const entitlements = await tx.entitlement.findMany({
       where: {
         source: 'subscription',
@@ -762,8 +753,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
           source: 'subscription',
           subscription_id: subscriptionId,
         },
-        undefined,
-        tx,
+        { serviceId, tx },
       );
     }
   }
@@ -794,11 +784,26 @@ export class PaymentOrchestratorService implements OnModuleInit {
           status: newStatus,
           reason,
         },
-        undefined,
-        txInner,
+        { serviceId: await this.serviceIdForSubscription(subscriptionId, txInner), tx: txInner },
       );
     };
     return tx ? run(tx) : this.prisma.$transaction(run);
+  }
+
+  /**
+   * Which consumer an event about this subscription belongs to.
+   *
+   * Outbox deliveries are addressed by service now, and the subscription
+   * lifecycle paths only carry an id — so the owner is read back through
+   * price → product. Returns null when the chain is incomplete, and a null
+   * owner is delivered to nobody rather than to everybody.
+   */
+  private async serviceIdForSubscription(subscriptionId: string, tx: any): Promise<string | null> {
+    const sub = await tx.subscription.findUnique({
+      where: { id: subscriptionId },
+      include: { price: { include: { product: true } } },
+    });
+    return sub?.price?.product?.serviceId ?? null;
   }
 
   private extractEntitlementKeys(product: any): string[] {
@@ -989,8 +994,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
         reason: 'payment_refunded',
         order_id: order.id,
       },
-      undefined,
-      tx,
+      { serviceId: order.price?.product?.serviceId ?? null, tx },
     );
 
     this.logger.log(`Ended subscription ${subscription.id}: order ${order.id} was refunded`);

@@ -119,6 +119,12 @@ describe('order refund → credits and subscription', () => {
       entitlement: { findMany: jest.fn().mockResolvedValue([]), updateMany: jest.fn() },
       subscription: {
         findFirst: jest.fn().mockResolvedValue(overrides.subscription ?? null),
+        // The event is addressed to the service that sold the plan, which is
+        // read back through price → product.
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'sub-1',
+          price: { product: { serviceId: 'svc-1' } },
+        }),
         update: jest.fn(),
       },
     };
@@ -183,8 +189,7 @@ describe('order refund → credits and subscription', () => {
     expect(outboxService.emit).toHaveBeenCalledWith(
       'billing.subscription.ended',
       expect.objectContaining({ subscription_id: 'sub-1', reason: 'payment_refunded' }),
-      undefined,
-      tx,
+      expect.objectContaining({ tx }),
     );
   });
 
@@ -206,8 +211,7 @@ describe('order refund → credits and subscription', () => {
     expect(outboxService.emit).not.toHaveBeenCalledWith(
       'billing.subscription.ended',
       expect.anything(),
-      undefined,
-      tx,
+      expect.objectContaining({ tx }),
     );
   });
 });

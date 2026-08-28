@@ -31,6 +31,9 @@ describe('Outbox delivery', () => {
 
   const event = {
     id: 'evt-1',
+    // Deliveries are addressed by owner now: an event carries the consumer it
+    // belongs to, instead of being POSTed to every registered service.
+    serviceId: 'svc-club',
     eventType: 'billing.payment.succeeded',
     payload: { order_id: 'o1', user_id: 'u1', amount: '20.0000', currency: 'USD' },
     aggregate: {},
@@ -60,6 +63,7 @@ describe('Outbox delivery', () => {
     mockPrisma.outboxEvent.findMany.mockResolvedValue([event]);
     mockPrisma.service.findMany.mockResolvedValue([
       {
+        id: 'svc-club',
         code: 'club',
         isActive: true,
         apiKey: 'club_key',
@@ -95,6 +99,7 @@ describe('Outbox delivery', () => {
     mockPrisma.outboxEvent.findMany.mockResolvedValue([event]);
     mockPrisma.service.findMany.mockResolvedValue([
       {
+        id: 'svc-club',
         code: 'evil',
         isActive: true,
         apiKey: 'evil_key',
@@ -111,6 +116,7 @@ describe('Outbox delivery', () => {
     mockPrisma.outboxEvent.findMany.mockResolvedValue([event]);
     mockPrisma.service.findMany.mockResolvedValue([
       {
+        id: 'svc-club',
         code: 'club',
         isActive: true,
         apiKey: 'club_key',
@@ -150,5 +156,43 @@ describe('Outbox delivery', () => {
       {},
       { jobId: 'outbox-drain', removeOnComplete: true, removeOnFail: true },
     );
+  });
+
+  it('delivers only to the service the event belongs to', async () => {
+    mockPrisma.outboxEvent.findMany.mockResolvedValue([{ ...event, serviceId: 'svc-club' }]);
+    mockPrisma.service.findMany.mockResolvedValue([
+      {
+        id: 'svc-club',
+        code: 'club',
+        isActive: true,
+        apiKey: 'club_key',
+        webhookUrl: 'https://club.inite.ai/hooks/billing',
+      },
+    ]);
+    deliver.mockResolvedValue({ ok: true, status: 200, statusText: 'OK' });
+
+    await processor.process({} as any);
+
+    // The health module must never be handed the club module's order.
+    expect(mockPrisma.service.findMany).toHaveBeenCalledWith({
+      where: { id: { in: ['svc-club'] }, isActive: true },
+    });
+    expect(deliver).toHaveBeenCalledTimes(1);
+    expect(deliver.mock.calls[0][0].headers['x-service-code']).toBe('club');
+  });
+
+  it('delivers an unattributed event to nobody', async () => {
+    mockPrisma.outboxEvent.findMany.mockResolvedValue([{ ...event, serviceId: null }]);
+    mockPrisma.service.findMany.mockResolvedValue([]);
+
+    await processor.process({} as any);
+
+    // Fail closed: a missing owner is an emitter bug, not permission to
+    // broadcast someone's ledger to every registered consumer.
+    expect(deliver).not.toHaveBeenCalled();
+    expect(mockPrisma.outboxEvent.update).toHaveBeenCalledWith({
+      where: { id: 'evt-1' },
+      data: { status: 'sent', sentAt: expect.any(Date) },
+    });
   });
 });

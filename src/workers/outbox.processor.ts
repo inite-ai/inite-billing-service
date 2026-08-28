@@ -8,9 +8,14 @@ import { postToPinnedAddress } from './pinned-post';
 import { signOutboxDelivery } from './outbox-signature';
 
 /**
- * Outbox publisher processor. Consumes `drain-outbox` jobs enqueued by
- * `OutboxScheduler`, loads pending `outbox_events`, and delivers each via HTTP
- * POST to every active service that has a `webhookUrl` (SSRF-guarded).
+ * Outbox publisher. Consumes `drain-outbox` jobs from `OutboxScheduler`, loads
+ * pending `outbox_events`, and delivers each to the consumer it belongs to.
+ *
+ * It used to POST every event to every registered service. The payloads carry
+ * user ids, order ids, amounts and entitlement keys, so the club module would
+ * have received the health module's orders and vice versa — one signature
+ * check away from being another tenant's ledger. Delivery is addressed by
+ * `serviceId` now, and an event without one goes nowhere.
  */
 @Processor('outbox', {
   concurrency: 10,
@@ -29,27 +34,42 @@ export class OutboxProcessor extends WorkerHost {
     const events = await this.outboxService.getPendingEvents(100);
     if (events.length === 0) return;
 
-    // Get all active services — filter by webhookUrl in JS (field may not be in Prisma types on CI)
-    const allServices = await this.prisma.service.findMany({
-      where: { isActive: true },
-    });
-
-    const services = allServices.filter((s: any) => s.webhookUrl != null);
-
-    if (services.length === 0) {
-      // No webhook consumers — mark all as sent
-      for (const event of events) {
-        await this.outboxService.markSent(event.id);
-      }
-      return;
-    }
+    // Only the services these events are addressed to, and only those that can
+    // actually receive: inactive or webhook-less consumers are not failures.
+    const ownerIds = [...new Set(events.map((e) => e.serviceId).filter(Boolean))] as string[];
+    const subscribers = new Map<string, any>(
+      (
+        await this.prisma.service.findMany({
+          where: { id: { in: ownerIds }, isActive: true },
+        })
+      )
+        .filter((s: any) => s.webhookUrl != null)
+        .map((s: any) => [s.id, s]),
+    );
 
     for (const event of events) {
       let allDelivered = true;
 
-      for (const service of services) {
+      if (!event.serviceId) {
+        // Fail closed. An unattributed event is a bug in the emitter, not a
+        // licence to broadcast it to everyone.
+        this.logger.warn(
+          `Outbox event ${event.id} (${event.eventType}) has no owning service — not delivered`,
+        );
+        await this.outboxService.markSent(event.id);
+        continue;
+      }
+
+      const service = subscribers.get(event.serviceId);
+      if (!service) {
+        // The addressee is inactive or has no webhook URL: there is nothing to
+        // retry against, so the event is done rather than stuck.
+        await this.outboxService.markSent(event.id);
+        continue;
+      }
+
+      {
         const webhookUrl = (service as any).webhookUrl as string;
-        if (!webhookUrl) continue;
 
         // SSRF guard: resolve the host and reject if it (or any address it
         // resolves to) is private/loopback/link-local — not just a string check.

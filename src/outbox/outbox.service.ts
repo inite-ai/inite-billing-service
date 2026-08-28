@@ -11,14 +11,29 @@ export class OutboxService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Emit an outbox event (idempotent creation)
+   * Emit an outbox event.
+   *
+   * `serviceId` is who the event is *for*. It used to not exist, and the
+   * publisher POSTed every event to every registered consumer — payloads carry
+   * user ids, order ids, amounts and entitlement keys, so each product module
+   * would have received every other module's billing traffic. It is an option
+   * rather than a positional argument so that every call site has to name its
+   * owner where a reader can see it.
+   *
+   * A null owner means the publisher delivers to nobody. That is the safe
+   * direction for a leak: a caller that forgets to attribute an event stops a
+   * delivery instead of broadcasting one.
    */
   async emit(
     eventType: string,
     payload: Record<string, any>,
-    aggregate?: Record<string, any>,
-    tx?: any,
+    options: {
+      serviceId?: string | null;
+      aggregate?: Record<string, any>;
+      tx?: any;
+    } = {},
   ): Promise<void> {
+    const { serviceId, aggregate, tx } = options;
     const client = tx || this.prisma;
     try {
       await client.outboxEvent.create({
@@ -27,10 +42,11 @@ export class OutboxService {
           payload: payload || {},
           aggregate: aggregate || {},
           status: 'new',
+          serviceId: serviceId ?? null,
         },
       });
 
-      this.logger.debug(`Outbox event created: ${eventType}`);
+      this.logger.debug(`Outbox event created: ${eventType} (service: ${serviceId ?? 'none'})`);
     } catch (error) {
       this.logger.error(`Error creating outbox event: ${error.message}`, error.stack);
       throw error;
