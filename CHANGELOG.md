@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.3.0](https://github.com/inite-ai/inite-billing-service/compare/inite-billing-service-v1.2.0...inite-billing-service-v1.3.0) (2026-08-29)
+
+
+### Features
+
+* **admin:** make the admin a place to work — sorting, bulk, export, triage ([#127](https://github.com/inite-ai/inite-billing-service/issues/127)) ([d3d9f98](https://github.com/inite-ai/inite-billing-service/commit/d3d9f98e8f83a9915fd037c8eee914a556c66915))
+
+
+### Bug Fixes
+
+* **admin:** give the UI the states and semantics it was missing ([#125](https://github.com/inite-ai/inite-billing-service/issues/125)) ([91905fb](https://github.com/inite-ai/inite-billing-service/commit/91905fb2af7ccb2900a1ce05c756be92d7bbc196))
+* **admin:** UX pass — stop the admin lying, let the operator find records, make destructive actions name their target ([#126](https://github.com/inite-ai/inite-billing-service/issues/126)) ([e713898](https://github.com/inite-ai/inite-billing-service/commit/e713898a7657e0a23d7694ecc01a5c0d8f12e0ff))
+* **api:** validate every request body, and stop defaulting to INITE infrastructure ([#123](https://github.com/inite-ai/inite-billing-service/issues/123)) ([983031e](https://github.com/inite-ai/inite-billing-service/commit/983031e2c27c0b74c21c59f791c9af8f67f8ef28))
+* **billing:** P1 — affiliate ledger integrity and the last cross-tenant reads ([#131](https://github.com/inite-ai/inite-billing-service/issues/131)) ([2c69750](https://github.com/inite-ai/inite-billing-service/commit/2c69750c0237a9fcfd00fa34e3b4ec061323cbd6))
+* **billing:** P1 — lost webhooks, unrouted subscription events, unpinned issuer, cross-service reads ([#130](https://github.com/inite-ai/inite-billing-service/issues/130)) ([ed3f852](https://github.com/inite-ai/inite-billing-service/commit/ed3f852ff6a440a1b771f3813e0bf0996ef71601))
+* **billing:** P2 — secrets, unenforced scopes, half-atomic writes, decimal money ([#133](https://github.com/inite-ai/inite-billing-service/issues/133)) ([573729e](https://github.com/inite-ai/inite-billing-service/commit/573729e999e7ff273a8ba1207d4b00bdec4603c6))
+* **billing:** three P0 defects in the money path ([#129](https://github.com/inite-ai/inite-billing-service/issues/129)) ([9e79c7c](https://github.com/inite-ai/inite-billing-service/commit/9e79c7cffeeb1432dd7e64c55bdb35b8c3cdfb25))
+* **build:** keep the compiled entrypoint at dist/main.js ([#119](https://github.com/inite-ai/inite-billing-service/issues/119)) ([5aea854](https://github.com/inite-ai/inite-billing-service/commit/5aea854f999bd2be817e3a32ecfaf2bfea3c12aa))
+* **ci:** publish release image for component-prefixed tags ([#116](https://github.com/inite-ai/inite-billing-service/issues/116)) ([4842eca](https://github.com/inite-ai/inite-billing-service/commit/4842ecae77b8d3b459205c3a19cd8f0203cd40ee))
+* **deploy:** pin the self-hosted jobs to the sfo runner ([#128](https://github.com/inite-ai/inite-billing-service/issues/128)) ([3f53241](https://github.com/inite-ai/inite-billing-service/commit/3f532417a423bbff3f60e10fbdad3c0b459200eb))
+* **ops:** stop the deploy from guessing what production is running ([#132](https://github.com/inite-ai/inite-billing-service/issues/132)) ([dc7a2c4](https://github.com/inite-ai/inite-billing-service/commit/dc7a2c43e3a3864e453b7817ef22ffff5ace61a8))
+* **test:** restore the e2e suite, gate CI on it, and close the gaps it was hiding ([#122](https://github.com/inite-ai/inite-billing-service/issues/122)) ([f1b15f1](https://github.com/inite-ai/inite-billing-service/commit/f1b15f1f7b4f58110fb1e2b66d54bf2f04833147))
+
 ## [1.2.0](https://github.com/inite-ai/inite-billing-service/compare/inite-billing-service-v1.1.3...inite-billing-service-v1.2.0) (2026-08-08)
 
 
