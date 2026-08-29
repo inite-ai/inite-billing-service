@@ -3,7 +3,10 @@ import { SubscriptionsService } from '../src/subscriptions/subscriptions.service
 import { CreditsService } from '../src/credits/credits.service';
 import { ForbiddenException, BadRequestException, ConflictException } from '@nestjs/common';
 
-jest.mock('uuid', () => ({ v4: () => 'test-uuid' }));
+jest.mock('node:crypto', () => ({
+  ...jest.requireActual('node:crypto'),
+  randomUUID: () => 'test-uuid',
+}));
 
 /**
  * IDOR and authorization tests — verify that users cannot

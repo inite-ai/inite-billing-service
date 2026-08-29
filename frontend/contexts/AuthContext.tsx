@@ -34,6 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
 
       const AUTH_DOMAIN = process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || 'https://auth.inite.ai';
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.href = `${AUTH_DOMAIN}/oauth/logout?post_logout_redirect_uri=${window.location.origin}`;
     } catch (error) {
       console.error('Logout error:', error);

@@ -6,6 +6,7 @@ import { Bot, Loader2, RefreshCw, Sparkles } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import api from '@/lib/api'
 import { getErrorMessage } from '@/lib/api-error'
+import { useNow } from '@/hooks/useNow'
 
 interface InsightResponse {
   content: string
@@ -38,8 +39,10 @@ export default function AiInsightsCard({ serviceId }: { serviceId?: string }) {
     }
   }
 
+  const now = useNow(60 * 60 * 1000)
+
   const timeAgo = (iso: string) => {
-    const hours = Math.round((Date.now() - new Date(iso).getTime()) / 3_600_000)
+    const hours = Math.round((now - new Date(iso).getTime()) / 3_600_000)
     return hours < 1 ? t('justNow') : t('hoursAgo', { hours })
   }
 

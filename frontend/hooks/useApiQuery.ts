@@ -23,8 +23,14 @@ export function useApiQuery<T>(
   const [data, setData] = useState<T | null>(options?.initialData ?? null)
   const [loading, setLoading] = useState(url !== null && (options?.enabled !== false))
   const [error, setError] = useState<string | null>(null)
+  // The latest callback, held in a ref so an inline `onError` — which every
+  // caller passes — cannot re-create `fetchData` on each render and re-fetch
+  // forever. Written in an effect, not during render: a ref is not rendering
+  // state and touching it mid-render is what `react-hooks/refs` is about.
   const onErrorRef = useRef(options?.onError)
-  onErrorRef.current = options?.onError
+  useEffect(() => {
+    onErrorRef.current = options?.onError
+  })
   const onError = useCallback((e: unknown) => onErrorRef.current?.(e), [])
 
   const fetchData = useCallback(async () => {

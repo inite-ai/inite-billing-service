@@ -13,6 +13,7 @@ import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import type { Product, Service, Price } from '@/lib/types'
 import { getErrorMessage } from '@/lib/api-error'
+import { useRouter } from 'next/navigation'
 
 type BillingInterval = 'month' | 'year'
 
@@ -66,6 +67,7 @@ function getPriceByInterval(product: Product, interval: string | null): Price | 
 }
 
 export default function CatalogPage() {
+  const router = useRouter()
   const t = useTranslations('catalog')
   const tc = useTranslations('common')
   const [products, setProducts] = useState<Product[]>([])
@@ -129,7 +131,9 @@ export default function CatalogPage() {
         successUrl: window.location.origin + '/orders',
         errorUrl: window.location.origin + '/catalog',
       })
-      window.location.href = `/checkout/${res.data.sessionId}`
+      // A router push, not a full page load: the checkout page is this app's
+      // own, and reloading the document throws away everything already fetched.
+      router.push(`/checkout/${res.data.sessionId}`)
     } catch (e) {
       toast.error(getErrorMessage(e, tc('errors.generic')))
       setBuyLoading(null)

@@ -21,7 +21,7 @@ import {
   CheckoutSessionResponseDto,
   PaySessionResponseDto,
 } from '../common/dto/checkout.dto';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'node:crypto';
 import { moneyToNumber, toMoney } from '../common/money';
 import { resolveFrontendUrl } from '../common/config/frontend-url';
 
@@ -271,7 +271,7 @@ export class CheckoutService {
         status: 'created',
         amount: price.amount,
         currency: price.currency,
-        externalId: `order_${uuidv4()}`,
+        externalId: `order_${randomUUID()}`,
         // What was bought, as it read at this moment. Without it, renaming a
         // product or repricing it rewrites what every past order says it was
         // for.

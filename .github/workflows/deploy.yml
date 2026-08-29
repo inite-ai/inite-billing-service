@@ -36,8 +36,8 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend }}
       infra: ${{ steps.filter.outputs.infra }}
     steps:
-    - uses: actions/checkout@v7
-    - uses: dorny/paths-filter@v4
+    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+    - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
       id: filter
       with:
         filters: |
@@ -60,13 +60,13 @@ jobs:
     if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.infra == 'true' || github.event.inputs.force_all == 'true'
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v7
-    - uses: docker/setup-buildx-action@v4
-    - uses: docker/login-action@v4
+    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+    - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+    - uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
-    - uses: docker/build-push-action@v5
+    - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
       with:
         context: .
         file: ./Dockerfile
@@ -84,13 +84,13 @@ jobs:
     if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.infra == 'true' || github.event.inputs.force_all == 'true'
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v7
-    - uses: docker/setup-buildx-action@v4
-    - uses: docker/login-action@v4
+    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+    - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+    - uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
-    - uses: docker/build-push-action@v5
+    - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
       with:
         context: ./frontend
         file: ./frontend/Dockerfile
@@ -133,7 +133,7 @@ jobs:
           echo "::error::Runner $(hostname) is not the billing origin: no 'postgres' container. Check that the 'sfo' label is on the billing origin runner only."
           exit 1
         fi
-    - uses: docker/login-action@v4
+    - uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -240,7 +240,7 @@ jobs:
           echo "::error::Runner $(hostname) is not the billing origin: no 'postgres' container. Check that the 'sfo' label is on the billing origin runner only."
           exit 1
         fi
-    - uses: docker/login-action@v4
+    - uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -322,7 +322,7 @@ jobs:
           echo "::error::Runner $(hostname) is not the billing origin: no 'postgres' container. Check that the 'sfo' label is on the billing origin runner only."
           exit 1
         fi
-    - uses: docker/login-action@v4
+    - uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}

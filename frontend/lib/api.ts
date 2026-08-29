@@ -47,6 +47,10 @@ api.interceptors.response.use(
 
       clearTokens()
       if (typeof window !== 'undefined') {
+        // A hard navigation on purpose: the session is gone and every piece of
+        // state fetched under it should go with it. This runs inside an axios
+        // interceptor, where there is no router to push with anyway.
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
         window.location.href = '/login'
       }
     }
