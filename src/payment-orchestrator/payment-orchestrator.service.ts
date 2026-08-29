@@ -8,6 +8,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../common/services/prisma.service';
 import { PaymentRailAdapter } from '../common/interfaces/payment-rail-adapter.interface';
 import { ConnectorRegistry } from '../common/connectors/connector-registry.service';
@@ -325,10 +326,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
     });
 
     // Void affiliate commissions for this order (C4)
-    await tx.affiliateCommission.updateMany({
-      where: { orderId: order.id, status: { in: ['pending', 'earned'] } },
-      data: { status: 'voided' },
-    });
+    await this.voidAffiliateCommissions(order.id, tx);
 
     // Refund credits if they were granted for this order
     await this.handleCreditsRefund(order, tx);
@@ -1097,6 +1095,66 @@ export class PaymentOrchestratorService implements OnModuleInit {
   }
 
   /**
+   * Void the commissions a refunded order generated, and take back what was
+   * already credited for them.
+   *
+   * A settled ('earned') commission has already been added to
+   * `Affiliate.totalEarned`. Voiding it without unwinding that credit left the
+   * affiliate's balance permanently carrying a sale that never happened — every
+   * refund raised what they appeared to be owed, and the withdrawal path
+   * authorised against exactly that number.
+   *
+   * Both halves run in the caller's money transaction, commissions locked before
+   * the affiliate row — the same order the settlement job takes them in, so the
+   * two cannot deadlock.
+   */
+  private async voidAffiliateCommissions(orderId: string, tx: any): Promise<void> {
+    // Settled commissions: void and unwind their credit. RETURNING gives exactly
+    // the rows this statement changed, so a commission the settlement job is
+    // flipping concurrently is counted once, by whichever transaction wins.
+    const settled: Array<{ affiliate_id: string; amount: any }> = await tx.$queryRaw(Prisma.sql`
+      UPDATE billing.affiliate_commissions
+         SET status = 'voided'::billing."CommissionStatus",
+             updated_at = NOW()
+       WHERE order_id = ${orderId}::uuid
+         AND status = 'earned'::billing."CommissionStatus"
+      RETURNING affiliate_id, amount
+    `);
+
+    const creditedByAffiliate = new Map<string, Decimal>();
+    for (const row of settled) {
+      const current = creditedByAffiliate.get(row.affiliate_id) ?? new Decimal(0);
+      creditedByAffiliate.set(row.affiliate_id, current.plus(new Decimal(row.amount)));
+    }
+
+    for (const [affiliateId, credited] of creditedByAffiliate) {
+      await tx.affiliate.update({
+        where: { id: affiliateId },
+        data: { totalEarned: { decrement: credited } },
+      });
+    }
+
+    // Unsettled commissions were never credited — voiding them is the whole job.
+    await tx.affiliateCommission.updateMany({
+      where: { orderId, status: 'pending' },
+      data: { status: 'voided' },
+    });
+
+    // Commissions already covered by a payout are real money that has left, or
+    // is leaving. They are deliberately not voided — but nobody was being told,
+    // and clawing them back is a decision for whoever runs the programme.
+    const alreadyPaid = await tx.affiliateCommission.count({
+      where: { orderId, status: 'paid' },
+    });
+    if (alreadyPaid > 0) {
+      this.logger.warn(
+        `Order ${orderId} was refunded after ${alreadyPaid} of its commissions were paid out — ` +
+          `those commissions stand and need a manual clawback`,
+      );
+    }
+  }
+
+  /**
    * Handle affiliate commission using multi-level referral system.
    * Commissions are calculated on the original amount (before promo code discount).
    */
@@ -1107,20 +1165,23 @@ export class PaymentOrchestratorService implements OnModuleInit {
     // Commissions are calculated on the amount the user actually paid (after discount)
     const commissionBasisAmount = Number(order.amount);
 
-    try {
-      await this.affiliatesService.processMultiLevelCommissions(
-        order.id,
-        order.userId,
-        commissionBasisAmount,
-        order.currency,
-        serviceId,
-        tx,
-      );
-    } catch (error: any) {
-      this.logger.error(
-        `Error processing multi-level commissions for order ${order.id}: ${error.message}`,
-        error.stack,
-      );
-    }
+    // Deliberately not caught. The swallow that used to be here protected
+    // nothing: a database-level failure poisons the surrounding transaction, so
+    // every step after this one — credits, the payment.succeeded event — failed
+    // anyway, just with a misleading error. What it did do is let an
+    // application-level failure commit: `processMultiLevelCommissions` burns the
+    // referral's one-shot `firstOrderPaid` flag before it writes a single
+    // commission row, so a swallowed error committed a referral marked as
+    // converted with nothing to show for it — and the atomic check-and-set means
+    // no later run will ever try again. Letting it throw rolls the flag back with
+    // everything else and the webhook retries the whole settlement.
+    await this.affiliatesService.processMultiLevelCommissions(
+      order.id,
+      order.userId,
+      commissionBasisAmount,
+      order.currency,
+      serviceId,
+      tx,
+    );
   }
 }

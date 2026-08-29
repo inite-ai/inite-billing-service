@@ -50,16 +50,24 @@ export class RecommendationsController {
   ) {
     const order = await this.prisma.order.findUnique({
       where: { id: sessionId },
-      include: { price: { select: { productId: true } } },
+      include: { price: { select: { productId: true, product: { select: { serviceId: true } } } } },
     });
     if (!order) throw new NotFoundException('Checkout session not found');
-    if (!user.isService && order.userId !== user.userId) {
+    if (user.isService) {
+      // A service key used to be waved through to any session on the platform.
+      // 404 rather than 403: another service's session is not this caller's to
+      // know about.
+      if (order.price?.product?.serviceId !== user.serviceId) {
+        throw new NotFoundException('Checkout session not found');
+      }
+    } else if (order.userId !== user.userId) {
       throw new ForbiddenException('You do not have access to this session');
     }
     return this.recommendationsService.getNextBestOffers(order.userId, {
       surface: 'checkout',
       sessionProductId: order.price?.productId ?? undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
+      serviceId: user.isService ? user.serviceId : undefined,
     });
   }
 
@@ -73,6 +81,8 @@ export class RecommendationsController {
     }
     return this.recommendationsService.getNextBestOffers(userId, {
       surface: 'dashboard',
+      // A module gets its own catalogue and its own signals, not the platform's.
+      serviceId: user.isService ? user.serviceId : undefined,
     });
   }
 }

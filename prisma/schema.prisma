@@ -689,10 +689,16 @@ model Conversation {
   createdAt  DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt  DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
 
+  /// Which service's assistant this conversation belongs to. Service-key callers
+  /// are scoped to their own; a conversation with no service is the platform's
+  /// own and reachable only by the user who owns it.
+  serviceId  String?       @map("service_id") @db.Uuid
+
   messages   ChatMessage[]
   actions    AssistantAction[]
 
   @@index([userId, updatedAt(sort: Desc)])
+  @@index([serviceId, updatedAt(sort: Desc)])
   @@map("conversations")
   @@schema("billing")
 }

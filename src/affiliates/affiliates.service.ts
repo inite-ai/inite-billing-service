@@ -13,6 +13,7 @@ import {
 } from '../common/dto/affiliate.dto';
 import { ReferralLevelsService } from './referral-levels.service';
 import { resolveFrontendUrl } from '../common/config/frontend-url';
+import { availableIn, currencyBalances } from './affiliate-ledger';
 
 @Injectable()
 export class AffiliatesService {
@@ -240,15 +241,18 @@ export class AffiliatesService {
       throw new NotFoundException(`Affiliate not found: ${affiliateId}`);
     }
 
+    // Flat totals add currencies together and are kept only for the existing
+    // response shape; `balances` is the figure to read and to show.
     const pendingCommissions = affiliate.commissions
       .filter((c) => c.status === 'pending' || c.status === 'earned')
-      .reduce((sum, c) => sum + Number(c.amount), 0);
+      .reduce((sum, c) => sum.plus(c.amount), new Decimal(0));
 
     return {
       totalReferrals: affiliate.referrals.length,
       totalCommissions: affiliate.totalEarned.toString(),
-      pendingCommissions: pendingCommissions.toString(),
+      pendingCommissions: pendingCommissions.toFixed(4),
       paidCommissions: affiliate.totalPaid.toString(),
+      balances: await currencyBalances(this.prisma, affiliateId),
       upcomingPayout: affiliate.payouts[0] ? this.mapPayoutToDto(affiliate.payouts[0]) : undefined,
     };
   }
@@ -454,6 +458,18 @@ export class AffiliatesService {
 
   // ─── Balance & Withdrawal ─────────────────────────────────
 
+  /**
+   * Balance, per currency, off the commission ledger.
+   *
+   * `totalEarned - totalPaid` used to be the answer. It counted a euro and a
+   * dollar as the same unit, and it kept counting commissions the customer had
+   * been refunded for — every refund raised the balance it reported. The
+   * per-currency figures below come from the commissions themselves, where a
+   * voided one simply isn't there. The two flat totals stay for the existing
+   * response shape; `canWithdraw` no longer asks the cross-currency roll-up a
+   * question it cannot answer, because a withdrawal only ever happens within one
+   * currency.
+   */
   async getBalance(affiliateId: string) {
     const affiliate = await this.prisma.affiliate.findUnique({
       where: { id: affiliateId },
@@ -461,17 +477,23 @@ export class AffiliatesService {
     });
     if (!affiliate) throw new NotFoundException(`Affiliate not found: ${affiliateId}`);
 
-    const available = Number(affiliate.totalEarned) - Number(affiliate.totalPaid);
-    const minWithdrawal = (affiliate.service?.metadata as any)?.minWithdrawalAmount
-      ? Number((affiliate.service!.metadata as any).minWithdrawalAmount)
-      : 10;
+    const balances = await currencyBalances(this.prisma, affiliateId);
+    const minWithdrawal = new Decimal(
+      (affiliate.service?.metadata as any)?.minWithdrawalAmount ?? 10,
+    );
+
+    const available = balances.reduce(
+      (sum, balance) => sum.plus(balance.available),
+      new Decimal(0),
+    );
 
     return {
       totalEarned: affiliate.totalEarned.toString(),
       totalPaid: affiliate.totalPaid.toString(),
       available: available.toFixed(4),
-      canWithdraw: available >= minWithdrawal,
+      canWithdraw: balances.some((balance) => new Decimal(balance.available).gte(minWithdrawal)),
       minWithdrawalAmount: minWithdrawal.toString(),
+      balances,
     };
   }
 
@@ -508,17 +530,22 @@ export class AffiliatesService {
         throw new BadRequestException('You already have a pending withdrawal request');
       }
 
-      const available = new Decimal(affiliate.totalEarned).minus(affiliate.totalPaid);
+      // What is withdrawable in THIS currency, taken from the commissions that
+      // would fund it — not from `totalEarned - totalPaid`, which adds every
+      // currency together and still counts commissions voided by a refund.
+      const available = await availableIn(tx, affiliateId, payoutCurrency);
       const minWithdrawal = new Decimal(
         (affiliate.service?.metadata as any)?.minWithdrawalAmount ?? 10,
       );
 
       const target = amount != null ? new Decimal(amount) : available;
       if (target.lte(0)) {
-        throw new BadRequestException('Nothing to withdraw');
+        throw new BadRequestException(`Nothing to withdraw in ${payoutCurrency}`);
       }
       if (target.gt(available)) {
-        throw new BadRequestException(`Insufficient balance. Available: ${available.toFixed(2)}`);
+        throw new BadRequestException(
+          `Insufficient balance. Available: ${available.toFixed(2)} ${payoutCurrency}`,
+        );
       }
 
       // Cover whole settled ('earned'), not-yet-paid commissions oldest-first, up
