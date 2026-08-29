@@ -12,18 +12,30 @@ import { PrismaService } from '../../common/services/prisma.service';
  * What goes out instead is the shape of the config — which keys exist, and the
  * last four characters of each so an operator can tell one key from another.
  */
+/**
+ * Keys that are not credential names and never should be written as ones:
+ * assigning `__proto__` on a plain object changes its prototype rather than
+ * setting a field, and the config is built from a request body.
+ */
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 function redactConfig(config: unknown): {
   configuredKeys: string[];
   configPreview: Record<string, string>;
 } {
   if (!config || typeof config !== 'object') return { configuredKeys: [], configPreview: {} };
 
-  const preview: Record<string, string> = {};
-  for (const [key, value] of Object.entries(config as Record<string, unknown>)) {
-    const text = value == null ? '' : String(value);
-    preview[key] = text.length > 4 ? `••••${text.slice(-4)}` : text ? '••••' : '';
-  }
-  return { configuredKeys: Object.keys(preview), configPreview: preview };
+  const preview = Object.entries(config as Record<string, unknown>)
+    .filter(([key]) => !UNSAFE_KEYS.has(key))
+    .map(([key, value]): [string, string] => {
+      const text = value == null ? '' : String(value);
+      return [key, text.length > 4 ? `••••${text.slice(-4)}` : text ? '••••' : ''];
+    });
+
+  return {
+    configuredKeys: preview.map(([key]) => key),
+    configPreview: Object.fromEntries(preview),
+  };
 }
 
 function withoutSecrets<T extends { config?: unknown }>(provider: T) {
@@ -41,15 +53,23 @@ function withoutSecrets<T extends { config?: unknown }>(provider: T) {
  */
 function mergeConfig(stored: unknown, patch: unknown): Record<string, unknown> | undefined {
   if (patch === undefined) return undefined;
-  const base =
-    stored && typeof stored === 'object' ? { ...(stored as Record<string, unknown>) } : {};
-  if (!patch || typeof patch !== 'object') return base;
+
+  // A Map, then `Object.fromEntries`, rather than assigning into an object by a
+  // key that came off the wire. `base['__proto__'] = value` on a plain object
+  // sets its prototype instead of a field, and every key here is caller-chosen.
+  const base = new Map<string, unknown>(
+    stored && typeof stored === 'object'
+      ? Object.entries(stored as Record<string, unknown>).filter(([key]) => !UNSAFE_KEYS.has(key))
+      : [],
+  );
+  if (!patch || typeof patch !== 'object') return Object.fromEntries(base);
 
   for (const [key, value] of Object.entries(patch as Record<string, unknown>)) {
-    if (value === null) delete base[key];
-    else base[key] = value;
+    if (UNSAFE_KEYS.has(key)) continue;
+    if (value === null) base.delete(key);
+    else base.set(key, value);
   }
-  return base;
+  return Object.fromEntries(base);
 }
 
 @Injectable()

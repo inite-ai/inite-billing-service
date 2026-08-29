@@ -109,6 +109,21 @@ describe('admin provider secrets', () => {
     });
   });
 
+  it('refuses to treat a prototype key as a credential name', async () => {
+    // The config is built from a request body, and `base['__proto__'] = value`
+    // on a plain object sets its prototype rather than a field.
+    const { prisma, service } = build();
+    await service.updatePaymentProvider('prov-1', {
+      config: JSON.parse('{"__proto__": {"polluted": true}, "constructor": "x", "apiKey": "ok"}'),
+    });
+
+    const written = prisma.paymentProvider.update.mock.calls[0][0].data.config;
+    expect(written.apiKey).toBe('ok');
+    expect(Object.keys(written)).not.toContain('constructor');
+    expect(({} as any).polluted).toBeUndefined();
+    expect(Object.getPrototypeOf(written)).toBe(Object.prototype);
+  });
+
   it('handles a provider with no config at all', async () => {
     const { service } = build({ ...provider, config: null });
     const [listed] = (await service.getPaymentProviders()) as any[];
