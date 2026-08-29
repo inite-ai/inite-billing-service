@@ -22,6 +22,7 @@ import {
   PaySessionResponseDto,
 } from '../common/dto/checkout.dto';
 import { v4 as uuidv4 } from 'uuid';
+import { moneyToNumber, toMoney } from '../common/money';
 import { resolveFrontendUrl } from '../common/config/frontend-url';
 
 @Injectable()
@@ -271,6 +272,21 @@ export class CheckoutService {
         amount: price.amount,
         currency: price.currency,
         externalId: `order_${uuidv4()}`,
+        // What was bought, as it read at this moment. Without it, renaming a
+        // product or repricing it rewrites what every past order says it was
+        // for.
+        snapshot: {
+          priceCode: price.code,
+          priceAmount: price.amount.toString(),
+          currency: price.currency,
+          interval: price.interval ?? null,
+          trialDays: price.trialDays ?? null,
+          productCode: product.code,
+          productName: product.name,
+          productType: product.type,
+          serviceId: product.serviceId ?? null,
+          capturedAt: new Date().toISOString(),
+        },
         metadata: {
           ...dto.metadata,
           referralCode: dto.referralCode,
@@ -436,8 +452,10 @@ export class CheckoutService {
     const price = order.price;
     const product = price.product;
     const metadata = (order.metadata as Record<string, any>) || {};
-    let orderAmount = Number(order.amount);
-    const originalAmount = orderAmount;
+    // Decimal is what is stored and what is written back; the number below is
+    // only for the adapter interface, which takes one.
+    let orderAmountDecimal = toMoney(order.amount);
+    const originalAmount = moneyToNumber(orderAmountDecimal);
 
     // Validate + apply promo code if provided (wrapped in transaction to prevent race conditions)
     let promoValidation: any = null;
@@ -452,7 +470,7 @@ export class CheckoutService {
         throw new BadRequestException(`Invalid promo code: ${promoValidation.error}`);
       }
 
-      orderAmount = promoValidation.finalAmount;
+      orderAmountDecimal = toMoney(promoValidation.finalAmount);
 
       // Atomic transaction: re-check per-user limit + increment usage + create record + update order
       await this.prisma.$transaction(async (tx) => {
@@ -499,7 +517,7 @@ export class CheckoutService {
         await tx.order.update({
           where: { id: order.id },
           data: {
-            amount: orderAmount,
+            amount: orderAmountDecimal,
             metadata: {
               ...metadata,
               promoCode: data.promoCode,
@@ -516,7 +534,8 @@ export class CheckoutService {
     const errorUrl = metadata.errorUrl || '';
 
     // If amount is 0 (100% discount), skip payment — fulfill immediately
-    if (orderAmount === 0) {
+    const orderAmount = moneyToNumber(orderAmountDecimal);
+    if (orderAmountDecimal.isZero()) {
       const paymentIntent = await this.prisma.paymentIntent.create({
         data: {
           orderId: order.id,
@@ -613,7 +632,7 @@ export class CheckoutService {
           providerIntentId: intentResult.providerIntentId,
           providerCheckoutId: intentResult.providerCheckoutId,
           checkoutUrl: intentResult.checkoutUrl,
-          amount: orderAmount,
+          amount: orderAmountDecimal,
           currency: price.currency,
           expiresAt: intentResult.expiresAt,
           snapshot: intentResult.metadata || {},

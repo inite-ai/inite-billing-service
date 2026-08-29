@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
+import { getErrorMessage } from '@/lib/api-error'
 import type {
   Affiliate, AffiliateStats, AffiliateTreeNode,
   Referral, Commission, Payout, Service,
@@ -117,8 +118,8 @@ export default function ReferralsPage() {
       setBalance(balRes.data)
       const payRes = await api.get('/v1/affiliates/me/payouts')
       setPayouts(payRes.data)
-    } catch (e: any) {
-      toast.error(e.response?.data?.message || t('withdrawalError'))
+    } catch (e) {
+      toast.error(getErrorMessage(e, t('withdrawalError')))
     } finally {
       setWithdrawing(false)
     }

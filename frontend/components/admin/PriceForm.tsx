@@ -7,11 +7,19 @@ import { Button } from '@/components/ui/Button'
 import type { Product } from '@/lib/types'
 import { useTranslations } from 'next-intl'
 
+export interface PriceFormValues {
+  productId: string
+  code: string
+  currency: string
+  amount: number
+  interval?: string
+  trialDays?: number
+  graceDays?: number
+}
+
 interface PriceFormProps {
   products: Product[]
-  onSubmit: (data: {
-    productId: string; code: string; currency: string; amount: number; interval?: string; trialDays?: number; graceDays?: number
-  }) => Promise<void>
+  onSubmit: (data: PriceFormValues) => Promise<void>
   onCancel: () => void
 }
 

@@ -17,17 +17,19 @@ const FEATURE_TEMPLATES: Record<string, string[]> = {
   usage: ['Pay as you go', 'No monthly commitment'],
 }
 
+export interface ProductFormValues {
+  code: string
+  name: string
+  moduleScope: string
+  type: string
+  serviceId?: string
+  metadata?: Record<string, unknown>
+}
+
 interface ProductFormProps {
   initial?: Product
   services: Service[]
-  onSubmit: (data: {
-    code: string
-    name: string
-    moduleScope: string
-    type: string
-    serviceId?: string
-    metadata?: Record<string, unknown>
-  }) => Promise<void>
+  onSubmit: (data: ProductFormValues) => Promise<void>
   onCancel: () => void
 }
 

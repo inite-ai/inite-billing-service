@@ -47,8 +47,21 @@ export interface Order {
   metadata?: Record<string, unknown>
   createdAt: string
   updatedAt: string
+  /** What was bought, frozen at purchase. Absent on orders placed before it was recorded. */
+  snapshot?: Record<string, unknown>
   price?: Price
   paymentIntents?: PaymentIntent[]
+  /** Included by the admin detail endpoint only. */
+  invoices?: Array<{ id: string; status: string; amount: string; currency: string }>
+  /** Included by the admin detail endpoint only. */
+  affiliateCommissions?: Array<{
+    id: string
+    level: number
+    amount: string
+    commissionRate: string
+    currency: string
+    status: string
+  }>
 }
 
 export interface PaymentIntent {

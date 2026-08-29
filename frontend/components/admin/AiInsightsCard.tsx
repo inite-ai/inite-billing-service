@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from 'next-intl'
 import { Bot, Loader2, RefreshCw, Sparkles } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import api from '@/lib/api'
+import { getErrorMessage } from '@/lib/api-error'
 
 interface InsightResponse {
   content: string
@@ -30,8 +31,8 @@ export default function AiInsightsCard({ serviceId }: { serviceId?: string }) {
         force,
       })
       setInsight(data)
-    } catch (err: any) {
-      setError(err?.response?.data?.message || t('error'))
+    } catch (err) {
+      setError(getErrorMessage(err, t('error')))
     } finally {
       setLoading(false)
     }

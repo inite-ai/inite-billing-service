@@ -12,6 +12,7 @@ import { ShoppingBag, Loader2, Zap, Check, Sparkles } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import type { Product, Service, Price } from '@/lib/types'
+import { getErrorMessage } from '@/lib/api-error'
 
 type BillingInterval = 'month' | 'year'
 
@@ -129,8 +130,8 @@ export default function CatalogPage() {
         errorUrl: window.location.origin + '/catalog',
       })
       window.location.href = `/checkout/${res.data.sessionId}`
-    } catch (e: any) {
-      toast.error(e.response?.data?.message || tc('errors.generic'))
+    } catch (e) {
+      toast.error(getErrorMessage(e, tc('errors.generic')))
       setBuyLoading(null)
     }
   }

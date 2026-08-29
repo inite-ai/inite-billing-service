@@ -9,6 +9,7 @@ import api from '@/lib/api'
 import { OAuthClient } from '@/lib/oauth-client'
 import toast from 'react-hot-toast'
 import RecommendedOffers from '@/components/dashboard/RecommendedOffers'
+import { getErrorMessage, getErrorStatus } from '@/lib/api-error'
 
 interface SessionData {
   sessionId: string
@@ -71,7 +72,12 @@ export default function CheckoutPage() {
 
   const [session, setSession] = useState<SessionData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  // The three states this page can end in, each one a translation key. It was
+  // `string`, cast to `any` at the call site — so a typo would have rendered
+  // the key itself and nothing would have complained.
+  const [error, setError] = useState<'alreadyPaid' | 'sessionExpired' | 'sessionNotFound' | null>(
+    null,
+  )
 
   // Promo
   const [promoCode, setPromoCode] = useState('')
@@ -101,24 +107,21 @@ export default function CheckoutPage() {
         if (data.paymentMethods.length > 0) {
           setSelectedRail(data.paymentMethods[0].code)
         }
-      } catch (e: any) {
-        if (e.response?.status === 401) {
+      } catch (e) {
+        if (getErrorStatus(e) === 401) {
           // Not authenticated — auto-trigger OAuth silently
           sessionStorage.setItem('returnTo', `/checkout/${sessionId}`)
           OAuthClient.login()
           return
         }
-        if (e.response?.status === 404) {
-          setError('sessionNotFound')
-        } else {
-          setError('sessionNotFound')
-        }
+        // Anything else — missing, forbidden, or a server error — reads the
+        // same to someone holding a checkout link: this session is not usable.
+        setError('sessionNotFound')
       } finally {
         setLoading(false)
       }
     }
     fetchSession()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId])
 
   const handleApplyPromo = async () => {
@@ -147,8 +150,8 @@ export default function CheckoutPage() {
         toast.error(errorMessages[errorCode] || t('promoInvalid'))
         setPromoResult(null)
       }
-    } catch (e: any) {
-      toast.error(e.response?.data?.message || t('promoInvalid'))
+    } catch (e) {
+      toast.error(getErrorMessage(e, t('promoInvalid')))
       setPromoResult(null)
     } finally {
       setPromoLoading(false)
@@ -189,8 +192,8 @@ export default function CheckoutPage() {
         const successTarget = session.successUrl && isSafeRedirect(session.successUrl) ? session.successUrl : '/orders'
         window.location.href = successTarget
       }
-    } catch (e: any) {
-      toast.error(e.response?.data?.message || 'Payment failed')
+    } catch (e) {
+      toast.error(getErrorMessage(e, 'Payment failed'))
       setPayLoading(false)
     }
   }
@@ -234,7 +237,7 @@ export default function CheckoutPage() {
           <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4">
             <X className="w-7 h-7 text-red-400" />
           </div>
-          <h2 className="text-xl font-semibold text-white mb-2">{t(error as any)}</h2>
+          <h2 className="text-xl font-semibold text-white mb-2">{t(error)}</h2>
           {session?.errorUrl && isSafeRedirect(session.errorUrl) && (
             <button
               onClick={() => window.location.href = session.errorUrl!}

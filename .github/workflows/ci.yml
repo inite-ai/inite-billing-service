@@ -68,8 +68,12 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5433/inite_billing_test?schema=billing
 
+      # With coverage, so the thresholds in package.json are enforced rather
+      # than aspirational. The floors sit just under what is measured today and
+      # are highest on the paths that move money — they ratchet, they do not
+      # describe an ambition.
       - name: Run tests
-        run: npm run test:ci
+        run: npm run test:ci -- --coverage
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5433/inite_billing_test?schema=billing
           REDIS_URL: redis://localhost:6381

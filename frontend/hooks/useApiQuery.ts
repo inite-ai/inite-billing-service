@@ -1,6 +1,7 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import api from '@/lib/api'
+import { getErrorMessage } from '@/lib/api-error'
 
 interface UseApiQueryOptions<T> {
   initialData?: T
@@ -22,6 +23,9 @@ export function useApiQuery<T>(
   const [data, setData] = useState<T | null>(options?.initialData ?? null)
   const [loading, setLoading] = useState(url !== null && (options?.enabled !== false))
   const [error, setError] = useState<string | null>(null)
+  const onErrorRef = useRef(options?.onError)
+  onErrorRef.current = options?.onError
+  const onError = useCallback((e: unknown) => onErrorRef.current?.(e), [])
 
   const fetchData = useCallback(async () => {
     if (!url) return
@@ -30,14 +34,16 @@ export function useApiQuery<T>(
     try {
       const res = await api.get(url)
       setData(res.data)
-    } catch (e: any) {
-      const msg = e.response?.data?.message || 'Failed to load data'
-      setError(msg)
-      if (options?.onError) options.onError(e)
+    } catch (e) {
+      setError(getErrorMessage(e, 'Failed to load data'))
+      onError?.(e)
     } finally {
       setLoading(false)
     }
-  }, [url])
+    // `onError` is held in a ref-like const above so a caller passing an inline
+    // callback — which every caller does — cannot re-create this function on
+    // every render and re-fetch forever.
+  }, [url, onError])
 
   useEffect(() => {
     if (options?.enabled === false) return

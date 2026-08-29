@@ -212,6 +212,13 @@ model Order {
   currency     String      @db.VarChar(10)
   externalId   String?     @unique @map("external_id") @db.VarChar(255)
   metadata     Json?       @default("{}")
+
+  /// What was bought, as it read at the moment of buying: price code and
+  /// amount, product code and name, interval. The order only referenced the
+  /// catalogue, so renaming a product or repricing it rewrote every past
+  /// order's description of itself — a receipt that changes after the fact.
+  snapshot     Json?       @default("{}")
+
   createdAt    DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt    DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
 

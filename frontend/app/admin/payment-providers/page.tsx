@@ -15,6 +15,7 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { ActiveBadge } from '@/components/ui/StatusBadge'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { IconButton } from '@/components/ui/IconButton'
+import { getErrorMessage } from '@/lib/api-error'
 
 const KNOWN_PROVIDERS = [
   { code: 'ONE', name: 'ONE Payment', currencies: ['BRL', 'USD'], countries: ['BR', 'LATAM'], modes: ['PAYMENT', 'SUBSCRIPTION'], description: 'Latin America payment gateway — Pix, cards, bank transfer' },
@@ -88,8 +89,8 @@ export default function AdminPaymentProvidersPage() {
       setShowCreate(false)
       resetForm()
       load()
-    } catch (e: any) {
-      toast.error(e.response?.data?.message || t('providers.createError'))
+    } catch (e) {
+      toast.error(getErrorMessage(e, t('providers.createError')))
     } finally {
       setSaving(false)
     }

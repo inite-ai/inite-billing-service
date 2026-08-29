@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Check, X, Loader2, ShieldAlert, Clock } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import api from '@/lib/api'
+import { getErrorMessage, getErrorStatus, getErrorBodyStatus } from '@/lib/api-error'
 
 export interface ActionData {
   id: string
@@ -45,13 +46,15 @@ export default function ActionConfirmCard({ action }: { action: ActionData }) {
       const { data } = await api.post(`/v1/assistant/actions/${action.id}/${verb}`)
       setStatus(data.status as ActionStatus)
       if (data.error) setErrorText(data.error)
-    } catch (err: any) {
-      const serverStatus = err?.response?.data?.status
-      if (err?.response?.status === 409 && serverStatus) {
+    } catch (err) {
+      // A 409 carries the action's real state: it was already confirmed or
+      // already cancelled, and that state is the answer, not an error.
+      const serverStatus = getErrorBodyStatus(err)
+      if (getErrorStatus(err) === 409 && serverStatus) {
         setStatus(serverStatus as ActionStatus)
       } else {
         setStatus('pending')
-        setErrorText(err?.response?.data?.message || 'Request failed')
+        setErrorText(getErrorMessage(err, 'Request failed'))
       }
     } finally {
       setBusy(false)

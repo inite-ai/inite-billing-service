@@ -27,6 +27,10 @@ function parseCookies(cookieHeader: string): Record<string, string> {
   );
 }
 
+function asString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
 function isAdminFromToken(decoded: Record<string, unknown>): boolean {
   const roles = decoded.roles as string[] | undefined;
   const metadata = decoded.metadata as { isAdmin?: boolean } | undefined;
@@ -64,10 +68,17 @@ export async function getUserToken(request: Request): Promise<UserToken | null> 
 
   const isAdmin = isAdminFromToken(decoded);
 
+  // Claims are whatever the issuer put there, so each one is checked rather
+  // than asserted. A token with no subject is not a session.
+  const id = asString(decoded.sub);
+  if (!id) {
+    return null;
+  }
+
   return {
-    id: decoded.sub,
-    email: decoded.email,
-    name: decoded.name,
+    id,
+    email: asString(decoded.email) ?? '',
+    name: asString(decoded.name) ?? '',
     role: isAdmin ? 'ADMIN' : 'USER',
   };
 }

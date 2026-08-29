@@ -15,6 +15,7 @@ import { ActiveBadge } from '@/components/ui/StatusBadge'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { IconButton } from '@/components/ui/IconButton'
 import { useConfirmDialog } from '@/hooks/useConfirmDialog'
+import { getErrorMessage } from '@/lib/api-error'
 
 interface PayoutProvider {
   id: string
@@ -28,7 +29,7 @@ interface PayoutProvider {
   feeFixed: string | null
   configuredKeys?: string[]
   configPreview?: Record<string, string>
-  metadata: any
+  metadata?: Record<string, unknown>
   createdAt: string
 }
 
@@ -70,8 +71,8 @@ export default function AdminPayoutProvidersPage() {
       setShowCreate(false)
       setForm({ code: '', name: '', currencies: 'USD', minAmount: '', maxAmount: '', feePercent: '', feeFixed: '' })
       load()
-    } catch (e: any) {
-      toast.error(e.response?.data?.message || 'Failed to create')
+    } catch (e) {
+      toast.error(getErrorMessage(e, 'Failed to create'))
     }
   }
 
@@ -80,8 +81,8 @@ export default function AdminPayoutProvidersPage() {
       await api.put(`/v1/admin/payout-providers/${id}`, { isActive: !isActive })
       toast.success(isActive ? t('payoutProviders.deactivated') : t('payoutProviders.activated'))
       load()
-    } catch (e: any) {
-      toast.error(e.response?.data?.message || 'Failed')
+    } catch (e) {
+      toast.error(getErrorMessage(e, 'Failed'))
     }
   }
 
@@ -100,8 +101,8 @@ export default function AdminPayoutProvidersPage() {
       await api.delete(`/v1/admin/payout-providers/${id}`)
       toast.success(t('payoutProviders.deleted'))
       load()
-    } catch (e: any) {
-      toast.error(e.response?.data?.message || 'Failed to delete')
+    } catch (e) {
+      toast.error(getErrorMessage(e, 'Failed to delete'))
     }
   }
 

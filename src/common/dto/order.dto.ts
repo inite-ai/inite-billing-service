@@ -45,6 +45,12 @@ export class OrderResponseDto {
   @ApiPropertyOptional()
   metadata?: Record<string, any>;
 
+  @ApiPropertyOptional({
+    description:
+      'What was bought, as the catalogue read at the moment of purchase: price code and amount, product code and name, interval. Absent on orders placed before this was recorded.',
+  })
+  snapshot?: Record<string, any>;
+
   @ApiProperty()
   createdAt: Date;
 
