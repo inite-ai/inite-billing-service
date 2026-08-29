@@ -45,6 +45,10 @@ export function useTableState<F extends Record<string, string>>(
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
+  // Hoisted: a dependency list has to be plain expressions, so the memo can be
+  // compared rather than re-run on every render.
+  const defaultsKey = JSON.stringify(defaults)
+
   const filters = useMemo(() => {
     const out = { ...defaults }
     for (const key of Object.keys(defaults) as Array<keyof F>) {
@@ -53,7 +57,7 @@ export function useTableState<F extends Record<string, string>>(
     }
     return out
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, JSON.stringify(defaults)])
+  }, [searchParams, defaultsKey])
 
   const page = Math.max(parseInt(searchParams.get('page') || '1', 10) || 1, 1)
 
@@ -100,6 +104,8 @@ export function useTableState<F extends Record<string, string>>(
     [defaultDir, defaultSort, sort.dir, sort.key, write],
   )
 
+  const filtersKey = JSON.stringify(filters)
+
   const queryParams = useMemo(() => {
     const params: Record<string, string | number> = { page }
     for (const [key, value] of Object.entries(filters)) {
@@ -111,7 +117,7 @@ export function useTableState<F extends Record<string, string>>(
     }
     return params
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, JSON.stringify(filters), sort.key, sort.dir, defaultSort, defaultDir])
+  }, [page, filtersKey, sort.key, sort.dir, defaultSort, defaultDir])
 
   return { filters, page, sort, setFilters, setPage, toggleSort, queryParams }
 }

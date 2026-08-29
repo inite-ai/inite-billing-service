@@ -23,6 +23,7 @@ import { CopyableId } from '@/components/ui/CopyableId'
 import { ExportButton } from '@/components/ui/ExportButton'
 import { IconButton } from '@/components/ui/IconButton'
 import { useTableState } from '@/hooks/useTableState'
+import { useNow } from '@/hooks/useNow'
 
 export default function AdminSubscriptionsPage() {
   const t = useTranslations('admin')
@@ -96,7 +97,8 @@ export default function AdminSubscriptionsPage() {
     })
   }
 
-  const daysUntil = (date: string) => Math.max(0, Math.ceil((new Date(date).getTime() - Date.now()) / 86400000))
+  const now = useNow(60 * 60 * 1000)
+  const daysUntil = (date: string) => Math.max(0, Math.ceil((new Date(date).getTime() - now) / 86400000))
 
   return (
     <div>

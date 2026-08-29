@@ -1,7 +1,7 @@
-# Node 22, matching `engines` and the production images. The local stack ran
-# Node 18 — two majors behind everything else — so a dependency that needs a
-# newer runtime broke only for whoever was working in Docker.
-FROM node:22-alpine
+# Matches `engines` and the production images. The local stack ran Node 18 —
+# two majors behind everything else — so a dependency that needs a newer runtime
+# broke only for whoever was working in Docker.
+FROM node:24-alpine
 
 WORKDIR /app
 

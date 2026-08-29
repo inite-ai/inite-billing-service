@@ -16,6 +16,8 @@ import { CreditCard, Calendar, Clock, DollarSign, AlertTriangle, Loader2, Packag
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import type { Subscription } from '@/lib/types'
+import { useNow } from '@/hooks/useNow'
+import { getErrorMessage } from '@/lib/api-error'
 
 export default function SubscriptionsPage() {
   const { user, isLoading: authLoading } = useAuth()
@@ -34,6 +36,8 @@ export default function SubscriptionsPage() {
   const [statusFilter, setStatusFilter] = useState('')
   const [selectedSub, setSelectedSub] = useState<Subscription | null>(null)
   const [loading, setLoading] = useState(true)
+  // Every hook before the early returns below, so the order never changes.
+  const now = useNow(60 * 60 * 1000)
   const [confirmState, setConfirmState] = useState<{
     isOpen: boolean
     title: string
@@ -78,9 +82,8 @@ export default function SubscriptionsPage() {
           )
           setSelectedSub(null)
           toast.success(t('cancelSuccess'))
-        } catch (e: unknown) {
-          const err = e as { response?: { data?: { message?: string } } }
-          toast.error(err.response?.data?.message || t('cancelError'))
+        } catch (e) {
+          toast.error(getErrorMessage(e, t('cancelError')))
           throw e
         }
       },
@@ -94,13 +97,13 @@ export default function SubscriptionsPage() {
   const activeSubs = subscriptions.filter((s) => s.status === 'active' || s.status === 'trialing')
 
   const daysUntil = (date: string) => {
-    const diff = new Date(date).getTime() - Date.now()
+    const diff = new Date(date).getTime() - now
     return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
   }
 
   const periodProgress = (start: string, end: string) => {
     const total = new Date(end).getTime() - new Date(start).getTime()
-    const elapsed = Date.now() - new Date(start).getTime()
+    const elapsed = now - new Date(start).getTime()
     return Math.min(100, Math.max(0, (elapsed / total) * 100))
   }
 

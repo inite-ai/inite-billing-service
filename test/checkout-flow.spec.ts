@@ -1,8 +1,13 @@
 import { CheckoutService } from '../src/checkout/checkout.service';
 import { NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 
-// Stable UUID mock
-jest.mock('uuid', () => ({ v4: () => 'test-uuid-1234' }));
+// Stable external id. The service uses node's own randomUUID now — the `uuid`
+// package was a dependency for one call site and Node has had this built in
+// since 14.
+jest.mock('node:crypto', () => ({
+  ...jest.requireActual('node:crypto'),
+  randomUUID: () => 'test-uuid-1234',
+}));
 
 describe('CheckoutService', () => {
   let service: CheckoutService;

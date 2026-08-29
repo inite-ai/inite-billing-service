@@ -43,6 +43,9 @@ export class OAuthClient {
       code_challenge_method: 'S256',
     });
 
+    // Off to the identity provider — a different origin, and deliberately a
+    // full navigation. The lint rule cannot tell that AUTH_DOMAIN is absolute.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     window.location.href = `${AUTH_DOMAIN}/oauth/authorize?${params}`;
   }
 
@@ -105,6 +108,7 @@ export class OAuthClient {
       post_logout_redirect_uri: window.location.origin,
     });
 
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     window.location.href = `${AUTH_DOMAIN}/oauth/logout?${params}`;
   }
 }
