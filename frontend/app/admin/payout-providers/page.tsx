@@ -26,7 +26,8 @@ interface PayoutProvider {
   maxAmount: string | null
   feePercent: string | null
   feeFixed: string | null
-  config: any
+  configuredKeys?: string[]
+  configPreview?: Record<string, string>
   metadata: any
   createdAt: string
 }

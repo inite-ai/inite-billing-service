@@ -387,8 +387,12 @@ export class PaymentOrchestratorService implements OnModuleInit {
   }
 
   private async handleOrderFailed(orderId: string, tx: any): Promise<void> {
+    // `price.product` is what addresses the event below. Without the include it
+    // was always undefined, so every payment.failed event went out with no
+    // owning service — and since the outbox delivers by owner, to nobody.
     const order = await tx.order.findUnique({
       where: { id: orderId },
+      include: { price: { include: { product: true } } },
     });
 
     if (!order) return;
@@ -399,6 +403,8 @@ export class PaymentOrchestratorService implements OnModuleInit {
       data: { status: 'failed' },
     });
 
+    await this.releasePromoCodeUsage(order.id, tx);
+
     // Emit event
     await this.outboxService.emit(
       'billing.payment.failed',
@@ -408,6 +414,47 @@ export class PaymentOrchestratorService implements OnModuleInit {
       },
       { serviceId: order.price?.product?.serviceId ?? null, tx: tx },
     );
+  }
+
+  /**
+   * Give back the promo code a failed or expired order consumed.
+   *
+   * The code is redeemed when the session is paid — before the provider has
+   * said anything — so an order that then fails or expires kept the redemption
+   * forever. A campaign capped at 500 uses could be exhausted entirely by
+   * abandoned checkouts, and a per-user limit of one (the default) meant a
+   * customer whose card was declined could never use the code again, with
+   * nothing in the UI explaining why.
+   *
+   * A refund deliberately does NOT come through here: that sale happened, and
+   * restoring the redemption would let a code be farmed by buying and refunding.
+   */
+  private async releasePromoCodeUsage(orderId: string, tx: any): Promise<void> {
+    const released: Array<{ promo_code_id: string }> = await tx.$queryRaw(Prisma.sql`
+      DELETE FROM billing.promo_code_usages
+       WHERE order_id = ${orderId}::uuid
+      RETURNING promo_code_id
+    `);
+    if (released.length === 0) return;
+
+    const counts = new Map<string, number>();
+    for (const row of released) {
+      counts.set(row.promo_code_id, (counts.get(row.promo_code_id) ?? 0) + 1);
+    }
+
+    for (const [promoCodeId, count] of counts) {
+      // Guarded so a miscounted code cannot be driven below zero, which would
+      // silently hand out uses beyond the cap.
+      const updated = await tx.promoCode.updateMany({
+        where: { id: promoCodeId, currentUsageCount: { gte: count } },
+        data: { currentUsageCount: { decrement: count } },
+      });
+      if (updated.count === 0) {
+        this.logger.warn(
+          `Promo code ${promoCodeId} usage count is below the ${count} use(s) order ${orderId} is giving back — left as is`,
+        );
+      }
+    }
   }
 
   private async grantEntitlementsForOrder(order: any, tx: any): Promise<void> {

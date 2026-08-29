@@ -22,7 +22,7 @@ describe('IDOR — Checkout Session Access', () => {
   beforeEach(() => {
     mockPrisma = {
       $transaction: jest.fn((cb: any) => cb(mockPrisma)),
-      order: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
+      order: { findUnique: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
       paymentProvider: { findMany: jest.fn().mockResolvedValue([]) },
       paymentIntent: { create: jest.fn() },
       promoCode: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
@@ -191,6 +191,7 @@ describe('IDOR — Credits Consume', () => {
       $queryRaw: jest.fn().mockResolvedValue([]),
       creditBalance: {
         findUnique: jest.fn(),
+        findFirst: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
       },
@@ -199,7 +200,12 @@ describe('IDOR — Credits Consume', () => {
 
     mockPrisma = {
       $transaction: jest.fn((fn: any) => fn(mockTx)),
-      creditBalance: { findUnique: jest.fn(), create: jest.fn(), findMany: jest.fn() },
+      creditBalance: {
+        findUnique: jest.fn(),
+        findFirst: jest.fn(),
+        create: jest.fn(),
+        findMany: jest.fn(),
+      },
       creditUsage: { findMany: jest.fn(), count: jest.fn(), create: jest.fn() },
     };
 
@@ -207,7 +213,7 @@ describe('IDOR — Credits Consume', () => {
   });
 
   it('negative admin adjust is blocked when exceeds balance', async () => {
-    mockTx.creditBalance.findUnique.mockResolvedValue({
+    mockTx.creditBalance.findFirst.mockResolvedValue({
       id: 'bal-1',
       userId: 'user-1',
       serviceId: null,
@@ -226,7 +232,7 @@ describe('IDOR — Credits Consume', () => {
   });
 
   it('consume of exactly 0 amount succeeds (no-op)', async () => {
-    mockTx.creditBalance.findUnique.mockResolvedValue({
+    mockTx.creditBalance.findFirst.mockResolvedValue({
       id: 'bal-1',
       userId: 'user-1',
       serviceId: null,

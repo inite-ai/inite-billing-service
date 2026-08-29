@@ -225,7 +225,14 @@ export interface PaymentProvider {
   currencies: string[]
   countries: string[]
   webhookUrl?: string
-  config?: Record<string, unknown>
+  /**
+   * Which credentials are stored, never the credentials. The API used to send
+   * the whole config — live secret keys — to this browser so the edit form
+   * could merge into it; the merge happens on the server now.
+   */
+  configuredKeys?: string[]
+  /** Last four characters per key, enough to tell one key from another. */
+  configPreview?: Record<string, string>
   metadata?: Record<string, unknown>
   createdAt: string
   updatedAt: string

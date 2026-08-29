@@ -166,13 +166,20 @@ export class PromoCodesService {
       },
     });
 
-    // Increment usage count
-    await db.promoCode.update({
-      where: { id: promoCodeId },
-      data: {
-        currentUsageCount: { increment: 1 },
+    // Guarded increment, matching the checkout path. An unguarded
+    // `update` here would take a capped code past its cap the moment anything
+    // started calling this instead.
+    const promoCode = await db.promoCode.findUnique({ where: { id: promoCodeId } });
+    const updated = await db.promoCode.updateMany({
+      where: {
+        id: promoCodeId,
+        currentUsageCount: { lt: promoCode?.maxUsageCount ?? Number.MAX_SAFE_INTEGER },
       },
+      data: { currentUsageCount: { increment: 1 } },
     });
+    if (updated.count === 0) {
+      throw new BadRequestException('Promo code usage limit reached');
+    }
   }
 
   // ─── Admin CRUD ───────────────────────────────────────────

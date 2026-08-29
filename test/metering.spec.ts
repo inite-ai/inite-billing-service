@@ -111,6 +111,7 @@ describe('MeteringService', () => {
         },
         creditBalance: {
           findUnique: jest.fn().mockResolvedValue({ createdAt: new Date(0) }),
+          findFirst: jest.fn().mockResolvedValue({ createdAt: new Date(0) }),
         },
       }) as any;
 
@@ -203,6 +204,7 @@ describe('CreditsService metered consume', () => {
       $queryRaw: jest.fn().mockResolvedValue([{ id: 'bal-1' }]),
       creditBalance: {
         findUnique: jest.fn().mockResolvedValue(balance),
+        findFirst: jest.fn().mockResolvedValue(balance),
         update: jest.fn().mockResolvedValue({ ...balance, balance: 90 }),
       },
       creditUsage: { create: jest.fn() },

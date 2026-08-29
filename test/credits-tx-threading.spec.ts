@@ -21,6 +21,7 @@ describe('CreditsService transaction threading', () => {
   const makeDb = () => ({
     creditBalance: {
       findUnique: jest.fn().mockResolvedValue(baseBalance),
+      findFirst: jest.fn().mockResolvedValue(baseBalance),
       create: jest.fn().mockResolvedValue(baseBalance),
       update: jest.fn().mockResolvedValue({ ...baseBalance, balance: 100 }),
     },
