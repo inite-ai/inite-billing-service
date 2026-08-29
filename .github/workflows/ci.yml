@@ -88,8 +88,12 @@ jobs:
           JWT_SECRET: test-jwt-secret
           NODE_ENV: test
 
+      # `critical` let everything below it through, and both trees were sitting
+      # on high-severity advisories nobody was being told about — including a
+      # Next.js middleware bypass on the frontend. Both are at zero now, so the
+      # gate can be where it belongs.
       - name: Security audit
-        run: npm audit --audit-level=critical
+        run: npm audit --audit-level=high
 
   frontend:
     runs-on: ubuntu-latest
@@ -117,13 +121,20 @@ jobs:
         working-directory: frontend
         run: npm run lint
 
+      # The frontend had no tests at all — not a runner, not a config, not one
+      # assertion — while it holds the OAuth callback, the admin tables and the
+      # money figures an operator reads.
+      - name: Test
+        working-directory: frontend
+        run: npm test
+
       - name: Build
         working-directory: frontend
         run: npm run build
 
       - name: Security audit
         working-directory: frontend
-        run: npm audit --audit-level=critical
+        run: npm audit --audit-level=high
 
   docker:
     runs-on: ubuntu-latest

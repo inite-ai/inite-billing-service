@@ -12,5 +12,8 @@ npx nest build || { echo "Backend build failed — commit blocked."; exit 1; }
 echo "Running frontend lint check..."
 cd frontend && npm run lint || { echo "Frontend lint failed — commit blocked."; exit 1; }
 
+echo "Running frontend tests..."
+npm test || { echo "Frontend tests failed — commit blocked."; exit 1; }
+
 echo "Running frontend build check..."
 npx next build || { echo "Frontend build failed — commit blocked."; exit 1; }

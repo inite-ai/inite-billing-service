@@ -10,6 +10,15 @@ on:
         type: boolean
         default: false
 
+# One deploy at a time, queued rather than cancelled. Two pushes to main used
+# to run two deploys against the same host: their `docker-compose up` calls
+# interleaved, and whichever finished last decided what production ran —
+# regardless of which commit was newer. Cancelling instead of queueing would be
+# worse still, since a cancel can land mid-migration.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 env:
   PROJECT_NAME: inite-billing-service
   DOMAIN: billing.inite.ai
@@ -133,6 +142,14 @@ jobs:
         mkdir -p /opt/projects/${{ env.PROJECT_NAME }}
         cd /opt/projects/${{ env.PROJECT_NAME }}
 
+        set_env() {
+          key="$1"; value="$2"
+          touch .env
+          grep -v "^${key}=" .env > .env.next || true
+          echo "${key}=${value}" >> .env.next
+          mv .env.next .env
+        }
+
         # Ensure .env exists
         if [ ! -f .env ]; then
           {
@@ -150,13 +167,19 @@ jobs:
           exit 1
         fi
 
-        # Mark init migration as applied if DB already exists (baseline)
-        docker exec postgres psql -U ${{ secrets.ORCH_POSTGRES_USER }} -d inite_billing -c "
-          DELETE FROM billing._prisma_migrations WHERE migration_name = '20260322051612_init' AND finished_at IS NULL;
-        " 2>/dev/null || true
+        IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/inite-billing-service"
+        NEW_TAG="${{ github.sha }}"
+        # What is running right now, so a failed deploy has something to go back
+        # to. Empty on the first deploy after immutable tags landed.
+        PREV_TAG="$(sed -n 's/^BILLING_API_TAG=//p' .env | tail -1)"
 
-        docker pull ${{ secrets.DOCKERHUB_USERNAME }}/inite-billing-service:latest
-        docker-compose up -d --no-deps --force-recreate billing-service
+        # Deploy the commit, not `:latest`. A mutable tag meant a container
+        # recreated for any reason later — a host reboot, an unrelated compose
+        # command — silently picked up whatever `latest` pointed at by then, and
+        # there was no way to name the version to go back to.
+        docker pull "$IMAGE:$NEW_TAG"
+        set_env BILLING_API_TAG "$NEW_TAG"
+        docker-compose up -d --no-deps --force-recreate billing-service || echo "::warning::docker-compose up reported an error — the health gate below decides"
 
         # Poll the app's own readiness (database + redis) instead of the container
         # state: a
@@ -173,6 +196,24 @@ jobs:
         echo "Backend deployment failed — /health never came up"
         docker-compose ps billing-service
         docker-compose logs --tail 100 billing-service
+
+        # Put production back on the version that was serving. The job still
+        # fails: the deploy did not succeed, and saying otherwise is how a
+        # broken release goes unnoticed.
+        if [ -n "$PREV_TAG" ] && [ "$PREV_TAG" != "$NEW_TAG" ]; then
+          echo "::warning::Rolling back billing-service to ${PREV_TAG}"
+          set_env BILLING_API_TAG "$PREV_TAG"
+          docker-compose up -d --no-deps --force-recreate billing-service
+          for i in $(seq 1 24); do
+            if docker exec inite-billing-service wget --spider -q http://localhost:3000/health/ready 2>/dev/null; then
+              echo "Rolled back to ${PREV_TAG} and healthy"
+              break
+            fi
+            sleep 5
+          done
+        else
+          echo "::error::No previous tag recorded — production is left on the failed image"
+        fi
         exit 1
 
   # ── Deploy frontend (incremental fast-path) ────────────────
@@ -213,8 +254,21 @@ jobs:
           exit 1
         fi
 
-        docker pull ${{ secrets.DOCKERHUB_USERNAME }}/inite-billing-frontend:latest
-        docker-compose up -d --no-deps --force-recreate billing-frontend
+        set_env() {
+          key="$1"; value="$2"
+          touch .env
+          grep -v "^${key}=" .env > .env.next || true
+          echo "${key}=${value}" >> .env.next
+          mv .env.next .env
+        }
+
+        IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/inite-billing-frontend"
+        NEW_TAG="${{ github.sha }}"
+        PREV_TAG="$(sed -n 's/^BILLING_WEB_TAG=//p' .env | tail -1)"
+
+        docker pull "$IMAGE:$NEW_TAG"
+        set_env BILLING_WEB_TAG "$NEW_TAG"
+        docker-compose up -d --no-deps --force-recreate billing-frontend || echo "::warning::docker-compose up reported an error — the health gate below decides"
 
         # Same reasoning as the backend gate: serve a real request, not a state string.
         for i in $(seq 1 24); do
@@ -228,6 +282,21 @@ jobs:
         echo "Frontend deployment failed — the app never served a request"
         docker-compose ps billing-frontend
         docker-compose logs --tail 100 billing-frontend
+
+        if [ -n "$PREV_TAG" ] && [ "$PREV_TAG" != "$NEW_TAG" ]; then
+          echo "::warning::Rolling back billing-frontend to ${PREV_TAG}"
+          set_env BILLING_WEB_TAG "$PREV_TAG"
+          docker-compose up -d --no-deps --force-recreate billing-frontend
+          for i in $(seq 1 24); do
+            if docker exec inite-billing-frontend wget --spider -q http://localhost:3001/ 2>/dev/null; then
+              echo "Rolled back to ${PREV_TAG} and healthy"
+              break
+            fi
+            sleep 5
+          done
+        else
+          echo "::error::No previous tag recorded — production is left on the failed image"
+        fi
         exit 1
 
   # ── Full infra deploy (docker-compose.yml + .env + both services) ──
@@ -281,13 +350,22 @@ jobs:
         set_env OAUTH_CLIENT_SECRET "${{ secrets.BILLING_OAUTH_CLIENT_SECRET }}"
         set_env ANTHROPIC_API_KEY "${{ secrets.ANTHROPIC_API_KEY }}"
         set_env DOCKERHUB_USERNAME "${{ secrets.DOCKERHUB_USERNAME }}"
+
+        # The versions this deploy is putting into service, and the ones it can
+        # go back to. Compose reads both from .env, so what is running is
+        # written down instead of being whatever `:latest` resolved to at the
+        # moment a container happened to start.
+        PREV_API_TAG="$(sed -n 's/^BILLING_API_TAG=//p' .env | tail -1)"
+        PREV_WEB_TAG="$(sed -n 's/^BILLING_WEB_TAG=//p' .env | tail -1)"
+        set_env BILLING_API_TAG "${{ github.sha }}"
+        set_env BILLING_WEB_TAG "${{ github.sha }}"
         chmod 600 .env
 
         # Recreate docker-compose.yml
         cat > docker-compose.yml << COMPOSE_EOF
         services:
           billing-service:
-            image: ${{ secrets.DOCKERHUB_USERNAME }}/inite-billing-service:latest
+            image: ${{ secrets.DOCKERHUB_USERNAME }}/inite-billing-service:\${BILLING_API_TAG}
             container_name: inite-billing-service
             restart: unless-stopped
             labels:
@@ -328,7 +406,7 @@ jobs:
               start_period: 60s
 
           billing-frontend:
-            image: ${{ secrets.DOCKERHUB_USERNAME }}/inite-billing-frontend:latest
+            image: ${{ secrets.DOCKERHUB_USERNAME }}/inite-billing-frontend:\${BILLING_WEB_TAG}
             container_name: inite-billing-frontend
             restart: unless-stopped
             labels:
@@ -365,19 +443,19 @@ jobs:
             external: true
         COMPOSE_EOF
 
-        # Clear a stuck/interrupted migration so `migrate deploy` can retry it.
-        # This used to DROP the whole _prisma_migrations table, which on an
-        # already-populated database makes Prisma replay every migration from
-        # init and fail on the first CREATE TABLE. Only unfinished rows go.
-        docker exec postgres psql -U ${{ secrets.ORCH_POSTGRES_USER }} -d inite_billing -c "
-          DELETE FROM billing._prisma_migrations WHERE finished_at IS NULL;
-        " 2>/dev/null || true
+        # No migration surgery here any more. This step used to delete every
+        # `_prisma_migrations` row with `finished_at IS NULL` — the record that
+        # a migration started and never finished — which tells the next boot to
+        # run that migration again over a schema where some of its statements
+        # already applied, and which also deletes the row of a migration another
+        # container is running at that moment. `scripts/migrate.sh` now stops and
+        # says what to resolve instead.
 
-        docker pull ${{ secrets.DOCKERHUB_USERNAME }}/inite-billing-service:latest
-        docker pull ${{ secrets.DOCKERHUB_USERNAME }}/inite-billing-frontend:latest
+        docker pull "${{ secrets.DOCKERHUB_USERNAME }}/inite-billing-service:${{ github.sha }}"
+        docker pull "${{ secrets.DOCKERHUB_USERNAME }}/inite-billing-frontend:${{ github.sha }}"
 
         docker-compose down --remove-orphans
-        docker-compose up -d
+        docker-compose up -d || echo "::warning::docker-compose up reported an error — the health gate below decides"
 
         # The old gate grepped `docker-compose ps` for "Up", which passed as
         # long as *any* container was running — a dead backend behind a live
@@ -401,6 +479,26 @@ jobs:
         echo "Deployment failed — backend_ok='${backend_ok:-no}' frontend_ok='${frontend_ok:-no}'"
         docker-compose ps
         docker-compose logs --tail 100
+
+        # Return production to the versions that were serving before this run.
+        # The job still fails — the deploy did not succeed — but the site is not
+        # left down while someone reads the logs.
+        if [ -n "$PREV_API_TAG" ] || [ -n "$PREV_WEB_TAG" ]; then
+          echo "::warning::Rolling back to api=${PREV_API_TAG:-unchanged} web=${PREV_WEB_TAG:-unchanged}"
+          if [ -n "$PREV_API_TAG" ]; then set_env BILLING_API_TAG "$PREV_API_TAG"; fi
+          if [ -n "$PREV_WEB_TAG" ]; then set_env BILLING_WEB_TAG "$PREV_WEB_TAG"; fi
+          docker-compose up -d || true
+          for i in $(seq 1 24); do
+            if docker exec inite-billing-service wget --spider -q http://localhost:3000/health/ready 2>/dev/null \
+               && docker exec inite-billing-frontend wget --spider -q http://localhost:3001/ 2>/dev/null; then
+              echo "Rolled back and healthy"
+              break
+            fi
+            sleep 5
+          done
+        else
+          echo "::error::No previous tags recorded — production is left on the failed images"
+        fi
         exit 1
 
     - name: Cleanup
