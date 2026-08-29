@@ -13,6 +13,7 @@ import { IconButton } from '@/components/ui/IconButton'
 import { Button } from '@/components/ui/Button'
 import { useConfirmDialog } from '@/hooks/useConfirmDialog'
 import toast from 'react-hot-toast'
+import { getErrorMessage } from '@/lib/api-error'
 
 const errorMessage = (e: unknown, fallback: string) =>
   (e as { response?: { data?: { message?: string } } }).response?.data?.message || fallback
@@ -149,8 +150,8 @@ export default function AdminMeteringPage() {
       }
       setFeatureModal(null)
       load()
-    } catch (err: any) {
-      setFormError(err?.response?.data?.message?.toString() || 'Error')
+    } catch (err) {
+      setFormError(getErrorMessage(err, 'Error'))
     } finally {
       setSaving(false)
     }
@@ -208,8 +209,8 @@ export default function AdminMeteringPage() {
       setQuotaModal(false)
       setQuotaForm(emptyQuotaForm)
       load()
-    } catch (err: any) {
-      setFormError(err?.response?.data?.message?.toString() || 'Error')
+    } catch (err) {
+      setFormError(getErrorMessage(err, 'Error'))
     } finally {
       setSaving(false)
     }

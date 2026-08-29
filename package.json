@@ -36,9 +36,9 @@
     "start:prod": "node dist/main",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "bash scripts/test.sh",
-    "test:ci": "jest --forceExit",
+    "test:ci": "jest --forceExit --runInBand",
     "test:watch": "jest --watch",
-    "test:cov": "jest --coverage",
+    "test:cov": "jest --coverage --forceExit",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "test:e2e:watch": "jest --config ./test/jest-e2e.json --watch",
@@ -130,12 +130,66 @@
       "node_modules/(?!(jose)/)"
     ],
     "collectCoverageFrom": [
-      "**/*.(t|j)s"
+      "src/**/*.(t|j)s",
+      "!src/main.ts",
+      "!src/**/*.module.ts",
+      "!src/**/*.dto.ts",
+      "!src/**/*.interface.ts"
     ],
-    "coverageDirectory": "../coverage",
+    "coverageDirectory": "coverage",
     "testEnvironment": "node",
     "setupFiles": [
       "<rootDir>/test/setup-e2e.ts"
-    ]
+    ],
+    "coverageThreshold": {
+      "global": {
+        "statements": 38,
+        "branches": 18,
+        "functions": 27,
+        "lines": 38
+      },
+      "./src/payment-orchestrator/": {
+        "statements": 85,
+        "branches": 70,
+        "functions": 90,
+        "lines": 85
+      },
+      "./src/workers/": {
+        "statements": 80,
+        "branches": 55,
+        "functions": 80,
+        "lines": 80
+      },
+      "./src/webhooks/": {
+        "statements": 80,
+        "branches": 50,
+        "functions": 75,
+        "lines": 80
+      },
+      "./src/checkout/": {
+        "statements": 65,
+        "branches": 50,
+        "functions": 50,
+        "lines": 65
+      },
+      "./src/credits/": {
+        "statements": 60,
+        "branches": 45,
+        "functions": 40,
+        "lines": 60
+      },
+      "./src/affiliates/": {
+        "statements": 50,
+        "branches": 30,
+        "functions": 45,
+        "lines": 50
+      },
+      "./src/common/": {
+        "statements": 85,
+        "branches": 55,
+        "functions": 75,
+        "lines": 85
+      }
+    }
   }
 }

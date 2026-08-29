@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Logger,
   Optional,
@@ -21,6 +22,7 @@ import {
   PaySessionResponseDto,
 } from '../common/dto/checkout.dto';
 import { v4 as uuidv4 } from 'uuid';
+import { moneyToNumber, toMoney } from '../common/money';
 import { resolveFrontendUrl } from '../common/config/frontend-url';
 
 @Injectable()
@@ -28,7 +30,11 @@ export class CheckoutService {
   private readonly logger = new Logger(CheckoutService.name);
   /** Fallback idempotency store when Redis is unavailable (single-instance
    * only — does not survive restart or span instances). */
-  private readonly idempotencyStore: Map<string, CheckoutSessionResponseDto> = new Map();
+  private readonly idempotencyStore: Map<string, CheckoutSessionResponseDto | string> = new Map();
+  /** Written while the session is being created, replaced by the response. */
+  private static readonly IDEM_IN_FLIGHT = '__in_flight__';
+  /** How long a claim survives if the request dies without releasing it. */
+  private static readonly IDEM_IN_FLIGHT_SECONDS = 60;
   private redis: Redis | null = null;
   private static readonly IDEM_TTL_SECONDS = 3600;
 
@@ -63,17 +69,66 @@ export class CheckoutService {
     }
   }
 
-  private async idempotencyGet(key: string): Promise<CheckoutSessionResponseDto | null> {
+  /**
+   * Claim an idempotency key, or report what already holds it.
+   *
+   * This used to be a plain read followed, much later, by a write. Two requests
+   * carrying the same key — a double-clicked button, a client retry after a
+   * timeout — both read nothing and both went on to create an order, which is
+   * the one thing an idempotency key is for. The claim is now atomic: the first
+   * request takes the key, the second is told the work is already happening.
+   */
+  private async idempotencyClaim(
+    key: string,
+  ): Promise<
+    | { kind: 'claimed' }
+    | { kind: 'completed'; value: CheckoutSessionResponseDto }
+    | { kind: 'in_flight' }
+  > {
     const redis = this.getRedis();
     if (redis) {
       try {
+        const claimed = await redis.set(
+          key,
+          CheckoutService.IDEM_IN_FLIGHT,
+          'EX',
+          CheckoutService.IDEM_IN_FLIGHT_SECONDS,
+          'NX',
+        );
+        if (claimed) return { kind: 'claimed' };
+
         const raw = await redis.get(key);
-        return raw ? (JSON.parse(raw) as CheckoutSessionResponseDto) : null;
+        if (!raw) return { kind: 'claimed' }; // expired between the two calls
+        if (raw === CheckoutService.IDEM_IN_FLIGHT) return { kind: 'in_flight' };
+        return { kind: 'completed', value: JSON.parse(raw) as CheckoutSessionResponseDto };
       } catch (err: any) {
-        this.logger.warn(`Redis idempotency read failed, falling back: ${err.message}`);
+        this.logger.warn(`Redis idempotency claim failed, falling back: ${err.message}`);
       }
     }
-    return this.idempotencyStore.get(key) ?? null;
+
+    // Single-instance fallback. Node runs this to completion between awaits, so
+    // the read and the write below cannot interleave within one process.
+    const held = this.idempotencyStore.get(key);
+    if (held === undefined) {
+      this.idempotencyStore.set(key, CheckoutService.IDEM_IN_FLIGHT);
+      return { kind: 'claimed' };
+    }
+    if (typeof held === 'string') return { kind: 'in_flight' };
+    return { kind: 'completed', value: held };
+  }
+
+  /** Release a claim so a failed attempt can be retried immediately. */
+  private async idempotencyRelease(key: string): Promise<void> {
+    const redis = this.getRedis();
+    if (redis) {
+      try {
+        await redis.del(key);
+        return;
+      } catch (err: any) {
+        this.logger.warn(`Redis idempotency release failed: ${err.message}`);
+      }
+    }
+    this.idempotencyStore.delete(key);
   }
 
   private async idempotencySet(key: string, value: CheckoutSessionResponseDto): Promise<void> {
@@ -126,15 +181,40 @@ export class CheckoutService {
     // across instances; falls back to an in-process Map if Redis is absent).
     const idemKey = idempotencyKey ? `checkout:idem:${userId}:${idempotencyKey}` : null;
     if (idemKey) {
-      const existing = await this.idempotencyGet(idemKey);
-      if (existing) {
+      const claim = await this.idempotencyClaim(idemKey);
+      if (claim.kind === 'completed') {
         this.logger.debug(
           `Returning existing checkout session for idempotency key: ${idempotencyKey}`,
         );
-        return existing;
+        return claim.value;
+      }
+      if (claim.kind === 'in_flight') {
+        // The first request is still creating this order. Answering "not yet"
+        // is the only honest reply: inventing a second order would defeat the
+        // key, and returning nothing would look like success.
+        throw new ConflictException(
+          'A checkout with this idempotency key is already being created',
+        );
       }
     }
 
+    // From here on the key is held. Anything that throws must release it, or a
+    // failed attempt would lock the client out of retrying for the full TTL.
+    try {
+      return await this.buildSession(userId, dto, idemKey, clientIp, callerServiceId);
+    } catch (error) {
+      if (idemKey) await this.idempotencyRelease(idemKey);
+      throw error;
+    }
+  }
+
+  private async buildSession(
+    userId: string,
+    dto: CreateCheckoutSessionDto,
+    idemKey: string | null,
+    clientIp?: string,
+    callerServiceId?: string,
+  ): Promise<CheckoutSessionResponseDto> {
     // Get price (includes product via CatalogService)
     const price = await this.catalogService.getPriceByCode(dto.priceCode);
     const product = price.product;
@@ -192,6 +272,21 @@ export class CheckoutService {
         amount: price.amount,
         currency: price.currency,
         externalId: `order_${uuidv4()}`,
+        // What was bought, as it read at this moment. Without it, renaming a
+        // product or repricing it rewrites what every past order says it was
+        // for.
+        snapshot: {
+          priceCode: price.code,
+          priceAmount: price.amount.toString(),
+          currency: price.currency,
+          interval: price.interval ?? null,
+          trialDays: price.trialDays ?? null,
+          productCode: product.code,
+          productName: product.name,
+          productType: product.type,
+          serviceId: product.serviceId ?? null,
+          capturedAt: new Date().toISOString(),
+        },
         metadata: {
           ...dto.metadata,
           referralCode: dto.referralCode,
@@ -357,8 +452,10 @@ export class CheckoutService {
     const price = order.price;
     const product = price.product;
     const metadata = (order.metadata as Record<string, any>) || {};
-    let orderAmount = Number(order.amount);
-    const originalAmount = orderAmount;
+    // Decimal is what is stored and what is written back; the number below is
+    // only for the adapter interface, which takes one.
+    let orderAmountDecimal = toMoney(order.amount);
+    const originalAmount = moneyToNumber(orderAmountDecimal);
 
     // Validate + apply promo code if provided (wrapped in transaction to prevent race conditions)
     let promoValidation: any = null;
@@ -373,7 +470,7 @@ export class CheckoutService {
         throw new BadRequestException(`Invalid promo code: ${promoValidation.error}`);
       }
 
-      orderAmount = promoValidation.finalAmount;
+      orderAmountDecimal = toMoney(promoValidation.finalAmount);
 
       // Atomic transaction: re-check per-user limit + increment usage + create record + update order
       await this.prisma.$transaction(async (tx) => {
@@ -420,7 +517,7 @@ export class CheckoutService {
         await tx.order.update({
           where: { id: order.id },
           data: {
-            amount: orderAmount,
+            amount: orderAmountDecimal,
             metadata: {
               ...metadata,
               promoCode: data.promoCode,
@@ -437,7 +534,8 @@ export class CheckoutService {
     const errorUrl = metadata.errorUrl || '';
 
     // If amount is 0 (100% discount), skip payment — fulfill immediately
-    if (orderAmount === 0) {
+    const orderAmount = moneyToNumber(orderAmountDecimal);
+    if (orderAmountDecimal.isZero()) {
       const paymentIntent = await this.prisma.paymentIntent.create({
         data: {
           orderId: order.id,
@@ -534,7 +632,7 @@ export class CheckoutService {
           providerIntentId: intentResult.providerIntentId,
           providerCheckoutId: intentResult.providerCheckoutId,
           checkoutUrl: intentResult.checkoutUrl,
-          amount: orderAmount,
+          amount: orderAmountDecimal,
           currency: price.currency,
           expiresAt: intentResult.expiresAt,
           snapshot: intentResult.metadata || {},

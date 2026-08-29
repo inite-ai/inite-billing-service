@@ -1,6 +1,77 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../common/services/prisma.service';
 
+/**
+ * A provider's `config` holds its live credentials — the Stripe secret key, the
+ * webhook signing secret, the payout API token. Those used to be serialised
+ * into every admin list response and sent to the browser, where they sat in
+ * memory, in the devtools network tab, in any screen share, and within reach of
+ * anything that ever manages to run script on the page. Nothing on the client
+ * needed them: the UI only ever showed which keys were set.
+ *
+ * What goes out instead is the shape of the config — which keys exist, and the
+ * last four characters of each so an operator can tell one key from another.
+ */
+/**
+ * Keys that are not credential names and never should be written as ones:
+ * assigning `__proto__` on a plain object changes its prototype rather than
+ * setting a field, and the config is built from a request body.
+ */
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+function redactConfig(config: unknown): {
+  configuredKeys: string[];
+  configPreview: Record<string, string>;
+} {
+  if (!config || typeof config !== 'object') return { configuredKeys: [], configPreview: {} };
+
+  const preview = Object.entries(config as Record<string, unknown>)
+    .filter(([key]) => !UNSAFE_KEYS.has(key))
+    .map(([key, value]): [string, string] => {
+      const text = value == null ? '' : String(value);
+      return [key, text.length > 4 ? `••••${text.slice(-4)}` : text ? '••••' : ''];
+    });
+
+  return {
+    configuredKeys: preview.map(([key]) => key),
+    configPreview: Object.fromEntries(preview),
+  };
+}
+
+function withoutSecrets<T extends { config?: unknown }>(provider: T) {
+  const { config, ...rest } = provider;
+  return { ...rest, ...redactConfig(config) };
+}
+
+/**
+ * Merge a submitted config over the stored one instead of replacing it.
+ *
+ * The admin UI used to do this merge in the browser, which only worked because
+ * the browser had been handed the secrets to merge with. Doing it here means a
+ * form that submits just the API key keeps the signing secret it never saw. A
+ * key submitted as `null` is removed — the only way to delete one.
+ */
+function mergeConfig(stored: unknown, patch: unknown): Record<string, unknown> | undefined {
+  if (patch === undefined) return undefined;
+
+  // A Map, then `Object.fromEntries`, rather than assigning into an object by a
+  // key that came off the wire. `base['__proto__'] = value` on a plain object
+  // sets its prototype instead of a field, and every key here is caller-chosen.
+  const base = new Map<string, unknown>(
+    stored && typeof stored === 'object'
+      ? Object.entries(stored as Record<string, unknown>).filter(([key]) => !UNSAFE_KEYS.has(key))
+      : [],
+  );
+  if (!patch || typeof patch !== 'object') return Object.fromEntries(base);
+
+  for (const [key, value] of Object.entries(patch as Record<string, unknown>)) {
+    if (UNSAFE_KEYS.has(key)) continue;
+    if (value === null) base.delete(key);
+    else base.set(key, value);
+  }
+  return Object.fromEntries(base);
+}
+
 @Injectable()
 export class AdminProvidersService {
   constructor(private readonly prisma: PrismaService) {}
@@ -8,9 +79,10 @@ export class AdminProvidersService {
   // ─── Payment Providers ──────────────────────────────────────
 
   async getPaymentProviders() {
-    return this.prisma.paymentProvider.findMany({
+    const providers = await this.prisma.paymentProvider.findMany({
       orderBy: { createdAt: 'desc' },
     });
+    return providers.map(withoutSecrets);
   }
 
   async createPaymentProvider(data: {
@@ -24,7 +96,8 @@ export class AdminProvidersService {
     config?: any;
     metadata?: any;
   }) {
-    return this.prisma.paymentProvider.create({ data: data as any });
+    const created = await this.prisma.paymentProvider.create({ data: data as any });
+    return withoutSecrets(created);
   }
 
   async updatePaymentProvider(
@@ -42,21 +115,27 @@ export class AdminProvidersService {
   ) {
     const provider = await this.prisma.paymentProvider.findUnique({ where: { id } });
     if (!provider) throw new NotFoundException(`Payment provider not found: ${id}`);
-    return this.prisma.paymentProvider.update({ where: { id }, data: data as any });
+    const updated = await this.prisma.paymentProvider.update({
+      where: { id },
+      data: { ...data, config: mergeConfig(provider.config, data.config) } as any,
+    });
+    return withoutSecrets(updated);
   }
 
   async deletePaymentProvider(id: string) {
     const provider = await this.prisma.paymentProvider.findUnique({ where: { id } });
     if (!provider) throw new NotFoundException(`Payment provider not found: ${id}`);
-    return this.prisma.paymentProvider.delete({ where: { id } });
+    const deleted = await this.prisma.paymentProvider.delete({ where: { id } });
+    return withoutSecrets(deleted);
   }
 
   // ─── Payout Providers ──────────────────────────────────────
 
   async getPayoutProviders() {
-    return this.prisma.payoutProvider.findMany({
+    const providers = await this.prisma.payoutProvider.findMany({
       orderBy: { createdAt: 'desc' },
     });
+    return providers.map(withoutSecrets);
   }
 
   async createPayoutProvider(data: {
@@ -70,7 +149,8 @@ export class AdminProvidersService {
     config?: any;
     metadata?: any;
   }) {
-    return this.prisma.payoutProvider.create({ data });
+    const created = await this.prisma.payoutProvider.create({ data });
+    return withoutSecrets(created);
   }
 
   async updatePayoutProvider(
@@ -89,12 +169,17 @@ export class AdminProvidersService {
   ) {
     const provider = await this.prisma.payoutProvider.findUnique({ where: { id } });
     if (!provider) throw new NotFoundException(`Payout provider not found: ${id}`);
-    return this.prisma.payoutProvider.update({ where: { id }, data });
+    const updated = await this.prisma.payoutProvider.update({
+      where: { id },
+      data: { ...data, config: mergeConfig(provider.config, data.config) } as any,
+    });
+    return withoutSecrets(updated);
   }
 
   async deletePayoutProvider(id: string) {
     const provider = await this.prisma.payoutProvider.findUnique({ where: { id } });
     if (!provider) throw new NotFoundException(`Payout provider not found: ${id}`);
-    return this.prisma.payoutProvider.delete({ where: { id } });
+    const deleted = await this.prisma.payoutProvider.delete({ where: { id } });
+    return withoutSecrets(deleted);
   }
 }

@@ -47,8 +47,21 @@ export interface Order {
   metadata?: Record<string, unknown>
   createdAt: string
   updatedAt: string
+  /** What was bought, frozen at purchase. Absent on orders placed before it was recorded. */
+  snapshot?: Record<string, unknown>
   price?: Price
   paymentIntents?: PaymentIntent[]
+  /** Included by the admin detail endpoint only. */
+  invoices?: Array<{ id: string; status: string; amount: string; currency: string }>
+  /** Included by the admin detail endpoint only. */
+  affiliateCommissions?: Array<{
+    id: string
+    level: number
+    amount: string
+    commissionRate: string
+    currency: string
+    status: string
+  }>
 }
 
 export interface PaymentIntent {
@@ -225,7 +238,14 @@ export interface PaymentProvider {
   currencies: string[]
   countries: string[]
   webhookUrl?: string
-  config?: Record<string, unknown>
+  /**
+   * Which credentials are stored, never the credentials. The API used to send
+   * the whole config — live secret keys — to this browser so the edit form
+   * could merge into it; the merge happens on the server now.
+   */
+  configuredKeys?: string[]
+  /** Last four characters per key, enough to tell one key from another. */
+  configPreview?: Record<string, string>
   metadata?: Record<string, unknown>
   createdAt: string
   updatedAt: string

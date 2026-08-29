@@ -1,0 +1,12 @@
+-- Freeze what an order was for.
+--
+-- An order stored only `price_id`, so what it was for was whatever the
+-- catalogue says today. Renaming a product, repricing it, or changing a
+-- subscription's interval rewrote the description of every order ever placed
+-- against it — a receipt that changes after the fact, and a support
+-- conversation where nobody can agree on what was sold.
+--
+-- The amount was already snapshotted on the order; this is the rest of it.
+-- Nullable, so orders that predate it simply have none and continue to read
+-- through to the catalogue.
+ALTER TABLE "billing"."orders" ADD COLUMN IF NOT EXISTS "snapshot" JSONB DEFAULT '{}';

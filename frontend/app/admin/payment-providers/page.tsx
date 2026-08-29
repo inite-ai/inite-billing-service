@@ -15,6 +15,7 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { ActiveBadge } from '@/components/ui/StatusBadge'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { IconButton } from '@/components/ui/IconButton'
+import { getErrorMessage } from '@/lib/api-error'
 
 const KNOWN_PROVIDERS = [
   { code: 'ONE', name: 'ONE Payment', currencies: ['BRL', 'USD'], countries: ['BR', 'LATAM'], modes: ['PAYMENT', 'SUBSCRIPTION'], description: 'Latin America payment gateway — Pix, cards, bank transfer' },
@@ -88,8 +89,8 @@ export default function AdminPaymentProvidersPage() {
       setShowCreate(false)
       resetForm()
       load()
-    } catch (e: any) {
-      toast.error(e.response?.data?.message || t('providers.createError'))
+    } catch (e) {
+      toast.error(getErrorMessage(e, t('providers.createError')))
     } finally {
       setSaving(false)
     }
@@ -136,12 +137,10 @@ export default function AdminPaymentProvidersPage() {
         countries: formCountries.split(',').map((s) => s.trim()).filter(Boolean),
         supportedModes: formModes.split(',').map((s) => s.trim()).filter(Boolean),
         webhookUrl: formWebhook || undefined,
-        // Merge, never replace. Typing only the API key used to write
-        // `apiSecret: ''` and wipe the stored secret — while the field's own
-        // placeholder promised "leave empty to keep". The next webhook
-        // signature check then failed for no visible reason.
+        // Only what was typed. The server merges it over what is stored, so an
+        // untouched field keeps its value — this page never receives the
+        // secrets, and no longer needs to in order to avoid wiping them.
         config: {
-          ...(editing.config as Record<string, unknown>),
           ...(formApiKey ? { apiKey: formApiKey } : {}),
           ...(formApiSecret ? { apiSecret: formApiSecret } : {}),
         },
@@ -307,6 +306,16 @@ export default function AdminPaymentProvidersPage() {
           <Input label={t('providers.formWebhookUrl')} value={formWebhook} onChange={(e) => setFormWebhook(e.target.value)} />
           <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
             <p className="text-sm text-slate-500 mb-2">{t('providers.apiCredentialsUpdate')}</p>
+            {editing?.configuredKeys?.length ? (
+              // What is stored, without sending it: the key names and the last
+              // four characters of each, enough to tell one credential from
+              // another before overwriting it.
+              <p className="mb-3 font-mono text-xs text-slate-500 dark:text-slate-400">
+                {editing.configuredKeys
+                  .map((key) => `${key} ${editing.configPreview?.[key] ?? ''}`.trim())
+                  .join('  ·  ')}
+              </p>
+            ) : null}
             <div className="grid grid-cols-2 gap-4">
               <Input label={t('providers.formApiKey')} value={formApiKey} onChange={(e) => setFormApiKey(e.target.value)} placeholder={t('providers.leaveEmptyToKeep')} />
               <Input label={t('providers.formApiSecret')} type="password" value={formApiSecret} onChange={(e) => setFormApiSecret(e.target.value)} placeholder={t('providers.leaveEmptyToKeep')} />

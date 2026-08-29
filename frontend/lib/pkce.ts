@@ -48,7 +48,10 @@ function base64URLDecode(str: string): Uint8Array {
   return bytes;
 }
 
-export function decodeJWT(token: string): any {
+/** The claims a token carries. Unknown values, because the issuer decides them. */
+export type JwtClaims = Record<string, unknown> & { exp?: number };
+
+export function decodeJWT(token: string): JwtClaims | null {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) {
@@ -57,7 +60,7 @@ export function decodeJWT(token: string): any {
     const payload = parts[1];
     const decoded = base64URLDecode(payload);
     const jsonString = new TextDecoder().decode(decoded);
-    return JSON.parse(jsonString);
+    return JSON.parse(jsonString) as JwtClaims;
   } catch (error) {
     console.error('Failed to decode JWT:', error);
     return null;
@@ -66,8 +69,9 @@ export function decodeJWT(token: string): any {
 
 export function isJWTExpired(token: string): boolean {
   const decoded = decodeJWT(token);
-  if (!decoded || !decoded.exp) {
+  if (!decoded || typeof decoded.exp !== 'number') {
     return true;
   }
+  // A minute early, so a token cannot expire between the check and the request.
   return Date.now() >= decoded.exp * 1000 - 60000;
 }

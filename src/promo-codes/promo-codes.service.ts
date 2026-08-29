@@ -1,5 +1,13 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../common/services/prisma.service';
+import {
+  clampToZero,
+  minMoney,
+  moneyToNumber,
+  percentOf,
+  roundMoney,
+  toMoney,
+} from '../common/money';
 
 @Injectable()
 export class PromoCodesService {
@@ -91,53 +99,45 @@ export class PromoCodesService {
       }
     }
 
-    const originalAmount = Number(price.amount);
+    // Decimal throughout. This was float arithmetic finished with
+    // `Math.round(x * 10000) / 10000`, which is how fifteen percent off 19.99
+    // arrives as 16.991499999999998 and the rounding meant to hide it lands on
+    // the wrong side for the values that sit exactly on a boundary.
+    const originalAmount = toMoney(price.amount);
 
-    // Check min purchase amount
     if (
       promoCode.minPurchaseAmount !== null &&
-      originalAmount < Number(promoCode.minPurchaseAmount)
+      originalAmount.lt(toMoney(promoCode.minPurchaseAmount))
     ) {
       return {
         isValid: false,
         error: 'min_purchase_not_met',
         errorCode: 'min_purchase_not_met',
-        minPurchaseAmount: Number(promoCode.minPurchaseAmount),
+        minPurchaseAmount: moneyToNumber(promoCode.minPurchaseAmount),
       };
     }
 
-    // Calculate discount
-    let discountAmount: number;
-    if (promoCode.discountType === 'percentage') {
-      discountAmount = originalAmount * (Number(promoCode.discountValue) / 100);
-    } else {
-      // fixed_amount
-      discountAmount = Number(promoCode.discountValue);
+    let discountAmount =
+      promoCode.discountType === 'percentage'
+        ? percentOf(originalAmount, promoCode.discountValue)
+        : roundMoney(promoCode.discountValue);
+
+    if (promoCode.maxDiscountAmount !== null) {
+      discountAmount = minMoney(discountAmount, promoCode.maxDiscountAmount);
     }
 
-    // Cap at maxDiscountAmount if set
-    if (
-      promoCode.maxDiscountAmount !== null &&
-      discountAmount > Number(promoCode.maxDiscountAmount)
-    ) {
-      discountAmount = Number(promoCode.maxDiscountAmount);
-    }
+    // A discount can take the price to zero, never past it.
+    discountAmount = minMoney(discountAmount, originalAmount);
+    const finalAmount = clampToZero(originalAmount.minus(discountAmount));
 
-    // Cap at originalAmount (never negative)
-    if (discountAmount > originalAmount) {
-      discountAmount = originalAmount;
-    }
-
-    // Round to 4 decimal places
-    discountAmount = Math.round(discountAmount * 10000) / 10000;
-    const finalAmount = Math.round((originalAmount - discountAmount) * 10000) / 10000;
-
+    // Numbers only at the boundary: the response fields are numbers and have
+    // been since this endpoint shipped.
     return {
       isValid: true,
       promoCode,
-      discountAmount,
-      finalAmount,
-      originalAmount,
+      discountAmount: moneyToNumber(discountAmount),
+      finalAmount: moneyToNumber(finalAmount),
+      originalAmount: moneyToNumber(originalAmount),
     };
   }
 
@@ -166,13 +166,20 @@ export class PromoCodesService {
       },
     });
 
-    // Increment usage count
-    await db.promoCode.update({
-      where: { id: promoCodeId },
-      data: {
-        currentUsageCount: { increment: 1 },
+    // Guarded increment, matching the checkout path. An unguarded
+    // `update` here would take a capped code past its cap the moment anything
+    // started calling this instead.
+    const promoCode = await db.promoCode.findUnique({ where: { id: promoCodeId } });
+    const updated = await db.promoCode.updateMany({
+      where: {
+        id: promoCodeId,
+        currentUsageCount: { lt: promoCode?.maxUsageCount ?? Number.MAX_SAFE_INTEGER },
       },
+      data: { currentUsageCount: { increment: 1 } },
     });
+    if (updated.count === 0) {
+      throw new BadRequestException('Promo code usage limit reached');
+    }
   }
 
   // ─── Admin CRUD ───────────────────────────────────────────

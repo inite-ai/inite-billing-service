@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
-import { PriceForm } from '@/components/admin/PriceForm'
+import { PriceForm, type PriceFormValues } from '@/components/admin/PriceForm'
 import { Plus, Trash2 } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
@@ -50,7 +50,7 @@ export default function AdminPricesPage() {
 
   useEffect(() => { load() }, [])
 
-  const handleCreate = async (data: any) => {
+  const handleCreate = async (data: PriceFormValues) => {
     await api.post('/v1/admin/prices', data)
     toast.success(t('prices.created'))
     setShowModal(false)

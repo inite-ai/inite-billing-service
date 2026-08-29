@@ -27,6 +27,7 @@ describe('CreditsService', () => {
       $queryRaw: jest.fn().mockResolvedValue([]),
       creditBalance: {
         findUnique: jest.fn(),
+        findFirst: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
       },
@@ -39,6 +40,7 @@ describe('CreditsService', () => {
       $transaction: jest.fn((fn: any) => fn(mockTx)),
       creditBalance: {
         findUnique: jest.fn(),
+        findFirst: jest.fn(),
         create: jest.fn(),
         findMany: jest.fn(),
         count: jest.fn(),
@@ -56,7 +58,7 @@ describe('CreditsService', () => {
   // --- grant() ---
 
   it('grant() creates balance and usage record, increments totalGranted', async () => {
-    mockTx.creditBalance.findUnique.mockResolvedValue(null);
+    mockTx.creditBalance.findFirst.mockResolvedValue(null);
     mockTx.creditBalance.create.mockResolvedValue({ ...baseBalance });
     mockTx.creditBalance.update.mockResolvedValue({
       ...baseBalance,
@@ -95,7 +97,7 @@ describe('CreditsService', () => {
 
   it('grant() on existing balance adds to it', async () => {
     const existing = { ...baseBalance, balance: 50, totalGranted: 50 };
-    mockTx.creditBalance.findUnique.mockResolvedValue(existing);
+    mockTx.creditBalance.findFirst.mockResolvedValue(existing);
     mockTx.creditBalance.update.mockResolvedValue({
       ...existing,
       balance: 150,
@@ -125,7 +127,7 @@ describe('CreditsService', () => {
 
   it('consume() deducts from balance, increments totalUsed', async () => {
     const existing = { ...baseBalance, balance: 100, totalUsed: 0 };
-    mockTx.creditBalance.findUnique.mockResolvedValue(existing);
+    mockTx.creditBalance.findFirst.mockResolvedValue(existing);
     mockTx.creditBalance.update.mockResolvedValue({
       ...existing,
       balance: 70,
@@ -160,7 +162,7 @@ describe('CreditsService', () => {
 
   it('consume() flat path acquires a FOR UPDATE row lock (double-spend guard)', async () => {
     const existing = { ...baseBalance, balance: 100 };
-    mockTx.creditBalance.findUnique.mockResolvedValue(existing);
+    mockTx.creditBalance.findFirst.mockResolvedValue(existing);
     mockTx.creditBalance.update.mockResolvedValue({ ...existing, balance: 70, totalUsed: 30 });
     mockTx.creditUsage.create.mockResolvedValue({});
 
@@ -172,13 +174,13 @@ describe('CreditsService', () => {
     const rawSql = Array.isArray(sqlArg?.strings) ? sqlArg.strings.join('') : String(sqlArg);
     expect(rawSql).toMatch(/FOR UPDATE/i);
     expect(mockTx.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
-      mockTx.creditBalance.findUnique.mock.invocationCallOrder[0],
+      mockTx.creditBalance.findFirst.mock.invocationCallOrder[0],
     );
   });
 
   it('consume() returns error when insufficient balance', async () => {
     const existing = { ...baseBalance, balance: 10 };
-    mockTx.creditBalance.findUnique.mockResolvedValue(existing);
+    mockTx.creditBalance.findFirst.mockResolvedValue(existing);
 
     const result = await service.consume({
       userId: 'user-1',
@@ -192,7 +194,7 @@ describe('CreditsService', () => {
   });
 
   it('consume() returns error when no balance record exists', async () => {
-    mockTx.creditBalance.findUnique.mockResolvedValue(null);
+    mockTx.creditBalance.findFirst.mockResolvedValue(null);
 
     const result = await service.consume({
       userId: 'user-1',
@@ -206,7 +208,7 @@ describe('CreditsService', () => {
 
   it('consume() with exact balance succeeds (balance becomes 0)', async () => {
     const existing = { ...baseBalance, balance: 50 };
-    mockTx.creditBalance.findUnique.mockResolvedValue(existing);
+    mockTx.creditBalance.findFirst.mockResolvedValue(existing);
     mockTx.creditBalance.update.mockResolvedValue({
       ...existing,
       balance: 0,
@@ -228,7 +230,7 @@ describe('CreditsService', () => {
   it('resetForPeriod() resets balance and logs reset + grant usages', async () => {
     const existing = { ...baseBalance, balance: 30, totalGranted: 100 };
     const resetsAt = new Date('2026-04-01');
-    mockTx.creditBalance.findUnique.mockResolvedValue(existing);
+    mockTx.creditBalance.findFirst.mockResolvedValue(existing);
     mockTx.creditBalance.update.mockResolvedValue({
       ...existing,
       balance: 200,
@@ -272,7 +274,7 @@ describe('CreditsService', () => {
 
   it('adminAdjust() positive adds to balance', async () => {
     const existing = { ...baseBalance, balance: 50, totalGranted: 50 };
-    mockTx.creditBalance.findUnique.mockResolvedValue(existing);
+    mockTx.creditBalance.findFirst.mockResolvedValue(existing);
     mockTx.creditBalance.update.mockResolvedValue({
       ...existing,
       balance: 80,
@@ -308,7 +310,7 @@ describe('CreditsService', () => {
 
   it('adminAdjust() negative subtracts from balance', async () => {
     const existing = { ...baseBalance, balance: 100, totalUsed: 0 };
-    mockTx.creditBalance.findUnique.mockResolvedValue(existing);
+    mockTx.creditBalance.findFirst.mockResolvedValue(existing);
     mockTx.creditBalance.update.mockResolvedValue({
       ...existing,
       balance: 80,
@@ -349,7 +351,7 @@ describe('CreditsService', () => {
   // and the credits have to come back to us.
   it('revokeGrant() takes the credits back off the balance', async () => {
     const existing = { ...baseBalance, balance: 100, totalGranted: 100 };
-    mockTx.creditBalance.findUnique.mockResolvedValue(existing);
+    mockTx.creditBalance.findFirst.mockResolvedValue(existing);
     mockTx.creditBalance.update.mockResolvedValue({
       ...existing,
       balance: 50,

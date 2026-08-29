@@ -192,7 +192,10 @@ describe('PromoCodesService — apply', () => {
   beforeEach(() => {
     mockPrisma = {
       promoCodeUsage: { create: jest.fn() },
-      promoCode: { update: jest.fn() },
+      promoCode: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'promo-1', maxUsageCount: 100 }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
     };
     service = new PromoCodesService(mockPrisma);
   });
@@ -211,8 +214,10 @@ describe('PromoCodesService — apply', () => {
       }),
     });
 
-    expect(mockPrisma.promoCode.update).toHaveBeenCalledWith({
-      where: { id: 'promo-1' },
+    // Guarded by the cap, like the checkout path — an unguarded increment
+    // would take a capped code past its cap.
+    expect(mockPrisma.promoCode.updateMany).toHaveBeenCalledWith({
+      where: { id: 'promo-1', currentUsageCount: { lt: 100 } },
       data: { currentUsageCount: { increment: 1 } },
     });
   });
@@ -220,13 +225,16 @@ describe('PromoCodesService — apply', () => {
   it('uses transaction client when provided', async () => {
     const mockTx: any = {
       promoCodeUsage: { create: jest.fn() },
-      promoCode: { update: jest.fn() },
+      promoCode: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'promo-1', maxUsageCount: null }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
     };
 
     await service.applyPromoCode('promo-1', 'order-1', 'user-1', 100, 10, 90, mockTx);
 
     expect(mockTx.promoCodeUsage.create).toHaveBeenCalled();
-    expect(mockTx.promoCode.update).toHaveBeenCalled();
+    expect(mockTx.promoCode.updateMany).toHaveBeenCalled();
     expect(mockPrisma.promoCodeUsage.create).not.toHaveBeenCalled();
   });
 });

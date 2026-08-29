@@ -7,11 +7,13 @@ import { NotificationEmailProcessor } from './notification-email.processor';
 import { OutreachProcessor } from './outreach.processor';
 import { SubscriptionExpirerScheduler } from './subscription-expirer.scheduler';
 import { WebhookRecoveryScheduler } from './webhook-recovery.scheduler';
+import { BacklogMonitorScheduler } from './backlog-monitor.scheduler';
 import { PaymentOrchestratorModule } from '../payment-orchestrator/payment-orchestrator.module';
 import { OutboxModule } from '../outbox/outbox.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { OutreachModule } from '../outreach/outreach.module';
 import { RiskModule } from '../risk/risk.module';
+import { HealthModule } from '../health/health.module';
 import { PrismaService } from '../common/services/prisma.service';
 
 @Module({
@@ -21,6 +23,7 @@ import { PrismaService } from '../common/services/prisma.service';
     NotificationsModule,
     OutreachModule,
     RiskModule,
+    HealthModule,
     BullModule.registerQueue({
       name: 'webhooks',
       defaultJobOptions: {
@@ -60,6 +63,7 @@ import { PrismaService } from '../common/services/prisma.service';
     OutreachProcessor,
     SubscriptionExpirerScheduler,
     WebhookRecoveryScheduler,
+    BacklogMonitorScheduler,
     PrismaService,
   ],
 })

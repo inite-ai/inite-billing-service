@@ -32,6 +32,7 @@ export class OrdersService {
       currency: o.currency,
       externalId: o.externalId || undefined,
       metadata: o.metadata as Record<string, any> | undefined,
+      snapshot: (o.snapshot as Record<string, any> | null) ?? undefined,
       createdAt: o.createdAt,
       updatedAt: o.updatedAt,
     }));
@@ -61,6 +62,7 @@ export class OrdersService {
       currency: order.currency,
       externalId: order.externalId || undefined,
       metadata: order.metadata as Record<string, any> | undefined,
+      snapshot: (order.snapshot as Record<string, any> | null) ?? undefined,
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,
     };

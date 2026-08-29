@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useTranslations } from 'next-intl'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -18,13 +18,14 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { ActiveBadge } from '@/components/ui/StatusBadge'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { IconButton } from '@/components/ui/IconButton'
+import { getErrorMessage } from '@/lib/api-error'
 
 interface Template {
   key: string
   name: string
   description: string
   totalRate: number
-  levels: { level: number; rate: number; name: string; criteria?: Record<string, any> }[]
+  levels: { level: number; rate: number; name: string; criteria?: Record<string, unknown> }[]
 }
 
 export default function AdminReferralConfigPage() {
@@ -50,7 +51,7 @@ export default function AdminReferralConfigPage() {
     variant?: 'danger' | 'default'
   } | null>(null)
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const params: Record<string, string> = {}
       if (filterService) params.serviceId = filterService
@@ -60,15 +61,16 @@ export default function AdminReferralConfigPage() {
       ])
       setLevels(levelsRes.data)
       setServices(svcRes.data)
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { message?: string } } }
-      toast.error(err.response?.data?.message || 'Failed to load referral levels')
+    } catch (e) {
+      toast.error(getErrorMessage(e, 'Failed to load referral levels'))
     } finally {
       setLoading(false)
     }
-  }
+    // Rebuilt when the service filter changes, which is exactly when the effect
+    // below should run again.
+  }, [filterService])
 
-  useEffect(() => { load() }, [filterService])
+  useEffect(() => { load() }, [load])
 
   const loadTemplates = async () => {
     try {

@@ -9,7 +9,7 @@ import { Modal } from '@/components/ui/Modal'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Select } from '@/components/ui/Select'
 import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
-import { ProductForm } from '@/components/admin/ProductForm'
+import { ProductForm, type ProductFormValues } from '@/components/admin/ProductForm'
 import { Plus, Trash2, Eye, EyeOff, Package } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
@@ -36,7 +36,7 @@ export default function AdminProductsPage() {
   const { data: products, loading, error, refetch } = useApiQuery<Product[]>(productsUrl)
   const { data: services } = useApiQuery<Service[]>('/v1/admin/services')
 
-  const handleCreate = async (data: any) => {
+  const handleCreate = async (data: ProductFormValues) => {
     await api.post('/v1/admin/products', data)
     toast.success(t('products.created'))
     setShowModal(false)

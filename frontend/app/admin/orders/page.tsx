@@ -179,7 +179,7 @@ export default function AdminOrdersPage() {
                   <Tr key={order.id} className="cursor-pointer" onClick={() => handleDetail(order.id)}>
                     <Td>{new Date(order.createdAt).toLocaleDateString()}</Td>
                     <Td className="font-mono text-xs"><CopyableId value={order.userId} /></Td>
-                    <Td>{(order as any).price?.product?.name || '-'}</Td>
+                    <Td>{order.price?.product?.name || '-'}</Td>
                     <Td className="font-semibold">{order.amount} {order.currency}</Td>
                     <Td><Badge variant={order.mode === 'SUBSCRIPTION' ? 'info' : 'default'}>{order.mode}</Badge></Td>
                     <Td><StatusBadge status={order.status} /></Td>
@@ -226,7 +226,7 @@ export default function AdminOrdersPage() {
               <div className="flex justify-between"><span className="text-slate-500">{t('orders.detailAmount')}</span><span className="font-semibold">{selected.amount} {selected.currency}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">{t('orders.detailMode')}</span><span>{selected.mode}</span></div>
               {selected.externalId && <div className="flex justify-between"><span className="text-slate-500">{t('orders.detailExternalId')}</span><span className="font-mono text-xs">{selected.externalId}</span></div>}
-              {(selected as any).price?.product?.name && <div className="flex justify-between"><span className="text-slate-500">{t('orders.detailProduct')}</span><span>{(selected as any).price.product.name}</span></div>}
+              {selected.price?.product?.name && <div className="flex justify-between"><span className="text-slate-500">{t('orders.detailProduct')}</span><span>{selected.price?.product?.name}</span></div>}
             </div>
 
             {/* Payment Intents */}
@@ -244,10 +244,10 @@ export default function AdminOrdersPage() {
             )}
 
             {/* Commissions */}
-            {(selected as any).affiliateCommissions?.length > 0 && (
+            {(selected.affiliateCommissions?.length ?? 0) > 0 && (
               <div>
                 <h5 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">{t('orders.affiliateCommissions')}</h5>
-                {(selected as any).affiliateCommissions.map((c: any) => (
+                {selected.affiliateCommissions?.map((c) => (
                   <div key={c.id} className="flex items-center justify-between text-sm py-1">
                     <span>L{c.level} - {(Number(c.commissionRate) * 100).toFixed(1)}%</span>
                     <span className="font-semibold text-green-600">${Number(c.amount).toFixed(2)} {c.currency}</span>

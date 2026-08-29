@@ -1,12 +1,17 @@
-import { Controller, Get, HttpCode, HttpStatus, Res } from '@nestjs/common';
+import { Controller, Get, HttpCode, HttpStatus, Res, UseGuards } from '@nestjs/common';
 import { Response } from 'express';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { HealthService, ReadinessReport } from './health.service';
+import { BacklogReport, BacklogService } from './backlog.service';
+import { JwtOrServiceGuard } from '../auth/guards/jwt-or-service.guard';
 
 @ApiTags('Health')
 @Controller('health')
 export class HealthController {
-  constructor(private readonly healthService: HealthService) {}
+  constructor(
+    private readonly healthService: HealthService,
+    private readonly backlogService: BacklogService,
+  ) {}
 
   /** Liveness: the process is up and serving. Deliberately dependency-free. */
   @Get()
@@ -31,5 +36,19 @@ export class HealthController {
       res.status(HttpStatus.SERVICE_UNAVAILABLE);
     }
     return report;
+  }
+
+  /**
+   * How much work is stuck. Deliberately separate from readiness: a backlog
+   * does not mean the service should be taken out of rotation, it means
+   * somebody should look. Behind auth because the counts describe business
+   * volume; a monitor uses a service key.
+   */
+  @Get('backlog')
+  @UseGuards(JwtOrServiceGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Outbox and webhook backlog (counts and oldest age)' })
+  async backlog(): Promise<BacklogReport> {
+    return this.backlogService.report();
   }
 }

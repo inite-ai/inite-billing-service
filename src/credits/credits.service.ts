@@ -29,23 +29,31 @@ export class CreditsService {
     userId: string,
     serviceId?: string,
   ): Promise<CreditBalance> {
-    let balance = await db.creditBalance.findUnique({
-      where: {
-        userId_serviceId: { userId, serviceId: (serviceId ?? null) as any },
-      },
-    });
-    if (!balance) {
-      balance = await db.creditBalance.create({
-        data: {
-          userId,
-          serviceId: (serviceId ?? null) as any,
-          balance: 0,
-          totalGranted: 0,
-          totalUsed: 0,
-        },
+    // A platform-wide balance has no service, and a compound unique lookup
+    // cannot express that: Prisma rejects a null inside `userId_serviceId`
+    // outright ("Argument `serviceId` must not be null"), so every credit
+    // operation that named no service threw before it did anything. A filter
+    // takes null and means IS NULL, which is what was wanted all along.
+    const scope = { userId, serviceId: serviceId ?? null };
+
+    const existing = await db.creditBalance.findFirst({ where: scope });
+    if (existing) return existing;
+
+    try {
+      return await db.creditBalance.create({
+        data: { ...scope, balance: 0, totalGranted: 0, totalUsed: 0 },
       });
+    } catch (error: any) {
+      // Two first-time grants for the same scope can race between the read and
+      // the insert; the unique index decides, and the loser reads the winner's
+      // row. Inside a transaction the conflict has already aborted it, so this
+      // rethrows and the caller retries the whole thing.
+      if (error?.code === 'P2002') {
+        const raced = await db.creditBalance.findFirst({ where: scope });
+        if (raced) return raced;
+      }
+      throw error;
     }
-    return balance;
   }
 
   /**
@@ -182,13 +190,8 @@ export class CreditsService {
         FOR UPDATE
       `);
 
-      const balance = await tx.creditBalance.findUnique({
-        where: {
-          userId_serviceId: {
-            userId: data.userId,
-            serviceId: (data.serviceId ?? null) as any,
-          },
-        },
+      const balance = await tx.creditBalance.findFirst({
+        where: { userId: data.userId, serviceId: data.serviceId ?? null },
       });
 
       if (!balance) {

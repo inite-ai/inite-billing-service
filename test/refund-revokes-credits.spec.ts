@@ -24,6 +24,7 @@ describe('CreditsService.revokeGrant', () => {
   const makeDb = (after: Partial<typeof balance> = {}) => ({
     creditBalance: {
       findUnique: jest.fn().mockResolvedValue(balance),
+      findFirst: jest.fn().mockResolvedValue(balance),
       create: jest.fn().mockResolvedValue(balance),
       update: jest.fn().mockResolvedValue({ ...balance, ...after }),
     },
@@ -73,6 +74,7 @@ describe('CreditsService.resetForPeriod', () => {
     const db = {
       creditBalance: {
         findUnique: jest.fn().mockResolvedValue({ id: 'bal-1', balance: 30, serviceId: null }),
+        findFirst: jest.fn().mockResolvedValue({ id: 'bal-1', balance: 30, serviceId: null }),
         create: jest.fn(),
         update: jest.fn().mockResolvedValue({ id: 'bal-1', balance: 500 }),
       },
