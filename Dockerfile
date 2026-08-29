@@ -1,5 +1,5 @@
 # Build stage
-FROM node:24-alpine AS builder
+FROM node:26-alpine AS builder
 
 RUN apk add --no-cache openssl
 
@@ -21,7 +21,7 @@ RUN npm run build
 RUN test -f dist/main.js || (echo "Build error: dist/main.js missing — check tsconfig include/rootDir" && ls -R dist | head -50 && exit 1)
 
 # Production stage
-FROM node:24-alpine
+FROM node:26-alpine
 
 RUN apk add --no-cache openssl
 
