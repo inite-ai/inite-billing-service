@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { LogIn, Loader2 } from 'lucide-react';
 import { OAuthClient } from '@/lib/oauth-client';
+import { safeReturnTo } from '@/lib/safe-redirect';
 import { useTranslations } from 'next-intl';
 
 function LoginContent() {
@@ -18,8 +19,10 @@ function LoginContent() {
     try {
       setIsLoading(true);
       setError(null);
+      // Stored already narrowed to this origin, so nothing off-site can be
+      // parked in sessionStorage waiting for the callback to follow it.
       if (returnTo) {
-        sessionStorage.setItem('returnTo', returnTo);
+        sessionStorage.setItem('returnTo', safeReturnTo(returnTo));
       }
       await OAuthClient.login();
     } catch (err) {

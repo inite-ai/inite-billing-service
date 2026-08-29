@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import { Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { OAuthClient } from '@/lib/oauth-client';
 import { storeIdToken, clearTokens } from '@/lib/auth-helper';
+import { safeReturnTo } from '@/lib/safe-redirect';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTranslations } from 'next-intl';
 
@@ -51,13 +52,9 @@ function CallbackContent() {
         setStatus('success');
 
         setTimeout(() => {
-          const returnTo = searchParams?.get('returnTo') || sessionStorage.getItem('returnTo');
-          if (returnTo && returnTo.startsWith('/')) {
-            sessionStorage.removeItem('returnTo');
-            router.push(returnTo);
-          } else {
-            router.push('/dashboard');
-          }
+          const requested = searchParams?.get('returnTo') || sessionStorage.getItem('returnTo');
+          sessionStorage.removeItem('returnTo');
+          router.push(safeReturnTo(requested));
         }, 1500);
       } catch (err) {
         console.error('OAuth callback error:', err);
