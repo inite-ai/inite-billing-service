@@ -14,7 +14,14 @@ import globals from 'globals';
  */
 export default tseslint.config(
   {
-    ignores: ['dist/**', 'node_modules/**', 'coverage/**', 'eslint.config.mjs', 'frontend/**'],
+    ignores: [
+      'dist/**',
+      'mcp/dist/**',
+      'node_modules/**',
+      'coverage/**',
+      'eslint.config.mjs',
+      'frontend/**',
+    ],
   },
   ...tseslint.configs.recommended,
   prettierRecommended,

@@ -26,6 +26,7 @@ import { FunnelModule } from './funnel/funnel.module';
 import { ConversationsModule } from './conversations/conversations.module';
 import { AssistantModule } from './assistant/assistant.module';
 import { CreditsModule } from './credits/credits.module';
+import { McpModule } from './mcp/mcp.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { OutreachModule } from './outreach/outreach.module';
 import { RagModule } from './rag/rag.module';
@@ -74,6 +75,7 @@ import { InsightsModule } from './insights/insights.module';
     ConversationsModule,
     AssistantModule,
     CreditsModule,
+    McpModule,
     NotificationsModule,
     OutreachModule,
     RagModule,
