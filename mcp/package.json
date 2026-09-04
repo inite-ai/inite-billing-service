@@ -1,0 +1,44 @@
+{
+  "name": "@inite/billing-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for INITE billing — check entitlements, charge credits, and open checkouts from an agent",
+  "license": "AGPL-3.0-or-later",
+  "author": "INITE (https://inite.ai)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/inite-ai/inite-billing-service.git",
+    "directory": "mcp"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "billing",
+    "credits",
+    "entitlements",
+    "payments"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "bin": {
+    "inite-billing-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "typescript": "^5.9.3"
+  }
+}

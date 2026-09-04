@@ -633,6 +633,12 @@ model CreditUsage {
   featureCode     String?  @map("feature_code") @db.VarChar(100)
   units           Int?
   modelTier       String?  @map("model_tier") @db.VarChar(50)
+
+  /// Charge once per key. Agents retry on their own — a timeout, a dropped
+  /// connection, a tool the model calls again — and without this every retry
+  /// was a second debit.
+  idempotencyKey  String?  @map("idempotency_key") @db.VarChar(255)
+
   metadata        Json?    @default("{}")
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 

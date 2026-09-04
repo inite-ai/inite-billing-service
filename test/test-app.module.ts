@@ -16,6 +16,7 @@ import { WebhooksModule } from '../src/webhooks/webhooks.module';
 import { OutboxModule } from '../src/outbox/outbox.module';
 import { WorkersModule } from '../src/workers/workers.module';
 import { AffiliatesModule } from '../src/affiliates/affiliates.module';
+import { McpModule } from '../src/mcp/mcp.module';
 import { AdminModule } from '../src/admin/admin.module';
 import { MockOneAdapter } from './mocks/one-adapter.mock';
 import { PaymentOrchestratorService } from '../src/payment-orchestrator/payment-orchestrator.service';
@@ -57,6 +58,7 @@ import { OneAdapter } from '../src/adapters/one/one.adapter';
     WorkersModule,
     AffiliatesModule,
     AdminModule,
+    McpModule,
   ],
   providers: [
     MockOneAdapter,

@@ -34,7 +34,7 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
-    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
+    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" \"mcp/src/**/*.ts\" --fix",
     "test": "bash scripts/test.sh",
     "test:ci": "jest --forceExit --runInBand",
     "test:watch": "jest --watch",
@@ -50,13 +50,15 @@
     "db:reset": "prisma migrate reset",
     "db:seed": "prisma db seed",
     "postinstall": "prisma generate",
-    "prepare": "husky || true"
+    "prepare": "husky || true",
+    "mcp:build": "npm --prefix mcp run build"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@nestjs/bullmq": "^11.0.4",
     "@nestjs/common": "^11.1.28",
     "@nestjs/config": "^4.0.4",

@@ -68,6 +68,11 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5433/inite_billing_test?schema=billing
 
+      # The stdio bridge ships as its own npm package with its own tsconfig, so
+      # nothing else in this job would notice it breaking.
+      - name: Build MCP bridge
+        run: npm --prefix mcp ci --no-audit --no-fund && npm --prefix mcp run build
+
       # With coverage, so the thresholds in package.json are enforced rather
       # than aspirational. The floors sit just under what is measured today and
       # are highest on the paths that move money — they ratchet, they do not

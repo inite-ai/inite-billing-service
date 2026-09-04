@@ -144,12 +144,20 @@ export class CreditsService {
     modelTier?: string;
     description?: string;
     metadata?: Record<string, any>;
+    /**
+     * Charge once for this key, however many times the call arrives. Agents
+     * retry on their own — a timeout, a dropped connection, a tool the model
+     * decides to call again — and without this every retry is a second debit.
+     */
+    idempotencyKey?: string;
   }): Promise<{
     success: boolean;
     remainingBalance: number;
     error?: string;
     creditsCharged?: number;
     quota?: Record<string, any>;
+    /** True when an idempotency key matched an earlier charge and nothing moved. */
+    replayed?: boolean;
   }> {
     const isMetered = !!data.featureCode;
     if (isMetered) {
@@ -189,6 +197,26 @@ export class CreditsService {
           AND service_id IS NOT DISTINCT FROM ${data.serviceId ?? null}::uuid
         FOR UPDATE
       `);
+
+      // Behind the same lock: a key already charged is reported as the success
+      // it was, without charging again. The unique index is the backstop for
+      // anything that reaches here without the lock.
+      if (data.idempotencyKey) {
+        const already = await tx.creditUsage.findFirst({
+          where: { userId: data.userId, idempotencyKey: data.idempotencyKey },
+        });
+        if (already) {
+          const current = await tx.creditBalance.findFirst({
+            where: { userId: data.userId, serviceId: data.serviceId ?? null },
+          });
+          return {
+            success: true,
+            remainingBalance: current?.balance ?? 0,
+            replayed: true,
+            ...(isMetered ? { creditsCharged: Math.abs(already.amount) } : {}),
+          };
+        }
+      }
 
       const balance = await tx.creditBalance.findFirst({
         where: { userId: data.userId, serviceId: data.serviceId ?? null },
@@ -262,6 +290,7 @@ export class CreditsService {
                 modelTier: data.modelTier ?? null,
               }
             : {}),
+          idempotencyKey: data.idempotencyKey ?? null,
           metadata: data.metadata ?? {},
         },
       });
