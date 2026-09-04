@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/inite-ai/inite-billing-service/compare/inite-billing-service-v1.3.0...inite-billing-service-v1.4.0) (2026-09-04)
+
+
+### Features
+
+* **mcp:** speak MCP, over HTTP and over stdio, from one set of tools ([#145](https://github.com/inite-ai/inite-billing-service/issues/145)) ([cc10344](https://github.com/inite-ai/inite-billing-service/commit/cc10344f404e624b46f557404ea368122c8b70d6))
+
 ## [1.3.0](https://github.com/inite-ai/inite-billing-service/compare/inite-billing-service-v1.2.0...inite-billing-service-v1.3.0) (2026-08-29)
 
 
