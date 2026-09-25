@@ -562,6 +562,7 @@ model PromoCode {
   discountType      String   @map("discount_type") @db.VarChar(20) // percentage | fixed_amount
   discountValue     Decimal  @map("discount_value") @db.Decimal(19, 4)
   serviceId         String?  @map("service_id") @db.Uuid
+  productCodes      String[] @default([]) @map("product_codes")
   minPurchaseAmount Decimal? @map("min_purchase_amount") @db.Decimal(19, 4)
   maxDiscountAmount Decimal? @map("max_discount_amount") @db.Decimal(19, 4)
   validFrom         DateTime @map("valid_from") @db.Timestamptz(6)

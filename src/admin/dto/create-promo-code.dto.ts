@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  IsArray,
   IsBoolean,
   IsIn,
   IsInt,
@@ -49,6 +50,18 @@ export class CreatePromoCodeDto {
   @IsOptional()
   @IsUUID()
   serviceId?: string;
+
+  /**
+   * Product codes this coupon may be spent on, e.g. ["inite-atlas-premium"].
+   * Empty or absent means every product of the service — which a service
+   * scope alone has always meant, and which is too coarse on its own: one
+   * service can sell a $29 listing and a $149 plan.
+   */
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  @MaxLength(100, { each: true })
+  productCodes?: string[];
 
   @IsOptional()
   @Type(() => Number)
