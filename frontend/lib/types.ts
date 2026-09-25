@@ -289,3 +289,48 @@ export interface WebhookEvent {
   attempts: number
   lastError?: string
 }
+
+export type McpPricingMode = 'free' | 'per_call' | 'entitlement'
+export type McpCallOutcome = 'ok' | 'free' | 'denied' | 'upstream_error' | 'unpaid'
+
+/** A proxied MCP server. Upstream header values are never returned — only their names. */
+export interface McpServer {
+  id: string
+  serviceId: string
+  slug: string
+  name: string
+  description?: string | null
+  upstreamUrl: string
+  upstreamHeaderKeys: string[]
+  isActive: boolean
+  pricingMode: McpPricingMode
+  creditsPerCall?: number | null
+  featureCode?: string | null
+  requiredEntitlement?: string | null
+  priceCode?: string | null
+  createdAt: string
+  updatedAt: string
+  service?: { id: string; code: string; name: string }
+  calls?: Partial<Record<McpCallOutcome, number>>
+  creditsCharged?: number
+}
+
+export interface McpCall {
+  id: string
+  userId: string
+  method: string
+  toolName?: string | null
+  outcome: McpCallOutcome
+  creditsCharged: number
+  latencyMs?: number | null
+  detail?: string | null
+  createdAt: string
+}
+
+export interface McpServerUsage {
+  slug: string
+  since: string
+  calls: Partial<Record<McpCallOutcome, number>>
+  creditsCharged: number
+  recent: McpCall[]
+}

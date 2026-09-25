@@ -134,4 +134,53 @@ describe('MCP server registration', () => {
     await service.update('svc-a', 'srv-1', { name: 'Renamed' });
     expect(guard).not.toHaveBeenCalled();
   });
+
+  describe('admin overview', () => {
+    const withCalls = (servers: any[], byOutcome: any[], credits: any[]) => {
+      const prisma: any = {
+        mcpServer: { findMany: jest.fn().mockResolvedValue(servers), findUnique: jest.fn() },
+        mcpCall: {
+          groupBy: jest
+            .fn()
+            .mockImplementationOnce(() => Promise.resolve(byOutcome))
+            .mockImplementationOnce(() => Promise.resolve(credits)),
+        },
+      };
+      return { prisma, service: new McpServersService(prisma) };
+    };
+
+    it('folds call counts and credits onto each server, without its secrets', async () => {
+      const { service } = withCalls(
+        [row({ service: { id: 'svc-a', code: 'a', name: 'A' } })],
+        [
+          { mcpServerId: 'srv-1', outcome: 'ok', _count: { _all: 7 } },
+          { mcpServerId: 'srv-1', outcome: 'denied', _count: { _all: 2 } },
+        ],
+        [{ mcpServerId: 'srv-1', _sum: { creditsCharged: 14 } }],
+      );
+      const result = await service.overview(30);
+      expect(result.servers[0]).toMatchObject({
+        slug: 'weather',
+        calls: { ok: 7, denied: 2 },
+        creditsCharged: 14,
+        upstreamHeaderKeys: ['X-Key'],
+        service: { code: 'a' },
+      });
+      expect(result.servers[0]).not.toHaveProperty('upstreamHeaders');
+    });
+
+    it('still lists a server that had no calls, with zeroes', async () => {
+      const { service } = withCalls([row()], [], []);
+      const result = await service.overview(30);
+      expect(result.servers[0]).toMatchObject({ calls: {}, creditsCharged: 0 });
+    });
+
+    it('resolves the operator a server belongs to, and refuses an unknown one', async () => {
+      const { prisma, service } = withCalls([], [], []);
+      prisma.mcpServer.findUnique.mockResolvedValueOnce({ serviceId: 'svc-b' });
+      await expect(service.operatorOf('srv-1')).resolves.toBe('svc-b');
+      prisma.mcpServer.findUnique.mockResolvedValueOnce(null);
+      await expect(service.operatorOf('nope')).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
 });

@@ -194,6 +194,61 @@ export class McpServersService {
   }
 
   /**
+   * Every operator's servers with their traffic, for the platform admin.
+   *
+   * Two grouped queries rather than one per server, so the page costs the same
+   * with three servers as with three hundred. A server with no calls in the
+   * window still appears, with zeroes — a silent server is the thing an admin
+   * most needs to notice.
+   */
+  async overview(days = 30) {
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const [servers, byOutcome, credits] = await Promise.all([
+      this.prisma.mcpServer.findMany({
+        orderBy: { createdAt: 'desc' },
+        include: { service: { select: { id: true, code: true, name: true } } },
+      }),
+      this.prisma.mcpCall.groupBy({
+        by: ['mcpServerId', 'outcome'],
+        where: { createdAt: { gte: since } },
+        _count: { _all: true },
+      }),
+      this.prisma.mcpCall.groupBy({
+        by: ['mcpServerId'],
+        where: { createdAt: { gte: since } },
+        _sum: { creditsCharged: true },
+      }),
+    ]);
+
+    const calls = new Map<string, Record<string, number>>();
+    for (const row of byOutcome) {
+      const bucket = calls.get(row.mcpServerId) ?? {};
+      bucket[row.outcome] = row._count._all;
+      calls.set(row.mcpServerId, bucket);
+    }
+    const charged = new Map(credits.map((row) => [row.mcpServerId, row._sum.creditsCharged ?? 0]));
+
+    return {
+      since: since.toISOString(),
+      servers: servers.map((server) => ({
+        ...withoutSecrets(server),
+        calls: calls.get(server.id) ?? {},
+        creditsCharged: charged.get(server.id) ?? 0,
+      })),
+    };
+  }
+
+  /** Which operator a server is filed under — the admin acts in their name. */
+  async operatorOf(id: string): Promise<string> {
+    const server = await this.prisma.mcpServer.findUnique({
+      where: { id },
+      select: { serviceId: true },
+    });
+    if (!server) throw new NotFoundException(`MCP server not found: ${id}`);
+    return server.serviceId;
+  }
+
+  /**
    * Everything that would otherwise fail at the first call instead of at
    * registration, when the operator is watching.
    */
