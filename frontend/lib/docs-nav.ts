@@ -88,6 +88,16 @@ export const DOCS_GROUPS: DocGroup[] = [
         title: 'AI features',
         description: 'The assistant, confirm-gated action layer, outreach, metering, search and insights.',
       },
+      {
+        slug: 'mcp',
+        title: 'Billing tools for agents (MCP)',
+        description: 'Check entitlements, charge credits and open a checkout from inside an agent, over MCP.',
+      },
+      {
+        slug: 'mcp-gateway',
+        title: 'Charge for your MCP server',
+        description: 'Put your MCP server behind the billing gateway: per-call pricing, checkout on refusal, a call log.',
+      },
     ],
   },
   {

@@ -351,6 +351,21 @@ describe('MCP gateway proxy', () => {
     });
   });
 
+  describe('who may call', () => {
+    it('refuses a service key, which names no customer to bill or log against', async () => {
+      const { service, prisma, credits } = build();
+      const asService = { userId: null as any, isService: true, serviceId: 'svc-a', roles: [] };
+
+      const answer = await service.handle('weather', asService, call(), '{}');
+
+      expect(answer.status).toBe(403);
+      expect(JSON.parse(answer.body)).toMatchObject({ id: 7, error: { code: -32001 } });
+      expect(prisma.mcpServer.findFirst).not.toHaveBeenCalled();
+      expect(forward).not.toHaveBeenCalled();
+      expect(credits.consume).not.toHaveBeenCalled();
+    });
+  });
+
   describe('the call log', () => {
     it('records the successful call with what it cost', async () => {
       const { service, prisma } = build();

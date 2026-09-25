@@ -21,6 +21,7 @@ INITE Billing is one deployable backend for money across a product ecosystem: su
 - AI assistant: 19 role-gated tools over billing data (14 read-only + 5 confirm-before-execute write actions).
 - AI retention: LLM-written dunning, win-back and abandoned-checkout outreach (localized, rate-capped, off by default).
 - Developer surface: REST API + Swagger, webhooks, OAuth 2.0 + PKCE via INITE Identity, per-service API keys.
+- MCP: billing tools for agents at /mcp (entitlements, credits with idempotent charges, checkout links) plus a gateway that bills third-party MCP servers per call at /mcp/s/<slug>.
 
 ## Pricing
 Free to integrate — INITE takes no cut of your revenue. You pay only the standard processing fees charged by your payment provider.

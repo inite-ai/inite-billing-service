@@ -57,6 +57,25 @@ export class McpProxyService {
     payload: any,
     rawBody: string,
   ): Promise<ProxiedResponse> {
+    if (!caller.userId) {
+      // A service key carries no customer. Every call here is charged to, and
+      // logged against, a person — without one a paid call has nobody to bill
+      // and a free one leaves no trace. A module acting for its customers has
+      // the billing tools at /mcp, where it names who it is acting for.
+      return {
+        status: 403,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: payload?.id ?? null,
+          error: {
+            code: -32001,
+            message: 'This gateway bills a person: call it with a user token, not a service key.',
+          },
+        }),
+      };
+    }
+
     const server = await this.prisma.mcpServer.findFirst({
       where: { slug, isActive: true },
     });
