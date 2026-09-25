@@ -312,7 +312,20 @@ export class LavaAdapter implements Connector {
       body.cancel_return_url = back;
     }
 
-    const invoice = await this.call(config, '/api/v3/invoice', { method: 'POST', body });
+    let invoice: any;
+    try {
+      invoice = await this.call(config, '/api/v3/invoice', { method: 'POST', body });
+    } catch (error: any) {
+      // lava.top refusing the invoice — an amount outside its limits, an offer
+      // it does not have — is something the customer or admin can act on, not
+      // a server fault. It used to surface as a bare "Internal server error".
+      if (error.status && error.status >= 400 && error.status < 500 && error.status !== 401) {
+        throw new BadRequestException(
+          `lava.top could not open this payment: ${String(error.message).replace(/^lava\.top \d+: /, '')}`,
+        );
+      }
+      throw error;
+    }
     if (!invoice?.id || !invoice?.paymentUrl) {
       throw new Error('lava.top created no payment link for this offer');
     }
