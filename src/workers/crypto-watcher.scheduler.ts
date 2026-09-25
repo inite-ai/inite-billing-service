@@ -62,6 +62,25 @@ export class CryptoWatcherScheduler {
     });
   }
 
+  /**
+   * Keep exchange rates fresh while the rail is on, so the first checkout of
+   * the day is not the one that waits for a rate source.
+   */
+  @Cron('17 * * * *')
+  async refreshRates(): Promise<void> {
+    await this.lock.runWithLock('crypto-fx', 5 * 60_000, async () => {
+      const settings = await loadCryptoSettings(this.prisma);
+      const adapter = this.adapter();
+      if (!settings?.isActive || !adapter) return;
+      try {
+        const { source, count } = await adapter.fx.refresh({ force: true });
+        this.logger.log(`Exchange rates refreshed from ${source} (${count} currencies)`);
+      } catch (error: any) {
+        this.logger.warn(`Exchange rate refresh failed: ${error.message}`);
+      }
+    });
+  }
+
   /** What the last polls found, per chain — for the admin page. */
   lastStatus(): ChainPollStatus[] {
     return CHAIN_IDS.map(

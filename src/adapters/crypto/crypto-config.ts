@@ -26,11 +26,39 @@ export interface CryptoSettings {
   solanaRpcUrl?: string;
   /** Shared secret for an external indexer posting to /webhooks/crypto. Optional. */
   webhookSecret?: string;
+  /**
+   * Added to a price converted from another currency, in percent — the
+   * spread between the reference rate and what dollars cost the shop, and a
+   * cushion for the rate moving while the invoice is open. Never applied to a
+   * dollar price.
+   */
+  fxMarkupPercent: number;
+  /** Admin-pinned rates, units of the currency per US dollar. Win over any source. */
+  fixedRates: Record<string, string>;
 }
+
+export const MAX_FX_MARKUP_PERCENT = 20;
 
 function positive(value: unknown, fallback: number): number {
   const n = Number(value);
   return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+function markup(value: unknown): number {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 && n <= MAX_FX_MARKUP_PERCENT ? n : 0;
+}
+
+/** Only well-formed entries: a three-letter currency and a positive number. */
+function fixedRates(value: unknown): Record<string, string> {
+  if (!value || typeof value !== 'object') return {};
+  const out = new Map<string, string>();
+  for (const [currency, rate] of Object.entries(value as Record<string, unknown>)) {
+    if (/^[A-Z]{3}$/.test(currency) && /^\d+(\.\d+)?$/.test(String(rate)) && Number(rate) > 0) {
+      out.set(currency, String(rate));
+    }
+  }
+  return Object.fromEntries(out);
 }
 
 function text(value: unknown): string | undefined {
@@ -66,6 +94,8 @@ export function parseCryptoSettings(
     toncenterApiKey: text(config.toncenterApiKey),
     solanaRpcUrl: text(config.solanaRpcUrl) ?? text(config.chains?.SOL?.rpcUrl),
     webhookSecret: text(config.webhookSecret),
+    fxMarkupPercent: markup(config.fxMarkupPercent),
+    fixedRates: fixedRates(config.fixedRates),
   };
 }
 

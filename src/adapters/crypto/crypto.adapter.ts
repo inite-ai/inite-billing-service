@@ -15,13 +15,14 @@ import {
   PaymentMethod,
   WebhookParseResult,
 } from '../../common/interfaces/payment-rail-adapter.interface';
+import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../common/services/prisma.service';
-import { formatUnits, parseRawAmount, toOnChainAmount } from './amount.util';
+import { formatUnits, parseRawAmount } from './amount.util';
+import { FxRates } from './fx';
 import {
   CHAINS,
   CHAIN_IDS,
   ChainId,
-  STABLECOIN_CURRENCIES,
   isChainId,
   paymentUri,
   receiverKey,
@@ -60,9 +61,11 @@ export const UNMATCHED_TRANSFER_EVENT = 'crypto.transfer.unmatched';
 export class CryptoAdapter implements Connector {
   private readonly logger = new Logger(CryptoAdapter.name);
   readonly ledger: CryptoLedger;
+  readonly fx: FxRates;
 
   constructor(private readonly prisma: PrismaService) {
     this.ledger = new CryptoLedger(prisma);
+    this.fx = new FxRates(prisma);
   }
 
   rail(): string {
@@ -74,7 +77,6 @@ export class CryptoAdapter implements Connector {
       supportedModes: ['PAYMENT'],
       requiresRedirect: false,
       selectableMethods: true,
-      currencies: [...STABLECOIN_CURRENCIES],
     };
   }
 
@@ -100,10 +102,14 @@ export class CryptoAdapter implements Connector {
 
   // ─── Checkout ─────────────────────────────────────────────────
 
-  /** Every network/token pair a customer can pay with right now. */
-  async listMethods(): Promise<PaymentMethod[]> {
+  /**
+   * Every network/token pair a customer can pay with right now — none for a
+   * price in a currency there is no usable exchange rate for.
+   */
+  async listMethods(context: { currency?: string } = {}): Promise<PaymentMethod[]> {
     const settings = await loadCryptoSettings(this.prisma);
     if (!settings?.isActive) return [];
+    if (context.currency && !(await this.fx.quote(context.currency, settings))) return [];
 
     const methods: PaymentMethod[] = [];
     for (const chainId of CHAIN_IDS) {
@@ -131,9 +137,10 @@ export class CryptoAdapter implements Connector {
    * Open an invoice.
    *
    * Requires `cryptoChainId` and `cryptoToken` (or `metadata.cryptoChain` /
-   * `metadata.cryptoToken`). Prices must be in dollars: a stablecoin is worth
-   * one, and anything else would need an exchange rate this rail does not
-   * have — selling a 1000 ₽ product for 1000 USDT is the failure it prevents.
+   * `metadata.cryptoToken`). A stablecoin is a dollar, so a price in any other
+   * currency is converted at the current rate plus the shop's markup, rounded
+   * up to the token's smallest unit, and that rate is fixed for the invoice —
+   * recorded on it, so what the customer was charged can always be explained.
    */
   async createPaymentIntent(input: CreateIntentInput): Promise<CreateIntentResult> {
     const chainId = input.cryptoChainId || input.metadata?.cryptoChain;
@@ -151,13 +158,22 @@ export class CryptoAdapter implements Connector {
         `${token} is not accepted on ${chain.name}. Accepted: ${Object.keys(chain.tokens).join(', ')}`,
       );
     }
-    if (!STABLECOIN_CURRENCIES.has(String(input.currency).toUpperCase())) {
+    const settings = await this.settings();
+    const quote = await this.fx.quote(input.currency, settings);
+    if (!quote) {
       throw new BadRequestException(
-        `Crypto payments are only available for prices in USD; this one is in ${input.currency}`,
+        `Crypto payments are unavailable for prices in ${input.currency} right now: there is no current exchange rate for it`,
       );
     }
+    const markupPercent = quote.source === 'par' ? 0 : settings.fxMarkupPercent;
+    const usd = FxRates.toUsd(input.amount, quote, markupPercent);
+    // Up, never down: the customer covers the last fraction of a cent, the shop
+    // is never short by it.
+    const baseAmountRaw = usd
+      .mul(new Decimal(10).pow(tokenInfo.decimals))
+      .toDecimalPlaces(0, Decimal.ROUND_CEIL)
+      .toFixed(0);
 
-    const settings = await this.settings();
     if (!payable(settings, chainId)) {
       throw new BadRequestException(`Payments on ${chain.name} are not being accepted right now`);
     }
@@ -173,7 +189,7 @@ export class CryptoAdapter implements Connector {
       chain: chainId,
       token,
       receiverAddress,
-      baseAmountRaw: toOnChainAmount(input.amount, tokenInfo.decimals),
+      baseAmountRaw,
       decimals: tokenInfo.decimals,
       memo,
       expiresAt,
@@ -203,6 +219,17 @@ export class CryptoAdapter implements Connector {
         explorerUrl: chain.explorerUrl,
         requiredConfirmations: chain.confirmations,
         paymentUri: paymentUri(chainId, tokenInfo, receiverAddress, invoice.amountRaw, amount),
+        price: { amount: String(input.amount), currency: String(input.currency).toUpperCase() },
+        fx:
+          quote.source === 'par'
+            ? null
+            : {
+                perUsd: quote.perUsd.toString(),
+                source: quote.source,
+                publishedAt: quote.publishedAt?.toISOString() ?? null,
+                markupPercent,
+                usd: usd.toDecimalPlaces(6, Decimal.ROUND_CEIL).toString(),
+              },
         order_id: input.metadata?.order_id ?? input.orderId,
         expiresAt: expiresAt.toISOString(),
       },
@@ -278,6 +305,8 @@ export class CryptoAdapter implements Connector {
       requiredConfirmations: chain?.confirmations ?? 1,
       txHash: invoice.txHash,
       txUrl: invoice.txHash && chain ? txExplorerUrl(chainId, invoice.txHash) : null,
+      price: snapshot.price ?? null,
+      fx: snapshot.fx ?? null,
     };
   }
 

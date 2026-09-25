@@ -410,7 +410,9 @@
       "confirmations": "{done} of {required} confirmations",
       "paidTitle": "Payment confirmed",
       "paidHint": "Thank you — taking you back now.",
-      "viewTransaction": "View the transaction"
+      "viewTransaction": "View the transaction",
+      "converted": "{price} at {rate} per US dollar, fixed for this invoice.",
+      "convertedWithMarkup": "{price} at {rate} per US dollar plus {markup}%, fixed for this invoice."
     }
   },
   "referrals": {
@@ -1310,7 +1312,34 @@
       "ignoreHint": "{amount} will stay recorded but will not settle any order. Say why, for whoever looks next.",
       "reason": "Reason",
       "ignored": "Transfer set aside",
-      "ignoreFailed": "Could not set the transfer aside"
+      "ignoreFailed": "Could not set the transfer aside",
+      "fx": {
+        "title": "Exchange rates",
+        "hint": "A stablecoin is a dollar, so a price in any other currency is converted when the invoice opens and the rate is fixed for that invoice. Rates come from open.er-api.com, falling back to the Central Bank of Russia, and refresh hourly. A currency with no rate from the last four days is not offered crypto at all.",
+        "markup": "Markup on converted prices (%)",
+        "markupHint": "Covers the gap between the reference rate and what dollars cost you, and the rate moving while an invoice is open. Never added to a dollar price.",
+        "refresh": "Refresh rates",
+        "refreshed": "Rates refreshed from {source}",
+        "refreshFailed": "Could not fetch rates",
+        "currency": "Currency",
+        "rate": "Per US dollar",
+        "source": "Source",
+        "updated": "Published",
+        "unavailable": "No usable rate — crypto not offered",
+        "pin": "Pin a rate",
+        "pinHint": "A pinned rate wins over the sources — for a rate you set yourself, e.g. what USDT really costs you in roubles.",
+        "pinned": "pinned",
+        "unpin": "Unpin",
+        "noCurrencies": "Every active price is in dollars; nothing to convert.",
+        "sources": {
+          "fixed": "Pinned",
+          "openErApi": "open.er-api.com",
+          "cbr": "Central Bank of Russia"
+        },
+        "addPin": "Add",
+        "pinCurrency": "Currency (e.g. RUB)",
+        "pinRate": "Units per $1"
+      }
     }
   },
   "forms": {

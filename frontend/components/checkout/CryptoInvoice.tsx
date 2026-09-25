@@ -23,6 +23,15 @@ export interface CryptoPayment {
   requiredConfirmations: number
   txHash: string | null
   txUrl: string | null
+  /** The price as the shop set it. */
+  price?: { amount: string; currency: string } | null
+  /** Present when the price was converted from another currency. */
+  fx?: { perUsd: string; source: string; publishedAt: string | null; markupPercent: number; usd: string } | null
+}
+
+function formatNumber(value: string, maxFraction = 2): string {
+  const n = Number(value)
+  return Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: maxFraction }) : value
 }
 
 /**
@@ -231,6 +240,15 @@ export function CryptoInvoice({
 
       <CopyField label={t('exactAmount')} value={payment.amount} display={amountDisplay} large />
       <p className="-mt-3 text-xs text-slate-400">{t('exactAmountHint')}</p>
+      {payment.fx && payment.price && (
+        <p className="-mt-2 text-xs text-slate-400">
+          {t(payment.fx.markupPercent ? 'convertedWithMarkup' : 'converted', {
+            price: `${formatNumber(payment.price.amount)} ${payment.price.currency}`,
+            rate: `${formatNumber(payment.fx.perUsd, 4)} ${payment.price.currency}`,
+            markup: payment.fx.markupPercent,
+          })}
+        </p>
+      )}
 
       <div className="grid gap-5 sm:grid-cols-[1fr_auto] sm:items-start">
         <CopyField label={t('address')} value={payment.address} />

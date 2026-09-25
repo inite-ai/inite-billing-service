@@ -1130,3 +1130,20 @@ model CryptoTransfer {
   @@map("crypto_transfers")
   @@schema("billing")
 }
+
+/// How many units of a currency one US dollar buys, as last fetched — what a
+/// crypto invoice for a non-dollar price is converted at. One row per
+/// currency, overwritten on each refresh; the rate an invoice actually used is
+/// copied onto that invoice, so history lives there.
+model FxRate {
+  currency    String    @id @db.VarChar(10)
+  perUsd      Decimal   @map("per_usd") @db.Decimal(24, 10)
+  /// open.er-api.com | cbr.ru
+  source      String    @db.VarChar(40)
+  /// When the source says the rate is from.
+  publishedAt DateTime? @map("published_at") @db.Timestamptz(6)
+  fetchedAt   DateTime  @map("fetched_at") @db.Timestamptz(6)
+
+  @@map("fx_rates")
+  @@schema("billing")
+}

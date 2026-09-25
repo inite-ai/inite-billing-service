@@ -3,6 +3,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   IsBoolean,
   IsInt,
+  IsNumber,
   IsObject,
   IsOptional,
   IsString,
@@ -57,6 +58,15 @@ class UpdateCryptoSettingsDto {
   @IsString()
   @MaxLength(200)
   webhookSecret?: string | null;
+
+  @IsOptional()
+  @IsNumber()
+  fxMarkupPercent?: number;
+
+  /** `{ RUB: "84.5", EUR: null }` — units per US dollar; null unpins. */
+  @IsOptional()
+  @IsObject()
+  fixedRates?: Record<string, string | number | null>;
 }
 
 class AssignTransferDto {
@@ -125,6 +135,12 @@ export class CryptoAdminController {
   @ApiOperation({ summary: 'Set aside a transfer that pays for nothing here' })
   ignore(@Param('id') id: string, @Body() body: IgnoreTransferDto, @User() user: RequestUser) {
     return this.crypto.ignore(id, user.userId, body.note);
+  }
+
+  @Post('fx/refresh')
+  @ApiOperation({ summary: 'Fetch exchange rates now' })
+  refreshRates() {
+    return this.crypto.refreshRates();
   }
 
   @Post('poll')

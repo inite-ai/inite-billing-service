@@ -84,7 +84,13 @@ describe('Crypto payments E2E', () => {
         ? { success: true, data: chain.tron }
         : host.includes('toncenter')
           ? { jetton_transfers: chain.ton }
-          : {};
+          : host.includes('er-api')
+            ? {
+                result: 'success',
+                time_last_update_unix: Math.floor(Date.now() / 1000),
+                rates: { USD: 1, RUB: 90, EUR: 0.9 },
+              }
+            : {};
       return { ok: true, status: 200, json: async () => body };
     });
 
@@ -130,6 +136,15 @@ describe('Crypto payments E2E', () => {
         code: 'crypto-e2e-rub',
         currency: 'RUB',
         amount: 9000,
+        isActive: true,
+      },
+    });
+    await prisma.price.create({
+      data: {
+        productId: product.id,
+        code: 'crypto-e2e-zzz',
+        currency: 'ZZZ',
+        amount: 10,
         isActive: true,
       },
     });
@@ -190,19 +205,77 @@ describe('Crypto payments E2E', () => {
   });
 
   describe('checkout', () => {
-    it('offers crypto with its networks for a dollar price, and not at all for roubles', async () => {
+    it('offers crypto with its networks for a dollar price', async () => {
       const usd = await newSession();
       const usdSession = await http().get(`/v1/checkout/sessions/${usd}`).expect(200);
       const crypto = usdSession.body.paymentMethods.find((m: any) => m.code === 'CRYPTO');
       expect(crypto.options.map((o: any) => o.id).sort()).toEqual(['TON_USDT', 'TRON_USDT']);
+    });
+
+    it('converts a rouble price at the current rate plus the markup, and fixes the rate on the invoice', async () => {
+      asAdmin();
+      await http().put('/v1/admin/crypto/settings').send({ fxMarkupPercent: 2 }).expect(200);
 
       const rub = await newSession('crypto-e2e-rub');
       const rubSession = await http().get(`/v1/checkout/sessions/${rub}`).expect(200);
-      expect(rubSession.body.paymentMethods.find((m: any) => m.code === 'CRYPTO')).toBeUndefined();
+      expect(rubSession.body.paymentMethods.find((m: any) => m.code === 'CRYPTO')).toBeDefined();
 
-      const refused = await pay(rub, { cryptoChain: 'TRON', cryptoToken: 'USDT' });
+      // 9 000 ₽ at 90 ₽/$ is $100; plus 2% is $102.
+      const paid = await pay(rub, { cryptoChain: 'TRON', cryptoToken: 'USDT' }).expect(200);
+      expect(paid.body.payment).toMatchObject({
+        baseAmount: '102',
+        price: { amount: '9000', currency: 'RUB' },
+        fx: { perUsd: '90', source: 'open.er-api.com', markupPercent: 2 },
+      });
+      expect(Number(paid.body.payment.amount)).toBeGreaterThan(102);
+      expect(Number(paid.body.payment.amount)).toBeLessThan(102.01);
+
+      // The admin page shows the rate a rouble price will be charged at.
+      asAdmin();
+      const settings = await http().get('/v1/admin/crypto/settings').expect(200);
+      expect(settings.body.fx.rates.find((r: any) => r.currency === 'RUB')).toMatchObject({
+        perUsd: '90',
+        available: true,
+      });
+      await http().put('/v1/admin/crypto/settings').send({ fxMarkupPercent: 0 }).expect(200);
+    });
+
+    it('charges at an admin’s pinned rate instead of the source', async () => {
+      asAdmin();
+      await http()
+        .put('/v1/admin/crypto/settings')
+        .send({ fixedRates: { RUB: '100' } })
+        .expect(200);
+      const rub = await newSession('crypto-e2e-rub');
+      const paid = await pay(rub, { cryptoChain: 'TON', cryptoToken: 'USDT' }).expect(200);
+      expect(paid.body.payment).toMatchObject({
+        baseAmount: '90',
+        fx: { perUsd: '100', source: 'fixed' },
+      });
+
+      asAdmin();
+      await http()
+        .put('/v1/admin/crypto/settings')
+        .send({ fixedRates: { RUB: null } })
+        .expect(200);
+      await http()
+        .put('/v1/admin/crypto/settings')
+        .send({ fixedRates: { USD: '1' } })
+        .expect(400);
+      await http()
+        .put('/v1/admin/crypto/settings')
+        .send({ fixedRates: { RUB: '-3' } })
+        .expect(400);
+    });
+
+    it('does not offer crypto for a currency it has no rate for', async () => {
+      const session = await newSession('crypto-e2e-zzz');
+      const body = (await http().get(`/v1/checkout/sessions/${session}`).expect(200)).body;
+      expect(body.paymentMethods.find((m: any) => m.code === 'CRYPTO')).toBeUndefined();
+
+      const refused = await pay(session, { cryptoChain: 'TRON', cryptoToken: 'USDT' });
       expect(refused.status).toBe(400);
-      expect(refused.body.message).toContain('only available for prices in USD');
+      expect(refused.body.message).toContain('no current exchange rate');
     });
 
     it('needs a network to be chosen', async () => {
