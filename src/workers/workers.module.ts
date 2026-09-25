@@ -9,6 +9,7 @@ import { SubscriptionExpirerScheduler } from './subscription-expirer.scheduler';
 import { WebhookRecoveryScheduler } from './webhook-recovery.scheduler';
 import { BacklogMonitorScheduler } from './backlog-monitor.scheduler';
 import { CryptoWatcherScheduler } from './crypto-watcher.scheduler';
+import { ProviderStatusScheduler } from './provider-status.scheduler';
 import { WebhooksModule } from '../webhooks/webhooks.module';
 import { PaymentOrchestratorModule } from '../payment-orchestrator/payment-orchestrator.module';
 import { OutboxModule } from '../outbox/outbox.module';
@@ -68,6 +69,7 @@ import { PrismaService } from '../common/services/prisma.service';
     WebhookRecoveryScheduler,
     BacklogMonitorScheduler,
     CryptoWatcherScheduler,
+    ProviderStatusScheduler,
     PrismaService,
   ],
   exports: [CryptoWatcherScheduler],

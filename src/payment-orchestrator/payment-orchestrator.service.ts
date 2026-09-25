@@ -14,6 +14,7 @@ import { PaymentRailAdapter } from '../common/interfaces/payment-rail-adapter.in
 import { ConnectorRegistry } from '../common/connectors/connector-registry.service';
 import { Connector } from '../common/connectors/connector.interface';
 import { calculatePeriodEnd } from './period.util';
+import { reconcileAmount } from '../workers/reconcile-amount';
 import {
   isValidTransition,
   mapIntentToOrderStatus,
@@ -142,6 +143,50 @@ export class PaymentOrchestratorService implements OnModuleInit {
       `Provider subscription ${providerSubscriptionId} cancelled (${rail}, atPeriodEnd=${atPeriodEnd})`,
     );
     return true;
+  }
+
+  /**
+   * Ask the provider where a live payment stands and apply the answer — the
+   * same decision a webhook leads to, reached without one.
+   *
+   * For rails whose webhook may be missing or late (lava.top), and for the
+   * checkout page asking "has it gone through?" when the customer comes back.
+   * The rules are the webhook processor's: the provider's status is re-read,
+   * a "paid" without evidence of the right amount is refused, and only a
+   * valid transition is applied — which the intent row lock makes safe to race
+   * against a webhook arriving at the same moment.
+   */
+  async syncIntentWithProvider(
+    paymentIntentId: string,
+  ): Promise<{ status: IntentStatus; changed: boolean }> {
+    const intent = await this.prisma.paymentIntent.findUnique({
+      where: { id: paymentIntentId },
+      include: { order: true },
+    });
+    if (!intent) throw new NotFoundException(`Payment intent not found: ${paymentIntentId}`);
+    const current = intent.status as IntentStatus;
+    if (!['created', 'opened'].includes(current) || !intent.providerIntentId) {
+      return { status: current, changed: false };
+    }
+
+    const adapter = this.getAdapter(intent.rail);
+    const result = await adapter.getIntentStatus(intent.providerIntentId);
+    let next = result.status as IntentStatus;
+    if (next === 'paid') {
+      const rec = reconcileAmount(intent.order, result);
+      if (!rec.ok) {
+        this.logger.warn(
+          `Provider reports ${intent.id} paid but reconciliation failed (${rec.reason}); marking failed`,
+        );
+        next = 'failed';
+      }
+    }
+    if (next === current || next === 'created' || !isValidTransition(current, next)) {
+      return { status: current, changed: false };
+    }
+
+    await this.applyStateTransition(intent.id, next, result.providerData);
+    return { status: next, changed: true };
   }
 
   /**

@@ -419,6 +419,19 @@
       "card": "Card",
       "sbp": "SBP (Faster Payments)",
       "paypal": "PayPal"
+    },
+    "redirect": {
+      "titleWindow": "Finish paying in the {provider} window",
+      "titleResume": "Your {provider} payment isn't finished yet",
+      "hint": "This page checks the payment itself and moves on as soon as it goes through. Keep it open.",
+      "open": "Open the payment page",
+      "reopen": "Open the payment window again",
+      "check": "I've paid — check now",
+      "paidTitle": "Payment received",
+      "paidHint": "Thank you — taking you on now.",
+      "failedTitle": "The payment didn't go through",
+      "failedHint": "Nothing was charged. You can go back and try again.",
+      "back": "Go back"
     }
   },
   "referrals": {

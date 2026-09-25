@@ -61,9 +61,14 @@ Cards and СБП in roubles, cards and PayPal in dollars and euros. In **Admin �
 Lava.top**:
 
 1. **API key** — lava.top → Integrations → API.
-2. **Webhook** — in lava.top, point the webhook at `https://billing.inite.ai/webhooks/lava`, choose
-   *API key* auth and set any key; paste the same key into **Webhook key** here. (It is not your
-   API key.)
+2. **Webhook (recommended, not required).** One-time payments settle without it: the customer pays
+   in a window over the checkout, comes back to it, and the checkout asks lava.top; payments whose
+   customer never came back are checked in the background every minute (less often as they age)
+   and expired after three days unpaid. Subscription renewals, failures and cancellations are read
+   from lava.top as each period ends. What *needs* the webhook is refunds and chargebacks — lava.top
+   reports them nowhere else. To set it, point lava.top's webhook at
+   `https://billing.inite.ai/webhooks/lava`, choose *API key* auth, set any key, and paste the same
+   key into **Webhook key** here. (It is not your API key.)
 3. **Offers.** lava.top sells *offers* — prices of products created in its dashboard.
    - **One-time payments**: create one product with a **dynamic price** and paste its offer id as the
      **Default offer**. Every one-time price uses it, with the amount sent per invoice — so promo

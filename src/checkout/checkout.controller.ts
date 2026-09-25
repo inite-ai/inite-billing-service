@@ -104,6 +104,17 @@ export class CheckoutController {
     return this.checkoutService.paySession(id, user.userId, dto, user.email);
   }
 
+  @Post('sessions/:id/refresh')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({
+    summary: 'Check the session’s payment with its provider now, and return the session',
+  })
+  async refreshPayment(@Param('id') id: string, @User() user: RequestUser) {
+    return this.checkoutService.refreshPayment(id, user.userId);
+  }
+
   @Post('validate-promo')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)

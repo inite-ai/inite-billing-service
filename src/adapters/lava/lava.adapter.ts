@@ -179,6 +179,7 @@ export class LavaAdapter implements Connector {
       requiresRedirect: true,
       supportsCancel: true,
       selectableMethods: true,
+      statusPolling: true,
       currencies: LAVA_CURRENCIES,
     };
   }
@@ -298,11 +299,15 @@ export class LavaAdapter implements Connector {
       ...(input.metadata?.buyerLanguage ? { buyerLanguage: input.metadata.buyerLanguage } : {}),
       ...(input.metadata?.clientUtm ? { clientUtm: input.metadata.clientUtm } : {}),
     };
-    // Without these the customer finishes on lava.top's page with no way back.
-    const success = input.successUrl || input.metadata?.returnUrl;
-    const back = input.errorUrl || input.metadata?.checkoutReturnUrl;
-    if (success) body.successful_return_url = success;
+    // The customer comes back to our checkout page whatever happened — it
+    // checks the payment with lava.top itself and then goes on to the shop's
+    // success page, so a missing or late webhook costs nothing. Without these
+    // the customer finished on lava.top's page with no way back.
+    const back = input.metadata?.checkoutReturnUrl
+      ? `${input.metadata.checkoutReturnUrl}?returned=1`
+      : input.successUrl || input.metadata?.returnUrl;
     if (back) {
+      body.successful_return_url = back;
       body.failure_return_url = back;
       body.cancel_return_url = back;
     }
@@ -373,6 +378,44 @@ export class LavaAdapter implements Connector {
       },
       providerData: { ...snapshot, lavaInvoice: invoice },
     };
+  }
+
+  /**
+   * A subscription's state, read from lava.top instead of waiting for a
+   * webhook. The first contract of a subscription reports whether it is
+   * active and until when it is paid; a paid-until date past our period end
+   * is a renewal, a cancelled or failed status the matching event.
+   */
+  async syncSubscription(subscription: {
+    providerSubscriptionId: string;
+    currentPeriodEnd: Date;
+    status: string;
+  }): Promise<
+    'subscription.renewed' | 'subscription.renewal_failed' | 'subscription.cancelled' | null
+  > {
+    const config = await this.getConfig();
+    const invoice = await this.call(
+      config,
+      `/api/v2/invoices/${encodeURIComponent(subscription.providerSubscriptionId)}`,
+    );
+    const state = String(invoice?.subscriptionStatus ?? '').toUpperCase();
+    if (state === 'CANCELLED') return 'subscription.cancelled';
+    if (state === 'FAILED')
+      return subscription.status === 'past_due' ? null : 'subscription.renewal_failed';
+    if (state !== 'ACTIVE') return null;
+
+    const paidUntil = invoice?.subscriptionDetails?.expiredAt
+      ? new Date(invoice.subscriptionDetails.expiredAt)
+      : null;
+    // An hour of slack: lava.top's date and ours are computed separately and
+    // the same period should not read as a renewal.
+    if (
+      paidUntil &&
+      paidUntil.getTime() > subscription.currentPeriodEnd.getTime() + 60 * 60 * 1000
+    ) {
+      return 'subscription.renewed';
+    }
+    return null;
   }
 
   /**

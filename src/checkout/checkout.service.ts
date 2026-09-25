@@ -432,6 +432,19 @@ export class CheckoutService {
       orderBy: { createdAt: 'desc' },
     });
     let payment: Record<string, any> | null = null;
+    // A payment the customer is completing on the provider's own page: the
+    // checkout page shows "finish paying" and keeps checking, instead of
+    // calling a session that is merely waiting "expired".
+    const pending =
+      latestIntent &&
+      ['created', 'opened'].includes(latestIntent.status) &&
+      latestIntent.checkoutUrl
+        ? {
+            rail: latestIntent.rail,
+            status: latestIntent.status,
+            checkoutUrl: latestIntent.checkoutUrl,
+          }
+        : null;
     if (latestIntent) {
       try {
         const connector = this.paymentOrchestrator.getAdapter(latestIntent.rail) as Connector;
@@ -468,6 +481,7 @@ export class CheckoutService {
       errorUrl: metadata.errorUrl || null,
       paymentMethods,
       payment,
+      pending,
     };
   }
 
@@ -771,6 +785,33 @@ export class CheckoutService {
       paymentIntentId: paymentIntent.id,
       ...(await this.describe(adapter, paymentIntent)),
     };
+  }
+
+  /**
+   * Ask the provider about this session's payment now and apply the answer,
+   * then return the session as it stands. What the checkout page calls when
+   * the customer comes back from the provider's page, and while it waits —
+   * so the order is settled even when no webhook arrives.
+   */
+  async refreshPayment(sessionId: string, userId: string) {
+    const order = await this.prisma.order.findUnique({ where: { id: sessionId } });
+    if (!order) throw new NotFoundException('Checkout session not found');
+    if (order.userId !== userId) {
+      throw new ForbiddenException('You do not have access to this session');
+    }
+    const intent = await this.prisma.paymentIntent.findFirst({
+      where: { orderId: order.id, status: { in: ['created', 'opened'] } },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (intent?.providerIntentId) {
+      try {
+        await this.paymentOrchestrator.syncIntentWithProvider(intent.id);
+      } catch (error: any) {
+        // The provider being slow is not the customer's error; the page asks again.
+        this.logger.warn(`Could not check payment ${intent.id}: ${error.message}`);
+      }
+    }
+    return this.getSession(sessionId, userId);
   }
 
   /**
