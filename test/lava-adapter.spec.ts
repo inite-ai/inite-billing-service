@@ -100,9 +100,11 @@ describe('LavaAdapter', () => {
         offerId: 'offer-own',
         currency: 'RUB',
         periodicity: 'ONE_TIME',
-        successful_return_url: 'https://shop.example/thanks',
-        failure_return_url: 'https://billing.inite.ai/checkout/ord-1',
-        cancel_return_url: 'https://billing.inite.ai/checkout/ord-1',
+        // Back to our checkout, which confirms the payment itself and then
+        // goes on to the shop — whatever happened on lava.top.
+        successful_return_url: 'https://billing.inite.ai/checkout/ord-1?returned=1',
+        failure_return_url: 'https://billing.inite.ai/checkout/ord-1?returned=1',
+        cancel_return_url: 'https://billing.inite.ai/checkout/ord-1?returned=1',
       });
       expect(sentBody().amount).toBeUndefined();
       expect(result).toMatchObject({
@@ -330,6 +332,55 @@ describe('LavaAdapter', () => {
         },
       });
       expect(parsed.eventType).toBe('payment.refunded');
+    });
+  });
+
+  describe('subscriptions without a webhook', () => {
+    const sub = (o: Record<string, unknown> = {}) => ({
+      providerSubscriptionId: 'first-1',
+      currentPeriodEnd: new Date('2026-10-01T00:00:00Z'),
+      status: 'active',
+      ...o,
+    });
+    const first = (o: Record<string, unknown> = {}) => ({
+      id: 'first-1',
+      type: 'SUBSCRIPTION_FIRST_INVOICE',
+      status: 'COMPLETED',
+      subscriptionStatus: 'ACTIVE',
+      subscriptionDetails: { expiredAt: '2026-10-01T00:00:00Z' },
+      ...o,
+    });
+
+    it('sees a renewal in the paid-until date moving past our period', async () => {
+      fetchMock.mockReturnValue(
+        answer(first({ subscriptionDetails: { expiredAt: '2026-11-01T00:00:00Z' } })),
+      );
+      const { adapter } = build();
+      await expect(adapter.syncSubscription(sub())).resolves.toBe('subscription.renewed');
+      expect(fetchMock.mock.calls[0][0]).toBe('https://gate.lava.top/api/v2/invoices/first-1');
+    });
+
+    it('sees nothing new while the dates agree', async () => {
+      fetchMock.mockReturnValue(answer(first()));
+      const { adapter } = build();
+      await expect(adapter.syncSubscription(sub())).resolves.toBeNull();
+    });
+
+    it('sees a cancellation and a failed renewal — the latter once', async () => {
+      fetchMock.mockReturnValue(answer(first({ subscriptionStatus: 'CANCELLED' })));
+      await expect(build().adapter.syncSubscription(sub())).resolves.toBe('subscription.cancelled');
+
+      fetchMock.mockReturnValue(answer(first({ subscriptionStatus: 'FAILED' })));
+      await expect(build().adapter.syncSubscription(sub())).resolves.toBe(
+        'subscription.renewal_failed',
+      );
+      await expect(
+        build().adapter.syncSubscription(sub({ status: 'past_due' })),
+      ).resolves.toBeNull();
+    });
+
+    it('asks to be polled', () => {
+      expect(build().adapter.capabilities().statusPolling).toBe(true);
     });
   });
 

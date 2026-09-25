@@ -26,6 +26,12 @@ export interface ConnectorCapabilities {
    * crypto network and token), and the choice is passed to createPaymentIntent.
    */
   selectableMethods?: boolean;
+  /**
+   * The rail's payment status can be read by polling, and should be: its
+   * webhooks are optional or unreliable (lava.top), so open payments are
+   * checked on a schedule rather than only when a webhook arrives.
+   */
+  statusPolling?: boolean;
   /** Optional allow-lists; empty/undefined means "no restriction declared". */
   currencies?: string[];
   countries?: string[];
@@ -75,6 +81,20 @@ export interface Connector extends PaymentRailAdapter {
     intent: { providerIntentId: string | null; status: string; snapshot: unknown },
     input: CreateIntentInput,
   ): Promise<boolean> | boolean;
+
+  /**
+   * Where a provider subscription stands, read from the provider — the
+   * lifecycle event a webhook would have delivered, or null when nothing has
+   * changed. Lets a rail without reliable webhooks still renew, fail and
+   * cancel subscriptions.
+   */
+  syncSubscription?(subscription: {
+    providerSubscriptionId: string;
+    currentPeriodEnd: Date;
+    status: string;
+  }): Promise<
+    'subscription.renewed' | 'subscription.renewal_failed' | 'subscription.cancelled' | null
+  >;
 
   /** Release what the provider holds for an intent that is being replaced. */
   releaseIntent?(intent: { providerIntentId: string | null }): Promise<void>;

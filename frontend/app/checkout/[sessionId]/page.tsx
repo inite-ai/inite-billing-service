@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { motion } from 'framer-motion'
@@ -11,6 +11,7 @@ import toast from 'react-hot-toast'
 import RecommendedOffers from '@/components/dashboard/RecommendedOffers'
 import { getErrorMessage, getErrorStatus } from '@/lib/api-error'
 import { CryptoInvoice, type CryptoPayment } from '@/components/checkout/CryptoInvoice'
+import { RedirectWaiting } from '@/components/checkout/RedirectWaiting'
 
 interface SessionData {
   sessionId: string
@@ -32,7 +33,14 @@ interface SessionData {
   errorUrl: string | null
   paymentMethods: PaymentMethod[]
   payment?: CryptoPayment | null
+  /** A payment the customer is completing on the provider's own page. */
+  pending?: { rail: string; status: string; checkoutUrl: string } | null
 }
+
+/** The window the provider's payment page opens in, so this page stays put. */
+const PAYMENT_WINDOW = 'billing-payment'
+const PAYMENT_WINDOW_FEATURES = 'popup,width=520,height=780'
+const RETURNED_MESSAGE = 'billing:payment-returned'
 
 interface PaymentOption {
   id: string
@@ -110,13 +118,43 @@ export default function CheckoutPage() {
   const [payLoading, setPayLoading] = useState(false)
   // An open crypto invoice replaces the form: there is no page to redirect to.
   const [payment, setPayment] = useState<CryptoPayment | null>(null)
+  // A payment on the provider's page (lava.top, Stripe, …): this page waits
+  // behind it and checks with the provider until it settles.
+  const [redirect, setRedirect] = useState<{ url: string; windowOpened: boolean } | null>(null)
+  const [redirectOutcome, setRedirectOutcome] = useState<'paid' | 'failed' | null>(null)
+  const [checking, setChecking] = useState(false)
 
   useEffect(() => {
+    const returned = new URLSearchParams(window.location.search).get('returned') === '1'
+    // Back from the provider inside the payment window: tell the checkout page
+    // that opened it, and close. If there is no such page (a full redirect),
+    // carry on and show the result here.
+    if (returned && window.opener && window.name === PAYMENT_WINDOW) {
+      try {
+        window.opener.postMessage({ type: RETURNED_MESSAGE, sessionId }, window.location.origin)
+        window.close()
+      } catch {
+        // The opener is gone or elsewhere; this page handles it instead.
+      }
+    }
+
     async function fetchSession() {
       try {
-        const res = await api.get(`/v1/checkout/sessions/${sessionId}`)
+        const res = returned
+          ? await api.post(`/v1/checkout/sessions/${sessionId}/refresh`)
+          : await api.get(`/v1/checkout/sessions/${sessionId}`)
         const data: SessionData = res.data
         setSession(data)
+
+        if (returned && data.status === 'paid') {
+          setRedirect({ url: '', windowOpened: false })
+          setRedirectOutcome('paid')
+          return
+        }
+        if (data.pending && ['created', 'open'].includes(data.status)) {
+          setRedirect({ url: data.pending.checkoutUrl, windowOpened: false })
+          return
+        }
 
         // A crypto invoice under way — or just paid — is shown again after a
         // reload instead of the form, whatever the order status says.
@@ -178,8 +216,55 @@ export default function CheckoutPage() {
     return () => clearInterval(id)
   }, [waitingForChain, sessionId])
 
+  // Ask the provider (through the server) whether the payment went through.
+  const checkRedirect = useCallback(async () => {
+    setChecking(true)
+    try {
+      const res = await api.post(`/v1/checkout/sessions/${sessionId}/refresh`)
+      const data: SessionData = res.data
+      if (data.status === 'paid') setRedirectOutcome('paid')
+      else if (['failed', 'expired'].includes(data.status)) setRedirectOutcome('failed')
+    } catch {
+      // Asked again on the next tick.
+    } finally {
+      setChecking(false)
+    }
+  }, [sessionId])
+
+  const waitingForProvider = !!redirect && !redirectOutcome
+  useEffect(() => {
+    if (!waitingForProvider) return
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') void checkRedirect()
+    }, 5000)
+    // The payment window reports back the moment the customer returns to it;
+    // a customer who paid in another tab is caught when they come back here.
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin === window.location.origin && event.data?.type === RETURNED_MESSAGE) void checkRedirect()
+    }
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void checkRedirect()
+    }
+    window.addEventListener('message', onMessage)
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(id)
+      window.removeEventListener('message', onMessage)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [waitingForProvider, checkRedirect])
+
+  const reopenPaymentWindow = () => {
+    if (!redirect?.url) return
+    const opened = window.open(redirect.url, PAYMENT_WINDOW, PAYMENT_WINDOW_FEATURES)
+    if (opened) setRedirect({ ...redirect, windowOpened: true })
+    else window.location.assign(redirect.url)
+  }
+
   // Paid: show the confirmation for a moment, then go where the merchant asked.
-  const paidNow = !!payment && (payment.invoiceStatus === 'paid' || payment.intentStatus === 'paid')
+  const paidNow =
+    (!!payment && (payment.invoiceStatus === 'paid' || payment.intentStatus === 'paid')) ||
+    redirectOutcome === 'paid'
   useEffect(() => {
     if (!paidNow || !session) return
     const target = session.successUrl && isSafeRedirect(session.successUrl) ? session.successUrl : '/orders'
@@ -243,6 +328,11 @@ export default function CheckoutPage() {
     if (needsOption && !chosenOption) return
 
     setPayLoading(true)
+    // Opened now, inside the click, or the browser blocks it; pointed at the
+    // provider once the server has made the payment. Not for crypto, which
+    // has no page to go to, nor for a free order.
+    const paymentWindow =
+      !isFree && selectedRail !== 'CRYPTO' ? window.open('', PAYMENT_WINDOW, PAYMENT_WINDOW_FEATURES) : null
     try {
       const payload: Record<string, unknown> = {}
       if (!isFree && selectedRail) {
@@ -263,20 +353,31 @@ export default function CheckoutPage() {
       const res = await api.post(`/v1/checkout/sessions/${sessionId}/pay`, payload)
 
       if (res.data.payment?.type === 'crypto') {
+        paymentWindow?.close()
         setPayment(res.data.payment)
         setPayLoading(false)
         return
       }
 
       if (res.data.checkoutUrl) {
-        window.location.assign(res.data.checkoutUrl)
+        if (paymentWindow && !paymentWindow.closed) {
+          paymentWindow.location.replace(res.data.checkoutUrl)
+          setRedirect({ url: res.data.checkoutUrl, windowOpened: true })
+          setPayLoading(false)
+        } else {
+          // Popup blocked: the ordinary redirect, and the provider sends the
+          // customer back here to finish.
+          window.location.assign(res.data.checkoutUrl)
+        }
       } else {
+        paymentWindow?.close()
         // Free order fulfilled — go to orders
         toast.success(t('promoApplied'))
         const successTarget = session.successUrl && isSafeRedirect(session.successUrl) ? session.successUrl : '/orders'
         window.location.assign(successTarget)
       }
     } catch (e) {
+      paymentWindow?.close()
       toast.error(getErrorMessage(e, 'Payment failed'))
       setPayLoading(false)
     }
@@ -357,14 +458,24 @@ export default function CheckoutPage() {
               <ShoppingBag className="w-6 h-6 text-violet-400" />
             </div>
             <h1 className="text-2xl font-bold text-white">{t('title')}</h1>
-            {payment && (
+            {(payment || redirect) && (
               <p className="mt-1 text-sm text-slate-400">
                 {session.product.name} · {formatPrice(session.price.amount)} {session.price.currency}
               </p>
             )}
           </div>
 
-          {payment ? (
+          {redirect ? (
+            <RedirectWaiting
+              provider={session.paymentMethods.find((m) => m.code === (session.pending?.rail ?? selectedRail))?.name ?? ''}
+              outcome={redirectOutcome}
+              checking={checking}
+              windowOpened={redirect.windowOpened}
+              onReopen={reopenPaymentWindow}
+              onCheck={() => void checkRedirect()}
+              errorUrl={session.errorUrl && isSafeRedirect(session.errorUrl) ? session.errorUrl : null}
+            />
+          ) : payment ? (
             <CryptoInvoice
               payment={payment}
               renewing={payLoading}
