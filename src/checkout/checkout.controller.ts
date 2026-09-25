@@ -101,7 +101,7 @@ export class CheckoutController {
     @User() user: RequestUser,
     @Body() dto: PaySessionDto,
   ): Promise<PaySessionResponseDto> {
-    return this.checkoutService.paySession(id, user.userId, dto);
+    return this.checkoutService.paySession(id, user.userId, dto, user.email);
   }
 
   @Post('validate-promo')

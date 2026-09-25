@@ -413,6 +413,12 @@
       "viewTransaction": "Посмотреть транзакцию",
       "converted": "{price} по курсу {rate} за доллар, курс зафиксирован в этом счёте.",
       "convertedWithMarkup": "{price} по курсу {rate} за доллар плюс {markup}%, курс зафиксирован в этом счёте."
+    },
+    "methods": {
+      "choose": "Способ оплаты",
+      "card": "Карта",
+      "sbp": "СБП",
+      "paypal": "PayPal"
     }
   },
   "referrals": {
@@ -683,7 +689,16 @@
       "activated": "Провайдер активирован",
       "deactivated": "Провайдер деактивирован",
       "deleted": "Провайдер удалён",
-      "deleteConfirm": "Удалить этот платёжный провайдер?"
+      "deleteConfirm": "Удалить этот платёжный провайдер?",
+      "cryptoConfiguredElsewhere": "Кошельки, доступ к сетям и курсы настраиваются на отдельной странице.",
+      "fields": {
+        "webhookKey": "Ключ вебхука",
+        "webhookKeyHint": "Ключ, который вы задали в lava.top → Интеграции → Вебхук (приходит в X-Api-Key). Это не API-ключ.",
+        "defaultOfferId": "Оффер по умолчанию (динамическая цена)",
+        "defaultOfferIdHint": "Продукт в lava.top с динамической ценой. Используется для любой разовой цены без своего оффера (Price.metadata.lavaOfferId), сумма передаётся в каждом счёте — поэтому работают и скидки по промокодам.",
+        "apiBaseUrl": "Адрес API",
+        "apiBaseUrlHint": "Оставьте пустым для gate.lava.top; для тестов — sandbox.lava.top."
+      }
     },
     "affiliates": {
       "title": "Партнёры",
