@@ -124,6 +124,7 @@ model Service {
   promoCodes      PromoCode[]
   creditBalances  CreditBalance[]
   meteredFeatures MeteredFeature[]
+  mcpServers      McpServer[]
 
   @@map("services")
   @@schema("billing")
@@ -347,6 +348,81 @@ model WebhookEvent {
   @@index([status, receivedAt])
   @@index([rail, entityId])
   @@map("webhook_events")
+  @@schema("billing")
+}
+
+/// An MCP server somebody else operates, billed through this platform.
+///
+/// The operator registers where their server lives and what a call costs; we
+/// hand agents a URL here instead. Calls arriving at that URL are authorised
+/// against the caller's balance for the operator's service, forwarded upstream,
+/// metered, and logged — so the operator writes no billing code and the agent
+/// gets a payment link instead of a wall when the credits run out.
+model McpServer {
+  id          String  @id @default(uuid()) @db.Uuid
+  serviceId   String  @map("service_id") @db.Uuid
+  /// The path segment agents call: /mcp/s/<slug>.
+  slug        String  @unique @db.VarChar(64)
+  name        String  @db.VarChar(255)
+  description String? @db.Text
+
+  /// Where the operator's own server actually lives. Every request to it goes
+  /// through the SSRF guard: an operator-supplied URL is attacker-supplied as
+  /// far as this service is concerned.
+  upstreamUrl     String @map("upstream_url") @db.VarChar(500)
+  /// The operator's own credentials for their upstream. Never returned by the
+  /// API — the same rule as payment provider config.
+  upstreamHeaders Json?  @default("{}") @map("upstream_headers")
+
+  isActive Boolean @default(true) @map("is_active")
+
+  /// free | per_call | entitlement
+  pricingMode         String  @default("per_call") @map("pricing_mode") @db.VarChar(20)
+  /// Flat credits per billable call, when pricingMode is per_call and no
+  /// metered feature is named.
+  creditsPerCall      Int?    @map("credits_per_call")
+  /// Charge through an existing MeteredFeature instead, which brings its
+  /// quotas and soft caps with it.
+  featureCode         String? @map("feature_code") @db.VarChar(100)
+  /// Entitlement the caller must hold, when pricingMode is entitlement.
+  requiredEntitlement String? @map("required_entitlement") @db.VarChar(100)
+  /// What to sell when a caller cannot pay. The denial carries a checkout URL
+  /// for this price, so an agent can act on it rather than just fail.
+  priceCode           String? @map("price_code") @db.VarChar(100)
+
+  metadata  Json?    @default("{}")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  service Service   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  calls   McpCall[]
+
+  @@index([serviceId, isActive])
+  @@map("mcp_servers")
+  @@schema("billing")
+}
+
+/// One proxied call, for the operator's revenue and the customer's receipt.
+model McpCall {
+  id             String   @id @default(uuid()) @db.Uuid
+  mcpServerId    String   @map("mcp_server_id") @db.Uuid
+  userId         String   @map("user_id") @db.VarChar(255)
+  /// JSON-RPC method: tools/call, tools/list, initialize.
+  method         String   @db.VarChar(60)
+  toolName       String?  @map("tool_name") @db.VarChar(120)
+  /// ok | free | denied | upstream_error | unpaid
+  outcome        String   @db.VarChar(20)
+  creditsCharged Int      @default(0) @map("credits_charged")
+  latencyMs      Int?     @map("latency_ms")
+  detail         String?  @db.Text
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  mcpServer McpServer @relation(fields: [mcpServerId], references: [id], onDelete: Cascade)
+
+  @@index([mcpServerId, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([mcpServerId, outcome, createdAt])
+  @@map("mcp_calls")
   @@schema("billing")
 }
 

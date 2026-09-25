@@ -7,9 +7,16 @@ export interface PinnedPostResult {
   status: number;
   statusText: string;
   ok: boolean;
+  /** Present only when the caller asked for the body (see `captureBody`). */
+  body?: string;
+  contentType?: string;
 }
 
-/** Response bodies are read only to drain the socket; nothing needs them. */
+/**
+ * A webhook delivery reads the response only to drain the socket. A proxy has
+ * to hand it back, so the body is captured when — and only when — the caller
+ * asks; everything else keeps discarding it.
+ */
 const MAX_DRAIN_BYTES = 64 * 1024;
 
 /**
@@ -59,6 +66,8 @@ export async function postToPinnedAddress(params: {
   headers: Record<string, string>;
   body: string;
   timeoutMs: number;
+  /** Keep the response body, up to this many bytes, instead of discarding it. */
+  captureBody?: { maxBytes: number };
 }): Promise<PinnedPostResult> {
   const { addresses } = params;
   if (addresses.length === 0) throw new Error('No vetted address to deliver to');
@@ -82,8 +91,9 @@ function postToOneAddress(params: {
   headers: Record<string, string>;
   body: string;
   timeoutMs: number;
+  captureBody?: { maxBytes: number };
 }): Promise<PinnedPostResult> {
-  const { url, address, headers, body, timeoutMs } = params;
+  const { url, address, headers, body, timeoutMs, captureBody } = params;
   const parsed = new URL(url);
   const secure = parsed.protocol === 'https:';
   const request = secure ? httpsRequest : httpRequest;
@@ -106,10 +116,14 @@ function postToOneAddress(params: {
         ...(secure ? { servername: parsed.hostname } : {}),
       },
       (res) => {
-        let drained = 0;
+        const limit = captureBody?.maxBytes ?? MAX_DRAIN_BYTES;
+        const chunks: Buffer[] = [];
+        let read = 0;
         res.on('data', (chunk: Buffer) => {
-          drained += chunk.length;
-          if (drained > MAX_DRAIN_BYTES) res.destroy();
+          read += chunk.length;
+          if (captureBody && read <= limit) chunks.push(chunk);
+          // Past the limit there is nothing more worth reading, in either mode.
+          if (read > limit) res.destroy();
         });
         res.on('end', () => {
           const status = res.statusCode ?? 0;
@@ -117,6 +131,12 @@ function postToOneAddress(params: {
             status,
             statusText: res.statusMessage ?? '',
             ok: status >= 200 && status < 300,
+            ...(captureBody
+              ? {
+                  body: Buffer.concat(chunks).toString('utf8'),
+                  contentType: String(res.headers['content-type'] ?? ''),
+                }
+              : {}),
           });
         });
         res.on('error', reject);

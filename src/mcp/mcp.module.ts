@@ -1,6 +1,11 @@
 import { Module } from '@nestjs/common';
 import { McpController } from './mcp.controller';
 import { McpToolsService } from './mcp-tools.service';
+import { McpProxyController } from './mcp-proxy.controller';
+import { McpProxyService } from './mcp-proxy.service';
+import { McpServersController } from './mcp-servers.controller';
+import { McpServersService } from './mcp-servers.service';
+import { PrismaService } from '../common/services/prisma.service';
 import { AuthModule } from '../auth/auth.module';
 import { CreditsModule } from '../credits/credits.module';
 import { EntitlementsModule } from '../entitlements/entitlements.module';
@@ -24,8 +29,8 @@ import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
     CheckoutModule,
     SubscriptionsModule,
   ],
-  controllers: [McpController],
-  providers: [McpToolsService],
-  exports: [McpToolsService],
+  controllers: [McpController, McpProxyController, McpServersController],
+  providers: [McpToolsService, McpProxyService, McpServersService, PrismaService],
+  exports: [McpToolsService, McpProxyService, McpServersService],
 })
 export class McpModule {}
