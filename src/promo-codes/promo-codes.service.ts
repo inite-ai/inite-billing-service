@@ -99,6 +99,26 @@ export class PromoCodesService {
       }
     }
 
+    // Check product scope.
+    //
+    // A service was the finest scope this had, and a service is too coarse to
+    // be the only one: inite.ai sells a $29 Atlas listing and a $149 monthly
+    // plan behind one service id, so a coupon cut for the listing took half
+    // off the plan. The caller could refuse the mismatch itself, but a caller
+    // is not a gate — the checkout API answers any buyer's token.
+    //
+    // Empty means every product of the service, which is what every row
+    // written before this column meant.
+    if (promoCode.productCodes?.length) {
+      if (!promoCode.productCodes.includes(price.product.code)) {
+        return {
+          isValid: false,
+          error: 'wrong_product',
+          errorCode: 'wrong_product',
+        };
+      }
+    }
+
     // Decimal throughout. This was float arithmetic finished with
     // `Math.round(x * 10000) / 10000`, which is how fifteen percent off 19.99
     // arrives as 16.991499999999998 and the rounding meant to hide it lands on
@@ -191,6 +211,8 @@ export class PromoCodesService {
     discountType: string;
     discountValue: number;
     serviceId?: string;
+    /** Product codes this coupon may be spent on. Empty: the whole service. */
+    productCodes?: string[];
     minPurchaseAmount?: number;
     maxDiscountAmount?: number;
     validFrom: string;
@@ -221,6 +243,7 @@ export class PromoCodesService {
         discountType: data.discountType,
         discountValue: data.discountValue,
         serviceId: data.serviceId,
+        productCodes: data.productCodes ?? [],
         minPurchaseAmount: data.minPurchaseAmount,
         maxDiscountAmount: data.maxDiscountAmount,
         validFrom: new Date(data.validFrom),
