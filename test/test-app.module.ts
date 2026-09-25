@@ -15,6 +15,7 @@ import { EntitlementsModule } from '../src/entitlements/entitlements.module';
 import { WebhooksModule } from '../src/webhooks/webhooks.module';
 import { OutboxModule } from '../src/outbox/outbox.module';
 import { WorkersModule } from '../src/workers/workers.module';
+import { CryptoAdminModule } from '../src/crypto/crypto-admin.module';
 import { AffiliatesModule } from '../src/affiliates/affiliates.module';
 import { McpModule } from '../src/mcp/mcp.module';
 import { AdminModule } from '../src/admin/admin.module';
@@ -56,6 +57,7 @@ import { OneAdapter } from '../src/adapters/one/one.adapter';
     WebhooksModule,
     OutboxModule,
     WorkersModule,
+    CryptoAdminModule,
     AffiliatesModule,
     AdminModule,
     McpModule,

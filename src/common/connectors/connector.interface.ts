@@ -1,5 +1,8 @@
 import 'reflect-metadata';
-import { PaymentRailAdapter } from '../interfaces/payment-rail-adapter.interface';
+import {
+  CreateIntentInput,
+  PaymentRailAdapter,
+} from '../interfaces/payment-rail-adapter.interface';
 import { Rail } from './rail';
 
 /**
@@ -18,6 +21,11 @@ export interface ConnectorCapabilities {
   supportsRefund?: boolean;
   /** Provider subscriptions can be cancelled programmatically. */
   supportsCancel?: boolean;
+  /**
+   * The customer picks one of `listMethods()` at checkout before paying (a
+   * crypto network and token), and the choice is passed to createPaymentIntent.
+   */
+  selectableMethods?: boolean;
   /** Optional allow-lists; empty/undefined means "no restriction declared". */
   currencies?: string[];
   countries?: string[];
@@ -57,6 +65,29 @@ export interface Connector extends PaymentRailAdapter {
    * Return a boolean; do not throw for an ordinary bad signature.
    */
   verifyWebhook?(input: WebhookVerifyInput): Promise<boolean> | boolean;
+
+  /**
+   * Whether a still-live intent for this order must be replaced rather than
+   * handed back for this request — e.g. the customer switched crypto network,
+   * or the invoice's timer ran out. Absent means always reuse.
+   */
+  replaceLiveIntent?(
+    intent: { providerIntentId: string | null; status: string; snapshot: unknown },
+    input: CreateIntentInput,
+  ): Promise<boolean> | boolean;
+
+  /** Release what the provider holds for an intent that is being replaced. */
+  releaseIntent?(intent: { providerIntentId: string | null }): Promise<void>;
+
+  /**
+   * Payment instructions for a rail with no hosted page to redirect to — the
+   * address and exact amount of a crypto invoice — as the checkout shows them.
+   */
+  describeIntent?(intent: {
+    providerIntentId: string | null;
+    status: string;
+    snapshot: unknown;
+  }): Promise<Record<string, any> | null>;
 
   /**
    * Transform the raw request body into the representation to persist on the

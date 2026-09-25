@@ -274,6 +274,9 @@ describe('CheckoutService', () => {
       checkoutUrl: 'https://stripe/checkout/existing',
     });
 
+    const adapter = { createPaymentIntent: jest.fn() };
+    mockPaymentOrchestrator.getAdapter.mockReturnValue(adapter);
+
     const result = await service.paySession('order-1', 'user-1', { rail: 'STRIPE' });
 
     expect(result).toEqual({
@@ -281,7 +284,7 @@ describe('CheckoutService', () => {
       paymentIntentId: 'existing-pi',
     });
     // No new provider intent, no new DB row.
-    expect(mockPaymentOrchestrator.getAdapter).not.toHaveBeenCalled();
+    expect(adapter.createPaymentIntent).not.toHaveBeenCalled();
     expect(mockPrisma.paymentIntent.create).not.toHaveBeenCalled();
     // The reuse query is scoped to non-terminal intents on this order + rail.
     expect(mockPrisma.paymentIntent.findFirst).toHaveBeenCalledWith(

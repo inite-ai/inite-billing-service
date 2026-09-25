@@ -6,6 +6,7 @@ import { PaymentOrchestratorService } from '../payment-orchestrator/payment-orch
 import { RiskService } from '../risk/risk.service';
 import { reconcileAmount } from './reconcile-amount';
 import { isSubscriptionEvent } from '../payment-orchestrator/payment-orchestrator.service';
+import { UNMATCHED_TRANSFER_EVENT } from '../adapters/crypto/crypto.adapter';
 
 /**
  * How long a worker may hold a webhook before another may take it over. Long
@@ -96,6 +97,18 @@ export class WebhookProcessor extends WorkerHost {
     try {
       // Get adapter
       const adapter = this.paymentOrchestrator.getAdapter(rail);
+
+      // A crypto transfer no invoice claims is recorded for an admin to assign
+      // (CryptoTransfer, status unmatched). It pays for nothing yet, so there is
+      // no intent to look up; taking the payment path would only fail it.
+      if (webhookEvent.eventType === UNMATCHED_TRANSFER_EVENT) {
+        await this.prisma.webhookEvent.update({
+          where: { id: webhookEvent.id },
+          data: { status: 'processed', processedAt: new Date() },
+        });
+        this.logger.log(`Unmatched crypto transfer recorded: ${webhookId}`);
+        return;
+      }
 
       // Subscription lifecycle events are anchored to the provider's
       // *subscription* ID, not a PaymentIntent, so they go to the subscription

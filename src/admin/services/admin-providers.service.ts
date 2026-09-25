@@ -28,6 +28,9 @@ function redactConfig(config: unknown): {
   const preview = Object.entries(config as Record<string, unknown>)
     .filter(([key]) => !UNSAFE_KEYS.has(key))
     .map(([key, value]): [string, string] => {
+      // Nested settings (the crypto rail's wallets) are not a credential to
+      // fingerprint; say they are set rather than print "[object Object]".
+      if (value && typeof value === 'object') return [key, '{…}'];
       const text = value == null ? '' : String(value);
       return [key, text.length > 4 ? `••••${text.slice(-4)}` : text ? '••••' : ''];
     });

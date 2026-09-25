@@ -27,7 +27,7 @@ describe('IDOR — Checkout Session Access', () => {
       $transaction: jest.fn((cb: any) => cb(mockPrisma)),
       order: { findUnique: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
       paymentProvider: { findMany: jest.fn().mockResolvedValue([]) },
-      paymentIntent: { create: jest.fn() },
+      paymentIntent: { create: jest.fn(), findFirst: jest.fn().mockResolvedValue(null) },
       promoCode: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       promoCodeUsage: { create: jest.fn(), count: jest.fn().mockResolvedValue(0) },
     };

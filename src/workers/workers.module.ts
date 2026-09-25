@@ -8,6 +8,8 @@ import { OutreachProcessor } from './outreach.processor';
 import { SubscriptionExpirerScheduler } from './subscription-expirer.scheduler';
 import { WebhookRecoveryScheduler } from './webhook-recovery.scheduler';
 import { BacklogMonitorScheduler } from './backlog-monitor.scheduler';
+import { CryptoWatcherScheduler } from './crypto-watcher.scheduler';
+import { WebhooksModule } from '../webhooks/webhooks.module';
 import { PaymentOrchestratorModule } from '../payment-orchestrator/payment-orchestrator.module';
 import { OutboxModule } from '../outbox/outbox.module';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -24,6 +26,7 @@ import { PrismaService } from '../common/services/prisma.service';
     OutreachModule,
     RiskModule,
     HealthModule,
+    WebhooksModule,
     BullModule.registerQueue({
       name: 'webhooks',
       defaultJobOptions: {
@@ -64,7 +67,9 @@ import { PrismaService } from '../common/services/prisma.service';
     SubscriptionExpirerScheduler,
     WebhookRecoveryScheduler,
     BacklogMonitorScheduler,
+    CryptoWatcherScheduler,
     PrismaService,
   ],
+  exports: [CryptoWatcherScheduler],
 })
 export class WorkersModule {}
