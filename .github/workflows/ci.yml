@@ -63,8 +63,14 @@ jobs:
       - name: Build
         run: npx nest build
 
+      # The migrations, not `db push`: the partial unique indexes that keep
+      # money correct (one live intent per order, one open crypto invoice per
+      # amount) exist only as raw SQL in migrations. `db push` builds the schema
+      # from the Prisma model, silently without them, so CI tested a database
+      # production does not have — and a migration that fails to apply would
+      # only be found by the deploy.
       - name: Create test schema
-        run: npx prisma db push --skip-generate
+        run: npx prisma migrate deploy
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5433/inite_billing_test?schema=billing
 
