@@ -12,13 +12,16 @@ import {
   CHAINS,
   CHAIN_IDS,
   ChainId,
+  STABLECOIN_CURRENCIES,
   isValidAddress,
   txExplorerUrl,
 } from '../adapters/crypto/chains';
 import {
   CRYPTO_PROVIDER_CODE,
+  MAX_FX_MARKUP_PERCENT,
   DEFAULT_EXPIRY_MINUTES,
   DEFAULT_LATE_GRACE_HOURS,
+  CryptoSettings,
   parseCryptoSettings,
   payable,
   watchable,
@@ -45,6 +48,9 @@ export interface CryptoSettingsUpdate {
   toncenterApiKey?: string | null;
   solanaRpcUrl?: string | null;
   webhookSecret?: string | null;
+  fxMarkupPercent?: number;
+  /** Units per US dollar; null or '' removes a pinned rate. */
+  fixedRates?: Record<string, string | number | null>;
 }
 
 function mask(value: unknown): string | null {
@@ -126,7 +132,55 @@ export class CryptoAdminService {
       }),
       liveInvoices,
       unmatchedTransfers,
+      fx: await this.fxOverview(settings),
     };
+  }
+
+  /**
+   * The rates checkout would use right now, for every currency something is
+   * priced in (and every pinned one) — so an admin sees what a 9 000 ₽
+   * product will actually cost in USDT before a customer does.
+   */
+  private async fxOverview(settings: CryptoSettings) {
+    const priced = await this.prisma.price.findMany({
+      where: { isActive: true },
+      select: { currency: true },
+      distinct: ['currency'],
+    });
+    const currencies = [
+      ...new Set([
+        ...priced.map((p) => p.currency.toUpperCase()),
+        ...Object.keys(settings.fixedRates),
+      ]),
+    ]
+      .filter((c) => !STABLECOIN_CURRENCIES.has(c))
+      .sort();
+
+    const adapter = this.adapter();
+    const rates = [];
+    for (const currency of currencies) {
+      const quote = await adapter.fx.quote(currency, settings).catch(() => null);
+      const stored = await this.prisma.fxRate.findUnique({ where: { currency } });
+      rates.push({
+        currency,
+        perUsd: quote?.perUsd.toString() ?? null,
+        source: quote?.source ?? null,
+        publishedAt: quote?.publishedAt ?? null,
+        fetchedAt: stored?.fetchedAt ?? null,
+        pinned: settings.fixedRates[currency] ?? null,
+        available: !!quote,
+      });
+    }
+    return { markupPercent: settings.fxMarkupPercent, fixedRates: settings.fixedRates, rates };
+  }
+
+  /** Fetch rates now instead of waiting for the hourly refresh. */
+  async refreshRates() {
+    try {
+      return await this.adapter().fx.refresh({ force: true });
+    } catch (error: any) {
+      throw new BadRequestException(error.message);
+    }
   }
 
   /**
@@ -195,6 +249,42 @@ export class CryptoAdminService {
       if (value === undefined) continue;
       if (value === null || value === '') delete config[key];
       else config[key] = String(value).trim();
+    }
+
+    if (update.fxMarkupPercent !== undefined) {
+      const markup = Number(update.fxMarkupPercent);
+      if (!Number.isFinite(markup) || markup < 0 || markup > MAX_FX_MARKUP_PERCENT) {
+        throw new BadRequestException(`The markup must be between 0 and ${MAX_FX_MARKUP_PERCENT}%`);
+      }
+      config.fxMarkupPercent = markup;
+    }
+    if (update.fixedRates !== undefined) {
+      const pinned = new Map<string, string>(
+        Object.entries((config.fixedRates as Record<string, string>) || {}).filter(([c]) =>
+          /^[A-Z]{3}$/.test(c),
+        ),
+      );
+      for (const [raw, rate] of Object.entries(update.fixedRates ?? {})) {
+        const currency = raw.toUpperCase();
+        if (!/^[A-Z]{3}$/.test(currency)) {
+          throw new BadRequestException(`${raw} is not a currency code`);
+        }
+        if (STABLECOIN_CURRENCIES.has(currency)) {
+          throw new BadRequestException(`${currency} is already a dollar; it needs no rate`);
+        }
+        if (rate === null || rate === '') {
+          pinned.delete(currency);
+          continue;
+        }
+        const text = String(rate).trim().replace(',', '.');
+        if (!/^\d+(\.\d+)?$/.test(text) || Number(text) <= 0) {
+          throw new BadRequestException(
+            `The rate for ${currency} must be a positive number of ${currency} per US dollar`,
+          );
+        }
+        pinned.set(currency, text);
+      }
+      config.fixedRates = Object.fromEntries(pinned);
     }
 
     const next = parseCryptoSettings({ isActive: true, config })!;

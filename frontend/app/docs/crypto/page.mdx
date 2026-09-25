@@ -18,8 +18,9 @@ through the same state machine as every other rail.
 | Ethereum (ERC-20) | USDT, USDC | 12 confirmations (≈ 3 min) |
 | Solana (SPL) | USDT, USDC | finalized (≈ 15 s) |
 
-Prices must be in **USD**: a stablecoin is worth a dollar, and there is no exchange rate to price
-anything else. Crypto is not offered at checkout for a price in any other currency.
+Prices can be in **any currency**. A stablecoin is a dollar, so a price in roubles, euros or
+tenge is converted when the invoice opens, and that rate is fixed for the invoice — see
+[exchange rates](#exchange-rates).
 
 ## How a payment is recognised
 
@@ -54,6 +55,31 @@ In **Admin → Crypto payments**:
 3. **Turn on.** The rail refuses to turn on with no network it can actually watch.
 
 The page says per network whether it is accepting payments, and when the watcher last checked.
+
+## Exchange rates
+
+A price in any currency other than USD is converted to dollars when the invoice opens:
+
+```
+9 000 RUB ÷ 90 RUB per $1 = $100   → + 2% markup = $102   → invoice asks for 102.000137 USDT
+```
+
+- **Rates** come from open.er-api.com (160+ currencies, daily), falling back to the Central
+  Bank of Russia (the rouble, plus cross rates through it). They are stored and refreshed hourly.
+- **Pinned rates** win over both — for a rate you set yourself, e.g. what USDT actually costs you in
+  roubles rather than the official dollar rate.
+- **Markup** (0–20 %, default 0) is added to converted prices only, never to a dollar price. It
+  covers the gap between a reference rate and what dollars cost you, and movement while the
+  invoice is open.
+- The amount is **rounded up** to the token's smallest unit: the customer covers the last fraction,
+  the shop is never short by it.
+- The rate used, its source, the markup and the original price are **recorded on the invoice** and
+  shown to the customer under the amount.
+- A currency with **no rate published in the last four days** is not offered crypto at all, rather
+  than charged at a stale rate.
+
+Set the markup, pin rates and see the rate each of your currencies will be charged at in
+**Admin → Crypto payments → Exchange rates**.
 
 ## The watcher
 

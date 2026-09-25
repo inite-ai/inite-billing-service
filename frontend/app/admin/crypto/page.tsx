@@ -54,6 +54,19 @@ interface Settings {
   chains: ChainSettings[]
   liveInvoices: number
   unmatchedTransfers: number
+  fx: {
+    markupPercent: number
+    fixedRates: Record<string, string>
+    rates: Array<{
+      currency: string
+      perUsd: string | null
+      source: string | null
+      publishedAt: string | null
+      fetchedAt: string | null
+      pinned: string | null
+      available: boolean
+    }>
+  }
 }
 
 interface InvoiceRow {
@@ -292,6 +305,7 @@ function SettingsForm({ settings, onSaved }: { settings: Settings; onSaved: () =
   const [solanaRpcUrl, setSolanaRpcUrl] = useState(settings.solanaRpcUrl ?? '')
   const [expiryMinutes, setExpiryMinutes] = useState(String(settings.expiryMinutes))
   const [lateGraceHours, setLateGraceHours] = useState(String(settings.lateGraceHours))
+  const [markupPercent, setMarkupPercent] = useState(String(settings.fx.markupPercent))
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
@@ -319,6 +333,7 @@ function SettingsForm({ settings, onSaved }: { settings: Settings; onSaved: () =
         solanaRpcUrl: solanaRpcUrl.trim() || null,
         expiryMinutes: Number(expiryMinutes),
         lateGraceHours: Number(lateGraceHours),
+        fxMarkupPercent: Number(markupPercent.replace(',', '.')),
       })
       toast.success(t('saved'))
       setSecrets({ etherscanApiKey: '', trongridApiKey: '', toncenterApiKey: '', webhookSecret: '' })
@@ -423,6 +438,8 @@ function SettingsForm({ settings, onSaved }: { settings: Settings; onSaved: () =
         </div>
       </Card>
 
+      <FxCard settings={settings} markupPercent={markupPercent} onMarkupChange={setMarkupPercent} onChanged={onSaved} />
+
       <Card>
         <h2 className="text-base font-semibold text-slate-900 dark:text-white">{t('timing.title')}</h2>
         <div className="mt-5 grid gap-5 md:grid-cols-2">
@@ -462,6 +479,180 @@ function SettingsForm({ settings, onSaved }: { settings: Settings; onSaved: () =
         </Button>
       </div>
     </div>
+  )
+}
+
+// ─── Exchange rates ──────────────────────────────────────────
+
+function FxCard({
+  settings,
+  markupPercent,
+  onMarkupChange,
+  onChanged,
+}: {
+  settings: Settings
+  markupPercent: string
+  onMarkupChange: (value: string) => void
+  onChanged: () => void
+}) {
+  const t = useTranslations('admin.crypto.fx')
+  const [refreshing, setRefreshing] = useState(false)
+  const sourceLabel = (source: string) =>
+    source === 'fixed'
+      ? t('sources.fixed')
+      : source === 'cbr.ru'
+        ? t('sources.cbr')
+        : source === 'open.er-api.com'
+          ? t('sources.openErApi')
+          : source
+  const [pinCurrency, setPinCurrency] = useState('')
+  const [pinRate, setPinRate] = useState('')
+  const [pinning, setPinning] = useState(false)
+
+  const refresh = async () => {
+    setRefreshing(true)
+    try {
+      const res = await api.post('/v1/admin/crypto/fx/refresh')
+      toast.success(t('refreshed', { source: res.data.source }))
+      onChanged()
+    } catch (e) {
+      toast.error(getErrorMessage(e, t('refreshFailed')))
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  const setPin = async (currency: string, rate: string | null) => {
+    setPinning(true)
+    try {
+      await api.put('/v1/admin/crypto/settings', { fixedRates: { [currency]: rate } })
+      setPinCurrency('')
+      setPinRate('')
+      onChanged()
+    } catch (e) {
+      toast.error(getErrorMessage(e, t('refreshFailed')))
+    } finally {
+      setPinning(false)
+    }
+  }
+
+  return (
+    <Card>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold text-slate-900 dark:text-white">{t('title')}</h2>
+          <p className="mt-1 max-w-prose text-sm text-slate-500 dark:text-slate-400">{t('hint')}</p>
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          icon={<RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />}
+          onClick={refresh}
+          disabled={refreshing}
+        >
+          {t('refresh')}
+        </Button>
+      </div>
+
+      <div className="mt-5 max-w-xs">
+        <Input
+          label={t('markup')}
+          type="number"
+          min={0}
+          max={20}
+          step={0.1}
+          value={markupPercent}
+          onChange={(e) => onMarkupChange(e.target.value)}
+        />
+      </div>
+      <p className="mt-1.5 max-w-prose text-xs text-slate-500 dark:text-slate-400">{t('markupHint')}</p>
+
+      <div className="mt-6">
+        {settings.fx.rates.length === 0 ? (
+          <p className="text-sm text-slate-500 dark:text-slate-400">{t('noCurrencies')}</p>
+        ) : (
+          <Table>
+            <Thead>
+              <tr>
+                <Th>{t('currency')}</Th>
+                <Th className="text-right">{t('rate')}</Th>
+                <Th>{t('source')}</Th>
+                <Th>{t('updated')}</Th>
+                <Th>
+                  <span className="sr-only">{t('unpin')}</span>
+                </Th>
+              </tr>
+            </Thead>
+            <Tbody>
+              {settings.fx.rates.map((rate) => (
+                <tr key={rate.currency}>
+                  <Td className="font-mono font-semibold">{rate.currency}</Td>
+                  <Td className="text-right font-mono tabular-nums">
+                    {rate.perUsd ? Number(rate.perUsd).toLocaleString(undefined, { maximumFractionDigits: 4 }) : '—'}
+                  </Td>
+                  <Td className="text-sm">
+                    {rate.available && rate.source ? (
+                      sourceLabel(rate.source)
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400">
+                        <XCircle className="h-3.5 w-3.5" /> {t('unavailable')}
+                      </span>
+                    )}
+                  </Td>
+                  <Td className="whitespace-nowrap text-xs tabular-nums text-slate-500 dark:text-slate-400">
+                    {rate.pinned
+                      ? t('pinned')
+                      : rate.publishedAt
+                        ? new Date(rate.publishedAt).toLocaleString()
+                        : '—'}
+                  </Td>
+                  <Td>
+                    {rate.pinned && (
+                      <button
+                        type="button"
+                        onClick={() => setPin(rate.currency, null)}
+                        disabled={pinning}
+                        className="text-xs text-red-600 hover:underline dark:text-red-400"
+                      >
+                        {t('unpin')}
+                      </button>
+                    )}
+                  </Td>
+                </tr>
+              ))}
+            </Tbody>
+          </Table>
+        )}
+      </div>
+
+      <form
+        className="mt-5 grid gap-3 sm:grid-cols-[10rem_12rem_auto] sm:items-end"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (pinCurrency.trim() && pinRate.trim()) setPin(pinCurrency.trim().toUpperCase(), pinRate.trim())
+        }}
+      >
+        <Input
+          label={t('pin')}
+          placeholder={t('pinCurrency')}
+          value={pinCurrency}
+          onChange={(e) => setPinCurrency(e.target.value.toUpperCase().slice(0, 3))}
+          className="font-mono"
+        />
+        <Input
+          aria-label={t('pinRate')}
+          placeholder={t('pinRate')}
+          inputMode="decimal"
+          value={pinRate}
+          onChange={(e) => setPinRate(e.target.value)}
+          className="font-mono"
+        />
+        <Button type="submit" variant="secondary" loading={pinning} disabled={pinCurrency.length !== 3 || !pinRate.trim()}>
+          {t('addPin')}
+        </Button>
+      </form>
+      <p className="mt-1.5 max-w-prose text-xs text-slate-500 dark:text-slate-400">{t('pinHint')}</p>
+    </Card>
   )
 }
 

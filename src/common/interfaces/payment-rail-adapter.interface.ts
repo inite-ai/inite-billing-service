@@ -84,9 +84,10 @@ export interface PaymentRailAdapter {
   getIntentStatus(providerIntentId: string): Promise<IntentStatusResult>;
 
   /**
-   * Optional: List available payment methods
+   * Optional. Methods a customer can pay with. `context.currency` is the price's currency,
+   * for a rail that can only take some (crypto needs an exchange rate for it).
    */
-  listMethods?(): Promise<PaymentMethod[]>;
+  listMethods?(context?: { currency?: string }): Promise<PaymentMethod[]>;
 
   /**
    * Optional: Parse webhook payload from provider

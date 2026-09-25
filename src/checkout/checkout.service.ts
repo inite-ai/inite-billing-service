@@ -414,7 +414,9 @@ export class CheckoutService {
         continue;
       }
       if (capabilities?.selectableMethods && connector) {
-        const options = connector.listMethods ? await connector.listMethods().catch(() => []) : [];
+        const options = connector.listMethods
+          ? await connector.listMethods({ currency: order.currency }).catch(() => [])
+          : [];
         if (options.length === 0) continue;
         paymentMethods.push({ ...provider, options });
         continue;
