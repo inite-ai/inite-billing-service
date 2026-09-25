@@ -479,7 +479,14 @@ export class CheckoutService {
   async paySession(
     sessionId: string,
     userId: string,
-    data: { rail?: string; promoCode?: string; cryptoChain?: string; cryptoToken?: string },
+    data: {
+      rail?: string;
+      promoCode?: string;
+      cryptoChain?: string;
+      cryptoToken?: string;
+      method?: string;
+    },
+    buyerEmail?: string,
   ): Promise<PaySessionResponseDto> {
     const order = await this.prisma.order.findUnique({
       where: { id: sessionId },
@@ -648,11 +655,18 @@ export class CheckoutService {
       errorUrl,
       cryptoChainId: data.cryptoChain,
       cryptoToken: data.cryptoToken,
+      method: data.method,
       metadata: {
         ...metadata,
         order_id: order.id,
         price_code: price.code,
         product_code: product.code,
+        // Rails that collect the buyer's email (lava.top requires one) and
+        // send the customer back when they are done.
+        buyerEmail:
+          metadata.buyerEmail || metadata.email || (await this.buyerEmail(userId, buyerEmail)),
+        returnUrl: `${resolveFrontendUrl(this.configService)}/orders`,
+        checkoutReturnUrl: `${resolveFrontendUrl(this.configService)}/checkout/${order.id}`,
       },
     };
 
@@ -757,6 +771,18 @@ export class CheckoutService {
       paymentIntentId: paymentIntent.id,
       ...(await this.describe(adapter, paymentIntent)),
     };
+  }
+
+  /**
+   * The buyer's email: from their token, or the last one this service saw
+   * for them. Undefined when neither exists; a rail that needs one says so.
+   */
+  private async buyerEmail(userId: string, fromToken?: string): Promise<string | undefined> {
+    if (fromToken) return fromToken;
+    const contact = await this.prisma.userContact
+      ?.findUnique({ where: { userId }, select: { email: true } })
+      .catch(() => null);
+    return contact?.email ?? undefined;
   }
 
   /**

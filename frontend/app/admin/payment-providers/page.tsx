@@ -19,9 +19,25 @@ import { getErrorMessage } from '@/lib/api-error'
 
 const KNOWN_PROVIDERS = [
   { code: 'ONE', name: 'ONE Payment', currencies: ['BRL', 'USD'], countries: ['BR', 'LATAM'], modes: ['PAYMENT', 'SUBSCRIPTION'], description: 'Latin America payment gateway — Pix, cards, bank transfer' },
-  { code: 'LAVA', name: 'Lava.top', currencies: ['USD', 'EUR'], countries: ['GLOBAL'], modes: ['PAYMENT', 'SUBSCRIPTION'], description: 'Global payments — Visa/Mastercard, USD/EUR. Creator monetization platform.' },
-  { code: 'CRYPTO', name: 'Crypto (On-chain)', currencies: ['USDT', 'USDC', 'ETH'], countries: ['GLOBAL'], modes: ['PAYMENT'], description: 'Blockchain payments — direct on-chain invoicing with multi-chain support' },
+  { code: 'LAVA', name: 'Lava.top', currencies: ['RUB', 'USD', 'EUR'], countries: ['RU', 'GLOBAL'], modes: ['PAYMENT', 'SUBSCRIPTION'], description: 'Cards and SBP in roubles, cards and PayPal in USD/EUR. Webhook: https://billing.inite.ai/webhooks/lava' },
+  { code: 'CRYPTO', name: 'Crypto (stablecoins)', currencies: ['USD'], countries: ['GLOBAL'], modes: ['PAYMENT'], description: 'USDT/USDC to your own wallets — configured under Crypto payments' },
 ]
+
+/**
+ * Settings a rail needs beyond an API key, per provider code. Secrets are
+ * write-only like the key: the form sends what was typed and the server merges
+ * it over what is stored.
+ */
+const PROVIDER_FIELDS: Record<string, Array<{ key: string; secret?: boolean; placeholder?: string }>> = {
+  LAVA: [
+    { key: 'webhookKey', secret: true },
+    { key: 'defaultOfferId', placeholder: '836b9fc5-7ae9-4a27-9642-592bc44072b7' },
+    { key: 'apiBaseUrl', placeholder: 'https://gate.lava.top' },
+  ],
+}
+
+/** Rails whose credential is a single key — no separate secret to ask for. */
+const NO_API_SECRET = new Set(['LAVA', 'CRYPTO'])
 
 export default function AdminPaymentProvidersPage() {
   const t = useTranslations('admin')
@@ -40,6 +56,7 @@ export default function AdminPaymentProvidersPage() {
   const [formWebhook, setFormWebhook] = useState('')
   const [formApiKey, setFormApiKey] = useState('')
   const [formApiSecret, setFormApiSecret] = useState('')
+  const [formExtra, setFormExtra] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
   const [confirmState, setConfirmState] = useState<{
     isOpen: boolean
@@ -83,7 +100,11 @@ export default function AdminPaymentProvidersPage() {
         currencies: formCurrencies.split(',').map((s) => s.trim()).filter(Boolean),
         countries: formCountries.split(',').map((s) => s.trim()).filter(Boolean),
         webhookUrl: formWebhook || undefined,
-        config: formApiKey ? { apiKey: formApiKey, apiSecret: formApiSecret } : {},
+        config: {
+          ...(formApiKey ? { apiKey: formApiKey } : {}),
+          ...(formApiSecret ? { apiSecret: formApiSecret } : {}),
+          ...extraConfig(),
+        },
       })
       toast.success(t('providers.created'))
       setShowCreate(false)
@@ -143,6 +164,7 @@ export default function AdminPaymentProvidersPage() {
         config: {
           ...(formApiKey ? { apiKey: formApiKey } : {}),
           ...(formApiSecret ? { apiSecret: formApiSecret } : {}),
+          ...extraConfig(),
         },
       })
       toast.success(t('providers.updated'))
@@ -178,6 +200,47 @@ export default function AdminPaymentProvidersPage() {
     setFormWebhook('')
     setFormApiKey('')
     setFormApiSecret('')
+    setFormExtra({})
+  }
+
+  /** Only fields that were filled in; an empty one keeps what is stored. */
+  const extraConfig = () =>
+    Object.fromEntries(Object.entries(formExtra).filter(([, value]) => value.trim()).map(([k, v]) => [k, v.trim()]))
+
+  const credentialFields = (code: string, editingExisting: boolean) => {
+    if (code === 'CRYPTO') {
+      return (
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          {t('providers.cryptoConfiguredElsewhere')}{' '}
+          <a href="/admin/crypto" className="font-medium text-violet-600 hover:underline dark:text-violet-400">
+            {t('crypto.title')} →
+          </a>
+        </p>
+      )
+    }
+    const placeholder = editingExisting ? t('providers.leaveEmptyToKeep') : undefined
+    return (
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Input label={t('providers.formApiKey')} value={formApiKey} onChange={(e) => setFormApiKey(e.target.value)} placeholder={placeholder ?? 'sk_live_...'} />
+        {!NO_API_SECRET.has(code) && (
+          <Input label={t('providers.formApiSecret')} type="password" value={formApiSecret} onChange={(e) => setFormApiSecret(e.target.value)} placeholder={placeholder ?? 'secret...'} />
+        )}
+        {(PROVIDER_FIELDS[code] ?? []).map((field) => (
+          <div key={field.key} className="sm:col-span-2">
+            <Input
+              label={t(`providers.fields.${field.key}`)}
+              type={field.secret ? 'password' : 'text'}
+              autoComplete="off"
+              value={formExtra[field.key] ?? ''}
+              onChange={(e) => setFormExtra((x) => ({ ...x, [field.key]: e.target.value }))}
+              placeholder={editingExisting ? t('providers.leaveEmptyToKeep') : field.placeholder}
+              className={field.secret || field.placeholder ? 'font-mono' : ''}
+            />
+            <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">{t(`providers.fields.${field.key}Hint`)}</p>
+          </div>
+        ))}
+      </div>
+    )
   }
 
   return (
@@ -279,14 +342,11 @@ export default function AdminPaymentProvidersPage() {
           <Input label={t('providers.formCurrencies')} value={formCurrencies} onChange={(e) => setFormCurrencies(e.target.value)} placeholder="USD, EUR" />
           <Input label={t('providers.formCountries')} value={formCountries} onChange={(e) => setFormCountries(e.target.value)} placeholder="GLOBAL" />
           <Input label={t('providers.formSupportedModes')} value={formModes} onChange={(e) => setFormModes(e.target.value)} placeholder="PAYMENT, SUBSCRIPTION" />
-          <Input label={t('providers.formWebhookUrl')} value={formWebhook} onChange={(e) => setFormWebhook(e.target.value)} placeholder="https://billing-api.inite.ai/v1/webhooks/lava" />
+          <Input label={t('providers.formWebhookUrl')} value={formWebhook} onChange={(e) => setFormWebhook(e.target.value)} placeholder="https://billing.inite.ai/webhooks/lava" />
 
           <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
             <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">{t('providers.apiCredentials')}</p>
-            <div className="grid grid-cols-2 gap-4">
-              <Input label={t('providers.formApiKey')} value={formApiKey} onChange={(e) => setFormApiKey(e.target.value)} placeholder="sk_live_..." />
-              <Input label={t('providers.formApiSecret')} type="password" value={formApiSecret} onChange={(e) => setFormApiSecret(e.target.value)} placeholder="secret..." />
-            </div>
+            {credentialFields(formCode, false)}
           </div>
 
           <div className="flex gap-3 justify-end">
@@ -316,10 +376,7 @@ export default function AdminPaymentProvidersPage() {
                   .join('  ·  ')}
               </p>
             ) : null}
-            <div className="grid grid-cols-2 gap-4">
-              <Input label={t('providers.formApiKey')} value={formApiKey} onChange={(e) => setFormApiKey(e.target.value)} placeholder={t('providers.leaveEmptyToKeep')} />
-              <Input label={t('providers.formApiSecret')} type="password" value={formApiSecret} onChange={(e) => setFormApiSecret(e.target.value)} placeholder={t('providers.leaveEmptyToKeep')} />
-            </div>
+            {credentialFields(editing?.code ?? '', true)}
           </div>
           <div className="flex gap-3 justify-end">
             <Button variant="ghost" onClick={() => { setEditing(null); resetForm() }}>{tc('cancel')}</Button>

@@ -37,7 +37,8 @@ interface SessionData {
 interface PaymentOption {
   id: string
   name: string
-  metadata: { chain: string; token: string; chainName: string; network: string }
+  /** A crypto network/token, or a way to pay within a rail (lava.top: CARD, SBP, PAYPAL). */
+  metadata: { chain?: string; token?: string; chainName?: string; network?: string; method?: string }
 }
 
 interface PaymentMethod {
@@ -84,6 +85,10 @@ export default function CheckoutPage() {
   const params = useParams()
   const sessionId = params.sessionId as string
   const t = useTranslations('checkout')
+  const methodLabel = (option: PaymentOption) => {
+    const key = option.metadata.method
+    return key === 'CARD' ? t('methods.card') : key === 'SBP' ? t('methods.sbp') : key === 'PAYPAL' ? t('methods.paypal') : option.name
+  }
 
   const [session, setSession] = useState<SessionData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -244,8 +249,12 @@ export default function CheckoutPage() {
         payload.rail = selectedRail
       }
       if (needsOption && chosenOption) {
-        payload.cryptoChain = chosenOption.metadata.chain
-        payload.cryptoToken = chosenOption.metadata.token
+        if (chosenOption.metadata.chain) {
+          payload.cryptoChain = chosenOption.metadata.chain
+          payload.cryptoToken = chosenOption.metadata.token
+        } else if (chosenOption.metadata.method) {
+          payload.method = chosenOption.metadata.method
+        }
       }
       if (promoResult?.isValid && promoCode.trim()) {
         payload.promoCode = promoCode.trim()
@@ -482,7 +491,13 @@ export default function CheckoutPage() {
                     <button
                       key={method.code}
                       type="button"
-                      onClick={() => setSelectedRail(method.code)}
+                      onClick={() => {
+                        setSelectedRail(method.code)
+                        // Land on a choice that belongs to this rail, not the last one's.
+                        if (!method.options?.some((o) => o.id === selectedOption)) {
+                          setSelectedOption(method.options?.[0]?.id ?? '')
+                        }
+                      }}
                       className={`w-full flex items-center justify-between p-3.5 rounded-xl border transition-all text-left ${
                         selectedRail === method.code
                           ? 'border-violet-500 ring-2 ring-violet-500/20 bg-violet-500/10'
@@ -506,14 +521,18 @@ export default function CheckoutPage() {
                         </span>
                       </div>
                       <span className="text-xs text-slate-400">
-                        {method.options?.length ? t('crypto.networks', { count: method.options.length }) : method.currencies.join(', ')}
+                        {method.options?.length
+                          ? method.options[0].metadata.chain
+                            ? t('crypto.networks', { count: method.options.length })
+                            : method.options.map((o) => methodLabel(o)).join(' · ')
+                          : method.currencies.join(', ')}
                       </span>
                     </button>
                   ))}
                   {needsOption && selectedMethod?.options && (
                     <fieldset className="pt-1">
                       <legend className="mb-2 text-xs font-medium uppercase tracking-wider text-slate-400">
-                        {t('crypto.chooseNetwork')}
+                        {selectedMethod.options[0]?.metadata.chain ? t('crypto.chooseNetwork') : t('methods.choose')}
                       </legend>
                       <div className="grid gap-2 sm:grid-cols-2">
                         {selectedMethod.options.map((option) => (
@@ -528,10 +547,16 @@ export default function CheckoutPage() {
                                 : 'border-white/10 bg-slate-700/30 hover:border-white/20'
                             }`}
                           >
-                            <span className="block text-sm font-semibold text-white">{option.metadata.token}</span>
-                            <span className="block text-xs text-slate-400">
-                              {option.metadata.chainName} · {option.metadata.network}
-                            </span>
+                            {option.metadata.chain ? (
+                              <>
+                                <span className="block text-sm font-semibold text-white">{option.metadata.token}</span>
+                                <span className="block text-xs text-slate-400">
+                                  {option.metadata.chainName} · {option.metadata.network}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="block text-sm font-semibold text-white">{methodLabel(option)}</span>
+                            )}
                           </button>
                         ))}
                       </div>

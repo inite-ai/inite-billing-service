@@ -7,6 +7,14 @@ import { RiskService } from '../risk/risk.service';
 import { reconcileAmount } from './reconcile-amount';
 import { isSubscriptionEvent } from '../payment-orchestrator/payment-orchestrator.service';
 import { UNMATCHED_TRANSFER_EVENT } from '../adapters/crypto/crypto.adapter';
+import { LAVA_UNMATCHED_EVENT } from '../adapters/lava/lava.adapter';
+
+/**
+ * Events a rail records for an admin rather than settles: money or a refund
+ * that matched no order. There is no intent to look up, so the payment path
+ * would only fail them.
+ */
+const RECORD_ONLY_EVENTS = new Set([UNMATCHED_TRANSFER_EVENT, LAVA_UNMATCHED_EVENT]);
 
 /**
  * How long a worker may hold a webhook before another may take it over. Long
@@ -98,15 +106,16 @@ export class WebhookProcessor extends WorkerHost {
       // Get adapter
       const adapter = this.paymentOrchestrator.getAdapter(rail);
 
-      // A crypto transfer no invoice claims is recorded for an admin to assign
-      // (CryptoTransfer, status unmatched). It pays for nothing yet, so there is
-      // no intent to look up; taking the payment path would only fail it.
-      if (webhookEvent.eventType === UNMATCHED_TRANSFER_EVENT) {
+      // A crypto transfer no invoice claims (kept as a CryptoTransfer for an
+      // admin), or a lava.top refund that matches no sale: recorded, not settled.
+      if (RECORD_ONLY_EVENTS.has(webhookEvent.eventType)) {
         await this.prisma.webhookEvent.update({
           where: { id: webhookEvent.id },
           data: { status: 'processed', processedAt: new Date() },
         });
-        this.logger.log(`Unmatched crypto transfer recorded: ${webhookId}`);
+        this.logger.log(
+          `Recorded without settling: ${rail}/${webhookId} (${webhookEvent.eventType})`,
+        );
         return;
       }
 

@@ -413,6 +413,12 @@
       "viewTransaction": "View the transaction",
       "converted": "{price} at {rate} per US dollar, fixed for this invoice.",
       "convertedWithMarkup": "{price} at {rate} per US dollar plus {markup}%, fixed for this invoice."
+    },
+    "methods": {
+      "choose": "How to pay",
+      "card": "Card",
+      "sbp": "SBP (Faster Payments)",
+      "paypal": "PayPal"
     }
   },
   "referrals": {
@@ -683,7 +689,16 @@
       "activated": "Provider activated",
       "deactivated": "Provider deactivated",
       "deleted": "Provider deleted",
-      "deleteConfirm": "Delete this payment provider?"
+      "deleteConfirm": "Delete this payment provider?",
+      "cryptoConfiguredElsewhere": "Wallets, chain access and exchange rates are set on their own page.",
+      "fields": {
+        "webhookKey": "Webhook key",
+        "webhookKeyHint": "The key you set in lava.top → Integrations → Webhook (sent as X-Api-Key). Not your API key.",
+        "defaultOfferId": "Default offer (dynamic price)",
+        "defaultOfferIdHint": "A lava.top product with a dynamic price. Used for every one-time price without its own offer (Price.metadata.lavaOfferId), with the amount sent per invoice — so promo discounts work too.",
+        "apiBaseUrl": "API address",
+        "apiBaseUrlHint": "Leave empty for gate.lava.top; sandbox.lava.top for testing."
+      }
     },
     "affiliates": {
       "title": "Affiliates",

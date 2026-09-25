@@ -88,6 +88,15 @@ export class PaySessionDto {
   @IsIn(['USDT', 'USDC'])
   @IsOptional()
   cryptoToken?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'How to pay within the rail, for rails that offer a choice — e.g. CARD or SBP on lava.top',
+  })
+  @IsString()
+  @MaxLength(40)
+  @IsOptional()
+  method?: string;
 }
 
 export class PaySessionResponseDto {
