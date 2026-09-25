@@ -138,25 +138,26 @@ export class CryptoAdminService {
   async updateSettings(update: CryptoSettingsUpdate) {
     const provider = await this.provider();
     const config = { ...((provider?.config as Record<string, any>) || {}) };
-    const wallets: Record<string, string> = { ...(config.wallets || {}) };
+    // Keys come from the list of networks, never from the request: an
+    // unknown network is refused, and the stored map is rebuilt rather than
+    // written into by a caller-chosen name.
+    const requested = update.wallets ?? {};
+    const unknown = Object.keys(requested).filter((key) => !CHAIN_IDS.includes(key as ChainId));
+    if (unknown.length) throw new BadRequestException(`Unknown network: ${unknown.join(', ')}`);
 
-    for (const [chain, address] of Object.entries(update.wallets ?? {})) {
-      if (!CHAIN_IDS.includes(chain as ChainId)) {
-        throw new BadRequestException(`Unknown network: ${chain}`);
+    const stored = (config.wallets || {}) as Record<string, unknown>;
+    const wallets = new Map<ChainId, string>();
+    for (const chain of CHAIN_IDS) {
+      const hasUpdate = Object.prototype.hasOwnProperty.call(requested, chain);
+      const value = hasUpdate ? requested[chain] : stored[chain];
+      if (value === null || value === undefined || value === '') continue;
+      const trimmed = String(value).trim();
+      if (hasUpdate && !isValidAddress(chain, trimmed)) {
+        throw new BadRequestException(`${trimmed} is not a valid ${CHAINS[chain].name} address`);
       }
-      if (address === null || address === '') {
-        delete wallets[chain];
-        continue;
-      }
-      const trimmed = String(address).trim();
-      if (!isValidAddress(chain as ChainId, trimmed)) {
-        throw new BadRequestException(
-          `${trimmed} is not a valid ${CHAINS[chain as ChainId].name} address`,
-        );
-      }
-      wallets[chain] = trimmed;
+      wallets.set(chain, trimmed);
     }
-    config.wallets = wallets;
+    config.wallets = Object.fromEntries(wallets);
 
     if (update.expiryMinutes !== undefined) {
       if (
