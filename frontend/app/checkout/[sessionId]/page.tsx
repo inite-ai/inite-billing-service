@@ -10,6 +10,7 @@ import { OAuthClient } from '@/lib/oauth-client'
 import toast from 'react-hot-toast'
 import RecommendedOffers from '@/components/dashboard/RecommendedOffers'
 import { getErrorMessage, getErrorStatus } from '@/lib/api-error'
+import { CryptoInvoice, type CryptoPayment } from '@/components/checkout/CryptoInvoice'
 
 interface SessionData {
   sessionId: string
@@ -30,6 +31,13 @@ interface SessionData {
   successUrl: string | null
   errorUrl: string | null
   paymentMethods: PaymentMethod[]
+  payment?: CryptoPayment | null
+}
+
+interface PaymentOption {
+  id: string
+  name: string
+  metadata: { chain: string; token: string; chainName: string; network: string }
 }
 
 interface PaymentMethod {
@@ -37,6 +45,13 @@ interface PaymentMethod {
   name: string
   supportedModes: string[]
   currencies: string[]
+  /** For a rail where the customer picks first — crypto networks. */
+  options?: PaymentOption[]
+}
+
+/** A crypto invoice worth showing again: one that can still be paid, or that was. */
+function showableCrypto(payment: CryptoPayment | null | undefined): payment is CryptoPayment {
+  return !!payment && payment.type === 'crypto' && !['cancelled', 'expired'].includes(payment.invoiceStatus)
 }
 
 function isSafeRedirect(url: string): boolean {
@@ -86,7 +101,10 @@ export default function CheckoutPage() {
 
   // Payment
   const [selectedRail, setSelectedRail] = useState('')
+  const [selectedOption, setSelectedOption] = useState('')
   const [payLoading, setPayLoading] = useState(false)
+  // An open crypto invoice replaces the form: there is no page to redirect to.
+  const [payment, setPayment] = useState<CryptoPayment | null>(null)
 
   useEffect(() => {
     async function fetchSession() {
@@ -94,6 +112,16 @@ export default function CheckoutPage() {
         const res = await api.get(`/v1/checkout/sessions/${sessionId}`)
         const data: SessionData = res.data
         setSession(data)
+
+        // A crypto invoice under way — or just paid — is shown again after a
+        // reload instead of the form, whatever the order status says.
+        if (showableCrypto(data.payment) && ['created', 'open', 'paid'].includes(data.status)) {
+          setPayment({ ...data.payment, intentStatus: data.status === 'paid' ? 'paid' : data.payment.intentStatus })
+          const crypto = data.paymentMethods.find((m) => m.code === 'CRYPTO')
+          if (crypto) setSelectedRail('CRYPTO')
+          setSelectedOption(`${data.payment.chain}_${data.payment.token}`)
+          return
+        }
 
         if (data.status === 'paid') {
           setError('alreadyPaid')
@@ -105,7 +133,9 @@ export default function CheckoutPage() {
         }
 
         if (data.paymentMethods.length > 0) {
-          setSelectedRail(data.paymentMethods[0].code)
+          const first = data.paymentMethods[0]
+          setSelectedRail(first.code)
+          if (first.options?.length) setSelectedOption(first.options[0].id)
         }
       } catch (e) {
         if (getErrorStatus(e) === 401) {
@@ -123,6 +153,36 @@ export default function CheckoutPage() {
     }
     fetchSession()
   }, [sessionId])
+
+  // While a crypto invoice is open, watch it: the chain is checked on the
+  // server every half minute, and this picks the result up.
+  const waitingForChain = !!payment && payment.invoiceStatus !== 'paid' && payment.intentStatus !== 'paid'
+  useEffect(() => {
+    if (!waitingForChain) return
+    const id = setInterval(async () => {
+      try {
+        const res = await api.get(`/v1/checkout/sessions/${sessionId}`)
+        const data: SessionData = res.data
+        if (showableCrypto(data.payment)) {
+          setPayment({ ...data.payment, intentStatus: data.status === 'paid' ? 'paid' : data.payment.intentStatus })
+        }
+      } catch {
+        // A missed poll is retried on the next tick.
+      }
+    }, 8000)
+    return () => clearInterval(id)
+  }, [waitingForChain, sessionId])
+
+  // Paid: show the confirmation for a moment, then go where the merchant asked.
+  const paidNow = !!payment && (payment.invoiceStatus === 'paid' || payment.intentStatus === 'paid')
+  useEffect(() => {
+    if (!paidNow || !session) return
+    const target = session.successUrl && isSafeRedirect(session.successUrl) ? session.successUrl : '/orders'
+    const id = setTimeout(() => {
+      window.location.href = target
+    }, 2500)
+    return () => clearTimeout(id)
+  }, [paidNow, session])
 
   const handleApplyPromo = async () => {
     if (!promoCode.trim() || !session) return
@@ -168,9 +228,14 @@ export default function CheckoutPage() {
     : parseFloat(session?.price.amount || '0')
   const isFree = finalAmount === 0
 
+  const selectedMethod = session?.paymentMethods.find((m) => m.code === selectedRail)
+  const needsOption = !isFree && !!selectedMethod?.options?.length
+  const chosenOption = selectedMethod?.options?.find((o) => o.id === selectedOption)
+
   const handlePay = async () => {
     if (!session) return
     if (!isFree && !selectedRail) return
+    if (needsOption && !chosenOption) return
 
     setPayLoading(true)
     try {
@@ -178,19 +243,29 @@ export default function CheckoutPage() {
       if (!isFree && selectedRail) {
         payload.rail = selectedRail
       }
+      if (needsOption && chosenOption) {
+        payload.cryptoChain = chosenOption.metadata.chain
+        payload.cryptoToken = chosenOption.metadata.token
+      }
       if (promoResult?.isValid && promoCode.trim()) {
         payload.promoCode = promoCode.trim()
       }
 
       const res = await api.post(`/v1/checkout/sessions/${sessionId}/pay`, payload)
 
+      if (res.data.payment?.type === 'crypto') {
+        setPayment(res.data.payment)
+        setPayLoading(false)
+        return
+      }
+
       if (res.data.checkoutUrl) {
-        window.location.href = res.data.checkoutUrl
+        window.location.assign(res.data.checkoutUrl)
       } else {
         // Free order fulfilled — go to orders
         toast.success(t('promoApplied'))
         const successTarget = session.successUrl && isSafeRedirect(session.successUrl) ? session.successUrl : '/orders'
-        window.location.href = successTarget
+        window.location.assign(successTarget)
       }
     } catch (e) {
       toast.error(getErrorMessage(e, 'Payment failed'))
@@ -273,7 +348,22 @@ export default function CheckoutPage() {
               <ShoppingBag className="w-6 h-6 text-violet-400" />
             </div>
             <h1 className="text-2xl font-bold text-white">{t('title')}</h1>
+            {payment && (
+              <p className="mt-1 text-sm text-slate-400">
+                {session.product.name} · {formatPrice(session.price.amount)} {session.price.currency}
+              </p>
+            )}
           </div>
+
+          {payment ? (
+            <CryptoInvoice
+              payment={payment}
+              renewing={payLoading}
+              onRenew={handlePay}
+              onChangeNetwork={() => setPayment(null)}
+            />
+          ) : (
+          <>
 
           {/* Order Summary */}
           <div className="mb-6">
@@ -416,10 +506,37 @@ export default function CheckoutPage() {
                         </span>
                       </div>
                       <span className="text-xs text-slate-400">
-                        {method.currencies.join(', ')}
+                        {method.options?.length ? t('crypto.networks', { count: method.options.length }) : method.currencies.join(', ')}
                       </span>
                     </button>
                   ))}
+                  {needsOption && selectedMethod?.options && (
+                    <fieldset className="pt-1">
+                      <legend className="mb-2 text-xs font-medium uppercase tracking-wider text-slate-400">
+                        {t('crypto.chooseNetwork')}
+                      </legend>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {selectedMethod.options.map((option) => (
+                          <button
+                            key={option.id}
+                            type="button"
+                            onClick={() => setSelectedOption(option.id)}
+                            aria-pressed={selectedOption === option.id}
+                            className={`rounded-xl border px-3.5 py-2.5 text-left transition-all ${
+                              selectedOption === option.id
+                                ? 'border-violet-500 bg-violet-500/10 ring-2 ring-violet-500/20'
+                                : 'border-white/10 bg-slate-700/30 hover:border-white/20'
+                            }`}
+                          >
+                            <span className="block text-sm font-semibold text-white">{option.metadata.token}</span>
+                            <span className="block text-xs text-slate-400">
+                              {option.metadata.chainName} · {option.metadata.network}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </fieldset>
+                  )}
                 </div>
               )}
             </div>
@@ -428,13 +545,18 @@ export default function CheckoutPage() {
           {/* Pay Button */}
           <button
             onClick={handlePay}
-            disabled={payLoading || (!isFree && !selectedRail) || (!isFree && session.paymentMethods.length === 0)}
+            disabled={
+              payLoading ||
+              (!isFree && !selectedRail) ||
+              (!isFree && session.paymentMethods.length === 0) ||
+              (needsOption && !chosenOption)
+            }
             className="w-full py-3.5 rounded-xl font-semibold text-white bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-lg shadow-violet-500/20"
           >
             {payLoading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                {t('redirecting')}
+                {needsOption ? t('processing') : t('redirecting')}
               </>
             ) : isFree ? (
               t('completeOrder')
@@ -455,6 +577,8 @@ export default function CheckoutPage() {
           {/* Never distract mid-payment */}
           {!payLoading && (
             <RecommendedOffers sessionId={String(sessionId)} compact />
+          )}
+          </>
           )}
         </div>
       </motion.div>

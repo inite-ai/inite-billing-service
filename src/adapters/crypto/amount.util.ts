@@ -26,3 +26,33 @@ export function toOnChainAmount(amount: number, decimals: number): string {
   const scaled = BigInt(digits === '' ? '0' : digits);
   return (negative ? -scaled : scaled).toString();
 }
+
+/**
+ * An on-chain integer amount as a decimal token amount, without trailing zeros
+ * beyond what identifies it: `10000137` at 6 decimals is `10.000137`, and
+ * `10000000` is `10`. Exact — string arithmetic only.
+ */
+export function formatUnits(raw: string, decimals: number): string {
+  if (!/^\d+$/.test(raw)) throw new Error(`Invalid on-chain amount: ${raw}`);
+  if (decimals === 0) return raw.replace(/^0+(?=\d)/, '');
+  const padded = raw.padStart(decimals + 1, '0');
+  const whole = padded.slice(0, -decimals).replace(/^0+(?=\d)/, '');
+  const frac = padded.slice(-decimals).replace(/0+$/, '');
+  return frac ? `${whole}.${frac}` : whole;
+}
+
+/**
+ * Parse a token amount that may be given either in smallest units (`"10000000"`)
+ * or as a decimal (`"10.0"`), as indexers disagree on which they report.
+ * Returns null when it cannot be read.
+ */
+export function parseRawAmount(value: unknown, decimals: number): bigint | null {
+  if (value === undefined || value === null) return null;
+  const s = String(value).trim();
+  if (/^\d+$/.test(s)) return BigInt(s);
+  const m = s.match(/^(\d+)\.(\d+)$/);
+  if (!m) return null;
+  if (m[2].length > decimals && /[1-9]/.test(m[2].slice(decimals))) return null;
+  const frac = m[2].padEnd(decimals, '0').slice(0, decimals);
+  return BigInt(m[1] + frac);
+}

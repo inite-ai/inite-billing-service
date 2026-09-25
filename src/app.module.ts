@@ -18,6 +18,7 @@ import { EntitlementsModule } from './entitlements/entitlements.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { OutboxModule } from './outbox/outbox.module';
 import { WorkersModule } from './workers/workers.module';
+import { CryptoAdminModule } from './crypto/crypto-admin.module';
 import { AffiliatesModule } from './affiliates/affiliates.module';
 import { AdminModule } from './admin/admin.module';
 import { PromoCodesModule } from './promo-codes/promo-codes.module';
@@ -67,6 +68,7 @@ import { InsightsModule } from './insights/insights.module';
     WebhooksModule,
     OutboxModule,
     WorkersModule,
+    CryptoAdminModule,
     AffiliatesModule,
     AdminModule,
     PromoCodesModule,

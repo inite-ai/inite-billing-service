@@ -1,122 +1,296 @@
-import { CryptoAdapter } from '../src/adapters/crypto/crypto.adapter';
+import { BadRequestException } from '@nestjs/common';
+import { CryptoAdapter, UNMATCHED_TRANSFER_EVENT } from '../src/adapters/crypto/crypto.adapter';
 
 /**
- * The crypto rail was broken end-to-end:
- *  - handleWebhook set entityId = memo, but the intent's providerIntentId is the
- *    invoice id, so the generic processor could never reconcile a confirmation;
- *  - getIntentStatus never validated the transfer, so (had the lookup worked)
- *    any transfer of any token/amount to any address would settle the invoice.
+ * How the crypto rail decides a payment.
  *
- * These tests pin the fixed behavior: the webhook resolves the intent by memo
- * and persists the observed transfer; getIntentStatus then validates
- * receiver/token/amount/chain and only reports paid for a valid, confirmed
- * transfer — failing everything else closed.
+ * A transfer attached to an invoice only settles it when it is checked against
+ * that invoice — our wallet, the right chain and token, at least the amount —
+ * and final. A transfer that fails the check leaves the order payable instead
+ * of failing it: it is somebody's money arriving in the wrong shape, for an
+ * admin to look at, and the customer can still pay correctly.
+ *
+ * And the event for a transfer carries its phase, so "now final" is a new
+ * event rather than a duplicate of "first seen" — with one id per transaction
+ * the final report was dropped and the order stayed open forever.
  */
-describe('Crypto webhook resolution + validation', () => {
-  const INVOICE_ID = 'crypto_ETH_1712345678_abcd1234';
-  const RECEIVER = '0xReCeIvErADDRESS0000000000000000000000AA';
-  const MEMO = 'ABCD1234';
+describe('Crypto adapter: settlement decisions', () => {
+  const INVOICE_ID = 'crypto_TRON_1790000000000_ab12cd34';
+  const RECEIVER = 'TNXoiAJ3dct8Fjg4M9fkLFh9S2v9TXc32G';
 
-  // Invoice snapshot as persisted from createPaymentIntent metadata.
-  const invoiceSnapshot = {
-    chain: 'ETH',
+  const snapshot = {
+    chain: 'TRON',
     token: 'USDT',
     receiverAddress: RECEIVER,
-    amount: '10',
-    onChainAmount: '10000000', // 10 USDT @ 6 decimals
+    amount: '10.000137',
+    onChainAmount: '10000137',
     decimals: 6,
-    memo: MEMO,
-    requiredConfirmations: 12,
+    requiredConfirmations: 19,
   };
 
-  const buildAdapter = (intent: any | null) => {
-    const store: any = { updated: null };
-    const prisma: any = {
-      paymentIntent: {
-        findMany: jest.fn().mockResolvedValue(intent ? [intent] : []),
-        findFirst: jest.fn().mockImplementation(async () => store.updated ?? intent),
-        update: jest.fn().mockImplementation(async ({ data }: any) => {
-          store.updated = { ...intent, ...data, snapshot: data.snapshot };
-          return store.updated;
-        }),
-      },
-    };
-    return { adapter: new CryptoAdapter(prisma), prisma, store };
-  };
-
-  const intentRow = () => ({
-    id: 'pi-1',
-    providerIntentId: INVOICE_ID,
-    snapshot: { ...invoiceSnapshot },
-  });
-
-  const transfer = (over: Record<string, any> = {}) => ({
-    chain: 'ETH',
-    txHash: '0xdeadbeef',
-    from: '0xsender',
+  const observed = (o: Record<string, any> = {}) => ({
+    chain: 'TRON',
+    txHash: 'tx-1',
     to: RECEIVER,
     token: 'USDT',
-    amount: '10000000',
-    confirmations: 12,
-    memo: MEMO,
-    ...over,
+    amount: '10000137',
+    confirmations: 19,
+    isFinal: true,
+    ...o,
   });
 
-  it('handleWebhook resolves the intent by memo and returns its providerIntentId as entityId', async () => {
-    const { adapter, prisma } = buildAdapter(intentRow());
-    const parsed = await adapter.handleWebhook(transfer());
-    expect(parsed.entityId).toBe(INVOICE_ID); // NOT the memo
-    expect(prisma.paymentIntent.update).toHaveBeenCalledTimes(1);
-    const persisted = prisma.paymentIntent.update.mock.calls[0][0].data.snapshot.observedTransfer;
-    expect(persisted.txHash).toBe('0xdeadbeef');
+  const build = (intent: any, invoice: any = { status: 'confirming' }) => {
+    const prisma: any = {
+      paymentIntent: {
+        findFirst: jest.fn().mockResolvedValue(intent),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    };
+    const adapter = new CryptoAdapter(prisma);
+    const ledger = {
+      findByInvoiceId: jest.fn().mockResolvedValue(invoice),
+      ingest: jest.fn(),
+    };
+    (adapter as any).ledger = ledger;
+    return { adapter, prisma, ledger };
+  };
+
+  const withTransfer = (o: Record<string, any> = {}, status = 'created') => ({
+    id: 'pi-1',
+    status,
+    providerIntentId: INVOICE_ID,
+    snapshot: { ...snapshot, observedTransfer: observed(o) },
   });
 
-  it('a valid, confirmed transfer settles the invoice as paid', async () => {
-    const { adapter } = buildAdapter(intentRow());
-    await adapter.handleWebhook(transfer());
-    const res = await adapter.getIntentStatus(INVOICE_ID);
-    expect(res.status).toBe('paid');
+  describe('getIntentStatus', () => {
+    it('settles a checked, final transfer, keeping the invoice details on the snapshot', async () => {
+      const { adapter } = build(withTransfer());
+      const result = await adapter.getIntentStatus(INVOICE_ID);
+      expect(result.status).toBe('paid');
+      expect(result.amountVerifiedByAdapter).toBe(true);
+      expect(result.providerData).toMatchObject({
+        receiverAddress: RECEIVER,
+        onChainAmount: '10000137',
+        observedTransfer: { txHash: 'tx-1', validated: true },
+      });
+    });
+
+    it('leaves a payment that is seen but not yet final open', async () => {
+      const { adapter } = build(withTransfer({ confirmations: 3, isFinal: false }));
+      expect((await adapter.getIntentStatus(INVOICE_ID)).status).toBe('opened');
+    });
+
+    it.each([
+      [
+        'a transfer to another wallet',
+        { to: 'TOtherWallet000000000000000000000' },
+        'receiver_mismatch',
+      ],
+      ['another token', { token: 'USDC' }, 'token_mismatch'],
+      ['another chain', { chain: 'ETH' }, 'chain_mismatch'],
+      ['less than the invoice', { amount: '10000000' }, 'amount_too_low'],
+    ])('does not settle — and does not fail the order over — %s', async (_label, over, reason) => {
+      const { adapter } = build(withTransfer(over));
+      const result = await adapter.getIntentStatus(INVOICE_ID);
+      expect(result.status).toBe('created');
+      expect(result.metadata?.reason).toBe(reason);
+    });
+
+    it('keeps an intent that is already open where it is when a transfer fails the check', async () => {
+      const { adapter } = build(withTransfer({ amount: '1' }, 'opened'));
+      expect((await adapter.getIntentStatus(INVOICE_ID)).status).toBe('opened');
+    });
+
+    it('accepts a decimal amount equal to the invoice', async () => {
+      const { adapter } = build(withTransfer({ amount: '10.000137' }));
+      expect((await adapter.getIntentStatus(INVOICE_ID)).status).toBe('paid');
+    });
+
+    it('trusts an admin’s attribution on the amount, not on the wallet', async () => {
+      const low = build(withTransfer({ amount: '10000000', manual: true }));
+      expect((await low.adapter.getIntentStatus(INVOICE_ID)).status).toBe('paid');
+
+      const elsewhere = build(
+        withTransfer({ manual: true, to: 'TOtherWallet000000000000000000000' }),
+      );
+      expect((await elsewhere.adapter.getIntentStatus(INVOICE_ID)).status).toBe('created');
+    });
+
+    it('matches a TON receiver whichever spelling of the address each side used', async () => {
+      const ton = {
+        id: 'pi-1',
+        status: 'created',
+        providerIntentId: INVOICE_ID,
+        snapshot: {
+          ...snapshot,
+          chain: 'TON',
+          receiverAddress: 'EQDwB8YlfqX_bYO4cGGSkIJYUcgqlij6fhuEwEAhLAppLbEV',
+          requiredConfirmations: 1,
+          observedTransfer: observed({
+            chain: 'TON',
+            to: '0:F007C6257EA5FF6D83B870619290825851C82A9628FA7E1B84C040212C0A692D',
+            confirmations: 1,
+          }),
+        },
+      };
+      const { adapter } = build(ton);
+      expect((await adapter.getIntentStatus(INVOICE_ID)).status).toBe('paid');
+    });
+
+    it.each(['expired', 'cancelled'])(
+      'reports an invoice that was %s, with nothing received, as expired',
+      async (status) => {
+        const { adapter } = build({ id: 'pi-1', status: 'created', snapshot }, { status });
+        expect((await adapter.getIntentStatus(INVOICE_ID)).status).toBe('expired');
+      },
+    );
+
+    it('is still waiting while the invoice is open and nothing has arrived', async () => {
+      const { adapter } = build(
+        { id: 'pi-1', status: 'created', snapshot },
+        { status: 'awaiting' },
+      );
+      expect((await adapter.getIntentStatus(INVOICE_ID)).status).toBe('created');
+    });
   });
 
-  it('a transfer to the WRONG receiver is rejected (failed)', async () => {
-    const { adapter } = buildAdapter(intentRow());
-    await adapter.handleWebhook(transfer({ to: '0xAttackerWallet' }));
-    const res = await adapter.getIntentStatus(INVOICE_ID);
-    expect(res.status).toBe('failed');
-    expect(res.metadata?.reason).toBe('receiver_mismatch');
+  describe('events', () => {
+    const transferRow = (o: Record<string, any> = {}) => ({
+      id: 'tr-1',
+      chain: 'TRON',
+      txHash: 'tx-1',
+      token: 'USDT',
+      fromAddress: 'TSender',
+      toAddress: RECEIVER,
+      amountRaw: '10000137',
+      confirmations: 19,
+      isFinal: true,
+      invoiceId: 'inv-row-1',
+      ...o,
+    });
+    const invoiceRow = { id: 'inv-row-1', invoiceId: INVOICE_ID };
+
+    it('gives "seen" and "final" different event ids, so the second is not dropped as a duplicate', () => {
+      const { adapter } = build(null);
+      const seen = adapter.eventFor({
+        transfer: transferRow({ isFinal: false, confirmations: 3 }) as any,
+        invoice: invoiceRow as any,
+        phase: 'seen',
+        created: true,
+      });
+      const final = adapter.eventFor({
+        transfer: transferRow() as any,
+        invoice: invoiceRow as any,
+        phase: 'final',
+        created: false,
+      });
+      expect(seen.webhookId).not.toBe(final.webhookId);
+      expect(seen.eventType).toBe('payment.confirming');
+      expect(final.eventType).toBe('payment.paid');
+      expect(final.entityId).toBe(INVOICE_ID);
+    });
+
+    it('files a transfer no invoice claims as unmatched, not as a payment', () => {
+      const { adapter } = build(null);
+      const event = adapter.eventFor({
+        transfer: transferRow({ invoiceId: null }) as any,
+        invoice: null,
+        phase: null,
+        created: true,
+      });
+      expect(event.eventType).toBe(UNMATCHED_TRANSFER_EVENT);
+      expect(event.entityId).toBe('tr-1');
+    });
   });
 
-  it('a transfer of the WRONG token is rejected', async () => {
-    const { adapter } = buildAdapter(intentRow());
-    await adapter.handleWebhook(transfer({ token: 'SHIB' }));
-    expect((await adapter.getIntentStatus(INVOICE_ID)).status).toBe('failed');
-  });
+  describe('an external indexer’s webhook', () => {
+    it('reads a decimal amount into smallest units and judges finality by the chain', async () => {
+      const { adapter, ledger } = build(null);
+      ledger.ingest.mockResolvedValue({
+        transfer: { id: 'tr-1', chain: 'TRON', txHash: 'tx-1', isFinal: false, invoiceId: null },
+        invoice: null,
+        phase: null,
+        created: true,
+      });
 
-  it('an underpaying transfer (amount too low) is rejected', async () => {
-    const { adapter } = buildAdapter(intentRow());
-    await adapter.handleWebhook(transfer({ amount: '9000000' })); // 9 < 10 USDT
-    const res = await adapter.getIntentStatus(INVOICE_ID);
-    expect(res.status).toBe('failed');
-    expect(res.metadata?.reason).toBe('amount_too_low');
-  });
+      await adapter.handleWebhook({
+        chain: 'TRON',
+        txHash: 'tx-1',
+        to: RECEIVER,
+        token: 'usdt',
+        amount: '10.000137',
+        confirmations: 5,
+      });
 
-  it('a valid but under-confirmed transfer is opened, not paid', async () => {
-    const { adapter } = buildAdapter(intentRow());
-    await adapter.handleWebhook(transfer({ confirmations: 3 }));
-    const res = await adapter.getIntentStatus(INVOICE_ID);
-    expect(res.status).toBe('opened');
-  });
+      expect(ledger.ingest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          amountRaw: '10000137',
+          token: 'USDT',
+          isFinal: false,
+          confirmations: 5,
+        }),
+        'webhook',
+      );
+    });
 
-  it('accepts a decimal token amount equal to the invoice (unit-tolerant parsing)', async () => {
-    const { adapter } = buildAdapter(intentRow());
-    await adapter.handleWebhook(transfer({ amount: '10.0' }));
-    expect((await adapter.getIntentStatus(INVOICE_ID)).status).toBe('paid');
-  });
+    it('attaches a matched transfer to the intent it pays', async () => {
+      const { adapter, ledger, prisma } = build({ id: 'pi-1', status: 'created', snapshot });
+      ledger.ingest.mockResolvedValue({
+        transfer: {
+          id: 'tr-1',
+          chain: 'TRON',
+          txHash: 'tx-1',
+          token: 'USDT',
+          fromAddress: 'TSender',
+          toAddress: RECEIVER,
+          amountRaw: '10000137',
+          confirmations: 19,
+          isFinal: true,
+          invoiceId: 'inv-row-1',
+        },
+        invoice: { id: 'inv-row-1', invoiceId: INVOICE_ID },
+        phase: 'final',
+        created: true,
+      });
 
-  it('does not resolve (and cannot settle) when the memo matches no invoice', async () => {
-    const { adapter, prisma } = buildAdapter(null);
-    const parsed = await adapter.handleWebhook(transfer({ memo: 'ZZZZ9999' }));
-    expect(parsed.entityId).not.toBe(INVOICE_ID);
-    expect(prisma.paymentIntent.update).not.toHaveBeenCalled();
+      await adapter.handleWebhook({
+        chain: 'TRON',
+        txHash: 'tx-1',
+        to: RECEIVER,
+        token: 'USDT',
+        amount: '10000137',
+        confirmations: 19,
+      });
+
+      const written = prisma.paymentIntent.update.mock.calls[0][0].data;
+      expect(written.txHash).toBe('tx-1');
+      expect(written.snapshot.observedTransfer).toMatchObject({
+        amount: '10000137',
+        isFinal: true,
+      });
+      expect(written.snapshot.receiverAddress).toBe(RECEIVER);
+    });
+
+    it('refuses a token the chain does not carry, or an unreadable amount', async () => {
+      const { adapter } = build(null);
+      await expect(
+        adapter.handleWebhook({
+          chain: 'TRON',
+          txHash: 'x',
+          to: RECEIVER,
+          token: 'USDC',
+          amount: '1',
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        adapter.handleWebhook({
+          chain: 'TRON',
+          txHash: 'x',
+          to: RECEIVER,
+          token: 'USDT',
+          amount: 'lots',
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
   });
 });

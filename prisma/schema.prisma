@@ -1052,3 +1052,81 @@ model FunnelEvent {
   @@schema("billing")
 }
 
+
+/// A crypto invoice: which exact on-chain amount, on which chain and token,
+/// to which wallet, pays which payment intent.
+///
+/// ERC-20 and TRC-20 transfers carry no memo, so a payment is recognised by
+/// its amount alone. Each invoice therefore reserves a unique amount — the
+/// price plus a few smallest units — for as long as a payment against it can
+/// still arrive; a partial unique index enforces that no two live invoices
+/// share one.
+model CryptoInvoice {
+  id               String    @id @default(uuid()) @db.Uuid
+  /// PaymentIntent.providerIntentId for the CRYPTO rail.
+  invoiceId        String    @unique @map("invoice_id") @db.VarChar(255)
+  orderId          String?   @map("order_id") @db.VarChar(255)
+  chain            String    @db.VarChar(20)
+  token            String    @db.VarChar(20)
+  receiverAddress  String    @map("receiver_address") @db.VarChar(255)
+  /// receiverAddress in the form transfers are compared in (lower-cased on EVM, raw on TON).
+  receiverKey      String    @map("receiver_key") @db.VarChar(255)
+  /// The price in the token's smallest unit, before the identifying offset.
+  baseAmountRaw    String    @map("base_amount_raw") @db.VarChar(78)
+  /// What the customer is asked to send, exactly.
+  amountRaw        String    @map("amount_raw") @db.VarChar(78)
+  decimals         Int
+  memo             String?   @db.VarChar(64)
+  /// awaiting | confirming | paid | expired | cancelled
+  status           String    @default("awaiting") @db.VarChar(20)
+  expiresAt        DateTime  @map("expires_at") @db.Timestamptz(6)
+  txHash           String?   @map("tx_hash") @db.VarChar(255)
+  confirmations    Int       @default(0)
+  paidAt           DateTime? @map("paid_at") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  transfers CryptoTransfer[]
+
+  @@index([chain, status])
+  @@index([status, expiresAt])
+  @@map("crypto_invoices")
+  @@schema("billing")
+}
+
+/// Every incoming transfer to a configured wallet that the watcher or the
+/// indexer webhook reported — matched to an invoice or not. An unmatched one is
+/// money that arrived without a recognisable invoice (wrong amount, late, a
+/// cancelled invoice) and is the admin's to assign.
+model CryptoTransfer {
+  id               String    @id @default(uuid()) @db.Uuid
+  chain            String    @db.VarChar(20)
+  txHash           String    @map("tx_hash") @db.VarChar(255)
+  token            String    @db.VarChar(20)
+  fromAddress      String?   @map("from_address") @db.VarChar(255)
+  toAddress        String    @map("to_address") @db.VarChar(255)
+  amountRaw        String    @map("amount_raw") @db.VarChar(78)
+  decimals         Int
+  confirmations    Int       @default(0)
+  isFinal          Boolean   @default(false) @map("is_final")
+  blockTime        DateTime? @map("block_time") @db.Timestamptz(6)
+  /// watcher | webhook
+  source           String    @db.VarChar(20)
+  /// matched | unmatched | ignored
+  status           String    @db.VarChar(20)
+  invoiceId        String?   @map("invoice_id") @db.Uuid
+  /// For an unmatched transfer: an expired or cancelled invoice it most likely paid.
+  suggestedInvoiceId String? @map("suggested_invoice_id") @db.Uuid
+  note             String?   @db.Text
+  resolvedBy       String?   @map("resolved_by") @db.VarChar(255)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  invoice CryptoInvoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
+  @@unique([chain, txHash, token])
+  @@index([status, createdAt])
+  @@index([invoiceId])
+  @@map("crypto_transfers")
+  @@schema("billing")
+}

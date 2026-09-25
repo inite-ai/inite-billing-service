@@ -1,4 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { randomBytes } from 'node:crypto';
 import {
   Connector,
   ConnectorCapabilities,
@@ -15,142 +16,53 @@ import {
   WebhookParseResult,
 } from '../../common/interfaces/payment-rail-adapter.interface';
 import { PrismaService } from '../../common/services/prisma.service';
-import { toOnChainAmount } from './amount.util';
+import { formatUnits, parseRawAmount, toOnChainAmount } from './amount.util';
+import {
+  CHAINS,
+  CHAIN_IDS,
+  ChainId,
+  STABLECOIN_CURRENCIES,
+  isChainId,
+  paymentUri,
+  receiverKey,
+  txExplorerUrl,
+} from './chains';
+import { CryptoSettings, loadCryptoSettings, payable } from './crypto-config';
+import { CryptoLedger, IngestResult, Invoice, TransferSource } from './crypto-ledger';
+import { IncomingTransfer } from './watchers/types';
+
+/** The event a transfer nobody's invoice claims is filed under — recorded, not processed as a payment. */
+export const UNMATCHED_TRANSFER_EVENT = 'crypto.transfer.unmatched';
 
 /**
- * Chain-specific configuration
- */
-interface ChainConfig {
-  name: string;
-  chainId: string;
-  rpcUrl: string;
-  explorerUrl: string;
-  nativeToken: string;
-  /** Minimum confirmations to consider transaction final */
-  confirmations: number;
-  tokens: Record<
-    string,
-    {
-      contractAddress: string;
-      decimals: number;
-    }
-  >;
-}
-
-interface CryptoProviderConfig {
-  /** Receiver addresses per chain */
-  wallets: Record<string, string>;
-  /** Chain configurations */
-  chains: Record<string, ChainConfig>;
-  /** Callback URL for payment status updates */
-  callbackUrl?: string;
-  /** Payment expiry in minutes */
-  expiryMinutes: number;
-}
-
-/**
- * Supported chains and their default configs
- */
-const DEFAULT_CHAINS: Record<string, Omit<ChainConfig, 'rpcUrl'>> = {
-  ETH: {
-    name: 'Ethereum',
-    chainId: '1',
-    explorerUrl: 'https://etherscan.io',
-    nativeToken: 'ETH',
-    confirmations: 12,
-    tokens: {
-      USDT: { contractAddress: '0xdAC17F958D2ee523a2206206994597C13D831ec7', decimals: 6 },
-      USDC: { contractAddress: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', decimals: 6 },
-    },
-  },
-  SOL: {
-    name: 'Solana',
-    chainId: 'mainnet-beta',
-    explorerUrl: 'https://solscan.io',
-    nativeToken: 'SOL',
-    confirmations: 1,
-    tokens: {
-      USDT: { contractAddress: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', decimals: 6 },
-      USDC: { contractAddress: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', decimals: 6 },
-    },
-  },
-  TON: {
-    name: 'TON',
-    chainId: 'mainnet',
-    explorerUrl: 'https://tonviewer.com',
-    nativeToken: 'TON',
-    confirmations: 1,
-    tokens: {
-      USDT: { contractAddress: 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs', decimals: 6 },
-      USDC: { contractAddress: 'EQC61IQRl0_la95nfD8TQE4ioIjN7q3T_HQPGHDWe4AGNT0r', decimals: 6 },
-    },
-  },
-  TRON: {
-    name: 'TRON',
-    chainId: 'mainnet',
-    explorerUrl: 'https://tronscan.org',
-    nativeToken: 'TRX',
-    confirmations: 19,
-    tokens: {
-      USDT: { contractAddress: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t', decimals: 6 },
-      USDC: { contractAddress: 'TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8', decimals: 6 },
-    },
-  },
-};
-
-/**
- * Crypto payment adapter — USDT/USDC multi-chain support
+ * Stablecoin payments straight to the merchant's own wallets — USDT/USDC on
+ * TRON, TON, Ethereum and Solana — with no processor in between.
  *
- * Supported chains: ETH, SOL, TON, TRON
- * Supported tokens: USDT, USDC
+ * The flow:
+ * 1. At checkout the customer picks a network and token. The invoice reserves
+ *    an amount unique among open invoices — the price plus a fraction of a
+ *    cent — because on most of these chains the amount is the only thing a
+ *    transfer carries that can say which order it pays.
+ * 2. The customer sends exactly that amount to the wallet shown.
+ * 3. The watcher (`CryptoWatcherScheduler`) polls each chain's public API for
+ *    transfers into the wallets with an open invoice; an external indexer may
+ *    also post them to `/webhooks/crypto`. Both go through {@link ingest}.
+ * 4. A matched transfer becomes a webhook event, and the ordinary processor
+ *    asks {@link getIntentStatus}, which checks the transfer against the
+ *    invoice before reporting the intent paid.
  *
- * Flow:
- * 1. User selects chain + token at checkout
- * 2. Backend generates payment invoice with receiver address + amount + memo
- * 3. User sends transaction from their wallet
- * 4. Backend monitors chain for incoming transaction (via RPC/indexer/webhook)
- * 5. On confirmation threshold met, apply state transition to paid
- *
- * Monitoring strategies (configured per chain):
- * - RPC polling: getTransactionReceipt / getBalance checks
- * - Indexer webhook: blockchain indexer pushes tx confirmations
- * - Manual confirmation: admin verifies and updates status
+ * Money that arrives without matching an open invoice — the round amount, a
+ * payment after the grace period, a second payment — is recorded as an
+ * unmatched transfer for an admin to assign, never dropped.
  */
 @RegisterConnector(RAILS.CRYPTO)
 @Injectable()
 export class CryptoAdapter implements Connector {
   private readonly logger = new Logger(CryptoAdapter.name);
+  readonly ledger: CryptoLedger;
 
-  constructor(private readonly prisma: PrismaService) {}
-
-  private async getConfig(): Promise<CryptoProviderConfig> {
-    const provider = await this.prisma.paymentProvider.findUnique({
-      where: { code: 'CRYPTO' },
-    });
-
-    if (!provider || !provider.isActive) {
-      throw new Error('CRYPTO payment provider is not configured or inactive');
-    }
-
-    const config = (provider.config as Record<string, any>) || {};
-
-    // Merge default chain configs with custom overrides
-    const chains: Record<string, ChainConfig> = {};
-    for (const [chainId, defaults] of Object.entries(DEFAULT_CHAINS)) {
-      const customChain = config.chains?.[chainId] || {};
-      chains[chainId] = {
-        ...defaults,
-        rpcUrl: customChain.rpcUrl || config[`${chainId.toLowerCase()}RpcUrl`] || '',
-        ...customChain,
-      } as ChainConfig;
-    }
-
-    return {
-      wallets: config.wallets || {},
-      chains,
-      callbackUrl: config.callbackUrl,
-      expiryMinutes: config.expiryMinutes || 60,
-    };
+  constructor(private readonly prisma: PrismaService) {
+    this.ledger = new CryptoLedger(prisma);
   }
 
   rail(): string {
@@ -161,11 +73,24 @@ export class CryptoAdapter implements Connector {
     return {
       supportedModes: ['PAYMENT'],
       requiresRedirect: false,
+      selectableMethods: true,
+      currencies: [...STABLECOIN_CURRENCIES],
     };
   }
 
-  /** The indexer authenticates with a shared secret in x-webhook-secret. Fails
-   * closed when unset (a forged "confirmed" tx would trigger free fulfilment). */
+  private async settings(): Promise<CryptoSettings> {
+    const settings = await loadCryptoSettings(this.prisma);
+    if (!settings || !settings.isActive) {
+      throw new BadRequestException('Crypto payments are not enabled');
+    }
+    return settings;
+  }
+
+  /**
+   * An external indexer authenticates with a shared secret in
+   * `x-webhook-secret`. Fails closed when none is configured: a forged
+   * "confirmed" transfer would otherwise fulfil an order for free.
+   */
   verifyWebhook({ headers, config }: WebhookVerifyInput): boolean {
     const expectedSecret = config.webhookSecret;
     if (!expectedSecret) return false;
@@ -173,144 +98,238 @@ export class CryptoAdapter implements Connector {
     return !!secret && safeTimingSafeEqual(expectedSecret, secret);
   }
 
-  /**
-   * Validate chain and token selection
-   */
-  private validateChainToken(
-    chain: string,
-    token: string,
-    config: CryptoProviderConfig,
-  ): { chainConfig: ChainConfig; receiverAddress: string } {
-    const chainConfig = config.chains[chain];
-    if (!chainConfig) {
-      throw new Error(
-        `Unsupported chain: ${chain}. Supported: ${Object.keys(config.chains).join(', ')}`,
-      );
-    }
+  // ─── Checkout ─────────────────────────────────────────────────
 
-    if (!chainConfig.tokens[token]) {
-      throw new Error(
-        `Token ${token} not supported on ${chain}. Supported: ${Object.keys(chainConfig.tokens).join(', ')}`,
-      );
-    }
+  /** Every network/token pair a customer can pay with right now. */
+  async listMethods(): Promise<PaymentMethod[]> {
+    const settings = await loadCryptoSettings(this.prisma);
+    if (!settings?.isActive) return [];
 
-    const receiverAddress = config.wallets[chain];
-    if (!receiverAddress) {
-      throw new Error(
-        `No receiver wallet configured for chain ${chain}. Configure wallets.${chain} in provider settings.`,
-      );
+    const methods: PaymentMethod[] = [];
+    for (const chainId of CHAIN_IDS) {
+      if (!payable(settings, chainId)) continue;
+      const chain = CHAINS[chainId];
+      for (const [token, info] of Object.entries(chain.tokens)) {
+        methods.push({
+          id: `${chainId}_${token}`,
+          type: 'crypto',
+          name: `${token} · ${chain.name} (${chain.network})`,
+          metadata: {
+            chain: chainId,
+            chainName: chain.name,
+            network: chain.network,
+            token,
+            contractAddress: info?.contractAddress,
+          },
+        });
+      }
     }
-
-    return { chainConfig, receiverAddress };
+    return methods;
   }
 
   /**
-   * Create a crypto payment invoice
+   * Open an invoice.
    *
-   * Required metadata:
-   * - cryptoChain: 'ETH' | 'SOL' | 'TON' | 'TRON'
-   * - cryptoToken: 'USDT' | 'USDC'
-   *
-   * Amount is expected in the currency of the order (e.g. USD).
-   * For stablecoins, 1 USDT ≈ 1 USD — no conversion needed.
+   * Requires `cryptoChainId` and `cryptoToken` (or `metadata.cryptoChain` /
+   * `metadata.cryptoToken`). Prices must be in dollars: a stablecoin is worth
+   * one, and anything else would need an exchange rate this rail does not
+   * have — selling a 1000 ₽ product for 1000 USDT is the failure it prevents.
    */
   async createPaymentIntent(input: CreateIntentInput): Promise<CreateIntentResult> {
-    const chain = input.cryptoChainId || input.metadata?.cryptoChain;
-    const token = input.cryptoToken || input.metadata?.cryptoToken;
+    const chainId = input.cryptoChainId || input.metadata?.cryptoChain;
+    const token = String(input.cryptoToken || input.metadata?.cryptoToken || '').toUpperCase();
 
-    if (!chain || !token) {
-      throw new Error('Crypto adapter requires cryptoChain and cryptoToken (e.g. ETH + USDT)');
+    if (!isChainId(chainId) || !token) {
+      throw new BadRequestException(
+        `Choose a network and a token to pay with (networks: ${CHAIN_IDS.join(', ')})`,
+      );
+    }
+    const chain = CHAINS[chainId];
+    const tokenInfo = chain.tokens[token as keyof typeof chain.tokens];
+    if (!tokenInfo) {
+      throw new BadRequestException(
+        `${token} is not accepted on ${chain.name}. Accepted: ${Object.keys(chain.tokens).join(', ')}`,
+      );
+    }
+    if (!STABLECOIN_CURRENCIES.has(String(input.currency).toUpperCase())) {
+      throw new BadRequestException(
+        `Crypto payments are only available for prices in USD; this one is in ${input.currency}`,
+      );
     }
 
-    const config = await this.getConfig();
-    const { chainConfig, receiverAddress } = this.validateChainToken(chain, token, config);
+    const settings = await this.settings();
+    if (!payable(settings, chainId)) {
+      throw new BadRequestException(`Payments on ${chain.name} are not being accepted right now`);
+    }
+    const receiverAddress = settings.wallets[chainId] as string;
 
-    const tokenConfig = chainConfig.tokens[token];
-    const expiresAt = new Date(Date.now() + config.expiryMinutes * 60 * 1000);
+    const expiresAt = new Date(Date.now() + settings.expiryMinutes * 60 * 1000);
+    const invoiceId = `crypto_${chainId}_${Date.now()}_${randomBytes(4).toString('hex')}`;
+    const memo = input.orderId.slice(-8).toUpperCase();
 
-    // Amount in token's smallest unit (exact string scaling — no float math).
-    const rawAmount = input.amount;
-    const onChainAmount = toOnChainAmount(rawAmount, tokenConfig.decimals);
+    const invoice = await this.ledger.reserve({
+      invoiceId,
+      orderId: input.metadata?.order_id ?? input.orderId,
+      chain: chainId,
+      token,
+      receiverAddress,
+      baseAmountRaw: toOnChainAmount(input.amount, tokenInfo.decimals),
+      decimals: tokenInfo.decimals,
+      memo,
+      expiresAt,
+    });
 
-    // Generate a unique memo/tag for payment identification
-    const memo = this.generateMemo(input.orderId);
-
-    const invoiceId = `crypto_${chain}_${Date.now()}_${input.orderId.slice(-8)}`;
-
+    const amount = formatUnits(invoice.amountRaw, tokenInfo.decimals);
     this.logger.log(
-      `Created crypto invoice ${invoiceId}: ${rawAmount} ${token} on ${chain} → ${receiverAddress}`,
+      `Crypto invoice ${invoiceId}: ${amount} ${token} on ${chainId} → ${receiverAddress}`,
     );
 
     return {
       providerIntentId: invoiceId,
-      checkoutUrl: undefined, // No hosted checkout — client wallet UX
+      checkoutUrl: undefined,
       expiresAt,
       metadata: {
-        chain,
-        chainName: chainConfig.name,
+        chain: chainId,
+        chainName: chain.name,
+        network: chain.network,
         token,
-        contractAddress: tokenConfig.contractAddress,
-        decimals: tokenConfig.decimals,
+        contractAddress: tokenInfo.contractAddress,
+        decimals: tokenInfo.decimals,
         receiverAddress,
-        amount: rawAmount.toString(),
-        onChainAmount,
+        amount,
+        baseAmount: formatUnits(invoice.baseAmountRaw, tokenInfo.decimals),
+        onChainAmount: invoice.amountRaw,
         memo,
-        explorerUrl: chainConfig.explorerUrl,
-        requiredConfirmations: chainConfig.confirmations,
-        order_id: input.orderId,
+        explorerUrl: chain.explorerUrl,
+        requiredConfirmations: chain.confirmations,
+        paymentUri: paymentUri(chainId, tokenInfo, receiverAddress, invoice.amountRaw, amount),
+        order_id: input.metadata?.order_id ?? input.orderId,
         expiresAt: expiresAt.toISOString(),
       },
     };
   }
 
   /**
-   * Get payment status
+   * Hand back the open invoice, or open a new one?
    *
-   * In production, this queries the blockchain via RPC or indexer
-   * to check if the expected transfer arrived at the receiver address.
+   * A new one when the customer picked a different network or token — the old
+   * invoice's address and amount are wrong for what they are about to send —
+   * or when the old one's timer has run out. Never once a transfer has been
+   * seen against it: that payment is on its way and must land on this intent.
+   */
+  async replaceLiveIntent(
+    intent: { providerIntentId: string | null; status: string; snapshot: unknown },
+    input: CreateIntentInput,
+  ): Promise<boolean> {
+    if (intent.status !== 'created' || !intent.providerIntentId) return false;
+    const snapshot = (intent.snapshot as Record<string, any>) || {};
+    if (snapshot.observedTransfer) return false;
+
+    const invoice = await this.ledger.findByInvoiceId(intent.providerIntentId);
+    if (!invoice || invoice.status !== 'awaiting' || invoice.txHash) return false;
+
+    const chain = input.cryptoChainId || input.metadata?.cryptoChain;
+    const token = String(input.cryptoToken || input.metadata?.cryptoToken || '').toUpperCase();
+    const switched = (!!chain && chain !== invoice.chain) || (!!token && token !== invoice.token);
+    return switched || invoice.expiresAt.getTime() <= Date.now();
+  }
+
+  /** Give the replaced invoice's amount back. */
+  async releaseIntent(intent: { providerIntentId: string | null }): Promise<void> {
+    if (intent.providerIntentId) await this.ledger.cancel(intent.providerIntentId);
+  }
+
+  /**
+   * What the checkout page needs to show for an invoice: where to send, how
+   * much exactly, until when, and how far along the payment is.
+   */
+  async describeIntent(intent: {
+    providerIntentId: string | null;
+    status: string;
+    snapshot: unknown;
+  }): Promise<Record<string, any> | null> {
+    if (!intent.providerIntentId) return null;
+    const snapshot = (intent.snapshot as Record<string, any>) || {};
+    const invoice = await this.ledger.findByInvoiceId(intent.providerIntentId);
+    if (!invoice) return null;
+    const chainId = invoice.chain as ChainId;
+    const chain = CHAINS[chainId];
+    const tokenInfo = chain?.tokens[invoice.token as keyof typeof chain.tokens];
+    const amount = formatUnits(invoice.amountRaw, invoice.decimals);
+
+    return {
+      type: 'crypto',
+      invoiceStatus: invoice.status,
+      chain: chainId,
+      chainName: chain?.name ?? chainId,
+      network: chain?.network ?? chainId,
+      token: invoice.token,
+      contractAddress: tokenInfo?.contractAddress ?? snapshot.contractAddress,
+      address: invoice.receiverAddress,
+      amount,
+      amountRaw: invoice.amountRaw,
+      baseAmount: formatUnits(invoice.baseAmountRaw, invoice.decimals),
+      memo: invoice.memo,
+      expiresAt: invoice.expiresAt.toISOString(),
+      paymentUri: tokenInfo
+        ? paymentUri(chainId, tokenInfo, invoice.receiverAddress, invoice.amountRaw, amount)
+        : invoice.receiverAddress,
+      confirmations: invoice.confirmations,
+      requiredConfirmations: chain?.confirmations ?? 1,
+      txHash: invoice.txHash,
+      txUrl: invoice.txHash && chain ? txExplorerUrl(chainId, invoice.txHash) : null,
+    };
+  }
+
+  // ─── Settlement ───────────────────────────────────────────────
+
+  /**
+   * Where the payment for an invoice stands.
    *
-   * Current implementation checks the PaymentProvider metadata
-   * for manual confirmations or indexer-pushed updates.
+   * A transfer is only "paid" once it is checked against the invoice — same
+   * chain, same token, our wallet, at least the amount — and deep enough to
+   * be final. A transfer that fails the check does not fail the order: it is
+   * somebody's money arriving with the wrong shape, for an admin to look at,
+   * and the customer may still pay correctly.
    */
   async getIntentStatus(providerIntentId: string): Promise<IntentStatusResult> {
-    // Look up the payment intent to get chain info
     const intent = await this.prisma.paymentIntent.findFirst({
-      where: { providerIntentId: providerIntentId },
+      where: { providerIntentId },
     });
-
     const snapshot = (intent?.snapshot as Record<string, any>) || {};
     const chain = snapshot.chain || providerIntentId.split('_')[1];
+    const current = (intent?.status ?? 'created') as IntentStatusResult['status'];
+    const pending: IntentStatusResult['status'] = current === 'opened' ? 'opened' : 'created';
 
-    // A transfer observed by the indexer webhook (persisted by handleWebhook).
-    // It must be validated against THIS invoice before it can settle the order —
-    // otherwise any transfer of any token/amount to any address would count as
-    // payment. Only a validated transfer with enough confirmations is 'paid'.
     const observed = snapshot.observedTransfer as Record<string, any> | undefined;
     if (observed) {
       const check = this.validateObservedTransfer(snapshot, observed);
       if (!check.ok) {
         this.logger.warn(
-          `Crypto tx ${observed.txHash} rejected for ${providerIntentId}: ${check.reason}`,
+          `Crypto tx ${observed.txHash} does not pay ${providerIntentId}: ${check.reason}`,
         );
         return {
-          status: 'failed',
+          status: pending,
           metadata: { chain, reason: check.reason, txHash: observed.txHash },
         };
       }
 
       const required = Number(
-        snapshot.requiredConfirmations ?? DEFAULT_CHAINS[chain]?.confirmations ?? 1,
+        snapshot.requiredConfirmations ?? CHAINS[chain as ChainId]?.confirmations ?? 1,
       );
       const confirmations = Number(observed.confirmations ?? 0);
-      if (confirmations >= required) {
+      if (observed.isFinal === true || confirmations >= required) {
         return {
           status: 'paid',
-          // This adapter checks the on-chain transfer against the intent —
-          // receiver, token and amount — before reporting paid, so the
-          // settlement is verified even though no fiat amount is reported.
+          // The transfer was checked against the invoice above — receiver,
+          // token and amount — so the settlement is verified here even though
+          // no fiat amount is reported.
           amountVerifiedByAdapter: true,
           metadata: { txHash: observed.txHash, confirmations, chain },
-          providerData: { ...observed, validated: true },
+          // The whole snapshot, not just the transfer: applyStateTransition
+          // replaces the stored snapshot with this, and the invoice details
+          // are what support needs when a customer asks about the payment.
+          providerData: { ...snapshot, observedTransfer: { ...observed, validated: true } },
         };
       }
       return {
@@ -324,43 +343,13 @@ export class CryptoAdapter implements Connector {
       };
     }
 
-    // Manual/admin confirmation path (confirmTransaction writes snapshot.txHash)
-    if (snapshot.txHash && snapshot.confirmations >= (snapshot.requiredConfirmations || 1)) {
-      return {
-        status: 'paid',
-        amountVerifiedByAdapter: true,
-        metadata: {
-          txHash: snapshot.txHash,
-          confirmations: snapshot.confirmations,
-          chain,
-        },
-        providerData: snapshot,
-      };
-    }
-
-    // Check expiry
-    if (snapshot.expiresAt && new Date(snapshot.expiresAt) < new Date()) {
-      return {
-        status: 'expired',
-        metadata: { chain, reason: 'payment_expired' },
-      };
-    }
-
-    // Check if transaction is found but not yet confirmed
-    if (snapshot.txHash) {
-      return {
-        status: 'opened',
-        metadata: {
-          txHash: snapshot.txHash,
-          confirmations: snapshot.confirmations || 0,
-          requiredConfirmations: snapshot.requiredConfirmations,
-          chain,
-        },
-      };
+    const invoice = await this.ledger.findByInvoiceId(providerIntentId);
+    if (invoice && (invoice.status === 'expired' || invoice.status === 'cancelled')) {
+      return { status: 'expired', metadata: { chain, reason: `invoice_${invoice.status}` } };
     }
 
     return {
-      status: 'created',
+      status: pending,
       metadata: {
         chain,
         awaiting_payment: true,
@@ -372,213 +361,143 @@ export class CryptoAdapter implements Connector {
   }
 
   /**
-   * Confirm a crypto payment transaction
-   * Called by blockchain indexer webhook or admin manual confirmation
+   * Record a transfer the watcher or an indexer saw, and attach it to the
+   * intent it pays so the processor can settle it.
    */
-  async confirmTransaction(
-    providerIntentId: string,
-    txHash: string,
-    confirmations: number,
-  ): Promise<IntentStatusResult> {
-    const intent = await this.prisma.paymentIntent.findFirst({
-      where: { providerIntentId: providerIntentId },
-    });
-
-    if (!intent) {
-      throw new Error(`Payment intent not found: ${providerIntentId}`);
+  async ingest(
+    observed: IncomingTransfer & { memo?: string | null },
+    source: TransferSource,
+  ): Promise<IngestResult> {
+    const result = await this.ledger.ingest(observed, source);
+    if (result.invoice && result.transfer.invoiceId === result.invoice.id) {
+      await this.attach(result.invoice, {
+        chain: result.transfer.chain,
+        txHash: result.transfer.txHash,
+        from: result.transfer.fromAddress,
+        to: result.transfer.toAddress,
+        token: result.transfer.token,
+        amount: result.transfer.amountRaw,
+        confirmations: result.transfer.confirmations,
+        isFinal: result.transfer.isFinal,
+      });
     }
+    return result;
+  }
 
+  /**
+   * Put the transfer on the intent's snapshot, where getIntentStatus reads it.
+   * `manual` marks an admin's attribution, which is trusted for the amount.
+   */
+  async attach(invoice: Invoice, transfer: Record<string, any>): Promise<void> {
+    const intent = await this.prisma.paymentIntent.findFirst({
+      where: { providerIntentId: invoice.invoiceId, rail: RAILS.CRYPTO },
+    });
+    if (!intent) {
+      this.logger.warn(`Crypto invoice ${invoice.invoiceId} has no payment intent to settle`);
+      return;
+    }
     const snapshot = (intent.snapshot as Record<string, any>) || {};
-    const requiredConfirmations = snapshot.requiredConfirmations || 1;
-
-    const status = confirmations >= requiredConfirmations ? 'paid' : 'opened';
-
-    // Update intent with tx info
     await this.prisma.paymentIntent.update({
       where: { id: intent.id },
       data: {
-        txHash,
-        snapshot: {
-          ...snapshot,
-          txHash,
-          confirmations,
-          confirmedAt: status === 'paid' ? new Date().toISOString() : undefined,
-        },
+        txHash: transfer.txHash,
+        snapshot: { ...snapshot, observedTransfer: { ...transfer } },
       },
     });
-
-    this.logger.log(
-      `Crypto tx ${txHash}: ${confirmations}/${requiredConfirmations} confirmations → ${status}`,
-    );
-
-    return {
-      status: status as IntentStatusResult['status'],
-      metadata: {
-        txHash,
-        confirmations,
-        requiredConfirmations,
-        chain: snapshot.chain,
-      },
-    };
-  }
-
-  async listMethods(): Promise<PaymentMethod[]> {
-    const config = await this.getConfig();
-    const methods: PaymentMethod[] = [];
-
-    for (const [chainId, chainConfig] of Object.entries(config.chains)) {
-      // Only list chains that have a wallet configured
-      if (!config.wallets[chainId]) continue;
-
-      for (const token of Object.keys(chainConfig.tokens)) {
-        methods.push({
-          id: `${chainId}_${token}`,
-          type: 'crypto',
-          name: `${token} on ${chainConfig.name}`,
-          metadata: {
-            chain: chainId,
-            chainName: chainConfig.name,
-            token,
-            contractAddress: chainConfig.tokens[token].contractAddress,
-            explorerUrl: chainConfig.explorerUrl,
-          },
-        });
-      }
-    }
-
-    return methods;
   }
 
   /**
-   * Handle webhook from blockchain indexer
+   * A transfer reported by an external indexer.
    *
    * Expected payload:
-   * {
-   *   chain: 'ETH' | 'SOL' | 'TON' | 'TRON',
-   *   txHash: string,
-   *   from: string,
-   *   to: string,
-   *   token: string,
-   *   amount: string,
-   *   confirmations: number,
-   *   memo?: string,
-   *   blockNumber?: number,
-   * }
+   * `{ chain, txHash, from?, to, token, amount, confirmations, memo?, blockNumber? }`,
+   * where `amount` is either in the token's smallest unit or a decimal.
+   *
+   * The event id carries the payment's phase — seen, final — so the report
+   * that a transfer became final is a new event rather than a duplicate of the
+   * first sighting. With one id per transaction the second report was
+   * dropped as already handled and the order stayed open forever.
    */
   async handleWebhook(rawPayload: any): Promise<WebhookParseResult> {
-    const { chain, txHash, from, to, token, amount, confirmations, memo, blockNumber } = rawPayload;
+    const { chain, txHash, from, to, token, amount, confirmations, memo } = rawPayload ?? {};
 
-    if (!chain || !txHash) {
-      throw new Error('Invalid crypto webhook: missing chain or txHash');
+    if (!isChainId(chain) || !txHash || !to || !token) {
+      throw new BadRequestException(
+        'Invalid crypto webhook: chain, txHash, to and token are required',
+      );
     }
-
-    // Resolve the invoice this transfer pays. The indexer reports the on-chain
-    // memo/tag we embedded at invoice creation; the previous code set
-    // entityId=memo, but the intent's providerIntentId is the invoice id — so
-    // the generic processor (which looks up by providerIntentId) could NEVER
-    // reconcile a real confirmation. Match the memo back to the intent and
-    // return its providerIntentId as the entityId.
-    const intent = await this.resolveIntentForTransfer({ chain, memo, to });
-
-    // Persist the observed transfer so getIntentStatus can validate it against
-    // the invoice (receiver/token/amount/chain) and decide paid/opened/failed.
-    // Only the authenticated indexer reaches here — verifyWebhook gates on the
-    // shared webhookSecret and fails closed when it is unset.
-    if (intent) {
-      const snapshot = (intent.snapshot as Record<string, any>) || {};
-      await this.prisma.paymentIntent.update({
-        where: { id: intent.id },
-        data: {
-          txHash,
-          snapshot: {
-            ...snapshot,
-            observedTransfer: {
-              chain,
-              txHash,
-              from: from ?? null,
-              to: to ?? null,
-              token: token ?? null,
-              amount: amount ?? null,
-              confirmations: Number(confirmations ?? 0),
-              blockNumber: blockNumber ?? null,
-            },
-          },
-        },
-      });
+    const tokenSymbol = String(token).toUpperCase();
+    const tokenInfo =
+      CHAINS[chain].tokens[tokenSymbol as keyof (typeof CHAINS)[typeof chain]['tokens']];
+    if (!tokenInfo) {
+      throw new BadRequestException(
+        `Invalid crypto webhook: ${tokenSymbol} is not accepted on ${chain}`,
+      );
     }
+    const amountRaw = parseRawAmount(amount, tokenInfo.decimals);
+    if (amountRaw === null) {
+      throw new BadRequestException('Invalid crypto webhook: unreadable amount');
+    }
+    const depth = Number(confirmations ?? 0);
+    const isFinal = depth >= CHAINS[chain].confirmations;
 
-    const entityId = intent?.providerIntentId || memo || txHash;
-    const confirmed = Number(confirmations ?? 0) >= (DEFAULT_CHAINS[chain]?.confirmations || 1);
-
-    return {
-      webhookId: `crypto_${chain}_${txHash}`,
-      eventType: confirmed ? 'payment.paid' : 'payment.confirming',
-      entityId,
-      rail: 'CRYPTO',
-      payload: {
+    const result = await this.ingest(
+      {
         chain,
-        txHash,
-        from,
-        to,
-        token,
-        amount,
-        confirmations,
-        memo,
-        confirmed,
+        txHash: String(txHash),
+        token: tokenSymbol,
+        from: from ?? null,
+        to: String(to),
+        amountRaw: amountRaw.toString(),
+        decimals: tokenInfo.decimals,
+        confirmations: depth,
+        isFinal,
+        memo: memo ? String(memo) : null,
       },
+      'webhook',
+    );
+
+    return this.eventFor(result);
+  }
+
+  /** The webhook event a recorded transfer turns into. */
+  eventFor(result: IngestResult): WebhookParseResult {
+    const { transfer, invoice } = result;
+    const phase = result.phase ?? (transfer.isFinal ? 'final' : 'seen');
+    const payload = {
+      chain: transfer.chain,
+      txHash: transfer.txHash,
+      from: transfer.fromAddress,
+      to: transfer.toAddress,
+      token: transfer.token,
+      amount: transfer.amountRaw,
+      confirmations: transfer.confirmations,
+      confirmed: transfer.isFinal,
+      transferId: transfer.id,
+    };
+
+    if (!invoice || transfer.invoiceId !== invoice.id) {
+      return {
+        webhookId: `crypto_${transfer.chain}_${transfer.txHash}_unmatched`,
+        eventType: UNMATCHED_TRANSFER_EVENT,
+        entityId: transfer.id,
+        rail: RAILS.CRYPTO,
+        payload,
+      };
+    }
+    return {
+      webhookId: `crypto_${transfer.chain}_${transfer.txHash}_${phase}`,
+      eventType: phase === 'final' ? 'payment.paid' : 'payment.confirming',
+      entityId: invoice.invoiceId,
+      rail: RAILS.CRYPTO,
+      payload,
     };
   }
 
   /**
-   * Resolve the PaymentIntent a webhook-observed transfer belongs to, by the
-   * memo/tag embedded at invoice creation. Scoped to the crypto rail and further
-   * narrowed by chain + receiver address to disambiguate memo collisions (the
-   * memo is only the order id suffix). Most recent match wins.
-   */
-  private async resolveIntentForTransfer(params: {
-    chain?: string;
-    memo?: string;
-    to?: string;
-  }): Promise<{ id: string; providerIntentId: string | null; snapshot: any } | null> {
-    if (!params.memo) return null;
-
-    const candidates = await this.prisma.paymentIntent.findMany({
-      where: {
-        rail: RAILS.CRYPTO,
-        snapshot: { path: ['memo'], equals: params.memo },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 20,
-    });
-
-    // Narrow by chain, then PREFER a receiver-address match to break memo
-    // collisions — but still resolve to the memo+chain invoice on a receiver
-    // mismatch so getIntentStatus can explicitly reject it (receiver_mismatch)
-    // rather than silently leaving it unreconciled.
-    const chainMatches = candidates.filter((intent) => {
-      const s = (intent.snapshot as Record<string, any>) || {};
-      return !params.chain || !s.chain || s.chain === params.chain;
-    });
-    const preferred = params.to
-      ? chainMatches.find((intent) => {
-          const s = (intent.snapshot as Record<string, any>) || {};
-          return (
-            s.receiverAddress &&
-            String(s.receiverAddress).toLowerCase() === String(params.to).toLowerCase()
-          );
-        })
-      : undefined;
-    const match = preferred || chainMatches[0];
-
-    return match
-      ? { id: match.id, providerIntentId: match.providerIntentId, snapshot: match.snapshot }
-      : null;
-  }
-
-  /**
-   * Validate an observed transfer against the invoice snapshot: same chain, same
-   * token, correct receiver, and at least the invoiced on-chain amount. Returns
-   * a reason on failure so getIntentStatus can mark the intent failed.
+   * Check an observed transfer against the invoice it is attached to: same
+   * chain and token, our wallet, at least the invoiced amount. An admin's
+   * manual attribution is trusted on the amount — they looked.
    */
   private validateObservedTransfer(
     snapshot: Record<string, any>,
@@ -594,16 +513,19 @@ export class CryptoAdapter implements Connector {
     ) {
       return { ok: false, reason: 'token_mismatch' };
     }
-    if (
-      snapshot.receiverAddress &&
-      observed.to &&
-      String(snapshot.receiverAddress).toLowerCase() !== String(observed.to).toLowerCase()
-    ) {
-      return { ok: false, reason: 'receiver_mismatch' };
+    if (snapshot.receiverAddress && observed.to && isChainId(snapshot.chain)) {
+      if (
+        receiverKey(snapshot.chain, snapshot.receiverAddress) !==
+        receiverKey(snapshot.chain, observed.to)
+      ) {
+        return { ok: false, reason: 'receiver_mismatch' };
+      }
     }
+    if (observed.manual === true) return { ok: true };
 
-    const expected = this.toBigIntOrNull(snapshot.onChainAmount);
-    const got = this.observedRawAmount(observed.amount, Number(snapshot.decimals ?? 0));
+    const decimals = Number(snapshot.decimals ?? 0);
+    const expected = parseRawAmount(snapshot.onChainAmount, 0);
+    const got = parseRawAmount(observed.amount, decimals);
     if (expected === null || got === null) {
       return { ok: false, reason: 'unparseable_amount' };
     }
@@ -611,57 +533,5 @@ export class CryptoAdapter implements Connector {
       return { ok: false, reason: 'amount_too_low' };
     }
     return { ok: true };
-  }
-
-  private toBigIntOrNull(value: any): bigint | null {
-    if (value === undefined || value === null) return null;
-    const s = String(value).trim();
-    return /^\d+$/.test(s) ? BigInt(s) : null;
-  }
-
-  /**
-   * Interpret an indexer-reported amount as the token's smallest on-chain unit.
-   * Accepts a raw integer string (already smallest units) or a decimal token
-   * amount (scaled by `decimals`). Returns null if it cannot be parsed.
-   */
-  private observedRawAmount(value: any, decimals: number): bigint | null {
-    if (value === undefined || value === null) return null;
-    const s = String(value).trim();
-    if (/^\d+$/.test(s)) return BigInt(s);
-    const m = s.match(/^(\d+)(?:\.(\d+))?$/);
-    if (!m) return null;
-    const whole = m[1];
-    const frac = (m[2] || '').padEnd(decimals, '0').slice(0, decimals);
-    return BigInt(whole + (decimals > 0 ? frac : ''));
-  }
-
-  /**
-   * Generate a unique memo/tag for payment identification
-   * Used on chains that support memos (TON, etc.)
-   */
-  private generateMemo(orderId: string): string {
-    // Use last 8 chars of orderId as a short identifier
-    return orderId.slice(-8).toUpperCase();
-  }
-
-  /**
-   * Get supported chains and tokens info (for frontend)
-   */
-  async getSupportedChains(): Promise<
-    Array<{
-      chain: string;
-      name: string;
-      tokens: string[];
-      hasWallet: boolean;
-    }>
-  > {
-    const config = await this.getConfig();
-
-    return Object.entries(config.chains).map(([chainId, chainConfig]) => ({
-      chain: chainId,
-      name: chainConfig.name,
-      tokens: Object.keys(chainConfig.tokens),
-      hasWallet: !!config.wallets[chainId],
-    }));
   }
 }

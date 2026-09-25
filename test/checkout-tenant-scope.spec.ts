@@ -21,6 +21,7 @@ describe('checkout tenant scope', () => {
     const prisma: any = {
       order: { findUnique: jest.fn().mockResolvedValue(order) },
       paymentProvider: { findMany: jest.fn().mockResolvedValue([]) },
+      paymentIntent: { findFirst: jest.fn().mockResolvedValue(null) },
     };
     return new CheckoutService(
       prisma,

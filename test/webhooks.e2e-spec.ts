@@ -211,16 +211,17 @@ describe('Webhooks E2E Tests', () => {
   });
 
   describe('POST /webhooks/crypto', () => {
-    it('should store a confirmed crypto transfer', async () => {
-      // Shape reported by the chain indexer. SOL needs 1 confirmation, so this
-      // one lands as fully paid.
+    it('records a transfer that matches no invoice as unmatched, not as a payment', async () => {
+      // Shape reported by the chain indexer. No open invoice asks for this
+      // amount, so it is kept for an admin rather than settling anything.
       const webhookPayload = {
         chain: 'SOL',
         txHash: 'tx-confirmed-1234567890abcdef',
         from: 'SenderWallet111111111111111111111111111111',
-        to: 'ReceiverWallet1111111111111111111111111111',
+        to: '5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1',
         token: 'USDC',
-        amount: '100',
+        // A decimal is token units; a bare integer would be smallest units.
+        amount: '100.0',
         confirmations: 3,
         memo: 'crypto-invoice-123',
       };
@@ -237,15 +238,20 @@ describe('Webhooks E2E Tests', () => {
         where: {
           rail_webhookId: {
             rail: 'CRYPTO',
-            webhookId: `crypto_SOL_${webhookPayload.txHash}`,
+            webhookId: `crypto_SOL_${webhookPayload.txHash}_unmatched`,
           },
         },
       });
+      expect(event?.eventType).toBe('crypto.transfer.unmatched');
 
-      expect(event).toBeDefined();
-      expect(event?.eventType).toBe('payment.paid');
-      // No intent matches this memo, so the transfer is filed under it.
-      expect(event?.entityId).toBe('crypto-invoice-123');
+      const transfer = await prisma.cryptoTransfer.findFirst({
+        where: { txHash: webhookPayload.txHash },
+      });
+      expect(transfer).toMatchObject({
+        status: 'unmatched',
+        amountRaw: '100000000',
+        isFinal: true,
+      });
     });
 
     it('should reject an unsigned crypto webhook', async () => {
@@ -255,31 +261,55 @@ describe('Webhooks E2E Tests', () => {
         .expect(403);
     });
 
-    it('should mark a transfer below the confirmation threshold as confirming', async () => {
-      // ETH needs 12 confirmations.
-      const webhookPayload = {
-        chain: 'ETH',
-        txHash: '0xnot-yet-final',
-        to: '0xReceiver',
-        token: 'USDC',
-        amount: '100',
-        confirmations: 2,
-        memo: 'crypto-invoice-456',
-      };
-
-      await request(app.getHttpServer())
-        .post('/webhooks/crypto')
-        .set('x-webhook-secret', CRYPTO_WEBHOOK_SECRET)
-        .send(webhookPayload)
-        .expect(200);
-
-      const event = await prisma.webhookEvent.findUnique({
-        where: {
-          rail_webhookId: { rail: 'CRYPTO', webhookId: `crypto_ETH_${webhookPayload.txHash}` },
+    it('reports a matched transfer as confirming, then as paid once it is final', async () => {
+      // ETH needs 12 confirmations. An open invoice asks for exactly 100.000137.
+      const receiver = '0x2222222222222222222222222222222222222222';
+      await prisma.cryptoInvoice.create({
+        data: {
+          invoiceId: 'crypto_ETH_webhook_e2e',
+          chain: 'ETH',
+          token: 'USDC',
+          receiverAddress: receiver,
+          receiverKey: receiver,
+          baseAmountRaw: '100000000',
+          amountRaw: '100000137',
+          decimals: 6,
+          expiresAt: new Date(Date.now() + 3600_000),
         },
       });
+      const report = (confirmations: number) =>
+        request(app.getHttpServer())
+          .post('/webhooks/crypto')
+          .set('x-webhook-secret', CRYPTO_WEBHOOK_SECRET)
+          .send({
+            chain: 'ETH',
+            txHash: '0xnot-yet-final',
+            to: receiver,
+            token: 'USDC',
+            amount: '100.000137',
+            confirmations,
+          })
+          .expect(200);
+      const eventFor = (phase: string) =>
+        prisma.webhookEvent.findUnique({
+          where: {
+            rail_webhookId: { rail: 'CRYPTO', webhookId: `crypto_ETH_0xnot-yet-final_${phase}` },
+          },
+        });
 
-      expect(event?.eventType).toBe('payment.confirming');
+      await report(2);
+      expect((await eventFor('seen'))?.eventType).toBe('payment.confirming');
+      expect((await eventFor('seen'))?.entityId).toBe('crypto_ETH_webhook_e2e');
+
+      // The same transaction, now final, is a new event — not a duplicate of
+      // the first sighting to be dropped, which is how orders used to stay
+      // open forever.
+      await report(12);
+      expect((await eventFor('final'))?.eventType).toBe('payment.paid');
+      const invoice = await prisma.cryptoInvoice.findUnique({
+        where: { invoiceId: 'crypto_ETH_webhook_e2e' },
+      });
+      expect(invoice).toMatchObject({ status: 'paid', confirmations: 12 });
     });
   });
 });

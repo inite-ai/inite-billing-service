@@ -49,6 +49,11 @@ export const DOCS_GROUPS: DocGroup[] = [
         description: 'Charge per token/request with model-tier rates and quotas, from your module.',
       },
       {
+        slug: 'crypto',
+        title: 'Accept stablecoins',
+        description: 'USDT/USDC on TRON, TON, Ethereum and Solana, straight to your wallets — recognised by amount.',
+      },
+      {
         slug: 'entitlements',
         title: 'Gate access with entitlements',
         description: 'Grant on payment, check from your module, and revoke on refund or expiry.',

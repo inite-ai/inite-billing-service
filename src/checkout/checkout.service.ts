@@ -22,6 +22,8 @@ import {
   PaySessionResponseDto,
 } from '../common/dto/checkout.dto';
 import { randomUUID } from 'node:crypto';
+import { Connector } from '../common/connectors/connector.interface';
+import { CreateIntentInput } from '../common/interfaces/payment-rail-adapter.interface';
 import { moneyToNumber, toMoney } from '../common/money';
 import { resolveFrontendUrl } from '../common/config/frontend-url';
 
@@ -382,7 +384,7 @@ export class CheckoutService {
     }
 
     // Get available payment methods
-    const paymentMethods = await this.prisma.paymentProvider.findMany({
+    const providers = await this.prisma.paymentProvider.findMany({
       where: { isActive: true },
       select: {
         code: true,
@@ -391,6 +393,56 @@ export class CheckoutService {
         currencies: true,
       },
     });
+
+    // A rail that declares which currencies it can take is not offered for a
+    // price in any other — crypto sells dollar prices only. A rail whose
+    // customer picks a method first (a crypto network) brings its options,
+    // and is not offered when it has none to give.
+    const paymentMethods: Array<(typeof providers)[number] & { options?: unknown[] }> = [];
+    for (const provider of providers) {
+      let connector: Connector | null = null;
+      try {
+        connector = this.paymentOrchestrator.getAdapter(provider.code) as Connector;
+      } catch {
+        connector = null;
+      }
+      const capabilities = connector?.capabilities?.();
+      if (
+        capabilities?.currencies?.length &&
+        !capabilities.currencies.includes(String(order.currency).toUpperCase())
+      ) {
+        continue;
+      }
+      if (capabilities?.selectableMethods && connector) {
+        const options = connector.listMethods ? await connector.listMethods().catch(() => []) : [];
+        if (options.length === 0) continue;
+        paymentMethods.push({ ...provider, options });
+        continue;
+      }
+      paymentMethods.push(provider);
+    }
+
+    // The payment already under way, for a rail with no page of its own: the
+    // checkout page shows the crypto invoice again after a reload, and keeps
+    // showing its progress once the order has moved past `created`.
+    const latestIntent = await this.prisma.paymentIntent.findFirst({
+      where: { orderId: order.id, status: { in: ['created', 'opened', 'paid'] } },
+      orderBy: { createdAt: 'desc' },
+    });
+    let payment: Record<string, any> | null = null;
+    if (latestIntent) {
+      try {
+        const connector = this.paymentOrchestrator.getAdapter(latestIntent.rail) as Connector;
+        const described = connector.describeIntent
+          ? await connector.describeIntent(latestIntent)
+          : null;
+        payment = described
+          ? { ...described, rail: latestIntent.rail, intentStatus: latestIntent.status }
+          : null;
+      } catch {
+        payment = null;
+      }
+    }
 
     const metadata = (order.metadata as Record<string, any>) || {};
 
@@ -413,6 +465,7 @@ export class CheckoutService {
       successUrl: metadata.successUrl || null,
       errorUrl: metadata.errorUrl || null,
       paymentMethods,
+      payment,
     };
   }
 
@@ -424,7 +477,7 @@ export class CheckoutService {
   async paySession(
     sessionId: string,
     userId: string,
-    data: { rail?: string; promoCode?: string },
+    data: { rail?: string; promoCode?: string; cryptoChain?: string; cryptoToken?: string },
   ): Promise<PaySessionResponseDto> {
     const order = await this.prisma.order.findUnique({
       where: { id: sessionId },
@@ -459,7 +512,13 @@ export class CheckoutService {
 
     // Validate + apply promo code if provided (wrapped in transaction to prevent race conditions)
     let promoValidation: any = null;
-    if (data.promoCode) {
+    // The same code sent again with a second pay call — a crypto customer
+    // switching network, a retry — was already applied to this order's amount
+    // and counted against its limits. Applying it twice would refuse the
+    // customer for having used their one redemption on this very order.
+    const promoAlreadyApplied =
+      !!data.promoCode && !!metadata.promoCodeId && metadata.promoCode === data.promoCode;
+    if (data.promoCode && !promoAlreadyApplied) {
       promoValidation = await this.promoCodesService.validatePromoCode(
         data.promoCode,
         price.id,
@@ -571,6 +630,30 @@ export class CheckoutService {
       rail = activeProvider.code;
     }
 
+    let adapter: Connector | null;
+    try {
+      adapter = (this.paymentOrchestrator.getAdapter(rail) as Connector) ?? null;
+    } catch {
+      adapter = null;
+    }
+
+    const intentInput: CreateIntentInput = {
+      orderId: order.externalId!,
+      amount: orderAmount,
+      currency: price.currency,
+      mode: order.mode,
+      successUrl,
+      errorUrl,
+      cryptoChainId: data.cryptoChain,
+      cryptoToken: data.cryptoToken,
+      metadata: {
+        ...metadata,
+        order_id: order.id,
+        price_code: price.code,
+        product_code: product.code,
+      },
+    };
+
     // Reuse a still-live intent for this order + rail instead of creating a
     // second one. Without this a double-click / retry (or two tabs) issues two
     // payment URLs for the same order — the customer can pay both and get
@@ -581,40 +664,39 @@ export class CheckoutService {
       orderBy: { createdAt: 'desc' },
     });
     if (liveIntent) {
-      this.logger.log(
-        `Reusing live payment intent ${liveIntent.id} for order ${order.id} (${rail})`,
-      );
-      return {
-        checkoutUrl: liveIntent.checkoutUrl || '',
-        paymentIntentId: liveIntent.id,
-      };
+      // Unless the rail says this request needs a new one — a crypto customer
+      // who switched network, or whose invoice ran out of time. The old intent
+      // is closed without touching the order, which is still being paid for.
+      const replace = adapter?.replaceLiveIntent
+        ? await adapter.replaceLiveIntent(liveIntent, intentInput)
+        : false;
+      if (!replace) {
+        this.logger.log(
+          `Reusing live payment intent ${liveIntent.id} for order ${order.id} (${rail})`,
+        );
+        return {
+          checkoutUrl: liveIntent.checkoutUrl || '',
+          paymentIntentId: liveIntent.id,
+          ...(await this.describe(adapter, liveIntent)),
+        };
+      }
+      await adapter?.releaseIntent?.(liveIntent);
+      await this.prisma.paymentIntent.updateMany({
+        where: { id: liveIntent.id, status: 'created' },
+        data: { status: 'expired' },
+      });
+      this.logger.log(`Replaced payment intent ${liveIntent.id} for order ${order.id} (${rail})`);
     }
 
-    // Get adapter
-    let adapter;
-    try {
-      adapter = this.paymentOrchestrator.getAdapter(rail);
-    } catch {
+    if (!adapter) {
       throw new BadRequestException(
         `Payment provider ${rail} is not available. Please select another payment method.`,
       );
     }
 
     // Create payment intent with adapter
-    const intentResult = await adapter.createPaymentIntent({
-      orderId: order.externalId!,
-      amount: orderAmount,
-      currency: price.currency,
-      mode: order.mode,
-      successUrl,
-      errorUrl,
-      metadata: {
-        ...metadata,
-        order_id: order.id,
-        price_code: price.code,
-        product_code: product.code,
-      },
-    });
+    const intentResult = await adapter.createPaymentIntent(intentInput);
+    const crypto = rail === 'CRYPTO' ? intentResult.metadata || {} : null;
 
     // Create payment intent record. The partial unique index
     // (payment_intents_one_live_per_order) enforces one live intent per order at
@@ -636,10 +718,20 @@ export class CheckoutService {
           currency: price.currency,
           expiresAt: intentResult.expiresAt,
           snapshot: intentResult.metadata || {},
+          ...(crypto
+            ? {
+                method: 'crypto',
+                cryptoChainId: crypto.chain ?? null,
+                cryptoToken: crypto.token ?? null,
+                cryptoAmount: crypto.amount ?? null,
+                receiverAddress: crypto.receiverAddress ?? null,
+              }
+            : {}),
         },
       });
     } catch (error: any) {
       if (error?.code === 'P2002') {
+        await adapter.releaseIntent?.({ providerIntentId: intentResult.providerIntentId });
         const winner = await this.prisma.paymentIntent.findFirst({
           where: { orderId: order.id, rail, status: { in: ['created', 'opened'] } },
           orderBy: { createdAt: 'desc' },
@@ -648,7 +740,11 @@ export class CheckoutService {
           this.logger.log(
             `Concurrent intent race for order ${order.id} (${rail}) — reusing ${winner.id}`,
           );
-          return { checkoutUrl: winner.checkoutUrl || '', paymentIntentId: winner.id };
+          return {
+            checkoutUrl: winner.checkoutUrl || '',
+            paymentIntentId: winner.id,
+            ...(await this.describe(adapter, winner)),
+          };
         }
       }
       throw error;
@@ -657,6 +753,19 @@ export class CheckoutService {
     return {
       checkoutUrl: intentResult.checkoutUrl || '',
       paymentIntentId: paymentIntent.id,
+      ...(await this.describe(adapter, paymentIntent)),
     };
+  }
+
+  /**
+   * Payment instructions for a rail that has no page to redirect to, as a
+   * fragment of the pay response — empty for rails that redirect.
+   */
+  private async describe(
+    adapter: Connector | null,
+    intent: { providerIntentId: string | null; status: string; snapshot: unknown },
+  ): Promise<{ payment?: Record<string, any> }> {
+    const payment = adapter?.describeIntent ? await adapter.describeIntent(intent) : null;
+    return payment ? { payment } : {};
   }
 }

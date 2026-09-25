@@ -385,7 +385,33 @@
     "sessionExpired": "This checkout session has expired",
     "alreadyPaid": "This order has already been paid",
     "securePayment": "Secure payment processing",
-    "redirecting": "Redirecting to payment..."
+    "redirecting": "Redirecting to payment...",
+    "crypto": {
+      "networks": "{count, plural, one {# network} other {# networks}}",
+      "chooseNetwork": "Network and token",
+      "sendTitle": "Send {token}",
+      "network": "Network",
+      "timeLeft": "Time left to pay",
+      "timeUp": "Time's up",
+      "exactAmount": "Exact amount",
+      "exactAmountHint": "Send exactly this amount — the last digits are how your payment is recognised. Exchanges that deduct a withdrawal fee send less; add the fee on top.",
+      "address": "To address",
+      "qrAlt": "QR code for the payment on {network}",
+      "networkWarning": "Send only {token} on {network}. The same token sent over another network cannot be recovered.",
+      "waiting": "Waiting for your payment. This page updates on its own — keep it open.",
+      "timeUpHint": "The time to pay has run out. If you have already sent the payment, it will still be credited — keep this page open. Otherwise, get a new invoice.",
+      "newInvoice": "Get a new invoice",
+      "openWallet": "Open in wallet",
+      "changeNetwork": "Pay on another network",
+      "copy": "Copy",
+      "copied": "Copied",
+      "confirmingTitle": "Payment received",
+      "confirmingHint": "Waiting for {network} to confirm it. This usually takes a minute or two.",
+      "confirmations": "{done} of {required} confirmations",
+      "paidTitle": "Payment confirmed",
+      "paidHint": "Thank you — taking you back now.",
+      "viewTransaction": "View the transaction"
+    }
   },
   "referrals": {
     "title": "Referral Program",
@@ -1169,6 +1195,122 @@
         "invalidCredits": "Credits per call must be a whole number, zero or more",
         "saveFailed": "Could not save the server"
       }
+    },
+    "crypto": {
+      "title": "Crypto payments",
+      "subtitle": "Stablecoins straight to your own wallets. Each invoice asks for a unique amount so a payment is recognised without a memo; the chains are checked every 30 seconds.",
+      "pollNow": "Check now",
+      "polled": "Chains checked",
+      "pollFailed": "Could not check the chains",
+      "turnOn": "Turn on",
+      "turnOff": "Turn off",
+      "turnedOn": "Crypto payments are on",
+      "turnedOff": "Crypto payments are off",
+      "on": "On",
+      "off": "Off",
+      "loadFailed": "Could not load crypto settings",
+      "save": "Save settings",
+      "saved": "Settings saved",
+      "saveFailed": "Could not save the settings",
+      "stats": {
+        "status": "Status",
+        "networks": "Networks accepting",
+        "openInvoices": "Open invoices",
+        "unmatched": "Unmatched transfers"
+      },
+      "tabs": {
+        "settings": "Settings",
+        "invoices": "Invoices",
+        "transfers": "Transfers"
+      },
+      "ready": {
+        "accepting": "Accepting payments",
+        "badWallet": "Not a valid address",
+        "needsKey": "Needs an Etherscan API key",
+        "noWallet": "No wallet"
+      },
+      "wallets": {
+        "title": "Receiving wallets",
+        "hint": "Where customers pay. Each address is checked against its network before it is saved — money sent to a mistyped address is lost. Leave a network empty to not offer it.",
+        "confirmations": "{count} confirmations",
+        "addressFor": "{network} wallet address",
+        "placeholder": "Wallet address",
+        "pollError": "Last check failed",
+        "lastPoll": "Checked at {time}"
+      },
+      "keys": {
+        "title": "Chain access",
+        "hint": "How payments are seen. TRON, TON and Solana work without keys at low volume; a key raises the rate limits. Ethereum needs an Etherscan key.",
+        "etherscanApiKey": "Etherscan API key",
+        "trongridApiKey": "TronGrid API key",
+        "toncenterApiKey": "Toncenter API key",
+        "webhookSecret": "Indexer webhook secret",
+        "solanaRpcUrl": "Solana RPC URL",
+        "etherscanHint": "Required for Ethereum. Free at etherscan.io/apis.",
+        "trongridHint": "Optional. Free at trongrid.io.",
+        "toncenterHint": "Optional. From @tonapibot on Telegram.",
+        "solanaHint": "Optional. The public endpoint is rate-limited; a provider URL (Helius, QuickNode) is steadier.",
+        "webhookHint": "Only if an external indexer posts transfers to /webhooks/crypto. Sent in x-webhook-secret.",
+        "stored": "Stored:",
+        "notSet": "Not set",
+        "remove": "Remove"
+      },
+      "timing": {
+        "title": "Timing",
+        "expiryMinutes": "Time to pay (minutes)",
+        "expiryHint": "How long the customer sees the invoice counting down. 10 minutes to 24 hours.",
+        "graceHours": "Late payments accepted for (hours)",
+        "graceHint": "A payment that arrives after the timer is still credited for this long; the amount stays reserved meanwhile."
+      },
+      "filterStatus": "Filter by status",
+      "invoiceStatus": {
+        "all": "All invoices",
+        "awaiting": "Awaiting",
+        "confirming": "Confirming",
+        "paid": "Paid",
+        "expired": "Expired",
+        "cancelled": "Replaced"
+      },
+      "transferStatus": {
+        "unmatched": "Unmatched",
+        "matched": "Matched",
+        "ignored": "Set aside"
+      },
+      "columns": {
+        "created": "Created",
+        "order": "Order",
+        "network": "Network",
+        "amount": "Amount",
+        "status": "Status",
+        "transaction": "Transaction",
+        "received": "Received",
+        "note": "Details",
+        "actions": "Actions"
+      },
+      "noInvoices": "No invoices yet",
+      "noInvoicesHint": "They appear when a customer picks crypto at checkout.",
+      "transfersHint": "Money that reached your wallet without matching an open invoice — the round price instead of the exact amount, a payment after the grace period, a second payment. Check it on the explorer, then assign it to the order it pays for or set it aside.",
+      "noUnmatched": "Nothing to review",
+      "noTransfers": "No transfers here",
+      "notFinal": "Not final yet",
+      "from": "from",
+      "likely": "Likely for the {status} invoice of {amount}",
+      "assign": "Assign",
+      "ignore": "Set aside",
+      "assignTitle": "Assign transfer to an invoice",
+      "invoice": "Invoice",
+      "suggested": "suggested",
+      "noteOptional": "Note (optional)",
+      "noCandidates": "No unpaid invoice on this network and token to assign it to.",
+      "assignHint": "The order is settled as paid in full, whatever the amount — you are confirming that this transfer is the customer's payment.",
+      "assigned": "Transfer assigned",
+      "assignedPaid": "Transfer assigned — order paid",
+      "assignFailed": "Could not assign the transfer",
+      "ignoreTitle": "Set aside transfer",
+      "ignoreHint": "{amount} will stay recorded but will not settle any order. Say why, for whoever looks next.",
+      "reason": "Reason",
+      "ignored": "Transfer set aside",
+      "ignoreFailed": "Could not set the transfer aside"
     }
   },
   "forms": {

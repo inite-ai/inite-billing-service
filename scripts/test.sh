@@ -65,8 +65,10 @@ for i in $(seq 1 15); do
 done
 
 # ── Prisma ──
-echo "Pushing schema to test database..."
-npx prisma db push --skip-generate --accept-data-loss 2>&1 | tail -3
+# Migrations rather than `db push`, so the partial unique indexes that live
+# only in migration SQL exist here as they do in production.
+echo "Applying migrations to test database..."
+npx prisma migrate deploy 2>&1 | tail -3
 
 # ── Run tests ──
 echo ""

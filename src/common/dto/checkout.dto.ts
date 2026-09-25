@@ -1,5 +1,6 @@
 import {
   IsEnum,
+  IsIn,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -71,6 +72,22 @@ export class PaySessionDto {
   @IsString()
   @IsOptional()
   promoCode?: string;
+
+  @ApiPropertyOptional({
+    description: 'Crypto rail only: the network to pay on',
+    enum: ['TRON', 'TON', 'ETH', 'SOL'],
+  })
+  @IsIn(['TRON', 'TON', 'ETH', 'SOL'])
+  @IsOptional()
+  cryptoChain?: string;
+
+  @ApiPropertyOptional({
+    description: 'Crypto rail only: the token to pay with',
+    enum: ['USDT', 'USDC'],
+  })
+  @IsIn(['USDT', 'USDC'])
+  @IsOptional()
+  cryptoToken?: string;
 }
 
 export class PaySessionResponseDto {
@@ -79,6 +96,12 @@ export class PaySessionResponseDto {
 
   @ApiPropertyOptional({ description: 'Payment Intent ID (if payment created)' })
   paymentIntentId?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Payment instructions for a rail with no page to redirect to — for crypto: the address, the exact amount, the deadline and progress.',
+  })
+  payment?: Record<string, any> | null;
 }
 
 /**

@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Server, Package, DollarSign, Receipt,
-  CreditCard, Key, Users, GitBranch, Wallet, Webhook, ArrowLeft, Plug, ChevronRight, Tag, TrendingUp, Coins, UserCheck, Send, Gauge, ShieldAlert, Waypoints, X
+  CreditCard, Key, Users, GitBranch, Wallet, Webhook, ArrowLeft, Plug, ChevronRight, Tag, TrendingUp, Coins, UserCheck, Send, Gauge, ShieldAlert, Waypoints, Bitcoin, X
 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 
@@ -92,6 +92,7 @@ export function Sidebar({ open = false, onClose }: { open?: boolean; onClose?: (
       labelKey: 'groupSystem',
       items: [
         { href: '/admin/payment-providers', label: ta('providers.title'), icon: Plug },
+        { href: '/admin/crypto', label: ta('crypto.title'), icon: Bitcoin },
         { href: '/admin/payout-providers', label: ta('payoutProviders.title'), icon: Receipt },
         { href: '/admin/credits', label: ta('credits.title'), icon: Coins },
         { href: '/admin/metering', label: ta('metering.title'), icon: Gauge },
