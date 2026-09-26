@@ -671,6 +671,14 @@ export default function CheckoutPage() {
                           </button>
                         ))}
                       </div>
+                      {/* Roubles by card go through an acquirer for Russian-issued
+                          cards; a foreign card hangs there instead of being refused.
+                          Found in a live test — say so before the customer tries. */}
+                      {chosenOption?.metadata.method === 'CARD' && session.price.currency === 'RUB' && (
+                        <p className="mt-2.5 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                          {t('methods.rubCardHint')}
+                        </p>
+                      )}
                     </fieldset>
                   )}
                 </div>
