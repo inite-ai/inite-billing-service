@@ -27,6 +27,9 @@ export class PriceResponseDto {
 
   @ApiProperty()
   isActive: boolean;
+
+  @ApiPropertyOptional({ description: "Present on the storefront, e.g. a credit pack's `credits`" })
+  metadata?: Record<string, any>;
 }
 
 export class ProductResponseDto {
@@ -56,4 +59,23 @@ export class ProductResponseDto {
 
   @ApiPropertyOptional({ type: [PriceResponseDto] })
   prices?: PriceResponseDto[];
+}
+
+export class StorefrontServiceDto {
+  @ApiProperty()
+  id: string;
+
+  @ApiProperty()
+  code: string;
+
+  @ApiProperty()
+  name: string;
+
+  @ApiProperty({ type: [ProductResponseDto] })
+  products: ProductResponseDto[];
+}
+
+export class StorefrontResponseDto {
+  @ApiProperty({ type: [StorefrontServiceDto] })
+  services: StorefrontServiceDto[];
 }

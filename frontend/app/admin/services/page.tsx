@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
-import { ServiceForm } from '@/components/admin/ServiceForm'
+import { ServiceForm, type ServiceFormValues } from '@/components/admin/ServiceForm'
 import { Plus, Pencil, Trash2, Eye, EyeOff, Server, Copy, RefreshCw, Check, Power, PowerOff } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
@@ -118,16 +118,16 @@ export default function AdminServicesPage() {
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState<Service | undefined>()
 
-  const handleCreate = async (data: { code: string; name: string }) => {
+  const handleCreate = async (data: ServiceFormValues) => {
     await api.post('/v1/admin/services', data)
     toast.success(t('services.created'))
     setShowModal(false)
     refetch()
   }
 
-  const handleUpdate = async (data: { code: string; name: string }) => {
+  const handleUpdate = async (data: ServiceFormValues) => {
     if (!editing) return
-    await api.put(`/v1/admin/services/${editing.id}`, { name: data.name })
+    await api.put(`/v1/admin/services/${editing.id}`, { name: data.name, metadata: data.metadata })
     toast.success(t('services.updated'))
     setShowModal(false)
     setEditing(undefined)

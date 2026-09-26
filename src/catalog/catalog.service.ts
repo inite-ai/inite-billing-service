@@ -1,7 +1,18 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../common/services/prisma.service';
-import { ProductResponseDto, PriceResponseDto } from '../common/dto/catalog.dto';
+import {
+  ProductResponseDto,
+  PriceResponseDto,
+  StorefrontResponseDto,
+} from '../common/dto/catalog.dto';
 import { ProductType } from '@prisma/client';
+
+function displayNameOf(service: { name: string; metadata: unknown }): string {
+  const meta = (service.metadata ?? {}) as Record<string, unknown>;
+  return typeof meta.displayName === 'string' && meta.displayName.trim()
+    ? meta.displayName.trim()
+    : service.name;
+}
 
 @Injectable()
 export class CatalogService {
@@ -38,6 +49,72 @@ export class CatalogService {
         isActive: pr.isActive,
       })),
     }));
+  }
+
+  /**
+   * The public storefront: every active service with its listed products and
+   * their active prices, for the catalog page.
+   *
+   * A product stays out when its metadata says `unlisted: true` — it is still
+   * active and can be bought by a direct link (a test product, a private
+   * offer) — or when it has no active price to buy it with. Prices carry their
+   * metadata here (a credit pack's `credits`), which the plain product list
+   * leaves out. Services without anything to show are dropped.
+   */
+  async getStorefront(): Promise<StorefrontResponseDto> {
+    const [services, products] = await Promise.all([
+      this.prisma.service.findMany({
+        where: { isActive: true },
+        select: { id: true, code: true, name: true, metadata: true },
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.product.findMany({
+        where: { isActive: true, serviceId: { not: null } },
+        include: { prices: { where: { isActive: true }, orderBy: { amount: 'asc' } } },
+        orderBy: { createdAt: 'asc' },
+      }),
+    ]);
+
+    const listed = products.filter((p) => {
+      const meta = (p.metadata ?? {}) as Record<string, unknown>;
+      return meta.unlisted !== true && p.prices.length > 0;
+    });
+
+    return {
+      services: services
+        .map((service) => ({
+          id: service.id,
+          code: service.code,
+          // `metadata.displayName` is the name customers see; `name` is the
+          // operator's (often a working title like "analitics").
+          name: displayNameOf(service),
+          products: listed
+            .filter((p) => p.serviceId === service.id)
+            .map((p) => ({
+              id: p.id,
+              code: p.code,
+              name: p.name,
+              serviceId: p.serviceId || undefined,
+              moduleScope: p.moduleScope,
+              type: p.type,
+              isActive: p.isActive,
+              metadata: p.metadata as Record<string, any> | undefined,
+              prices: p.prices.map((pr) => ({
+                id: pr.id,
+                productId: pr.productId,
+                code: pr.code,
+                currency: pr.currency,
+                amount: pr.amount.toString(),
+                interval: pr.interval || undefined,
+                trialDays: pr.trialDays || undefined,
+                graceDays: pr.graceDays || undefined,
+                isActive: pr.isActive,
+                metadata: (pr.metadata ?? undefined) as Record<string, any> | undefined,
+              })),
+            })),
+        }))
+        .filter((service) => service.products.length > 0),
+    };
   }
 
   async getPrices(productCode?: string, serviceId?: string): Promise<PriceResponseDto[]> {

@@ -11,7 +11,11 @@ import {
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { CatalogService } from './catalog.service';
 import { ProductSearchService } from '../rag/product-search.service';
-import { ProductResponseDto, PriceResponseDto } from '../common/dto/catalog.dto';
+import {
+  ProductResponseDto,
+  PriceResponseDto,
+  StorefrontResponseDto,
+} from '../common/dto/catalog.dto';
 import { OptionalServiceGuard } from './optional-service.guard';
 
 @ApiTags('Catalog')
@@ -40,6 +44,16 @@ export class CatalogController {
       limit: limit ? parseInt(limit, 10) : undefined,
       serviceId: effectiveServiceId,
     });
+  }
+
+  @Get('storefront')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Public storefront: active services with their listed products and prices',
+  })
+  @ApiResponse({ status: 200, type: StorefrontResponseDto })
+  async getStorefront(): Promise<StorefrontResponseDto> {
+    return this.catalogService.getStorefront();
   }
 
   @Get()

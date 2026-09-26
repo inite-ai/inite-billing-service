@@ -661,3 +661,46 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .lp .receipt .stamp { animation: none; }
 }
+
+/* ------------------------------------------------------------
+   Catalog (/catalog) — Ledger pricing page.
+   ------------------------------------------------------------ */
+.lp .shell-page { flex: 1; position: relative; z-index: 2; padding-bottom: 72px; }
+.lp .seg { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 11px; background: rgba(255, 255, 255, 0.02); }
+.lp .seg button {
+  font-family: var(--mono); font-size: 12px; letter-spacing: 0.02em; color: var(--dim); padding: 7px 12px; border-radius: 8px;
+  cursor: pointer; white-space: nowrap; transition: color 0.15s, background 0.15s; display: inline-flex; align-items: center; gap: 7px;
+}
+.lp .seg button:hover { color: var(--ink); }
+.lp .seg button[aria-pressed="true"] { background: rgba(255, 255, 255, 0.08); color: var(--ink); }
+.lp .seg button em { font-style: normal; color: var(--accent); }
+.lp .svc-tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.lp .svc-tabs::-webkit-scrollbar { display: none; }
+.lp .svc-tabs button {
+  flex-shrink: 0; font-size: 14px; font-weight: 500; color: var(--dim); padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line);
+  cursor: pointer; transition: 0.15s; background: transparent;
+}
+.lp .svc-tabs button:hover { color: var(--ink); border-color: rgba(255, 255, 255, 0.18); }
+.lp .svc-tabs button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.lp .svc-tabs button span { font-family: var(--mono); font-size: 11px; opacity: 0.6; margin-left: 6px; }
+.lp .plan {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 24px; position: relative;
+  display: flex; flex-direction: column; transition: border-color 0.2s, background 0.2s;
+}
+.lp .plan:hover { border-color: rgba(255, 255, 255, 0.14); background: var(--panel-2); }
+.lp .plan.hl { border-color: rgba(204, 255, 0, 0.45); background: radial-gradient(90% 60% at 50% 0%, rgba(204, 255, 0, 0.07), transparent 60%), var(--panel); }
+.lp .plan.mine { border-color: rgba(255, 255, 255, 0.3); }
+.lp .plan .flag {
+  position: absolute; top: -11px; left: 22px; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase;
+  padding: 3px 9px; border-radius: 6px; background: var(--accent); color: var(--accent-ink); font-weight: 500;
+}
+.lp .plan .flag.mine { background: var(--ink); color: var(--bg); }
+.lp .plan .amount { font-family: var(--display); font-weight: 700; font-size: 44px; letter-spacing: -0.03em; line-height: 1; }
+.lp .plan .ticks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.lp .plan .ticks li { display: flex; gap: 10px; font-size: 14px; line-height: 1.4; color: #c7c7c1; }
+.lp .plan .ticks li::before { content: "✓"; font-family: var(--mono); font-size: 12px; color: var(--accent); flex-shrink: 0; margin-top: 1px; }
+.lp .plan .ticks li.lim { color: var(--ink); }
+.lp .plan .ticks li.lim::before { content: "◆"; font-size: 9px; margin-top: 4px; }
+.lp .chip-acc { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px; padding: 3px 8px; border-radius: 6px; color: var(--accent); background: rgba(204, 255, 0, 0.08); border: 1px solid rgba(204, 255, 0, 0.2); }
+.lp .skel { border-radius: 16px; background: linear-gradient(90deg, var(--panel) 25%, var(--panel-2) 50%, var(--panel) 75%); background-size: 200% 100%; animation: mmd-shimmer 1.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .lp .skel { animation: none; } }

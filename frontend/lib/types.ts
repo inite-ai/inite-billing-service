@@ -32,6 +32,8 @@ export interface Price {
   trialDays?: number
   graceDays?: number
   isActive: boolean
+  /** On the storefront: e.g. a credit pack's `credits`. */
+  metadata?: Record<string, unknown>
   product?: Product
 }
 

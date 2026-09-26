@@ -9,6 +9,10 @@ const withMDX = createMDX({ options: { remarkPlugins: [['remark-gfm', {}]] } })
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Version-skew protection: a client built from another commit gets a full
+  // reload on navigation instead of old code rendering new pages. Unset in
+  // development, where there is only ever one build.
+  deploymentId: process.env.DEPLOYMENT_VERSION || undefined,
   // Treat .mdx as page sources so app/docs/<slug>/page.mdx works as a route.
   pageExtensions: ['ts', 'tsx', 'mdx'],
   env: {

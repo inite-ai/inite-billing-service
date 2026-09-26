@@ -43,7 +43,10 @@ export function ProductForm({ initial, services, onSubmit, onCancel }: ProductFo
 
   // Display
   const [description, setDescription] = useState((meta.description as string) || '')
+  const [descriptionRu, setDescriptionRu] = useState((meta.description_ru as string) || '')
   const [highlighted, setHighlighted] = useState(!!meta.highlighted)
+  const [unlisted, setUnlisted] = useState(meta.unlisted === true)
+  const [isAddon, setIsAddon] = useState(meta.isAddon === true)
 
   // Features
   const [features, setFeatures] = useState<string[]>(
@@ -155,13 +158,23 @@ export function ProductForm({ initial, services, onSubmit, onCancel }: ProductFo
 
       const filteredFeatures = features.filter((f) => f.trim() !== '')
 
-      const metadata: Record<string, unknown> = {}
-      if (description) metadata.description = description
-      if (filteredFeatures.length > 0) metadata.features = filteredFeatures
-      if (creditsPerPeriod) metadata.creditsPerPeriod = Number(creditsPerPeriod)
-      if (bonusCredits) metadata.bonusCredits = Number(bonusCredits)
-      if (highlighted) metadata.highlighted = true
-      if (parsedEntitlements.length > 0) metadata.entitlements = parsedEntitlements
+      // Start from what the product already carries: keys this form does not
+      // edit (maxUsers, entitlementKey, limits a module reads) must survive a
+      // save. It used to rebuild metadata from the form alone and drop them.
+      const metadata: Record<string, unknown> = { ...meta }
+      const put = (key: string, value: unknown, keep: boolean) => {
+        if (keep) metadata[key] = value
+        else delete metadata[key]
+      }
+      put('description', description, !!description)
+      put('description_ru', descriptionRu, !!descriptionRu)
+      put('features', filteredFeatures, filteredFeatures.length > 0)
+      put('creditsPerPeriod', Number(creditsPerPeriod), !!creditsPerPeriod)
+      put('bonusCredits', Number(bonusCredits), !!bonusCredits)
+      put('highlighted', true, highlighted)
+      put('unlisted', true, unlisted)
+      put('isAddon', true, isAddon)
+      put('entitlements', parsedEntitlements, parsedEntitlements.length > 0)
 
       await onSubmit({
         code,
@@ -237,6 +250,26 @@ export function ProductForm({ initial, services, onSubmit, onCancel }: ProductFo
               "
             />
           </div>
+          <div className="w-full">
+            <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">
+              {t('descriptionRu')}
+            </label>
+            <textarea
+              value={descriptionRu}
+              onChange={(e) => setDescriptionRu(e.target.value)}
+              placeholder={t('descriptionPlaceholder')}
+              rows={3}
+              className="
+                w-full px-3.5 py-2.5
+                bg-white dark:bg-slate-900
+                border border-slate-200 dark:border-slate-700 rounded-xl text-sm
+                text-slate-700 dark:text-slate-200
+                placeholder-slate-400 dark:placeholder-slate-500
+                focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500 transition-all
+                resize-none
+              "
+            />
+          </div>
 
           <label className="flex items-center gap-3 cursor-pointer">
             <input
@@ -251,6 +284,36 @@ export function ProductForm({ initial, services, onSubmit, onCancel }: ProductFo
             />
             <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
               {t('highlighted')}
+            </span>
+          </label>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isAddon}
+              onChange={(e) => setIsAddon(e.target.checked)}
+              className="
+                w-4 h-4 rounded border-slate-300 dark:border-slate-600
+                text-violet-600 focus:ring-violet-500/30
+                bg-white dark:bg-slate-900
+              "
+            />
+            <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
+              {t('isAddon')}
+            </span>
+          </label>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={unlisted}
+              onChange={(e) => setUnlisted(e.target.checked)}
+              className="
+                w-4 h-4 rounded border-slate-300 dark:border-slate-600
+                text-violet-600 focus:ring-violet-500/30
+                bg-white dark:bg-slate-900
+              "
+            />
+            <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
+              {t('unlisted')}
             </span>
           </label>
         </div>

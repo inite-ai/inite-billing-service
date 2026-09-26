@@ -9,7 +9,19 @@ import LanguageSwitcher from '@/components/ui/LanguageSwitcher'
  * sign-in, the OAuth callback, checkout — in the landing's Ledger look, so
  * the way from the landing to paying reads as one site.
  */
-export function LedgerShell({ children, footer }: { children: React.ReactNode; footer?: React.ReactNode }) {
+export function LedgerShell({
+  children,
+  footer,
+  nav,
+  wide = false,
+}: {
+  children: React.ReactNode
+  footer?: React.ReactNode
+  /** Links beside the language switch (sign in, account). */
+  nav?: React.ReactNode
+  /** A full page from the top (the catalog) rather than one card in the middle. */
+  wide?: boolean
+}) {
   const t = useTranslations('landing')
   return (
     <div className="lp">
@@ -24,10 +36,13 @@ export function LedgerShell({ children, footer }: { children: React.ReactNode; f
               {t('brand')}
               <b>{t('brandHighlight')}</b>
             </Link>
-            <LanguageSwitcher />
+            <div className="navr">
+              {nav}
+              <LanguageSwitcher />
+            </div>
           </div>
         </nav>
-        <main className="shell-main">{children}</main>
+        <main className={wide ? 'shell-page' : 'shell-main'}>{children}</main>
         {footer && <footer className="shell-foot">{footer}</footer>}
       </div>
     </div>

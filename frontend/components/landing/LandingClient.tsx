@@ -33,6 +33,9 @@ export default function LandingClient() {
             <b>{t('brandHighlight')}</b>
           </div>
           <div className="navr">
+            <Link href="/catalog" className="btn ghost">
+              {t('pricing')}
+            </Link>
             <Link href="/docs" className="btn ghost">
               {t('docs')}
             </Link>
