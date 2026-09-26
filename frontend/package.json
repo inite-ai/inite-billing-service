@@ -28,6 +28,7 @@
     "@mdx-js/react": "^3.1.1",
     "@next/mdx": "^16.2.12",
     "@swc/helpers": "^0.5.23",
+    "@web3icons/react": "^4.1.22",
     "ai": "^7.0.31",
     "axios": "^1.13.2",
     "framer-motion": "^13.1.1",

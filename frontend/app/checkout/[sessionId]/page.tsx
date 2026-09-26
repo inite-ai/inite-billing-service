@@ -4,7 +4,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { motion } from 'framer-motion'
-import { Loader2, Tag, Check, X, CreditCard, Lock, ShoppingBag } from 'lucide-react'
+import { Loader2, Tag, Check, X, CreditCard, Lock, ShoppingBag, Zap, Wallet } from 'lucide-react'
+import TokenUSDT from '@web3icons/react/icons/tokens/TokenUSDT'
+import TokenUSDC from '@web3icons/react/icons/tokens/TokenUSDC'
 import api from '@/lib/api'
 import { OAuthClient } from '@/lib/oauth-client'
 import toast from 'react-hot-toast'
@@ -12,6 +14,7 @@ import RecommendedOffers from '@/components/dashboard/RecommendedOffers'
 import { getErrorMessage, getErrorStatus } from '@/lib/api-error'
 import { CryptoInvoice, type CryptoPayment } from '@/components/checkout/CryptoInvoice'
 import { RedirectWaiting } from '@/components/checkout/RedirectWaiting'
+import { CryptoAssetIcon } from '@/components/checkout/CryptoAssetIcon'
 
 interface SessionData {
   sessionId: string
@@ -627,6 +630,7 @@ export default function CheckoutPage() {
                             <div className="w-2 h-2 rounded-full bg-violet-500" />
                           )}
                         </div>
+                        <MethodGlyph code={method.code} />
                         <span className="text-sm font-medium text-white">
                           {method.name}
                         </span>
@@ -659,14 +663,22 @@ export default function CheckoutPage() {
                             }`}
                           >
                             {option.metadata.chain ? (
-                              <>
-                                <span className="block text-sm font-semibold text-white">{option.metadata.token}</span>
-                                <span className="block text-xs text-slate-400">
-                                  {option.metadata.chainName} · {option.metadata.network}
+                              <span className="flex items-center gap-3">
+                                <CryptoAssetIcon token={option.metadata.token} chain={option.metadata.chain} size={32} />
+                                <span className="min-w-0">
+                                  <span className="block text-sm font-semibold text-white">{option.metadata.token}</span>
+                                  <span className="block truncate text-xs text-slate-400">
+                                    {option.metadata.chainName === option.metadata.network
+                                      ? option.metadata.chainName
+                                      : `${option.metadata.chainName} · ${option.metadata.network}`}
+                                  </span>
                                 </span>
-                              </>
+                              </span>
                             ) : (
-                              <span className="block text-sm font-semibold text-white">{methodLabel(option)}</span>
+                              <span className="flex items-center gap-2.5">
+                                <MethodGlyph method={option.metadata.method} />
+                                <span className="block text-sm font-semibold text-white">{methodLabel(option)}</span>
+                              </span>
                             )}
                           </button>
                         ))}
@@ -727,5 +739,26 @@ export default function CheckoutPage() {
         </div>
       </motion.div>
     </div>
+  )
+}
+
+/**
+ * A rail's or method's mark in the payment list: the stablecoins for crypto,
+ * a card, СБП or PayPal glyph for the rest — so the choice reads at a glance.
+ */
+function MethodGlyph({ code, method }: { code?: string; method?: string }) {
+  if (code === 'CRYPTO') {
+    return (
+      <span className="flex -space-x-2" aria-hidden>
+        <TokenUSDT variant="background" size={22} className="rounded-full ring-2 ring-slate-800" />
+        <TokenUSDC variant="background" size={22} className="rounded-full ring-2 ring-slate-800" />
+      </span>
+    )
+  }
+  const Icon = method === 'SBP' ? Zap : method === 'PAYPAL' ? Wallet : CreditCard
+  return (
+    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-600/40 text-slate-200" aria-hidden>
+      <Icon className="h-4 w-4" />
+    </span>
   )
 }

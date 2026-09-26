@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import QRCode from 'qrcode'
 import { AlertTriangle, Check, Copy, ExternalLink, Loader2, RefreshCw, Wallet } from 'lucide-react'
+import { CryptoAssetIcon } from './CryptoAssetIcon'
 
 export interface CryptoPayment {
   type: 'crypto'
@@ -222,11 +223,14 @@ export function CryptoInvoice({
   return (
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-4">
-        <div>
+        <div className="flex items-center gap-3">
+          <CryptoAssetIcon token={payment.token} chain={payment.chain} size={40} />
+          <div>
           <h2 className="text-lg font-semibold text-white">{t('sendTitle', { token: payment.token })}</h2>
           <p className="mt-0.5 text-sm text-slate-400">
             {t('network')}: <span className="font-medium text-white">{networkLabel}</span>
           </p>
+          </div>
         </div>
         <div
           className={`shrink-0 rounded-lg px-2.5 py-1 font-mono text-sm tabular-nums ${
