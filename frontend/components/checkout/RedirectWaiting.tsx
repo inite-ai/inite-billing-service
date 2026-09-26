@@ -34,11 +34,11 @@ export function RedirectWaiting({
   if (outcome === 'paid') {
     return (
       <div className="py-6 text-center" role="status">
-        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-500/30 bg-emerald-500/10">
-          <Check className="h-7 w-7 text-emerald-400" />
+        <div className="badge-ic ok">
+          <Check className="h-6 w-6" />
         </div>
-        <h2 className="text-xl font-semibold text-white">{t('paidTitle')}</h2>
-        <p className="mt-1 text-sm text-slate-400">{t('paidHint')}</p>
+        <h2 className="text-[26px]">{t('paidTitle')}</h2>
+        <p className="mt-1 text-sm text-[color:var(--dim)]">{t('paidHint')}</p>
       </div>
     )
   }
@@ -46,13 +46,13 @@ export function RedirectWaiting({
   if (outcome === 'failed') {
     return (
       <div className="py-6 text-center" role="alert">
-        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-red-500/20 bg-red-500/10">
-          <X className="h-7 w-7 text-red-400" />
+        <div className="badge-ic bad">
+          <X className="h-6 w-6" />
         </div>
-        <h2 className="text-xl font-semibold text-white">{t('failedTitle')}</h2>
-        <p className="mt-1 text-sm text-slate-400">{t('failedHint')}</p>
+        <h2 className="text-[26px]">{t('failedTitle')}</h2>
+        <p className="mt-1 text-sm text-[color:var(--dim)]">{t('failedHint')}</p>
         {errorUrl && (
-          <a href={errorUrl} className="mt-4 inline-block text-sm text-violet-300 underline hover:text-violet-200">
+          <a href={errorUrl} className="link mt-5 inline-block text-sm">
             {t('back')}
           </a>
         )}
@@ -63,12 +63,12 @@ export function RedirectWaiting({
   return (
     <div className="space-y-5 py-2" role="status" aria-live="polite">
       <div className="flex items-start gap-3">
-        <Loader2 className="mt-0.5 h-5 w-5 shrink-0 animate-spin text-violet-400" />
+        <Loader2 className="mt-0.5 h-5 w-5 shrink-0 animate-spin text-[color:var(--accent)]" />
         <div>
-          <h2 className="text-lg font-semibold text-white">
+          <h2 className="text-lg font-semibold text-[color:var(--ink)]">
             {windowOpened ? t('titleWindow', { provider }) : t('titleResume', { provider })}
           </h2>
-          <p className="mt-1 text-sm text-slate-400">{t('hint')}</p>
+          <p className="mt-1 text-sm text-[color:var(--dim)]">{t('hint')}</p>
         </div>
       </div>
 
@@ -76,7 +76,7 @@ export function RedirectWaiting({
         <button
           type="button"
           onClick={onReopen}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-500/20 transition-colors hover:bg-violet-500"
+          className="btn acc justify-center"
         >
           <ExternalLink className="h-4 w-4" />
           {windowOpened ? t('reopen') : t('open')}
@@ -85,7 +85,7 @@ export function RedirectWaiting({
           type="button"
           onClick={onCheck}
           disabled={checking}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-slate-700/40 px-4 py-2.5 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-600/50 disabled:opacity-50"
+          className="btn ghost justify-center"
         >
           <RefreshCw className={`h-4 w-4 ${checking ? 'animate-spin' : ''}`} />
           {t('check')}

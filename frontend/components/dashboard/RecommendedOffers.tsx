@@ -70,6 +70,49 @@ export default function RecommendedOffers({
   }
   if (offers.length === 0) return null
 
+  // On checkout the offers sit inside the Ledger page, so they take its look.
+  if (compact) {
+    return (
+      <div className="mt-7 border-t border-dashed border-[color:var(--line)] pt-5">
+        <p className="eyebrow mb-3 flex items-center gap-1.5">
+          <Sparkles className="h-3 w-3 text-[color:var(--accent)]" />
+          {t('compactTitle')}
+        </p>
+        <div className="flex gap-2.5 overflow-x-auto pb-1">
+          {offers.map((offer) => (
+            <div
+              key={offer.productId}
+              className="min-w-[210px] rounded-xl border border-[color:var(--line)] bg-white/[0.02] p-3.5"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <p className="ui min-w-0 truncate text-sm">{offer.name}</p>
+                <span className="mono shrink-0 text-[10px] uppercase tracking-[0.08em] text-[color:var(--dim)]">
+                  {t(`reasons.${offer.reason}`)}
+                </span>
+              </div>
+              {offer.explanation && <p className="mt-1.5 text-xs text-[color:var(--dim)]">{offer.explanation}</p>}
+              <div className="mt-3 flex items-center justify-between gap-2">
+                <span className="mono text-xs">
+                  {offer.amount ? `${offer.amount} ${offer.currency ?? ''}${offer.interval ? ` / ${offer.interval}` : ''}` : ''}
+                </span>
+                {offer.priceCode && (
+                  <button
+                    type="button"
+                    onClick={() => buy(offer)}
+                    disabled={buying === offer.productId}
+                    className="btn ghost !px-2.5 !py-1 !text-xs"
+                  >
+                    {buying === offer.productId ? '…' : t('cta')}
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className={compact ? 'mt-6' : ''}>
       <h2 className="text-sm font-semibold text-slate-500 flex items-center gap-1.5 mb-3">

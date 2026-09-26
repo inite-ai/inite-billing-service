@@ -220,7 +220,10 @@
     "subtitle": "Sign in to manage your subscriptions and billing",
     "connecting": "Connecting...",
     "signInWith": "Sign in with INITE",
-    "secureAuth": "Secure authentication via INITE Identity Provider"
+    "secureAuth": "Secure authentication via INITE Identity Provider",
+    "eyebrow": "Sign in",
+    "headline": "Your subscriptions, orders and credits in one place.",
+    "protocol": "OAuth 2.0 · PKCE"
   },
   "callback": {
     "authenticating": "Authenticating...",
@@ -229,7 +232,8 @@
     "successMessage": "You've been successfully authenticated. Redirecting...",
     "failed": "Authentication Failed",
     "failedMessage": "An error occurred during authentication",
-    "redirecting": "Redirecting to login page..."
+    "redirecting": "Redirecting to login page...",
+    "eyebrow": "INITE ID"
   },
   "dashboard": {
     "welcome": "Welcome, {name}",
@@ -433,7 +437,12 @@
       "failedTitle": "The payment didn't go through",
       "failedHint": "Nothing was charged. You can go back and try again.",
       "back": "Go back"
-    }
+    },
+    "goBack": "Go back",
+    "order": "Order",
+    "paidStamp": "PAID",
+    "pay_step": "Payment",
+    "youPay": "You pay"
   },
   "referrals": {
     "title": "Referral Program",
