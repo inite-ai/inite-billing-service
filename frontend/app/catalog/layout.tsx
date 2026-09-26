@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import './catalog.css'
 
 export const metadata: Metadata = {
   title: 'Pricing',

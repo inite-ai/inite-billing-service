@@ -1,0 +1,11 @@
+/* The catalog inside the cabinet: Ledger's pieces, without the page frame
+   (background, full height, centred column) the public page brings. */
+.lp.lp-embed {
+  min-height: 0;
+  background: transparent;
+  overflow-x: visible;
+}
+.lp.lp-embed .wrap {
+  max-width: none;
+  padding: 0;
+}
