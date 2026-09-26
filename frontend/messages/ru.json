@@ -220,7 +220,10 @@
     "subtitle": "Войдите для управления подписками и биллингом",
     "connecting": "Подключение...",
     "signInWith": "Войти через INITE",
-    "secureAuth": "Безопасная аутентификация через INITE Identity Provider"
+    "secureAuth": "Безопасная аутентификация через INITE Identity Provider",
+    "eyebrow": "Вход",
+    "headline": "Подписки, заказы и кредиты — в одном месте.",
+    "protocol": "OAuth 2.0 · PKCE"
   },
   "callback": {
     "authenticating": "Аутентификация...",
@@ -229,7 +232,8 @@
     "successMessage": "Аутентификация прошла успешно. Перенаправляем...",
     "failed": "Ошибка аутентификации",
     "failedMessage": "Произошла ошибка при аутентификации",
-    "redirecting": "Перенаправление на страницу входа..."
+    "redirecting": "Перенаправление на страницу входа...",
+    "eyebrow": "INITE ID"
   },
   "dashboard": {
     "welcome": "Добро пожаловать, {name}",
@@ -415,7 +419,7 @@
       "convertedWithMarkup": "{price} по курсу {rate} за доллар плюс {markup}%, курс зафиксирован в этом счёте."
     },
     "methods": {
-      "choose": "Способ оплаты",
+      "choose": "Чем платить",
       "card": "Карта",
       "sbp": "СБП",
       "paypal": "PayPal",
@@ -433,7 +437,12 @@
       "failedTitle": "Оплата не прошла",
       "failedHint": "Деньги не списаны. Можно вернуться и попробовать снова.",
       "back": "Вернуться"
-    }
+    },
+    "goBack": "Вернуться",
+    "order": "Заказ",
+    "paidStamp": "ОПЛАЧЕНО",
+    "pay_step": "Оплата",
+    "youPay": "К оплате"
   },
   "referrals": {
     "title": "Реферальная программа",

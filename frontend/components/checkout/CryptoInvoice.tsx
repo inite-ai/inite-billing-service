@@ -88,20 +88,20 @@ function CopyField({
   }
   return (
     <div>
-      <p className="mb-1.5 text-xs font-medium uppercase tracking-wider text-slate-400">{label}</p>
+      <p className="eyebrow mb-2">{label}</p>
       <button
         type="button"
         onClick={copy}
-        className="group flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-slate-900/40 px-4 py-3 text-left transition-colors hover:border-violet-400/40"
+        className="group flex w-full items-center justify-between gap-3 rounded-xl border border-[color:var(--line)] bg-white/[0.03] px-4 py-3 text-left transition-colors hover:border-[color:rgba(204,255,0,0.4)]"
         aria-label={`${t('copy')}: ${label}`}
       >
         <span
-          className={`min-w-0 break-all text-white ${mono ? 'font-mono' : ''} ${large ? 'text-2xl font-semibold tracking-tight' : 'text-sm'}`}
+          className={`min-w-0 break-all text-[color:var(--ink)] ${mono ? 'mono' : ''} ${large ? 'text-2xl font-semibold tracking-tight' : 'text-sm'}`}
         >
           {display ?? value}
         </span>
-        <span className="flex shrink-0 items-center gap-1 text-xs text-slate-400 group-hover:text-violet-300">
-          {copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+        <span className="flex shrink-0 items-center gap-1 text-xs text-[color:var(--dim)] group-hover:text-[color:var(--accent)]">
+          {copied ? <Check className="h-4 w-4 text-[color:var(--accent)]" /> : <Copy className="h-4 w-4" />}
           <span className="hidden sm:inline">{copied ? t('copied') : t('copy')}</span>
         </span>
       </button>
@@ -159,27 +159,27 @@ export function CryptoInvoice({
       {fraction && (
         <>
           .{fraction.slice(0, Math.max(2, baseFraction.length))}
-          <span className="text-violet-300">{fraction.slice(Math.max(2, baseFraction.length))}</span>
+          <span className="text-[color:var(--accent)]">{fraction.slice(Math.max(2, baseFraction.length))}</span>
         </>
       )}{' '}
-      <span className="text-base font-medium text-slate-400">{payment.token}</span>
+      <span className="text-base font-medium text-[color:var(--dim)]">{payment.token}</span>
     </>
   )
 
   if (paid) {
     return (
       <div className="py-6 text-center" role="status">
-        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-500/30 bg-emerald-500/10">
-          <Check className="h-7 w-7 text-emerald-400" />
+        <div className="badge-ic ok">
+          <Check className="h-6 w-6" />
         </div>
-        <h2 className="text-xl font-semibold text-white">{t('paidTitle')}</h2>
-        <p className="mt-1 text-sm text-slate-400">{t('paidHint')}</p>
+        <h2 className="text-[26px]">{t('paidTitle')}</h2>
+        <p className="mt-1 text-sm text-[color:var(--dim)]">{t('paidHint')}</p>
         {payment.txUrl && (
           <a
             href={payment.txUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-4 inline-flex items-center gap-1.5 text-sm text-violet-300 hover:text-violet-200"
+            className="mt-4 inline-flex items-center gap-1.5 text-sm text-[color:var(--accent)] "
           >
             {t('viewTransaction')} <ExternalLink className="h-3.5 w-3.5" />
           </a>
@@ -194,16 +194,16 @@ export function CryptoInvoice({
     return (
       <div className="py-4" role="status" aria-live="polite">
         <div className="mb-5 flex items-center gap-3">
-          <Loader2 className="h-5 w-5 animate-spin text-violet-400" />
+          <Loader2 className="h-5 w-5 animate-spin text-[color:var(--accent)]" />
           <div>
-            <h2 className="text-lg font-semibold text-white">{t('confirmingTitle')}</h2>
-            <p className="text-sm text-slate-400">{t('confirmingHint', { network: payment.chainName })}</p>
+            <h2 className="text-lg font-semibold text-[color:var(--ink)]">{t('confirmingTitle')}</h2>
+            <p className="text-sm text-[color:var(--dim)]">{t('confirmingHint', { network: payment.chainName })}</p>
           </div>
         </div>
-        <div className="h-2 overflow-hidden rounded-full bg-slate-700/60">
-          <div className="h-full rounded-full bg-violet-500 transition-all duration-700" style={{ width: `${Math.max(pct, 8)}%` }} />
+        <div className="h-2 overflow-hidden rounded-full bg-white/[0.06]">
+          <div className="h-full rounded-full bg-[color:var(--accent)] transition-all duration-700" style={{ width: `${Math.max(pct, 8)}%` }} />
         </div>
-        <p className="mt-2 text-xs tabular-nums text-slate-400">
+        <p className="mt-2 text-xs tabular-nums text-[color:var(--dim)]">
           {t('confirmations', { done, required: payment.requiredConfirmations })}
         </p>
         {payment.txUrl && (
@@ -211,7 +211,7 @@ export function CryptoInvoice({
             href={payment.txUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-4 inline-flex items-center gap-1.5 text-sm text-violet-300 hover:text-violet-200"
+            className="mt-4 inline-flex items-center gap-1.5 text-sm text-[color:var(--accent)] "
           >
             {t('viewTransaction')} <ExternalLink className="h-3.5 w-3.5" />
           </a>
@@ -226,15 +226,15 @@ export function CryptoInvoice({
         <div className="flex items-center gap-3">
           <CryptoAssetIcon token={payment.token} chain={payment.chain} size={40} />
           <div>
-          <h2 className="text-lg font-semibold text-white">{t('sendTitle', { token: payment.token })}</h2>
-          <p className="mt-0.5 text-sm text-slate-400">
-            {t('network')}: <span className="font-medium text-white">{networkLabel}</span>
+          <h2 className="text-lg font-semibold text-[color:var(--ink)]">{t('sendTitle', { token: payment.token })}</h2>
+          <p className="mt-0.5 text-sm text-[color:var(--dim)]">
+            {t('network')}: <span className="font-medium text-[color:var(--ink)]">{networkLabel}</span>
           </p>
           </div>
         </div>
         <div
-          className={`shrink-0 rounded-lg px-2.5 py-1 font-mono text-sm tabular-nums ${
-            timedOut ? 'bg-amber-500/15 text-amber-300' : 'bg-slate-700/50 text-slate-200'
+          className={`shrink-0 rounded-lg px-2.5 py-1 mono text-sm tabular-nums ${
+            timedOut ? 'bg-amber-500/15 text-amber-300' : 'bg-white/[0.06] text-[color:#c7c7c1]'
           }`}
           aria-label={t('timeLeft')}
         >
@@ -243,9 +243,9 @@ export function CryptoInvoice({
       </div>
 
       <CopyField label={t('exactAmount')} value={payment.amount} display={amountDisplay} large />
-      <p className="-mt-3 text-xs text-slate-400">{t('exactAmountHint')}</p>
+      <p className="-mt-3 text-xs text-[color:var(--dim)]">{t('exactAmountHint')}</p>
       {payment.fx && payment.price && (
-        <p className="-mt-2 text-xs text-slate-400">
+        <p className="-mt-2 text-xs text-[color:var(--dim)]">
           {t(payment.fx.markupPercent ? 'convertedWithMarkup' : 'converted', {
             price: `${formatNumber(payment.price.amount)} ${payment.price.currency}`,
             rate: `${formatNumber(payment.fx.perUsd, 4)} ${payment.price.currency}`,
@@ -270,8 +270,8 @@ export function CryptoInvoice({
         )}
       </div>
 
-      <div className="flex gap-2.5 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3.5 text-sm text-amber-100">
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+      <div className="note warn flex gap-2.5">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
         <p>
           {t('networkWarning', {
             token: payment.token,
@@ -281,30 +281,30 @@ export function CryptoInvoice({
       </div>
 
       {timedOut ? (
-        <div className="space-y-3 rounded-xl border border-white/10 bg-slate-900/40 p-4">
-          <p className="text-sm text-slate-300">{t('timeUpHint')}</p>
+        <div className="space-y-3 rounded-xl border border-[color:var(--line)] bg-white/[0.03] p-4">
+          <p className="text-sm text-[color:#c7c7c1]">{t('timeUpHint')}</p>
           <button
             type="button"
             onClick={onRenew}
             disabled={renewing}
-            className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
+            className="btn acc"
           >
             {renewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             {t('newInvoice')}
           </button>
         </div>
       ) : (
-        <div className="flex items-center gap-2.5 text-sm text-slate-400" role="status" aria-live="polite">
-          <Loader2 className="h-4 w-4 animate-spin text-violet-400" />
+        <div className="flex items-center gap-2.5 text-sm text-[color:var(--dim)]" role="status" aria-live="polite">
+          <Loader2 className="h-4 w-4 animate-spin text-[color:var(--accent)]" />
           {t('waiting')}
         </div>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/5 pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[color:var(--line-2)] pt-4">
         {payment.chain !== 'TRON' ? (
           <a
             href={payment.paymentUri}
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-violet-300 hover:text-violet-200"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-[color:var(--accent)] "
           >
             <Wallet className="h-4 w-4" /> {t('openWallet')}
           </a>
@@ -314,7 +314,7 @@ export function CryptoInvoice({
         <button
           type="button"
           onClick={onChangeNetwork}
-          className="text-sm text-slate-400 underline-offset-4 hover:text-white hover:underline"
+          className="text-sm text-[color:var(--dim)] underline-offset-4 hover:text-[color:var(--ink)] hover:underline"
         >
           {t('changeNetwork')}
         </button>

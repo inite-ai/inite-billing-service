@@ -605,3 +605,59 @@ body {
   .lp .rise, .lp .bar i, .lp .lvl .track2 i { animation: none; opacity: 1; transform: none; }
   .lp .track, .lp .live i, .lp .hero-graphic .ping { animation: none; }
 }
+
+/* ============================================================
+   Ledger app surfaces — sign-in, OAuth callback, checkout.
+   Same palette and type as the landing (.lp), for the pages a
+   customer sees between the landing and the product.
+   ============================================================ */
+.lp .shell { position: relative; z-index: 2; min-height: 100vh; display: flex; flex-direction: column; }
+.lp .shell-nav { border-bottom: 1px solid var(--line); }
+.lp .shell-nav .navrow { height: 58px; }
+.lp .shell-main { flex: 1; display: flex; align-items: center; justify-content: center; padding: 40px 20px 56px; }
+.lp .shell-foot {
+  display: flex; justify-content: center; gap: 10px; padding: 0 20px 28px;
+  font-family: var(--mono); font-size: 11.5px; color: var(--dim-2); letter-spacing: 0.04em;
+}
+.lp .ui { font-family: var(--body); font-weight: 600; letter-spacing: -0.01em; line-height: 1.3; }
+.lp .panel {
+  background: linear-gradient(180deg, var(--panel-2), var(--panel)); border: 1px solid var(--line); border-radius: 16px;
+  box-shadow: 0 40px 80px -40px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.02) inset; position: relative;
+}
+.lp .field {
+  width: 100%; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--line); border-radius: 9px;
+  padding: 10px 12px; color: var(--ink); font-family: var(--mono); font-size: 13px; letter-spacing: 0.04em;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.lp .field::placeholder { color: var(--dim-2); }
+.lp .field:focus { outline: none; border-color: rgba(204, 255, 0, 0.5); box-shadow: 0 0 0 3px rgba(204, 255, 0, 0.1); }
+.lp .field:disabled { opacity: 0.6; }
+.lp .opt {
+  width: 100%; display: flex; align-items: center; gap: 12px; text-align: left; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 12px; background: rgba(255, 255, 255, 0.02); padding: 12px 14px;
+  color: var(--ink); transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+.lp .opt:hover { border-color: rgba(255, 255, 255, 0.18); background: rgba(255, 255, 255, 0.04); }
+.lp .opt[aria-pressed="true"] { border-color: var(--accent); background: rgba(204, 255, 0, 0.05); box-shadow: 0 0 0 3px rgba(204, 255, 0, 0.08); }
+.lp .radio { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--dim-2); display: grid; place-items: center; flex-shrink: 0; }
+.lp .opt[aria-pressed="true"] .radio { border-color: var(--accent); }
+.lp .opt[aria-pressed="true"] .radio::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.lp .btn.block { width: 100%; justify-content: center; padding: 14px 20px; font-size: 15px; border-radius: 11px; }
+.lp .btn:disabled { opacity: 0.45; cursor: not-allowed; filter: none; box-shadow: none; }
+.lp .note { border-radius: 10px; padding: 10px 12px; font-size: 13px; line-height: 1.45; }
+.lp .note.warn { border: 1px solid rgba(245, 180, 40, 0.28); background: rgba(245, 180, 40, 0.07); color: #f3dca6; }
+.lp .note.err { border: 1px solid rgba(248, 113, 113, 0.28); background: rgba(248, 113, 113, 0.07); color: #fecaca; }
+.lp .badge-ic { width: 56px; height: 56px; border-radius: 14px; display: grid; place-items: center; margin: 0 auto 18px; border: 1px solid var(--line); }
+.lp .badge-ic.ok { border-color: rgba(204, 255, 0, 0.4); background: rgba(204, 255, 0, 0.08); color: var(--accent); }
+.lp .badge-ic.bad { border-color: rgba(248, 113, 113, 0.35); background: rgba(248, 113, 113, 0.08); color: #f87171; }
+.lp .link { color: var(--accent); text-underline-offset: 4px; }
+.lp .link:hover { text-decoration: underline; }
+.lp .receipt .stamp { animation: lp-stamp 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+@keyframes lp-stamp { from { opacity: 0; transform: rotate(-7deg) scale(1.6); } }
+@media (max-width: 640px) {
+  .lp .shell-main { padding: 20px 16px 40px; align-items: flex-start; }
+  .lp .shell-nav .wrap { padding: 0 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lp .receipt .stamp { animation: none; }
+}

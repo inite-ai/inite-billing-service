@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
-import { motion } from 'framer-motion'
-import { Loader2, Tag, Check, X, CreditCard, Lock, ShoppingBag, Zap, Wallet } from 'lucide-react'
+import { ArrowRight, Loader2, Tag, Check, X, CreditCard, Lock, Zap, Wallet } from 'lucide-react'
 import TokenUSDT from '@web3icons/react/icons/tokens/TokenUSDT'
 import TokenUSDC from '@web3icons/react/icons/tokens/TokenUSDC'
 import api from '@/lib/api'
@@ -15,6 +14,7 @@ import { getErrorMessage, getErrorStatus } from '@/lib/api-error'
 import { CryptoInvoice, type CryptoPayment } from '@/components/checkout/CryptoInvoice'
 import { RedirectWaiting } from '@/components/checkout/RedirectWaiting'
 import { CryptoAssetIcon } from '@/components/checkout/CryptoAssetIcon'
+import { LedgerShell } from '@/components/ledger/LedgerShell'
 
 interface SessionData {
   sessionId: string
@@ -395,79 +395,178 @@ export default function CheckoutPage() {
 
   // --- Render ---
 
+  const secureFooter = (
+    <>
+      <Lock className="h-3 w-3" aria-hidden />
+      {t('securePayment')}
+    </>
+  )
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
-        <div className="absolute inset-0">
-          <div className="absolute inset-0 bg-gradient-to-br from-slate-900/95 via-blue-900/90 to-indigo-900/95" />
-        </div>
-        <div className="relative z-10 flex items-center gap-3 text-white/60">
-          <Loader2 className="w-5 h-5 animate-spin" />
-          <span>{t('processing')}</span>
-        </div>
-      </div>
+      <LedgerShell>
+        <p className="mono flex items-center gap-2.5 text-[13px] text-[color:var(--dim)]" role="status">
+          <Loader2 className="h-4 w-4 animate-spin text-[color:var(--accent)]" />
+          {t('processing')}
+        </p>
+      </LedgerShell>
     )
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
-        <div className="absolute inset-0">
-          <div className="absolute inset-0 bg-gradient-to-br from-slate-900/95 via-blue-900/90 to-indigo-900/95" />
-          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-violet-500/20 rounded-full blur-3xl animate-pulse" />
-          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
-        </div>
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="relative z-10 w-full max-w-md bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-2xl text-center"
-        >
-          <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4">
-            <X className="w-7 h-7 text-red-400" />
+      <LedgerShell>
+        <div className="panel rise w-full max-w-[420px] p-9 text-center" role="alert">
+          <div className={`badge-ic ${error === 'alreadyPaid' ? 'ok' : 'bad'}`}>
+            {error === 'alreadyPaid' ? <Check className="h-6 w-6" /> : <X className="h-6 w-6" />}
           </div>
-          <h2 className="text-xl font-semibold text-white mb-2">{t(error)}</h2>
-          {session?.errorUrl && isSafeRedirect(session.errorUrl) && (
-            <button
-              onClick={() => window.location.href = session.errorUrl!}
-              className="mt-4 text-sm text-violet-400 hover:text-violet-300 underline"
-            >
-              Go back
-            </button>
+          <h1 className="text-[28px]">{t(error)}</h1>
+          {error === 'alreadyPaid' ? (
+            <a href="/orders" className="link mono mt-6 inline-block text-[13px]">
+              /orders →
+            </a>
+          ) : (
+            session?.errorUrl &&
+            isSafeRedirect(session.errorUrl) && (
+              <a href={session.errorUrl} className="link mt-6 inline-block text-sm">
+                {t('goBack')}
+              </a>
+            )
           )}
-        </motion.div>
-      </div>
+        </div>
+      </LedgerShell>
     )
   }
 
   if (!session) return null
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
-      <div className="absolute inset-0">
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-900/95 via-blue-900/90 to-indigo-900/95" />
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-violet-500/20 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
-      </div>
+  const currency = session.price.currency
+  const formStage = !redirect && !payment
 
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="relative z-10 w-full max-w-lg"
-      >
-        <div className="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-2xl">
-          {/* Header */}
-          <div className="text-center mb-8">
-            <div className="w-14 h-14 rounded-2xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center mx-auto mb-4">
-              <ShoppingBag className="w-6 h-6 text-violet-400" />
-            </div>
-            <h1 className="text-2xl font-bold text-white">{t('title')}</h1>
-            {(payment || redirect) && (
-              <p className="mt-1 text-sm text-slate-400">
-                {session.product.name} · {formatPrice(session.price.amount)} {session.price.currency}
-              </p>
+  return (
+    <LedgerShell footer={secureFooter}>
+      <div className="grid w-full max-w-[980px] gap-4 md:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] md:items-start md:gap-5">
+        {/* The receipt: what is being bought, and what it costs. */}
+        <aside className="receipt rise d1">
+          <div className="rc-top sm:!px-5">
+            <span className="path">
+              {t('order')} <span>#{sessionId.slice(0, 8)}</span>
+            </span>
+            {!paidNow && (
+              <span className="live">
+                <i />
+                {t('pay_step')}
+              </span>
             )}
           </div>
+          <div className="mesh px-4 pb-3 pt-6 sm:px-5">
+            <p className="eyebrow mb-3">
+              <span className="dot">●</span> {t('product')}
+            </p>
+            <h1 className="text-[30px] sm:text-[36px]">{session.product.name}</h1>
+            {session.product.description && (
+              <p className="mt-3 text-sm leading-relaxed text-[color:var(--dim)]">{session.product.description}</p>
+            )}
+          </div>
+          <div className="rc-body sm:!px-5">
+            <div className="rc-line">
+              <span className="k">{t('interval')}</span>
+              <span className="v">{getIntervalLabel(session.price.interval)}</span>
+            </div>
+            <div className="rc-line">
+              <span className="k">{promoResult?.isValid ? t('originalPrice') : t('price')}</span>
+              <span className="v">
+                {formatPrice(session.price.amount)} {currency}
+              </span>
+            </div>
+            {promoResult?.isValid && (
+              <div className="rc-line">
+                <span className="k">
+                  {t('discount')}
+                  {promoResult.promoCodeName ? ` · ${promoResult.promoCodeName}` : ''}
+                </span>
+                <span className="v ok">
+                  −{formatPrice(promoResult.discountAmount)} {currency}
+                </span>
+              </div>
+            )}
+          </div>
+          <div className="px-4 pb-5 pt-4 sm:px-5">
+            <div className="flex items-baseline justify-between gap-4">
+              <span className="text-sm text-[color:var(--dim)]">{t('youPay')}</span>
+              <span className="text-right font-[family-name:var(--display)] text-[34px] font-bold leading-none tracking-[-0.02em]">
+                {isFree ? (
+                  <span className="text-[color:var(--accent)]">{t('free')}</span>
+                ) : (
+                  <>
+                    {formatPrice(finalAmount)}{' '}
+                    <span className="mono text-base font-medium text-[color:var(--dim)]">{currency}</span>
+                  </>
+                )}
+              </span>
+            </div>
 
+            {formStage && (
+              <div className="mt-5 border-t border-dashed border-[color:var(--line)] pt-4">
+                <label htmlFor="promo" className="eyebrow mb-2 flex items-center gap-1.5">
+                  <Tag className="h-3 w-3" aria-hidden />
+                  {t('promoCode')}
+                </label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      id="promo"
+                      type="text"
+                      value={promoCode}
+                      onChange={(e) => {
+                        setPromoCode(e.target.value.toUpperCase())
+                        if (promoResult) setPromoResult(null)
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') void handleApplyPromo()
+                      }}
+                      placeholder="PROMO2026"
+                      disabled={!!promoResult?.isValid}
+                      className="field"
+                    />
+                    {promoResult?.isValid && (
+                      <button
+                        type="button"
+                        onClick={clearPromo}
+                        aria-label={t('removePromo')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[color:var(--dim)] transition-colors hover:text-[color:var(--ink)]"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleApplyPromo}
+                    disabled={!promoCode.trim() || !!promoResult?.isValid || promoLoading}
+                    className="btn ghost"
+                  >
+                    {promoLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : promoResult?.isValid ? (
+                      <Check className="h-4 w-4 text-[color:var(--accent)]" />
+                    ) : (
+                      t('applyPromo')
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+          {paidNow && (
+            <div className="stamp" style={{ top: 58, bottom: 'auto' }}>
+              {t('paidStamp')}
+            </div>
+          )}
+        </aside>
+
+        {/* The payment: pick a way, then pay, wait for the provider, or send crypto. */}
+        <section className="panel rise d2 p-5 sm:p-7">
           {redirect ? (
             <RedirectWaiting
               provider={session.paymentMethods.find((m) => m.code === (session.pending?.rail ?? selectedRail))?.name ?? ''}
@@ -486,259 +585,123 @@ export default function CheckoutPage() {
               onChangeNetwork={() => setPayment(null)}
             />
           ) : (
-          <>
-
-          {/* Order Summary */}
-          <div className="mb-6">
-            <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-3">
-              {t('orderSummary')}
-            </h3>
-            <div className="bg-slate-700/30 border border-white/5 rounded-2xl p-5 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-300">{t('product')}</span>
-                <span className="text-sm font-medium text-white">{session.product.name}</span>
-              </div>
-              {session.product.description && (
-                <p className="text-xs text-slate-400">{session.product.description}</p>
-              )}
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-300">{t('interval')}</span>
-                <span className="text-sm font-medium text-white">
-                  {getIntervalLabel(session.price.interval)}
-                </span>
-              </div>
-              <div className="border-t border-white/5 pt-3 flex items-center justify-between">
-                <span className="text-sm text-slate-300">{t('price')}</span>
-                <span className="text-xl font-bold text-white">
-                  {formatPrice(session.price.amount)} {session.price.currency}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Promo Code */}
-          <div className="mb-6">
-            <label className="flex items-center gap-1.5 text-sm font-medium text-slate-400 mb-2">
-              <Tag className="w-3.5 h-3.5" />
-              {t('promoCode')}
-            </label>
-            <div className="flex gap-2">
-              <div className="flex-1 relative">
-                <input
-                  type="text"
-                  value={promoCode}
-                  onChange={(e) => {
-                    setPromoCode(e.target.value.toUpperCase())
-                    if (promoResult) setPromoResult(null)
-                  }}
-                  placeholder="PROMO2024"
-                  disabled={!!promoResult?.isValid}
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-700/50 border border-white/10 text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500/40 disabled:opacity-50 transition-all"
-                />
-                {promoResult?.isValid && (
-                  <button
-                    onClick={clearPromo}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-              <button
-                onClick={handleApplyPromo}
-                disabled={!promoCode.trim() || !!promoResult?.isValid || promoLoading}
-                className="px-4 py-2.5 rounded-xl text-sm font-medium border transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-slate-700/50 border-white/10 text-slate-300 hover:bg-slate-600/50 hover:text-white"
-              >
-                {promoLoading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : promoResult?.isValid ? (
-                  <Check className="w-4 h-4 text-green-400" />
-                ) : (
-                  t('applyPromo')
-                )}
-              </button>
-            </div>
-          </div>
-
-          {/* Promo Result */}
-          {promoResult?.isValid && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              className="mb-6 bg-green-500/10 border border-green-500/20 rounded-2xl p-4 space-y-2"
-            >
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-400">{t('originalPrice')}</span>
-                <span className="text-slate-300">
-                  {formatPrice(promoResult.originalAmount)} {session.price.currency}
-                </span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-green-400">{t('discount')}</span>
-                <span className="text-green-400 font-medium">
-                  -{formatPrice(promoResult.discountAmount)} {session.price.currency}
-                </span>
-              </div>
-              <div className="border-t border-green-500/20 pt-2 flex justify-between">
-                <span className="font-medium text-slate-300">{t('total')}</span>
-                <span className="font-bold text-lg text-white">
-                  {promoResult.finalAmount === 0
-                    ? t('free')
-                    : `${formatPrice(promoResult.finalAmount)} ${session.price.currency}`}
-                </span>
-              </div>
-            </motion.div>
-          )}
-
-          {/* Payment Methods (hide if free) */}
-          {!isFree && (
-            <div className="mb-6">
-              <label className="flex items-center gap-1.5 text-sm font-medium text-slate-400 mb-2">
-                <CreditCard className="w-3.5 h-3.5" />
-                {t('paymentMethod')}
-              </label>
-              {session.paymentMethods.length === 0 ? (
-                <p className="text-sm text-red-400 py-2">{t('noPaymentMethods')}</p>
-              ) : (
-                <div className="space-y-2">
-                  {session.paymentMethods.map((method) => (
-                    <button
-                      key={method.code}
-                      type="button"
-                      onClick={() => {
-                        setSelectedRail(method.code)
-                        // Land on a choice that belongs to this rail, not the last one's.
-                        if (!method.options?.some((o) => o.id === selectedOption)) {
-                          setSelectedOption(method.options?.[0]?.id ?? '')
-                        }
-                      }}
-                      className={`w-full flex items-center justify-between p-3.5 rounded-xl border transition-all text-left ${
-                        selectedRail === method.code
-                          ? 'border-violet-500 ring-2 ring-violet-500/20 bg-violet-500/10'
-                          : 'border-white/10 bg-slate-700/30 hover:border-white/20'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                            selectedRail === method.code
-                              ? 'border-violet-500'
-                              : 'border-slate-500'
-                          }`}
+            <>
+              {!isFree && (
+                <div className="mb-6">
+                  <p className="eyebrow mb-3">
+                    <span className="dot">●</span> {t('paymentMethod')}
+                  </p>
+                  {session.paymentMethods.length === 0 ? (
+                    <p className="note err">{t('noPaymentMethods')}</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {session.paymentMethods.map((method) => (
+                        <button
+                          key={method.code}
+                          type="button"
+                          aria-pressed={selectedRail === method.code}
+                          onClick={() => {
+                            setSelectedRail(method.code)
+                            // Land on a choice that belongs to this rail, not the last one's.
+                            if (!method.options?.some((o) => o.id === selectedOption)) {
+                              setSelectedOption(method.options?.[0]?.id ?? '')
+                            }
+                          }}
+                          className="opt"
                         >
-                          {selectedRail === method.code && (
-                            <div className="w-2 h-2 rounded-full bg-violet-500" />
+                          <span className="radio" aria-hidden />
+                          <MethodGlyph code={method.code} />
+                          <span className="ui min-w-0 flex-1 truncate text-[15px]">{method.name}</span>
+                          <span className="mono shrink-0 text-[11.5px] text-[color:var(--dim)]">
+                            {method.options?.length
+                              ? method.options[0].metadata.chain
+                                ? t('crypto.networks', { count: method.options.length })
+                                : method.options.map((o) => methodLabel(o)).join(' · ')
+                              : method.currencies.join(', ')}
+                          </span>
+                        </button>
+                      ))}
+                      {needsOption && selectedMethod?.options && (
+                        <fieldset className="pt-3">
+                          <legend className="eyebrow mb-3">
+                            {selectedMethod.options[0]?.metadata.chain ? t('crypto.chooseNetwork') : t('methods.choose')}
+                          </legend>
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            {selectedMethod.options.map((option) => (
+                              <button
+                                key={option.id}
+                                type="button"
+                                onClick={() => setSelectedOption(option.id)}
+                                aria-pressed={selectedOption === option.id}
+                                className="opt !py-2.5"
+                              >
+                                {option.metadata.chain ? (
+                                  <>
+                                    <CryptoAssetIcon token={option.metadata.token} chain={option.metadata.chain} size={32} />
+                                    <span className="min-w-0">
+                                      <span className="ui block text-sm">{option.metadata.token}</span>
+                                      <span className="block truncate text-xs text-[color:var(--dim)]">
+                                        {option.metadata.chainName === option.metadata.network
+                                          ? option.metadata.chainName
+                                          : `${option.metadata.chainName} · ${option.metadata.network}`}
+                                      </span>
+                                    </span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <MethodGlyph method={option.metadata.method} />
+                                    <span className="ui text-sm">{methodLabel(option)}</span>
+                                  </>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                          {/* Roubles by card go through an acquirer for Russian-issued
+                              cards; a foreign card hangs there instead of being refused.
+                              Found in a live test — say so before the customer tries. */}
+                          {chosenOption?.metadata.method === 'CARD' && currency === 'RUB' && (
+                            <p className="note warn mt-3 text-xs">{t('methods.rubCardHint')}</p>
                           )}
-                        </div>
-                        <MethodGlyph code={method.code} />
-                        <span className="text-sm font-medium text-white">
-                          {method.name}
-                        </span>
-                      </div>
-                      <span className="text-xs text-slate-400">
-                        {method.options?.length
-                          ? method.options[0].metadata.chain
-                            ? t('crypto.networks', { count: method.options.length })
-                            : method.options.map((o) => methodLabel(o)).join(' · ')
-                          : method.currencies.join(', ')}
-                      </span>
-                    </button>
-                  ))}
-                  {needsOption && selectedMethod?.options && (
-                    <fieldset className="pt-1">
-                      <legend className="mb-2 text-xs font-medium uppercase tracking-wider text-slate-400">
-                        {selectedMethod.options[0]?.metadata.chain ? t('crypto.chooseNetwork') : t('methods.choose')}
-                      </legend>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        {selectedMethod.options.map((option) => (
-                          <button
-                            key={option.id}
-                            type="button"
-                            onClick={() => setSelectedOption(option.id)}
-                            aria-pressed={selectedOption === option.id}
-                            className={`rounded-xl border px-3.5 py-2.5 text-left transition-all ${
-                              selectedOption === option.id
-                                ? 'border-violet-500 bg-violet-500/10 ring-2 ring-violet-500/20'
-                                : 'border-white/10 bg-slate-700/30 hover:border-white/20'
-                            }`}
-                          >
-                            {option.metadata.chain ? (
-                              <span className="flex items-center gap-3">
-                                <CryptoAssetIcon token={option.metadata.token} chain={option.metadata.chain} size={32} />
-                                <span className="min-w-0">
-                                  <span className="block text-sm font-semibold text-white">{option.metadata.token}</span>
-                                  <span className="block truncate text-xs text-slate-400">
-                                    {option.metadata.chainName === option.metadata.network
-                                      ? option.metadata.chainName
-                                      : `${option.metadata.chainName} · ${option.metadata.network}`}
-                                  </span>
-                                </span>
-                              </span>
-                            ) : (
-                              <span className="flex items-center gap-2.5">
-                                <MethodGlyph method={option.metadata.method} />
-                                <span className="block text-sm font-semibold text-white">{methodLabel(option)}</span>
-                              </span>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                      {/* Roubles by card go through an acquirer for Russian-issued
-                          cards; a foreign card hangs there instead of being refused.
-                          Found in a live test — say so before the customer tries. */}
-                      {chosenOption?.metadata.method === 'CARD' && session.price.currency === 'RUB' && (
-                        <p className="mt-2.5 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
-                          {t('methods.rubCardHint')}
-                        </p>
+                        </fieldset>
                       )}
-                    </fieldset>
+                    </div>
                   )}
                 </div>
               )}
-            </div>
-          )}
 
-          {/* Pay Button */}
-          <button
-            onClick={handlePay}
-            disabled={
-              payLoading ||
-              (!isFree && !selectedRail) ||
-              (!isFree && session.paymentMethods.length === 0) ||
-              (needsOption && !chosenOption)
-            }
-            className="w-full py-3.5 rounded-xl font-semibold text-white bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-lg shadow-violet-500/20"
-          >
-            {payLoading ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                {needsOption ? t('processing') : t('redirecting')}
-              </>
-            ) : isFree ? (
-              t('completeOrder')
-            ) : (
-              t('pay', {
-                amount: formatPrice(finalAmount),
-                currency: session.price.currency,
-              })
-            )}
-          </button>
+              <button
+                type="button"
+                onClick={handlePay}
+                disabled={
+                  payLoading ||
+                  (!isFree && !selectedRail) ||
+                  (!isFree && session.paymentMethods.length === 0) ||
+                  (needsOption && !chosenOption)
+                }
+                className="btn acc block"
+              >
+                {payLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {needsOption ? t('processing') : t('redirecting')}
+                  </>
+                ) : isFree ? (
+                  t('completeOrder')
+                ) : (
+                  <>
+                    {t('pay', { amount: formatPrice(finalAmount), currency })}
+                    <ArrowRight className="h-4 w-4" />
+                  </>
+                )}
+              </button>
 
-          {/* Security note */}
-          <div className="mt-4 flex items-center justify-center gap-1.5 text-xs text-slate-500">
-            <Lock className="w-3 h-3" />
-            {t('securePayment')}
-          </div>
-
-          {/* Never distract mid-payment */}
-          {!payLoading && (
-            <RecommendedOffers sessionId={String(sessionId)} compact />
+              {/* Never distract mid-payment */}
+              {!payLoading && <RecommendedOffers sessionId={String(sessionId)} compact />}
+            </>
           )}
-          </>
-          )}
-        </div>
-      </motion.div>
-    </div>
+        </section>
+      </div>
+    </LedgerShell>
   )
 }
 
@@ -749,15 +712,15 @@ export default function CheckoutPage() {
 function MethodGlyph({ code, method }: { code?: string; method?: string }) {
   if (code === 'CRYPTO') {
     return (
-      <span className="flex -space-x-2" aria-hidden>
-        <TokenUSDT variant="background" size={22} className="rounded-full ring-2 ring-slate-800" />
-        <TokenUSDC variant="background" size={22} className="rounded-full ring-2 ring-slate-800" />
+      <span className="flex shrink-0 -space-x-2" aria-hidden>
+        <TokenUSDT variant="background" size={22} className="rounded-full ring-2 ring-[#141416]" />
+        <TokenUSDC variant="background" size={22} className="rounded-full ring-2 ring-[#141416]" />
       </span>
     )
   }
   const Icon = method === 'SBP' ? Zap : method === 'PAYPAL' ? Wallet : CreditCard
   return (
-    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-600/40 text-slate-200" aria-hidden>
+    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-[color:var(--line)] bg-white/[0.04] text-[color:var(--ink)]" aria-hidden>
       <Icon className="h-4 w-4" />
     </span>
   )

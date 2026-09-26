@@ -3,7 +3,8 @@
 import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
-import { MailX, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
+import { MailX, Check, X, Loader2 } from 'lucide-react'
+import { LedgerShell } from '@/components/ledger/LedgerShell'
 import { API_URL } from '@/lib/config'
 
 function UnsubscribeContent() {
@@ -29,28 +30,24 @@ function UnsubscribeContent() {
   }, [token, category])
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="max-w-md w-full rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-xl p-8 text-center space-y-4">
-        <div className="flex justify-center">
-          {state === 'loading' && (
-            <Loader2 className="w-10 h-10 text-violet-500 animate-spin" />
-          )}
-          {state === 'done' && (
-            <CheckCircle2 className="w-10 h-10 text-green-500" />
-          )}
-          {state === 'error' && <XCircle className="w-10 h-10 text-red-500" />}
+    <LedgerShell>
+      <div className="panel rise w-full max-w-[420px] p-9 text-center" role={state === 'error' ? 'alert' : 'status'} aria-live="polite">
+        <div className={`badge-ic ${state === 'done' ? 'ok' : state === 'error' ? 'bad' : ''}`}>
+          {state === 'loading' && <Loader2 className="h-6 w-6 animate-spin text-[color:var(--accent)]" />}
+          {state === 'done' && <Check className="h-6 w-6" />}
+          {state === 'error' && <X className="h-6 w-6" />}
         </div>
-        <h1 className="text-xl font-bold flex items-center justify-center gap-2">
-          <MailX className="w-5 h-5 text-violet-500" />
+        <h1 className="mb-3 flex items-center justify-center gap-2.5 text-[28px]">
+          <MailX className="h-5 w-5 text-[color:var(--dim)]" aria-hidden />
           {t('title')}
         </h1>
-        <p className="text-slate-500 text-sm">
+        <p className="text-[15px] leading-relaxed text-[color:var(--dim)]">
           {state === 'loading' && t('processing')}
           {state === 'done' && t('success')}
           {state === 'error' && t('error')}
         </p>
       </div>
-    </div>
+    </LedgerShell>
   )
 }
 
