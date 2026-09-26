@@ -15,7 +15,7 @@ const BLOCKED = [
 // Auth-gated / non-marketing surfaces — kept out of the index.
 const APP_PATHS = [
   '/api/', '/admin', '/dashboard', '/orders', '/subscriptions', '/referrals',
-  '/notifications', '/checkout', '/catalog', '/login', '/callback', '/unsubscribe',
+  '/notifications', '/checkout', '/login', '/callback', '/unsubscribe',
 ]
 
 export default function robots(): MetadataRoute.Robots {

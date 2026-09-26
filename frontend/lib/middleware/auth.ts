@@ -96,7 +96,6 @@ export function getUserDestination(token: UserToken): string {
 
 const PROTECTED_ROUTES: Record<string, Array<'USER' | 'ADMIN'>> = {
   '/dashboard': ['USER', 'ADMIN'],
-  '/catalog': ['USER', 'ADMIN'],
   '/orders': ['USER', 'ADMIN'],
   '/subscriptions': ['USER', 'ADMIN'],
   '/referrals': ['USER', 'ADMIN'],

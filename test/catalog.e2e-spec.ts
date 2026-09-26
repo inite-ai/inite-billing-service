@@ -162,4 +162,20 @@ describe('Catalog E2E Tests', () => {
         .expect(404);
     });
   });
+
+  describe('GET /v1/products/storefront', () => {
+    it('is public and returns services with their listed products', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/v1/products/storefront')
+        .expect(200);
+
+      expect(Array.isArray(response.body.services)).toBe(true);
+      for (const service of response.body.services) {
+        expect(service.products.length).toBeGreaterThan(0);
+        for (const product of service.products) {
+          expect(product.metadata?.unlisted).not.toBe(true);
+        }
+      }
+    });
+  });
 });
