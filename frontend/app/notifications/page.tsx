@@ -1,5 +1,6 @@
 'use client'
 
+import { useFormat } from '@/lib/useFormat'
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
@@ -37,6 +38,7 @@ export default function NotificationsPage() {
   const { user, isLoading: authLoading } = useAuth()
   const router = useRouter()
   const t = useTranslations('notifications')
+  const f = useFormat()
 
   const [items, setItems] = useState<NotificationItem[]>([])
   const [page, setPage] = useState(1)
@@ -135,7 +137,7 @@ export default function NotificationsPage() {
                       {n.body}
                     </p>
                     <p className="text-xs text-slate-400 mt-1">
-                      {new Date(n.createdAt).toLocaleString()}
+                      {f.dateTime(n.createdAt)}
                     </p>
                   </div>
                 </li>

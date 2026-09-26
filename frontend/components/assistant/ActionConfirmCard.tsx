@@ -119,7 +119,7 @@ export default function ActionConfirmCard({ action }: { action: ActionData }) {
                 <button
                   onClick={() => act('confirm')}
                   disabled={busy}
-                  className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-purple-600 text-white text-xs font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity"
+                  className="px-3 py-1.5 rounded-lg bg-[#ccff00] text-[#0a0a0b] text-xs font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity"
                 >
                   {t('confirm')}
                 </button>

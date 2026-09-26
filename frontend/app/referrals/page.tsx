@@ -6,7 +6,8 @@ import { useTranslations } from 'next-intl'
 import { motion } from 'framer-motion'
 import { ClientLayout } from '@/components/layout/ClientLayout'
 import { Card } from '@/components/ui/Card'
-import { Badge } from '@/components/ui/Badge'
+import { StatusBadge } from '@/components/ui/StatusBadge'
+import { useFormat } from '@/lib/useFormat'
 import { Button } from '@/components/ui/Button'
 import { ReferralTree } from '@/components/referrals/ReferralTree'
 import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
@@ -47,8 +48,16 @@ export default function ReferralsPage() {
   const [tree, setTree] = useState<AffiliateTreeNode | null>(null)
   const [services, setServices] = useState<Service[]>([])
   const [selectedService, setSelectedService] = useState('')
-  const [balance, setBalance] = useState<{ available: string; canWithdraw: boolean; minWithdrawalAmount: string; totalEarned: string; totalPaid: string } | null>(null)
-  const [withdrawing, setWithdrawing] = useState(false)
+  const [balance, setBalance] = useState<{
+    available: string
+    canWithdraw: boolean
+    minWithdrawalAmount: string
+    totalEarned: string
+    totalPaid: string
+    balances?: { currency: string; pending: string; available: string; earned: string; paid: string }[]
+  } | null>(null)
+  const [withdrawing, setWithdrawing] = useState<string | null>(null)
+  const f = useFormat()
   const [copied, setCopied] = useState(false)
   const [loading, setLoading] = useState(true)
 
@@ -58,8 +67,9 @@ export default function ReferralsPage() {
 
     async function load() {
       try {
-        const svcRes = await api.get('/v1/admin/services').catch(() => ({ data: [] }))
-        setServices(svcRes.data)
+        // The storefront's services, not the admin list a customer cannot read.
+        const svcRes = await api.get('/v1/products/storefront').catch(() => ({ data: { services: [] } }))
+        setServices(svcRes.data.services ?? [])
       } catch {}
 
       const params: Record<string, string> = {}
@@ -105,23 +115,24 @@ export default function ReferralsPage() {
     }
   }
 
-  const handleWithdraw = async () => {
-    if (!balance?.canWithdraw) return
-    setWithdrawing(true)
+  // One withdrawal per currency: earnings in roubles are paid out in roubles.
+  // It always asked for dollars, whatever the affiliate had earned.
+  const handleWithdraw = async (currency: string) => {
+    setWithdrawing(currency)
+    const params: Record<string, string> = {}
+    if (selectedService) params.serviceId = selectedService
     try {
-      await api.post('/v1/affiliates/me/withdraw', {
-        currency: 'USD',
-      })
+      await api.post('/v1/affiliates/me/withdraw', { currency }, { params })
       toast.success(t('withdrawalRequested'))
       // Reload balance
-      const balRes = await api.get('/v1/affiliates/me/balance').catch(() => ({ data: null }))
+      const balRes = await api.get('/v1/affiliates/me/balance', { params }).catch(() => ({ data: null }))
       setBalance(balRes.data)
-      const payRes = await api.get('/v1/affiliates/me/payouts')
+      const payRes = await api.get('/v1/affiliates/me/payouts', { params })
       setPayouts(payRes.data)
     } catch (e) {
       toast.error(getErrorMessage(e, t('withdrawalError')))
     } finally {
-      setWithdrawing(false)
+      setWithdrawing(null)
     }
   }
 
@@ -135,18 +146,19 @@ export default function ReferralsPage() {
   }
 
   const commissionsByLevel = useMemo(() => {
-    const map = new Map<number, { count: number; total: number; rate: number }>()
+    const map = new Map<number, { count: number; rows: { amount: string; currency: string }[]; rate: number }>()
     for (const c of commissions) {
-      const existing = map.get(c.level) || { count: 0, total: 0, rate: 0 }
+      const existing = map.get(c.level) || { count: 0, rows: [], rate: 0 }
       existing.count++
-      existing.total += Number(c.amount)
+      existing.rows.push({ amount: c.amount, currency: c.currency })
       existing.rate = Number(c.commissionRate)
       map.set(c.level, existing)
     }
     return Array.from(map.entries()).sort((a, b) => a[0] - b[0])
   }, [commissions])
 
-  const totalCommissionAmount = commissions.reduce((s, c) => s + Number(c.amount), 0)
+  const byCurrency = (pick: 'earned' | 'pending' | 'paid') =>
+    stats?.balances?.length ? f.totals(stats.balances.map((b) => ({ amount: b[pick], currency: b.currency }))) : '—'
   const earnedCount = commissions.filter((c) => c.status === 'earned' || c.status === 'paid').length
 
   if (authLoading || !user) {
@@ -181,7 +193,7 @@ export default function ReferralsPage() {
       ) : !affiliate ? (
         <Card>
           <div className="text-center py-16">
-            <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-violet-100 to-purple-100 dark:from-violet-900/20 dark:to-purple-900/20 flex items-center justify-center mx-auto mb-5">
+            <div className="w-20 h-20 rounded-3xl bg-white/[0.04] border border-white/10 flex items-center justify-center mx-auto mb-5">
               <GitBranch className="w-9 h-9 text-violet-500" />
             </div>
             <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">{t('joinTitle')}</h3>
@@ -214,7 +226,7 @@ export default function ReferralsPage() {
 
           {/* Balance & Withdrawal */}
           {balance && (
-            <Card className={balance.canWithdraw ? 'border-emerald-200 dark:border-emerald-800/50 bg-emerald-50/50 dark:bg-emerald-900/10' : ''}>
+            <Card>
               <div className="flex items-center justify-between flex-wrap gap-4">
                 <div className="flex items-center gap-4">
                   <div className="p-2.5 rounded-xl bg-emerald-100 dark:bg-emerald-900/30">
@@ -222,20 +234,35 @@ export default function ReferralsPage() {
                   </div>
                   <div>
                     <p className="text-xs text-slate-500 uppercase tracking-wide">{t('availableBalance')}</p>
-                    <p className="text-2xl font-bold text-slate-900 dark:text-white">${Number(balance.available).toFixed(2)}</p>
                     <p className="text-xs text-slate-400 mt-0.5">
-                      {t('minWithdrawal', { amount: Number(balance.minWithdrawalAmount).toFixed(0) })}
+                      {t('minWithdrawalPlain', { amount: Number(balance.minWithdrawalAmount).toFixed(0) })}
                     </p>
                   </div>
                 </div>
-                <Button
-                  onClick={handleWithdraw}
-                  disabled={!balance.canWithdraw || withdrawing}
-                  loading={withdrawing}
-                  icon={<DollarSign className="w-4 h-4" />}
-                >
-                  {t('requestWithdrawal')}
-                </Button>
+              </div>
+              <div className="mt-4 divide-y divide-white/[0.06] border-t border-white/[0.06]">
+                {(balance.balances?.length ? balance.balances : [{ currency: 'USD', available: balance.available, pending: '0', earned: '0', paid: '0' }]).map((b) => {
+                  const enough = Number(b.available) >= Number(balance.minWithdrawalAmount)
+                  return (
+                    <div key={b.currency} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                      <div>
+                        <p className="font-mono text-xl font-semibold text-slate-900 dark:text-white">{f.money(b.available, b.currency)}</p>
+                        {Number(b.pending) > 0 && (
+                          <p className="text-xs text-slate-500">{t('pendingSettlement', { amount: f.money(b.pending, b.currency) })}</p>
+                        )}
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={() => void handleWithdraw(b.currency)}
+                        disabled={!enough || withdrawing !== null}
+                        loading={withdrawing === b.currency}
+                        icon={<DollarSign className="w-4 h-4" />}
+                      >
+                        {t('requestWithdrawal')}
+                      </Button>
+                    </div>
+                  )
+                })}
               </div>
             </Card>
           )}
@@ -248,9 +275,9 @@ export default function ReferralsPage() {
               <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
                 {[
                   { label: t('statTotalReferrals'), value: stats?.totalReferrals || 0, icon: Users, color: 'text-violet-500' },
-                  { label: t('statTotalEarned'), value: `$${stats?.totalCommissions || '0'}`, icon: DollarSign, color: 'text-emerald-500' },
-                  { label: t('statPending'), value: `$${stats?.pendingCommissions || '0'}`, icon: Clock, color: 'text-amber-500' },
-                  { label: t('statPaidOut'), value: `$${stats?.paidCommissions || '0'}`, icon: Wallet, color: 'text-blue-500' },
+                  { label: t('statTotalEarned'), value: byCurrency('earned'), icon: DollarSign, color: 'text-emerald-500' },
+                  { label: t('statPending'), value: byCurrency('pending'), icon: Clock, color: 'text-amber-500' },
+                  { label: t('statPaidOut'), value: byCurrency('paid'), icon: Wallet, color: 'text-blue-500' },
                   { label: t('statCommissions'), value: earnedCount, icon: TrendingUp, color: 'text-emerald-500' },
                 ].map((item, i) => {
                   const Icon = item.icon
@@ -265,7 +292,7 @@ export default function ReferralsPage() {
                       <div className={`p-1.5 rounded-lg ${item.color} bg-white/80 dark:bg-slate-900/50 w-fit mb-2`}>
                         <Icon className="w-4 h-4" />
                       </div>
-                      <p className="text-xl font-bold text-slate-900 dark:text-white">{item.value}</p>
+                      <p className="font-mono text-xl font-semibold text-slate-900 dark:text-white truncate">{item.value}</p>
                       <p className="text-xs text-slate-500 mt-0.5">{item.label}</p>
                     </motion.div>
                   )
@@ -292,14 +319,14 @@ export default function ReferralsPage() {
                           </Td>
                           <Td>{(data.rate * 100).toFixed(1)}%</Td>
                           <Td>{data.count}</Td>
-                          <Td className="font-semibold">${data.total.toFixed(2)}</Td>
+                          <Td className="font-mono font-semibold">{f.totals(data.rows)}</Td>
                         </tr>
                       ))}
                       <tr className="border-t-2 border-slate-200 dark:border-slate-700">
                         <Td className="font-bold text-slate-900 dark:text-white">{tc('total')}</Td>
                         <Td>{' '}</Td>
                         <Td className="font-bold">{commissions.length}</Td>
-                        <Td className="font-bold text-emerald-600 dark:text-emerald-400">${totalCommissionAmount.toFixed(2)}</Td>
+                        <Td className="font-mono font-bold text-emerald-600 dark:text-emerald-400">{f.totals(commissions)}</Td>
                       </tr>
                     </Tbody>
                   </Table>
@@ -315,11 +342,11 @@ export default function ReferralsPage() {
                     <div className="flex-1">
                       <p className="font-semibold text-slate-900 dark:text-white text-sm">{t('upcomingPayout')}</p>
                       <p className="text-xs text-slate-500">
-                        ${stats.upcomingPayout.totalAmount} {stats.upcomingPayout.currency} -
-                        {t('payoutPeriod', { start: new Date(stats.upcomingPayout.periodStart).toLocaleDateString(), end: new Date(stats.upcomingPayout.periodEnd).toLocaleDateString() })}
+                        {f.money(stats.upcomingPayout.totalAmount, stats.upcomingPayout.currency)} ·{' '}
+                        {t('payoutPeriod', { start: f.date(stats.upcomingPayout.periodStart), end: f.date(stats.upcomingPayout.periodEnd) })}
                       </p>
                     </div>
-                    <Badge>{stats.upcomingPayout.status}</Badge>
+                    <StatusBadge status={stats.upcomingPayout.status} />
                   </div>
                 </Card>
               )}
@@ -347,10 +374,10 @@ export default function ReferralsPage() {
                   <Tbody>
                     {referrals.map((ref) => (
                       <tr key={ref.id} className="table-row-hover">
-                        <Td>{new Date(ref.createdAt).toLocaleDateString()}</Td>
+                        <Td>{f.date(ref.createdAt)}</Td>
                         <Td className="font-mono text-xs">{ref.referredUserId.slice(0, 12)}...</Td>
                         <Td>{ref.firstOrderId ? <span className="font-mono text-xs">{ref.firstOrderId.slice(0, 8)}...</span> : '-'}</Td>
-                        <Td><Badge>{ref.firstOrderPaid ? tc('status.converted') : tc('status.pending')}</Badge></Td>
+                        <Td><StatusBadge status={ref.firstOrderPaid ? 'converted' : 'pending'} /></Td>
                       </tr>
                     ))}
                   </Tbody>
@@ -380,16 +407,16 @@ export default function ReferralsPage() {
                   <Tbody>
                     {commissions.map((com) => (
                       <tr key={com.id} className="table-row-hover">
-                        <Td>{new Date(com.createdAt).toLocaleDateString()}</Td>
+                        <Td>{f.date(com.createdAt)}</Td>
                         <Td>
                           <span className="inline-flex items-center justify-center w-6 h-6 rounded-lg bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-300 text-xs font-bold">
                             L{com.level}
                           </span>
                         </Td>
-                        <Td className="font-semibold text-emerald-600 dark:text-emerald-400">${com.amount} {com.currency}</Td>
+                        <Td className="font-mono font-semibold text-emerald-600 dark:text-emerald-400">{f.money(com.amount, com.currency)}</Td>
                         <Td>{(Number(com.commissionRate) * 100).toFixed(1)}%</Td>
                         <Td className="font-mono text-xs">{com.orderId.slice(0, 8)}...</Td>
-                        <Td><Badge>{com.status}</Badge></Td>
+                        <Td><StatusBadge status={com.status} /></Td>
                       </tr>
                     ))}
                   </Tbody>
@@ -419,10 +446,10 @@ export default function ReferralsPage() {
                   <Tbody>
                     {payouts.map((p) => (
                       <tr key={p.id} className="table-row-hover">
-                        <Td>{new Date(p.periodStart).toLocaleDateString()} - {new Date(p.periodEnd).toLocaleDateString()}</Td>
-                        <Td className="font-semibold">${p.totalAmount} {p.currency}</Td>
-                        <Td>{p.payoutDate ? new Date(p.payoutDate).toLocaleDateString() : '-'}</Td>
-                        <Td><Badge>{p.status}</Badge></Td>
+                        <Td>{f.date(p.periodStart)} — {f.date(p.periodEnd)}</Td>
+                        <Td className="font-mono font-semibold">{f.money(p.totalAmount, p.currency)}</Td>
+                        <Td>{p.payoutDate ? f.date(p.payoutDate) : '—'}</Td>
+                        <Td><StatusBadge status={p.status} /></Td>
                       </tr>
                     ))}
                   </Tbody>

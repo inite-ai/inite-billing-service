@@ -324,7 +324,7 @@ export default function ChatPanel() {
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center justify-center"
+          className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-[#ccff00] text-[#0a0a0b] shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center justify-center"
           aria-label={t('title')}
         >
           <MessageCircle className="w-6 h-6" />
@@ -335,9 +335,9 @@ export default function ChatPanel() {
       {isOpen && (
         <div className="fixed bottom-6 right-6 z-50 w-[400px] h-[500px] rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-2xl flex flex-col overflow-hidden">
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-violet-600 to-purple-600 text-white">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-900 text-gray-100">
             <div className="flex items-center gap-2">
-              <Bot className="w-5 h-5" />
+              <Bot className="w-5 h-5 text-[#ccff00]" />
               <span className="font-semibold text-sm">{t('title')}</span>
             </div>
             <button
@@ -354,8 +354,8 @@ export default function ChatPanel() {
             {/* Welcome message */}
             {messages.length === 0 && (
               <div className="flex gap-2">
-                <div className="flex-shrink-0 w-7 h-7 rounded-full bg-gradient-to-r from-violet-600 to-purple-600 flex items-center justify-center">
-                  <Bot className="w-4 h-4 text-white" />
+                <div className="flex-shrink-0 w-7 h-7 rounded-full bg-[#ccff00] flex items-center justify-center">
+                  <Bot className="w-4 h-4 text-[#0a0a0b]" />
                 </div>
                 <div className="bg-gray-100 dark:bg-gray-800 rounded-2xl rounded-tl-sm px-3 py-2 max-w-[85%]">
                   <p className="text-sm text-gray-700 dark:text-gray-300">
@@ -382,8 +382,8 @@ export default function ChatPanel() {
                   }`}
                 >
                   {message.role === 'assistant' && (
-                    <div className="flex-shrink-0 w-7 h-7 rounded-full bg-gradient-to-r from-violet-600 to-purple-600 flex items-center justify-center">
-                      <Bot className="w-4 h-4 text-white" />
+                    <div className="flex-shrink-0 w-7 h-7 rounded-full bg-[#ccff00] flex items-center justify-center">
+                      <Bot className="w-4 h-4 text-[#0a0a0b]" />
                     </div>
                   )}
                   <div className="max-w-[85%] min-w-0">
@@ -391,7 +391,7 @@ export default function ChatPanel() {
                       <div
                         className={`rounded-2xl px-3 py-2 text-sm ${
                           message.role === 'user'
-                            ? 'bg-violet-500 text-white rounded-tr-sm'
+                            ? 'bg-[#ccff00] text-[#0a0a0b] rounded-tr-sm'
                             : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-tl-sm'
                         }`}
                       >
@@ -424,8 +424,8 @@ export default function ChatPanel() {
             {/* Tool indicator */}
             {runningTool && (
               <div className="flex gap-2">
-                <div className="flex-shrink-0 w-7 h-7 rounded-full bg-gradient-to-r from-violet-600 to-purple-600 flex items-center justify-center">
-                  <Bot className="w-4 h-4 text-white" />
+                <div className="flex-shrink-0 w-7 h-7 rounded-full bg-[#ccff00] flex items-center justify-center">
+                  <Bot className="w-4 h-4 text-[#0a0a0b]" />
                 </div>
                 <div className="bg-gray-100 dark:bg-gray-800 rounded-2xl rounded-tl-sm px-3 py-2">
                   <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
@@ -439,8 +439,8 @@ export default function ChatPanel() {
             {/* Loading indicator */}
             {isLoading && !runningTool && (
               <div className="flex gap-2">
-                <div className="flex-shrink-0 w-7 h-7 rounded-full bg-gradient-to-r from-violet-600 to-purple-600 flex items-center justify-center">
-                  <Bot className="w-4 h-4 text-white" />
+                <div className="flex-shrink-0 w-7 h-7 rounded-full bg-[#ccff00] flex items-center justify-center">
+                  <Bot className="w-4 h-4 text-[#0a0a0b]" />
                 </div>
                 <div className="bg-gray-100 dark:bg-gray-800 rounded-2xl rounded-tl-sm px-3 py-2">
                   <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">

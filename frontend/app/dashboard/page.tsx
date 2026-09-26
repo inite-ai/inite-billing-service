@@ -6,7 +6,8 @@ import { useTranslations } from 'next-intl'
 import { motion } from 'framer-motion'
 import { ClientLayout } from '@/components/layout/ClientLayout'
 import { Card } from '@/components/ui/Card'
-import { Badge } from '@/components/ui/Badge'
+import { StatusBadge } from '@/components/ui/StatusBadge'
+import { useFormat } from '@/lib/useFormat'
 import { Button } from '@/components/ui/Button'
 import { StatsCards } from '@/components/dashboard/StatsCards'
 import RecommendedOffers from '@/components/dashboard/RecommendedOffers'
@@ -22,6 +23,7 @@ export default function DashboardPage() {
   const router = useRouter()
   const t = useTranslations('dashboard')
   const tc = useTranslations('common')
+  const f = useFormat()
   const [orders, setOrders] = useState<Order[]>([])
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
   const [entitlements, setEntitlements] = useState<Entitlement[]>([])
@@ -81,7 +83,11 @@ export default function DashboardPage() {
             activeSubscriptions={activeSubs.length}
             totalOrders={orders.length}
             totalReferrals={affiliateStats?.totalReferrals || 0}
-            pendingCommissions={affiliateStats?.pendingCommissions || '0'}
+            pendingCommissions={
+              affiliateStats?.balances?.length
+                ? f.totals(affiliateStats.balances.map((b) => ({ amount: Number(b.pending) + Number(b.available), currency: b.currency })))
+                : '—'
+            }
           />
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
@@ -108,29 +114,26 @@ export default function DashboardPage() {
                       <div key={sub.id} className="border border-slate-100 dark:border-slate-800 rounded-xl p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                         <div className="flex items-center justify-between mb-2">
                           <h4 className="font-medium text-slate-900 dark:text-white text-sm">
-                            {sub.productName || sub.productCode || 'Subscription'}
+                            {sub.productName || sub.productCode || t('untitledSubscription')}
                           </h4>
-                          <Badge>{sub.status}</Badge>
+                          <StatusBadge status={sub.cancelAtPeriodEnd ? 'canceling' : sub.status} />
                         </div>
                         {sub.serviceName && (
                           <span className="text-xs px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 font-medium mb-2 inline-block">
-                            {sub.serviceName}
+                            {sub.serviceDisplayName || sub.serviceName}
                           </span>
                         )}
                         <div className="flex items-center justify-between text-xs">
                           <div className="flex items-center gap-1.5 text-slate-500">
                             <Calendar className="w-3.5 h-3.5" />
-                            <span>{t('renews', { date: new Date(sub.currentPeriodEnd).toLocaleDateString() })}</span>
+                            <span>{t(sub.cancelAtPeriodEnd ? 'endsOn' : 'renews', { date: f.date(sub.currentPeriodEnd) })}</span>
                           </div>
                           {sub.amount && (
                             <span className="font-semibold text-slate-700 dark:text-slate-200">
-                              {sub.amount} {sub.currency}/{sub.interval || 'month'}
+                              {f.price(sub.amount, sub.currency, sub.interval)}
                             </span>
                           )}
                         </div>
-                        {sub.cancelAtPeriodEnd && (
-                          <p className="text-xs text-orange-500 mt-2">{t('cancelsAtPeriodEnd')}</p>
-                        )}
                       </div>
                     ))}
                   </div>
@@ -149,24 +152,24 @@ export default function DashboardPage() {
                     <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-3">
                       <Sparkles className="w-6 h-6 text-slate-400" />
                     </div>
-                    <p className="text-sm text-slate-500">{t('noActiveSubscriptions')}</p>
+                    <p className="text-sm text-slate-500">{t('noEntitlements')}</p>
                   </div>
                 ) : (
-                  <div className="space-y-2">
-                    {activeEntitlements.map((e) => (
-                      <div key={e.id} className="flex items-center justify-between bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800/50 rounded-xl px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                          <span className="text-sm font-medium text-emerald-800 dark:text-emerald-300">{e.key}</span>
-                        </div>
-                        {e.expiresAt && (
-                          <span className="text-xs text-emerald-600 dark:text-emerald-400">
-                            {t('expires', { date: new Date(e.expiresAt).toLocaleDateString() })}
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+                  <>
+                    <p className="mb-3 text-xs text-slate-500">{t('entitlementsHint')}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {activeEntitlements.map((e) => (
+                        <span
+                          key={e.id}
+                          title={e.expiresAt ? t('expires', { date: f.date(e.expiresAt) }) : undefined}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 font-mono text-[12px] text-slate-200"
+                        >
+                          <span className="h-1.5 w-1.5 rounded-full bg-[#ccff00]" />
+                          {e.key}
+                        </span>
+                      ))}
+                    </div>
+                  </>
                 )}
               </Card>
             </motion.div>
@@ -193,8 +196,8 @@ export default function DashboardPage() {
                               {cb.service?.name || t('credits')}
                             </span>
                           </div>
-                          <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                            {cb.balance}
+                          <span className="font-mono text-sm font-semibold text-slate-100">
+                            {f.num(cb.balance)}
                           </span>
                         </div>
                         <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 mb-1.5">
@@ -204,9 +207,9 @@ export default function DashboardPage() {
                           />
                         </div>
                         <div className="flex items-center justify-between text-xs text-slate-500">
-                          <span>{used} / {total} used</span>
+                          <span>{t('creditsUsed', { used: f.num(used), total: f.num(total) })}</span>
                           {cb.resetsAt && (
-                            <span>{t('expires', { date: new Date(cb.resetsAt).toLocaleDateString() })}</span>
+                            <span>{t('resets', { date: f.date(cb.resetsAt) })}</span>
                           )}
                         </div>
                       </div>
@@ -236,10 +239,10 @@ export default function DashboardPage() {
                   <Tbody>
                     {orders.slice(0, 5).map((order) => (
                       <tr key={order.id} className="table-row-hover">
-                        <Td>{new Date(order.createdAt).toLocaleDateString()}</Td>
-                        <Td className="font-semibold">{order.amount} {order.currency}</Td>
-                        <Td>{order.mode}</Td>
-                        <Td><Badge>{order.status}</Badge></Td>
+                        <Td>{f.date(order.createdAt)}</Td>
+                        <Td className="font-mono font-semibold">{f.money(order.amount, order.currency)}</Td>
+                        <Td>{f.mode(order.mode)}</Td>
+                        <Td><StatusBadge status={order.status} /></Td>
                       </tr>
                     ))}
                   </Tbody>

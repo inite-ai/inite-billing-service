@@ -52,7 +52,10 @@
       "earned": "начислена",
       "converted": "Конвертирован",
       "canceling": "Отменяется",
-      "processing": "обработка"
+      "processing": "обработка",
+      "open": "ждёт оплаты",
+      "ended": "завершена",
+      "succeeded": "успешно"
     },
     "pagination": {
       "page": "Страница {page} из {pages}",
@@ -106,6 +109,18 @@
       "done": "{count, plural, one {Выгружена # строка} few {Выгружено # строки} many {Выгружено # строк} other {Выгружено # строк}}",
       "doneUnknown": "Файл выгружен",
       "failed": "Не удалось выгрузить"
+    },
+    "billing": {
+      "perMonth": "/мес",
+      "perYear": "/год",
+      "monthly": "Помесячно",
+      "yearly": "За год",
+      "oneTime": "Разово",
+      "modeSubscription": "Подписка",
+      "modePayment": "Разовая покупка",
+      "railCrypto": "Крипта",
+      "methodCard": "Карта",
+      "methodSbp": "СБП"
     }
   },
   "nav": {
@@ -269,7 +284,13 @@
         "popular_with": "Часто берут вместе",
         "top_seller": "Хит продаж"
       }
-    }
+    },
+    "untitledSubscription": "Подписка",
+    "endsOn": "Действует до {date}",
+    "creditsUsed": "Потрачено {used} из {total}",
+    "resets": "Обновится {date}",
+    "entitlementsHint": "Что открывают ваши тарифы в продуктах INITE.",
+    "noEntitlements": "Доступов пока нет"
   },
   "orders": {
     "title": "История заказов",
@@ -299,7 +320,10 @@
     "paymentRail": "Платёжная система",
     "paymentStatus": "Статус",
     "paymentMethod": "Способ оплаты",
-    "completePayment": "Завершить оплату"
+    "completePayment": "Завершить оплату",
+    "spent": "Потрачено",
+    "payNow": "Оплатить",
+    "untitledOrder": "Заказ"
   },
   "subscriptions": {
     "title": "Мои подписки",
@@ -330,7 +354,18 @@
     "cancelSubscription": "Отменить подписку",
     "confirmCancel": "Вы уверены, что хотите отменить подписку? Она останется активной до конца текущего расчётного периода.",
     "cancelSuccess": "Подписка будет отменена в конце периода",
-    "cancelError": "Не удалось отменить подписку"
+    "cancelError": "Не удалось отменить подписку",
+    "loadError": "Не удалось загрузить подписки",
+    "cancelTitle": "Отменить подписку?",
+    "cancelMessage": "Она перестанет продлеваться и будет работать до {date}. До этой даты её можно возобновить.",
+    "resume": "Возобновить подписку",
+    "resumeSuccess": "Подписка снова будет продлеваться",
+    "resumeError": "Не удалось возобновить подписку",
+    "untitled": "Подписка",
+    "creditsPerPeriodCount": "{count} кредитов за период",
+    "detailIncludes": "Что включено",
+    "detailService": "Сервис",
+    "detailProduct": "Продукт"
   },
   "catalog": {
     "title": "Тарифы",
@@ -569,7 +604,9 @@
     "minWithdrawal": "Мин. вывод: ${amount}",
     "requestWithdrawal": "Запросить вывод",
     "withdrawalRequested": "Запрос на вывод отправлен!",
-    "withdrawalError": "Не удалось запросить вывод"
+    "withdrawalError": "Не удалось запросить вывод",
+    "minWithdrawalPlain": "Вывод от {amount} в валюте баланса",
+    "pendingSettlement": "+{amount} ещё в холде"
   },
   "admin": {
     "dashboard": {
@@ -629,7 +666,9 @@
       "regenerateConfirm": "Перегенерировать API-ключ? Старый ключ перестанет работать немедленно.",
       "keyRegenerated": "API-ключ перегенерирован",
       "deleteConfirm": "Удалить этот сервис? Операция не выполнится, если для него существуют продукты или реферальные уровни.",
-      "deleteError": "Не удалось удалить — у сервиса могут быть связанные данные"
+      "deleteError": "Не удалось удалить — у сервиса могут быть связанные данные",
+      "revealFailed": "Не удалось показать ключ",
+      "copyFailed": "Не удалось скопировать ключ"
     },
     "products": {
       "title": "Продукты",
@@ -1563,5 +1602,32 @@
       "success": "Вы отписаны от рассылки. Включить письма снова можно в настройках уведомлений.",
       "error": "Неверная или устаревшая ссылка отписки."
     }
+  },
+  "referralLevelForm": {
+    "service": "Сервис",
+    "selectService": "Выберите сервис…",
+    "name": "Название уровня",
+    "namePlaceholder": "Прямой реферал",
+    "rate": "Комиссия, %",
+    "level": "Уровень {level}",
+    "criteria": "Условия (необязательно)",
+    "criteriaHint": "Партнёр, который перестал им соответствовать, выбывает, и уровни ниже сдвигаются вверх.",
+    "minDirect": "Мин. прямых рефералов",
+    "minActive": "Мин. активных рефералов",
+    "minPersonal": "Мин. личных заказов",
+    "minDownline": "Мин. заказов в структуре",
+    "minVolume": "Мин. оборот в месяц",
+    "create": "Создать уровень",
+    "personalPurchaseRequired": "Нужна личная покупка"
+  },
+  "errorPages": {
+    "notFoundTitle": "Здесь ничего нет",
+    "notFoundHint": "Страница переехала, или в ссылке опечатка.",
+    "home": "На главную",
+    "pricing": "Тарифы",
+    "errorEyebrow": "Ошибка",
+    "errorTitle": "У нас что-то сломалось",
+    "errorHint": "Попробуйте ещё раз через минуту. Код ошибки ниже поможет нам её найти.",
+    "retry": "Повторить"
   }
 }

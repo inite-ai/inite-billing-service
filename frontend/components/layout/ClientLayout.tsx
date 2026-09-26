@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, ShoppingBag, Receipt, CreditCard, Users,
-  Settings, LogOut, Menu, X, ChevronRight,
+  Settings, LogOut, Menu, X,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTranslations } from 'next-intl'
@@ -31,20 +31,17 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       {/* Logo */}
       <div className="px-5 py-6">
         <Link href="/dashboard" className="flex items-center gap-3" onClick={onNavigate}>
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-lg shadow-violet-500/20">
-            <span className="text-white font-bold text-sm">IN</span>
-          </div>
-          <div>
-            <span className="text-white font-bold text-lg tracking-tight">INITE</span>
-            <span className="text-slate-500 text-xs block -mt-0.5">Billing</span>
-          </div>
+          <span className="brand-mark" aria-hidden>IN</span>
+          <span className="font-semibold tracking-tight text-white">
+            INITE <span className="font-medium text-slate-500">Billing</span>
+          </span>
         </Link>
       </div>
 
       {/* Navigation */}
       <nav className="flex-1 px-3 space-y-1">
-        <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-widest text-slate-600">
-          {t('menu') || 'Menu'}
+        <p className="px-3 mb-2 font-mono text-[10.5px] uppercase tracking-[0.18em] text-slate-500">
+          {t('menu')}
         </p>
         {navItems.map((item) => {
           const Icon = item.icon
@@ -57,11 +54,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               onClick={onNavigate}
               className={`sidebar-item ${isActive ? 'active' : ''}`}
             >
-              <Icon className={`w-[18px] h-[18px] sidebar-icon ${isActive ? 'text-violet-500' : ''}`} />
+              <Icon className="w-[18px] h-[18px] sidebar-icon" />
               <span className="flex-1">{t(item.key)}</span>
-              {isActive && (
-                <ChevronRight className="w-3.5 h-3.5 text-violet-500/50" />
-              )}
             </Link>
           )
         })}
@@ -69,7 +63,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         {user?.role === 'ADMIN' && (
           <>
             <div className="my-3 border-t border-slate-800" />
-            <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-widest text-slate-600">
+            <p className="px-3 mb-2 font-mono text-[10.5px] uppercase tracking-[0.18em] text-slate-500">
               {t('admin')}
             </p>
             <Link
@@ -93,7 +87,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           </div>
           {user && (
             <div className="flex items-center gap-3 px-3">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-600 to-purple-700 flex items-center justify-center text-white text-xs font-bold shrink-0">
+              <div className="w-8 h-8 rounded-lg bg-[#ccff00] flex items-center justify-center text-[#0a0a0b] text-xs font-bold shrink-0">
                 {(user.name || user.email || '?')[0].toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
@@ -107,7 +101,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               <button
                 onClick={logout}
                 className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                title="Logout"
+                title={t('signOut')}
+                aria-label={t('signOut')}
               >
                 <LogOut className="w-4 h-4" />
               </button>
@@ -123,7 +118,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false)
 
   return (
-    <div className="flex min-h-screen">
+    <div className="app flex min-h-screen">
       {/* Desktop Sidebar */}
       <aside className="sidebar hidden lg:flex lg:flex-col lg:w-[260px] lg:fixed lg:inset-y-0 z-30">
         <SidebarContent />
@@ -138,8 +133,10 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
           <Menu className="w-5 h-5" />
         </button>
         <Link href="/dashboard" className="ml-3">
-          <span className="font-bold text-lg gradient-text">INITE</span>
-          <span className="text-slate-400 text-sm ml-1">Billing</span>
+          <span className="flex items-center gap-2 font-semibold text-white">
+            <span className="brand-mark !h-7 !w-7 !text-[13px]" aria-hidden>IN</span>
+            INITE <span className="font-medium text-slate-500">Billing</span>
+          </span>
         </Link>
         <div className="ml-auto">
           <NotificationBell direction="down" />

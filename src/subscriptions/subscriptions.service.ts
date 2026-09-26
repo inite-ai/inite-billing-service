@@ -126,6 +126,13 @@ export class SubscriptionsService {
         productFeatures: metadata.features || [],
         creditsPerPeriod: metadata.creditsPerPeriod || metadata.credits || null,
         serviceName: service?.name || null,
+        // The name customers see in the catalog; `serviceName` stays the
+        // operator's name, which external services already read.
+        serviceDisplayName:
+          (typeof (service?.metadata as any)?.displayName === 'string' &&
+            (service?.metadata as any).displayName.trim()) ||
+          service?.name ||
+          null,
         serviceCode: service?.code || null,
         // Pricing
         amount: price ? price.amount.toString() : null,

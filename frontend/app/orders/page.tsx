@@ -7,11 +7,14 @@ import { motion } from 'framer-motion'
 import { ClientLayout } from '@/components/layout/ClientLayout'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
+import { StatusBadge } from '@/components/ui/StatusBadge'
+import { useFormat } from '@/lib/useFormat'
+import Link from 'next/link'
 import { Modal } from '@/components/ui/Modal'
 import { Table, Thead, Tbody, Th, Td } from '@/components/ui/Table'
 import { Tabs } from '@/components/ui/Tabs'
 import { useAuth } from '@/contexts/AuthContext'
-import { Receipt, Loader2, ExternalLink } from 'lucide-react'
+import { Receipt, Loader2, ArrowRight } from 'lucide-react'
 import api from '@/lib/api'
 import type { Order } from '@/lib/types'
 
@@ -20,6 +23,8 @@ export default function OrdersPage() {
   const router = useRouter()
   const t = useTranslations('orders')
   const tc = useTranslations('common')
+  const ts = useTranslations('common.status')
+  const f = useFormat()
 
   const statusTabs = [
     { key: '', label: t('tabAll') },
@@ -55,16 +60,18 @@ export default function OrdersPage() {
     return <div className="min-h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-violet-500" /></div>
   }
 
-  const paidTotal = orders.filter((o) => o.status === 'paid').reduce((s, o) => s + Number(o.amount), 0)
+  // Spent per currency — adding dollars to roubles gives a number that means nothing.
+  const paidTotals = f.totals(orders.filter((o) => o.status === 'paid'))
+  const awaitingPayment = (o: Order) => o.status === 'created' || o.status === 'open'
 
   return (
     <ClientLayout>
       <div className="flex items-center justify-between mb-2">
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">{t('title')}</h1>
-        {paidTotal > 0 && (
+        {paidTotals && (
           <div className="text-right">
-            <p className="text-xs text-slate-400 uppercase tracking-wide">{t('totalSpent', { amount: '' }).replace('$', '').trim()}</p>
-            <p className="text-lg font-bold text-slate-900 dark:text-white">${paidTotal.toFixed(2)}</p>
+            <p className="font-mono text-[10.5px] uppercase tracking-[0.18em] text-slate-500">{t('spent')}</p>
+            <p className="font-mono text-lg font-semibold text-slate-900 dark:text-white">{paidTotals}</p>
           </div>
         )}
       </div>
@@ -82,7 +89,7 @@ export default function OrdersPage() {
             <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-4">
               <Receipt className="w-7 h-7 text-slate-400" />
             </div>
-            <p className="text-slate-500 font-medium">{statusFilter ? t('noFilteredOrders', { status: statusFilter }) : t('noOrders')}</p>
+            <p className="text-slate-500 font-medium">{statusFilter ? t('noFilteredOrders', { status: ts.has(statusFilter as never) ? ts(statusFilter as never) : statusFilter }) : t('noOrders')}</p>
           </div>
         </Card>
       ) : (
@@ -95,11 +102,24 @@ export default function OrdersPage() {
               <Tbody>
                 {orders.map((order) => (
                   <tr key={order.id} className="table-row-hover cursor-pointer" onClick={() => setSelectedOrder(order)}>
-                    <Td>{new Date(order.createdAt).toLocaleDateString()}</Td>
-                    <Td className="font-medium">{order.price?.product?.name || order.price?.code || '-'}</Td>
-                    <Td className="font-semibold">{order.amount} {order.currency}</Td>
-                    <Td><Badge variant={order.mode === 'SUBSCRIPTION' ? 'info' : 'default'}>{order.mode}</Badge></Td>
-                    <Td><Badge>{order.status}</Badge></Td>
+                    <Td>{f.date(order.createdAt)}</Td>
+                    <Td className="font-medium">{order.price?.product?.name || order.price?.code || '—'}</Td>
+                    <Td className="font-mono font-semibold">{f.money(order.amount, order.currency)}</Td>
+                    <Td><Badge variant={order.mode === 'SUBSCRIPTION' ? 'info' : 'default'}>{f.mode(order.mode)}</Badge></Td>
+                    <Td>
+                      <div className="flex items-center gap-3">
+                        <StatusBadge status={order.status} />
+                        {awaitingPayment(order) && (
+                          <Link
+                            href={`/checkout/${order.id}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-xs font-semibold text-[#ccff00] hover:underline"
+                          >
+                            {t('payNow')}
+                          </Link>
+                        )}
+                      </div>
+                    </Td>
                   </tr>
                 ))}
               </Tbody>
@@ -118,9 +138,9 @@ export default function OrdersPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h4 className="font-semibold text-slate-900 dark:text-white">
-                {selectedOrder.price?.product?.name || 'Order'}
+                {selectedOrder.price?.product?.name || t('untitledOrder')}
               </h4>
-              <Badge>{selectedOrder.status}</Badge>
+              <StatusBadge status={selectedOrder.status} />
             </div>
 
             <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 space-y-3 text-sm">
@@ -130,15 +150,15 @@ export default function OrdersPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">{t('detailAmount')}</span>
-                <span className="font-semibold text-slate-900 dark:text-white">{selectedOrder.amount} {selectedOrder.currency}</span>
+                <span className="font-mono font-semibold text-slate-900 dark:text-white">{f.money(selectedOrder.amount, selectedOrder.currency)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">{t('detailMode')}</span>
-                <span className="text-slate-700 dark:text-slate-300">{selectedOrder.mode}</span>
+                <span className="text-slate-700 dark:text-slate-300">{f.mode(selectedOrder.mode)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">{t('detailDate')}</span>
-                <span className="text-slate-700 dark:text-slate-300">{new Date(selectedOrder.createdAt).toLocaleString()}</span>
+                <span className="text-slate-700 dark:text-slate-300">{f.dateTime(selectedOrder.createdAt)}</span>
               </div>
               {selectedOrder.price && (
                 <>
@@ -149,7 +169,7 @@ export default function OrdersPage() {
                   {selectedOrder.price.interval && (
                     <div className="flex justify-between">
                       <span className="text-slate-500">{t('detailBillingInterval')}</span>
-                      <span className="text-slate-700 dark:text-slate-300">{selectedOrder.price.interval}</span>
+                      <span className="text-slate-700 dark:text-slate-300">{f.interval(selectedOrder.price.interval)}</span>
                     </div>
                   )}
                 </>
@@ -162,6 +182,13 @@ export default function OrdersPage() {
               )}
             </div>
 
+            {awaitingPayment(selectedOrder) && (
+              <Link href={`/checkout/${selectedOrder.id}`} className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#ccff00] px-4 py-2.5 text-sm font-semibold text-[#0a0a0b] hover:brightness-110">
+                {t('completePayment')}
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            )}
+
             {/* Payment Intents */}
             {selectedOrder.paymentIntents && selectedOrder.paymentIntents.length > 0 && (
               <div>
@@ -170,27 +197,17 @@ export default function OrdersPage() {
                   <div key={pi.id} className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3 text-sm space-y-2">
                     <div className="flex justify-between">
                       <span className="text-slate-500">{t('paymentRail')}</span>
-                      <span className="text-slate-700 dark:text-slate-300">{pi.rail}</span>
+                      <span className="text-slate-700 dark:text-slate-300">{f.rail(pi.rail)}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-slate-500">{t('paymentStatus')}</span>
-                      <Badge>{pi.status}</Badge>
+                      <StatusBadge status={pi.status} />
                     </div>
                     {pi.method && (
                       <div className="flex justify-between">
                         <span className="text-slate-500">{t('paymentMethod')}</span>
-                        <span className="text-slate-700 dark:text-slate-300">{pi.method}</span>
+                        <span className="text-slate-700 dark:text-slate-300">{f.method(pi.method)}</span>
                       </div>
-                    )}
-                    {pi.checkoutUrl && pi.status === 'created' && (
-                      <a
-                        href={pi.checkoutUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-violet-600 hover:text-violet-700 dark:text-violet-400 text-sm font-medium"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" /> {t('completePayment')}
-                      </a>
                     )}
                   </div>
                 ))}
