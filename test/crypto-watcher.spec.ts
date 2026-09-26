@@ -153,7 +153,18 @@ describe('CryptoWatcherScheduler', () => {
 
   it('reports every chain before its first poll', () => {
     const { scheduler } = build();
-    expect(scheduler.lastStatus().map((s) => s.chain)).toEqual(['TRON', 'TON', 'ETH', 'SOL']);
+    expect(scheduler.lastStatus().map((s) => s.chain)).toEqual([
+      'TRON',
+      'TON',
+      'SOL',
+      'ETH',
+      'BSC',
+      'POLYGON',
+      'ARBITRUM',
+      'OPTIMISM',
+      'BASE',
+      'AVAX',
+    ]);
     expect(scheduler.lastStatus().every((s) => s.lastPolledAt === null)).toBe(true);
   });
 });

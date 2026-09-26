@@ -1,6 +1,7 @@
-import { ChainId } from '../chains';
+import { CHAINS, ChainId } from '../chains';
 import { CryptoSettings, watchable } from '../crypto-config';
 import { EthWatcher } from './eth.watcher';
+import { EvmWatcher } from './evm.watcher';
 import { SolWatcher } from './sol.watcher';
 import { TonWatcher } from './ton.watcher';
 import { TronWatcher } from './tron.watcher';
@@ -21,14 +22,13 @@ export function watcherFor(
   opts: { anyWallet?: boolean } = {},
 ): ChainWatcher | null {
   if (!opts.anyWallet && !watchable(settings, chain)) return null;
-  if (chain === 'ETH' && !settings.etherscanApiKey) return null;
+  if (chain === 'ETH' && settings.etherscanApiKey) return new EthWatcher(settings.etherscanApiKey);
+  if (CHAINS[chain]?.evm) return new EvmWatcher(chain, settings.rpcUrls[chain]);
   switch (chain) {
     case 'TRON':
       return new TronWatcher(settings.trongridApiKey);
     case 'TON':
       return new TonWatcher(settings.toncenterApiKey);
-    case 'ETH':
-      return new EthWatcher(settings.etherscanApiKey as string);
     case 'SOL':
       return new SolWatcher(settings.solanaRpcUrl);
     default:

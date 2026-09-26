@@ -67,6 +67,11 @@ class UpdateCryptoSettingsDto {
   @IsOptional()
   @IsObject()
   fixedRates?: Record<string, string | number | null>;
+
+  /** `{ BSC: "https://…", BASE: null }` — per-EVM-network RPC; null removes. */
+  @IsOptional()
+  @IsObject()
+  rpcUrls?: Record<string, string | null>;
 }
 
 class AssignTransferDto {

@@ -12,7 +12,10 @@ import {
   CHAINS,
   CHAIN_IDS,
   ChainId,
+  EVM_CHAIN_IDS,
+  EVM_WALLET_KEY,
   STABLECOIN_CURRENCIES,
+  isEvm,
   isValidAddress,
   txExplorerUrl,
 } from '../adapters/crypto/chains';
@@ -51,6 +54,8 @@ export interface CryptoSettingsUpdate {
   fxMarkupPercent?: number;
   /** Units per US dollar; null or '' removes a pinned rate. */
   fixedRates?: Record<string, string | number | null>;
+  /** Per-EVM-network RPC override; null removes it. */
+  rpcUrls?: Partial<Record<ChainId, string | null>>;
 }
 
 function mask(value: unknown): string | null {
@@ -119,6 +124,9 @@ export class CryptoAdminService {
         const stored = typeof config.wallets?.[chain] === 'string' ? config.wallets[chain] : null;
         return {
           chain,
+          evm: isEvm(chain),
+          // What this network actually uses — its own address, or the shared EVM one.
+          effectiveWallet: settings.wallets[chain] ?? null,
           name: CHAINS[chain].name,
           network: CHAINS[chain].network,
           tokens: Object.keys(CHAINS[chain].tokens),
@@ -130,6 +138,11 @@ export class CryptoAdminService {
           poll: polls.get(chain) ?? null,
         };
       }),
+      evmWallet:
+        typeof config.wallets?.[EVM_WALLET_KEY] === 'string'
+          ? config.wallets[EVM_WALLET_KEY]
+          : null,
+      rpcUrls: settings.rpcUrls,
       liveInvoices,
       unmatchedTransfers,
       fx: await this.fxOverview(settings),
@@ -196,22 +209,43 @@ export class CryptoAdminService {
     // unknown network is refused, and the stored map is rebuilt rather than
     // written into by a caller-chosen name.
     const requested = update.wallets ?? {};
-    const unknown = Object.keys(requested).filter((key) => !CHAIN_IDS.includes(key as ChainId));
+    // `EVM` is the one address every EVM network shares.
+    const walletKeys: string[] = [...CHAIN_IDS, EVM_WALLET_KEY];
+    const unknown = Object.keys(requested).filter((key) => !walletKeys.includes(key));
     if (unknown.length) throw new BadRequestException(`Unknown network: ${unknown.join(', ')}`);
 
     const stored = (config.wallets || {}) as Record<string, unknown>;
-    const wallets = new Map<ChainId, string>();
-    for (const chain of CHAIN_IDS) {
-      const hasUpdate = Object.prototype.hasOwnProperty.call(requested, chain);
-      const value = hasUpdate ? requested[chain] : stored[chain];
+    const wallets = new Map<string, string>();
+    for (const key of walletKeys) {
+      const hasUpdate = Object.prototype.hasOwnProperty.call(requested, key);
+      const value = hasUpdate ? (requested as Record<string, unknown>)[key] : stored[key];
       if (value === null || value === undefined || value === '') continue;
       const trimmed = String(value).trim();
-      if (hasUpdate && !isValidAddress(chain, trimmed)) {
-        throw new BadRequestException(`${trimmed} is not a valid ${CHAINS[chain].name} address`);
+      const checkAs: ChainId = key === EVM_WALLET_KEY ? 'ETH' : (key as ChainId);
+      if (hasUpdate && !isValidAddress(checkAs, trimmed)) {
+        const label = key === EVM_WALLET_KEY ? 'EVM (0x…)' : CHAINS[key as ChainId].name;
+        throw new BadRequestException(`${trimmed} is not a valid ${label} address`);
       }
-      wallets.set(chain, trimmed);
+      wallets.set(key, trimmed);
     }
     config.wallets = Object.fromEntries(wallets);
+
+    if (update.rpcUrls !== undefined) {
+      const urls = new Map<string, string>(
+        Object.entries((config.rpcUrls as Record<string, string>) || {}).filter(([c]) =>
+          EVM_CHAIN_IDS.includes(c as ChainId),
+        ),
+      );
+      for (const chain of EVM_CHAIN_IDS) {
+        if (!Object.prototype.hasOwnProperty.call(update.rpcUrls, chain)) continue;
+        const url = update.rpcUrls[chain];
+        if (url === null || url === '') urls.delete(chain);
+        else if (!/^https:\/\/\S+$/.test(String(url))) {
+          throw new BadRequestException(`The RPC URL for ${CHAINS[chain].name} must be https://`);
+        } else urls.set(chain, String(url));
+      }
+      config.rpcUrls = Object.fromEntries(urls);
+    }
 
     if (update.expiryMinutes !== undefined) {
       if (
@@ -291,7 +325,7 @@ export class CryptoAdminService {
     const willBeActive = update.isActive ?? provider?.isActive ?? false;
     if (willBeActive && !CHAIN_IDS.some((chain) => payable(next, chain))) {
       throw new BadRequestException(
-        'Add at least one wallet the rail can watch before turning crypto payments on (Ethereum also needs an Etherscan API key)',
+        'Add at least one wallet the rail can watch before turning crypto payments on ',
       );
     }
 

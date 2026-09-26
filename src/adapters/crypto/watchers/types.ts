@@ -26,6 +26,13 @@ export interface WatchQuery {
   since: Date;
   /** Transactions already recorded as final — a watcher may skip re-reading them. */
   finalTxHashes: Set<string>;
+  /** Where a block-scanning watcher resumes from, kept across restarts. */
+  cursor?: ScanCursor;
+}
+
+export interface ScanCursor {
+  get(): Promise<bigint | null>;
+  set(lastBlock: bigint): Promise<void>;
 }
 
 export interface ChainWatcher {

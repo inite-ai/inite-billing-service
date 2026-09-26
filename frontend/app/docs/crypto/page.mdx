@@ -15,8 +15,19 @@ through the same state machine as every other rail.
 |---|---|---|
 | TRON (TRC-20) | USDT | 19 confirmations (≈ 1 min) |
 | TON | USDT | committed block (≈ 5 s) |
-| Ethereum (ERC-20) | USDT, USDC | 12 confirmations (≈ 3 min) |
 | Solana (SPL) | USDT, USDC | finalized (≈ 15 s) |
+| Ethereum (ERC-20) | USDT, USDC | 12 confirmations (≈ 3 min) |
+| BNB Chain (BEP-20) | USDT, USDC | 15 confirmations |
+| Polygon PoS | USDT, USDC | 64 confirmations |
+| Arbitrum One | USDT, USDC | 20 confirmations |
+| Optimism | USDT, USDC | 20 confirmations |
+| Base | USDC, USDT | 20 confirmations |
+| Avalanche C-Chain | USDT, USDC | 12 confirmations |
+
+All EVM networks share **one 0x wallet** — the same address works on every one of them — and are
+watched straight from the chain (`Transfer` logs over public RPC, no API key). How far each has been
+read is kept in the database, so a restart resumes instead of missing blocks. A network's RPC can be
+overridden per network in the settings.
 
 Prices can be in **any currency**. A stablecoin is a dollar, so a price in roubles, euros or
 tenge is converted when the invoice opens, and that rate is fixed for the invoice — see
@@ -50,8 +61,8 @@ In **Admin → Crypto payments**:
 
 1. **Wallets** — paste a receiving address per network. Each is checked as an address on its
    own network (checksums included) before it is saved; a network left empty is not offered.
-2. **Chain access** — TRON, TON and Solana work without keys at low volume; a key raises the
-   rate limits. Ethereum needs an Etherscan API key. Keys are stored write-only.
+2. **Chain access** — No keys are needed; a TronGrid or Toncenter key raises their rate limits. Keys are stored
+   write-only.
 3. **Turn on.** The rail refuses to turn on with no network it can actually watch.
 
 The page says per network whether it is accepting payments, and when the watcher last checked.
@@ -84,7 +95,7 @@ Set the markup, pin rates and see the rate each of your currencies will be charg
 ## The watcher
 
 Every 30 seconds, for each network and token with an open invoice, the watcher asks that chain's
-public API for recent incoming transfers — TronGrid, Toncenter, Etherscan, Solana RPC. An idle
+public API for recent incoming transfers — TronGrid, Toncenter, Solana RPC and each EVM network's RPC. An idle
 shop makes no calls at all.
 
 Each transfer is recorded once, idempotently, and:

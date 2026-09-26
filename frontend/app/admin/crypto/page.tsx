@@ -43,6 +43,8 @@ interface ChainSettings {
   watchable: boolean
   payable: boolean
   poll: { lastPolledAt: string | null; lastError: string | null; transfersSeen: number; watching: boolean } | null
+  evm: boolean
+  effectiveWallet: string | null
 }
 
 interface Settings {
@@ -52,6 +54,8 @@ interface Settings {
   solanaRpcUrl: string | null
   secrets: Record<SecretKey, string | null>
   chains: ChainSettings[]
+  /** The one 0x address every EVM network uses unless it has its own. */
+  evmWallet: string | null
   liveInvoices: number
   unmatchedTransfers: number
   fx: {
@@ -291,7 +295,11 @@ function Readiness({ chain }: { chain: ChainSettings }) {
 function SettingsForm({ settings, onSaved }: { settings: Settings; onSaved: () => void }) {
   const t = useTranslations('admin.crypto')
   const initialWallets = useMemo(
-    () => Object.fromEntries(settings.chains.map((c) => [c.chain, c.wallet ?? ''])) as Record<string, string>,
+    () =>
+      ({
+        ...Object.fromEntries(settings.chains.map((c) => [c.chain, c.wallet ?? ''])),
+        EVM: settings.evmWallet ?? '',
+      }) as Record<string, string>,
     [settings],
   )
   const [wallets, setWallets] = useState(initialWallets)
@@ -322,6 +330,8 @@ function SettingsForm({ settings, onSaved }: { settings: Settings; onSaved: () =
         const next = (wallets[chain.chain] ?? '').trim()
         if (next !== (chain.wallet ?? '')) walletPatch[chain.chain] = next || null
       }
+      const evmNext = (wallets.EVM ?? '').trim()
+      if (evmNext !== (settings.evmWallet ?? '')) walletPatch.EVM = evmNext || null
       const secretPatch: Record<string, string | null> = {}
       for (const key of Object.keys(secrets) as SecretKey[]) {
         if (secrets[key].trim()) secretPatch[key] = secrets[key].trim()
@@ -382,38 +392,41 @@ function SettingsForm({ settings, onSaved }: { settings: Settings; onSaved: () =
         <h2 className="text-base font-semibold text-slate-900 dark:text-white">{t('wallets.title')}</h2>
         <p className="mt-1 max-w-prose text-sm text-slate-500 dark:text-slate-400">{t('wallets.hint')}</p>
         <div className="mt-5 divide-y divide-slate-100 dark:divide-slate-800">
-          {settings.chains.map((chain) => (
-            <div key={chain.chain} className="grid gap-3 py-4 first:pt-0 last:pb-0 lg:grid-cols-[12rem_1fr_14rem] lg:items-start">
-              <div>
-                <p className="font-medium text-slate-900 dark:text-white">
-                  {chain.name} <span className="text-slate-400">· {chain.network}</span>
-                </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {chain.tokens.join(', ')} · {t('wallets.confirmations', { count: chain.confirmations })}
-                </p>
-              </div>
-              <Input
-                aria-label={t('wallets.addressFor', { network: chain.name })}
+          {settings.chains
+            .filter((chain) => !chain.evm)
+            .map((chain) => (
+              <WalletRow
+                key={chain.chain}
+                title={`${chain.name} · ${chain.network}`}
+                detail={`${chain.tokens.join(', ')} · ${t('wallets.confirmations', { count: chain.confirmations })}`}
                 value={wallets[chain.chain] ?? ''}
-                onChange={(e) => setWallets((w) => ({ ...w, [chain.chain]: e.target.value }))}
-                placeholder={t('wallets.placeholder')}
-                className="font-mono text-xs"
-                spellCheck={false}
-              />
-              <div className="space-y-1 lg:pt-2.5">
-                <Readiness chain={chain} />
-                {chain.poll?.lastError ? (
-                  <p className="text-xs text-red-600 dark:text-red-400" title={chain.poll.lastError}>
-                    {t('wallets.pollError')}: {chain.poll.lastError}
-                  </p>
-                ) : chain.poll?.lastPolledAt ? (
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    {t('wallets.lastPoll', { time: new Date(chain.poll.lastPolledAt).toLocaleTimeString() })}
-                  </p>
-                ) : null}
-              </div>
-            </div>
-          ))}
+                onChange={(value) => setWallets((w) => ({ ...w, [chain.chain]: value }))}
+                label={t('wallets.addressFor', { network: chain.name })}
+              >
+                <ChainStatus chain={chain} />
+              </WalletRow>
+            ))}
+          <WalletRow
+            title={t('wallets.evmTitle')}
+            detail={t('wallets.evmDetail')}
+            value={wallets.EVM ?? ''}
+            onChange={(value) => setWallets((w) => ({ ...w, EVM: value }))}
+            label={t('wallets.evmTitle')}
+            placeholder="0x…"
+          >
+            <ul className="space-y-1.5">
+              {settings.chains
+                .filter((chain) => chain.evm)
+                .map((chain) => (
+                  <li key={chain.chain} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5">
+                    <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                      {chain.name} <span className="text-slate-400">· {chain.tokens.join(', ')}</span>
+                    </span>
+                    <ChainStatus chain={chain} compact />
+                  </li>
+                ))}
+            </ul>
+          </WalletRow>
         </div>
       </Card>
 
@@ -653,6 +666,61 @@ function FxCard({
       </form>
       <p className="mt-1.5 max-w-prose text-xs text-slate-500 dark:text-slate-400">{t('pinHint')}</p>
     </Card>
+  )
+}
+
+function WalletRow({
+  title,
+  detail,
+  value,
+  onChange,
+  label,
+  placeholder,
+  children,
+}: {
+  title: string
+  detail: string
+  value: string
+  onChange: (value: string) => void
+  label: string
+  placeholder?: string
+  children: React.ReactNode
+}) {
+  const t = useTranslations('admin.crypto')
+  return (
+    <div className="grid gap-3 py-4 first:pt-0 last:pb-0 lg:grid-cols-[12rem_1fr_16rem] lg:items-start">
+      <div>
+        <p className="font-medium text-slate-900 dark:text-white">{title}</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400">{detail}</p>
+      </div>
+      <Input
+        aria-label={label}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder ?? t('wallets.placeholder')}
+        className="font-mono text-xs"
+        spellCheck={false}
+      />
+      <div className="lg:pt-2.5">{children}</div>
+    </div>
+  )
+}
+
+function ChainStatus({ chain, compact = false }: { chain: ChainSettings; compact?: boolean }) {
+  const t = useTranslations('admin.crypto')
+  return (
+    <div className={compact ? 'flex items-center gap-2' : 'space-y-1'}>
+      <Readiness chain={chain} />
+      {chain.poll?.lastError ? (
+        <p className="text-xs text-red-600 dark:text-red-400" title={chain.poll.lastError}>
+          {compact ? t('wallets.pollError') : `${t('wallets.pollError')}: ${chain.poll.lastError}`}
+        </p>
+      ) : !compact && chain.poll?.lastPolledAt ? (
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          {t('wallets.lastPoll', { time: new Date(chain.poll.lastPolledAt).toLocaleTimeString() })}
+        </p>
+      ) : null}
+    </div>
   )
 }
 

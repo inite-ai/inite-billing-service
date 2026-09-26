@@ -176,9 +176,7 @@ describe('Crypto payments E2E', () => {
 
     it('refuses to turn the rail on with nothing to watch', async () => {
       asAdmin();
-      const res = await http()
-        .put('/v1/admin/crypto/settings')
-        .send({ isActive: true, wallets: { ETH: '0x1111111111111111111111111111111111111111' } });
+      const res = await http().put('/v1/admin/crypto/settings').send({ isActive: true });
       expect(res.status).toBe(400);
     });
 
@@ -201,6 +199,46 @@ describe('Crypto payments E2E', () => {
       // The key comes back as a fingerprint, never whole.
       expect(res.body.secrets.trongridApiKey).toBe('••••-key');
       expect(JSON.stringify(res.body)).not.toContain('trongrid-secret-key');
+    });
+  });
+
+  describe('EVM networks', () => {
+    it('opens every EVM network from one 0x wallet, and rejects a malformed one', async () => {
+      asAdmin();
+      await http()
+        .put('/v1/admin/crypto/settings')
+        .send({ wallets: { EVM: '0x12345' } })
+        .expect(400);
+      const res = await http()
+        .put('/v1/admin/crypto/settings')
+        .send({ wallets: { EVM: '0x1111111111111111111111111111111111111111' } })
+        .expect(200);
+      const evm = res.body.chains.filter((c: any) => c.evm);
+      expect(evm.map((c: any) => c.chain)).toEqual([
+        'ETH',
+        'BSC',
+        'POLYGON',
+        'ARBITRUM',
+        'OPTIMISM',
+        'BASE',
+        'AVAX',
+      ]);
+      expect(evm.every((c: any) => c.payable)).toBe(true);
+
+      const session = await newSession();
+      const crypto = (
+        await http().get(`/v1/checkout/sessions/${session}`).expect(200)
+      ).body.paymentMethods.find((m: any) => m.code === 'CRYPTO');
+      expect(crypto.options.map((o: any) => o.id)).toEqual(
+        expect.arrayContaining(['BSC_USDT', 'BASE_USDC', 'ARBITRUM_USDT']),
+      );
+
+      // Back to TRON/TON only, as the rest of this suite expects.
+      asAdmin();
+      await http()
+        .put('/v1/admin/crypto/settings')
+        .send({ wallets: { EVM: null } })
+        .expect(200);
     });
   });
 

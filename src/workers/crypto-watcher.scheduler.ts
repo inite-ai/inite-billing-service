@@ -6,7 +6,7 @@ import { PaymentOrchestratorService } from '../payment-orchestrator/payment-orch
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { RAILS } from '../common/connectors/rail';
 import { CryptoAdapter } from '../adapters/crypto/crypto.adapter';
-import { CHAINS, CHAIN_IDS, ChainId } from '../adapters/crypto/chains';
+import { CHAINS, CHAIN_IDS, ChainId, receiverKey } from '../adapters/crypto/chains';
 import { loadCryptoSettings } from '../adapters/crypto/crypto-config';
 import { watcherFor } from '../adapters/crypto/watchers';
 
@@ -137,6 +137,7 @@ export class CryptoWatcherScheduler {
           requiredConfirmations: chain.confirmations,
           since,
           finalTxHashes: await adapter.ledger.finalTxHashes(target.chain, since),
+          cursor: this.cursorFor(target.chain, target.token, target.receiverAddress),
         });
 
         for (const transfer of transfers) {
@@ -190,6 +191,26 @@ export class CryptoWatcherScheduler {
     }
     if (expired.length) this.logger.log(`Expired ${expired.length} unpaid crypto invoice(s)`);
     return expired.length;
+  }
+
+  /** Where a block-scanning watcher resumes for this network, token and wallet. */
+  private cursorFor(chain: ChainId, token: string, receiver: string) {
+    const id = { chain, token, receiverKey: receiverKey(chain, receiver) };
+    return {
+      get: async () => {
+        const row = await this.prisma.cryptoScanCursor.findUnique({
+          where: { chain_token_receiverKey: id },
+        });
+        return row ? row.lastBlock : null;
+      },
+      set: async (lastBlock: bigint) => {
+        await this.prisma.cryptoScanCursor.upsert({
+          where: { chain_token_receiverKey: id },
+          create: { ...id, lastBlock },
+          update: { lastBlock },
+        });
+      },
+    };
   }
 
   private record(chain: ChainId, result: { error: string | null; seen: number }): void {
