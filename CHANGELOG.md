@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.4.0](https://github.com/inite-ai/inite-billing-service/compare/inite-billing-service-v1.3.0...inite-billing-service-v1.4.0) (2026-09-26)
+
+
+### Features
+
+* **auth:** sign in silently when INITE already knows the person ([#172](https://github.com/inite-ai/inite-billing-service/issues/172)) ([ede2598](https://github.com/inite-ai/inite-billing-service/commit/ede25984b885ee7deb0eb65aafaa24a620b41e26))
+* **catalog:** public price list in the Ledger look, priced in one currency ([#169](https://github.com/inite-ai/inite-billing-service/issues/169)) ([781f3c1](https://github.com/inite-ai/inite-billing-service/commit/781f3c10de2b7f6ee43fde546824c410c9f9417f))
+* **checkout:** token and network icons for crypto and payment methods ([#167](https://github.com/inite-ai/inite-billing-service/issues/167)) ([1b80157](https://github.com/inite-ai/inite-billing-service/commit/1b80157eea2a353b0f1d8fdd57f72e8826cb0d8a))
+* **crypto:** convert prices in any currency into stablecoins ([#161](https://github.com/inite-ai/inite-billing-service/issues/161)) ([6805481](https://github.com/inite-ai/inite-billing-service/commit/68054819d9b4372693d14d625c50d8b52ad53a73))
+* **crypto:** make stablecoin payments actually settle ([#160](https://github.com/inite-ai/inite-billing-service/issues/160)) ([50944d5](https://github.com/inite-ai/inite-billing-service/commit/50944d5e1ae91d0b7b37ed489828d6819783643e))
+* **crypto:** seven EVM networks from one 0x wallet ([#166](https://github.com/inite-ai/inite-billing-service/issues/166)) ([94cbc04](https://github.com/inite-ai/inite-billing-service/commit/94cbc0480f060a4776a867e598c7bf9205a21431))
+* **frontend:** Ledger across the cabinet and the admin; cabinet UX fixes ([#170](https://github.com/inite-ai/inite-billing-service/issues/170)) ([c133043](https://github.com/inite-ai/inite-billing-service/commit/c133043b835e51aadf725091f7d48fa6d146a62f))
+* **frontend:** sign-in, callback, checkout and unsubscribe in the Ledger look ([#168](https://github.com/inite-ai/inite-billing-service/issues/168)) ([daf1b4b](https://github.com/inite-ai/inite-billing-service/commit/daf1b4bb1de2fa4798b9dd3a6d8c3e4c88e9a787))
+* **lava:** settle without a webhook; pay in a window over the checkout ([#163](https://github.com/inite-ai/inite-billing-service/issues/163)) ([5657a74](https://github.com/inite-ai/inite-billing-service/commit/5657a7400b0a3e1bcd576929d1e11fcd53783a4a))
+* **mcp:** admin view of the gateway, docs for both MCP surfaces ([#159](https://github.com/inite-ai/inite-billing-service/issues/159)) ([952552d](https://github.com/inite-ai/inite-billing-service/commit/952552da1b491e3571bc4819dcfcf2b5d77ddd37))
+* **mcp:** bill other people's MCP servers through this one ([#157](https://github.com/inite-ai/inite-billing-service/issues/157)) ([9b53861](https://github.com/inite-ai/inite-billing-service/commit/9b538619b9f8f7f5ffe9f2813fab031d3a805bba))
+* **mcp:** speak MCP, over HTTP and over stdio, from one set of tools ([#145](https://github.com/inite-ai/inite-billing-service/issues/145)) ([cc10344](https://github.com/inite-ai/inite-billing-service/commit/cc10344f404e624b46f557404ea368122c8b70d6))
+* **promo:** scope a code by product, not only by service ([cb02e13](https://github.com/inite-ai/inite-billing-service/commit/cb02e1357244bef54b4bea74b8060ff28f5bb331))
+* **promo:** scope a code by product, not only by service ([f82238d](https://github.com/inite-ai/inite-billing-service/commit/f82238d108a445dd26932121ce96a0478cd6e4fd))
+
+
+### Bug Fixes
+
+* **catalog:** signed-in customers see the catalog inside the cabinet ([#171](https://github.com/inite-ai/inite-billing-service/issues/171)) ([2ea4f91](https://github.com/inite-ai/inite-billing-service/commit/2ea4f91eb8002acbf4bca7dc45ab20927d36c6cf))
+* **checkout:** say that rouble card payments need a Russian card ([#165](https://github.com/inite-ai/inite-billing-service/issues/165)) ([05c5249](https://github.com/inite-ai/inite-billing-service/commit/05c524982989562422aa87e26913f730935697d9))
+* **deploy:** route /mcp to the backend ([#158](https://github.com/inite-ai/inite-billing-service/issues/158)) ([b048bd7](https://github.com/inite-ai/inite-billing-service/commit/b048bd7f58cfe7a097a2ba9753589b1102b73744))
+* **deps:** take multer off the vulnerable range ([2e3f446](https://github.com/inite-ai/inite-billing-service/commit/2e3f446577bd3448db2130949e5df3b068f21ab7))
+* **lava:** make lava.top payments actually complete ([#162](https://github.com/inite-ai/inite-billing-service/issues/162)) ([3c5a231](https://github.com/inite-ai/inite-billing-service/commit/3c5a231534e9d3b2d44f3a8d7b9df2f8f4bb0aa2))
+* **lava:** show lava.top's refusal instead of an internal error ([#164](https://github.com/inite-ai/inite-billing-service/issues/164)) ([925af36](https://github.com/inite-ai/inite-billing-service/commit/925af36a317201e9c0461bd4344b57a7bd8b639d))
+
 ## [1.3.0](https://github.com/inite-ai/inite-billing-service/compare/inite-billing-service-v1.2.0...inite-billing-service-v1.3.0) (2026-08-29)
 
 
