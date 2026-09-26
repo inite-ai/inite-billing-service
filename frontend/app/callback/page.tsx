@@ -32,6 +32,12 @@ function CallbackContent() {
         const errorDescription = searchParams?.get('error_description');
 
         if (errorParam) {
+          // The silent attempt found no INITE session (or needs the person):
+          // carry on with the ordinary sign-in rather than show an error.
+          if (OAuthClient.shouldFallBackToInteractive(errorParam)) {
+            await OAuthClient.login({ interactive: true });
+            return;
+          }
           throw new Error(errorDescription || errorParam);
         }
 
