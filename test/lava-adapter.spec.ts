@@ -179,6 +179,18 @@ describe('LavaAdapter', () => {
       ).rejects.toThrow('email');
     });
 
+    it('passes lava.top’s refusal on as a client error the customer can read', async () => {
+      fetchMock.mockReturnValue(
+        answer({ error: 'Amount=2 not in allowed limits=(5, 10000) for USD' }, 400),
+      );
+      const { adapter } = build({ config: { defaultOfferId: 'offer-dynamic' }, price: price() });
+      const attempt = adapter.createPaymentIntent(input({ amount: 2, currency: 'USD' }));
+      await expect(attempt).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        adapter.createPaymentIntent(input({ amount: 2, currency: 'USD' })),
+      ).rejects.toThrow('allowed limits=(5, 10000)');
+    });
+
     it('offers card and СБП for roubles, card and PayPal for dollars', async () => {
       const { adapter } = build();
       expect((await adapter.listMethods({ currency: 'RUB' })).map((m) => m.id)).toEqual([
