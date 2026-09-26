@@ -4,12 +4,11 @@ import { useState } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
 import { Loader2 } from 'lucide-react'
 import type { Price, Product } from '@/lib/types'
+import { useFeatureLabel } from './useFeatureLabel'
 import {
   description,
   features,
   formatMoney,
-  humanizeKey,
-  isFeatureKey,
   meta,
   numberMeta,
   priceFor,
@@ -27,6 +26,7 @@ const VISIBLE_FEATURES = 7
  */
 function usePlanLines(product: Product, price: Price) {
   const t = useTranslations('catalog')
+  const featureLabel = useFeatureLabel()
   const lines: { text: string; limit?: boolean }[] = []
 
   const limit = (key: string, upTo: 'usersUpTo' | 'vehiclesUpTo', unlimited: 'usersUnlimited' | 'vehiclesUnlimited') => {
@@ -55,11 +55,7 @@ function usePlanLines(product: Product, price: Price) {
     })
   }
 
-  for (const f of list) {
-    if (f === '*') lines.push({ text: t('allFeatures') })
-    else if (isFeatureKey(f)) lines.push({ text: t.has(`feature.${f}`) ? t(`feature.${f}`) : humanizeKey(f) })
-    else lines.push({ text: f })
-  }
+  for (const f of list) lines.push({ text: featureLabel(f) })
   return lines
 }
 

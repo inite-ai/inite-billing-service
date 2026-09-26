@@ -413,7 +413,7 @@ export default function AdminMeteringPage() {
                 </div>
                 <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-500"
+                    className="h-full rounded-full bg-[#ccff00]"
                     style={{ width: `${(u.totalCredits / maxCredits) * 100}%` }}
                   />
                 </div>

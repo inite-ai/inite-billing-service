@@ -1,6 +1,6 @@
 import './globals.css'
 import type { Metadata } from 'next'
-import { Inter, Playfair_Display, Manrope, JetBrains_Mono } from 'next/font/google'
+import { Playfair_Display, Manrope, JetBrains_Mono } from 'next/font/google'
 import { Toaster } from 'react-hot-toast'
 import { AuthProvider } from '@/contexts/AuthContext'
 import ChatWrapper from '@/components/assistant/ChatWrapper'
@@ -8,10 +8,8 @@ import { NextIntlClientProvider } from 'next-intl'
 import { getMessages, getLocale } from 'next-intl/server'
 import { SITE_URL } from '@/lib/brand'
 
-const inter = Inter({ subsets: ['latin', 'cyrillic'] })
-
-// Landing-only type system (Cyrillic-complete). The dashboard keeps Inter;
-// these are exposed as CSS variables and only consumed under `.lp`.
+// The Ledger type system (Cyrillic-complete), used everywhere: Manrope for
+// text, Playfair Display for headings, JetBrains Mono for figures and ids.
 const display = Playfair_Display({
   subsets: ['latin', 'cyrillic'],
   weight: ['400', '500', '600', '700', '800', '900'],
@@ -49,8 +47,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const messages = await getMessages()
 
   return (
-    <html lang={locale}>
-      <body className={`${inter.className} ${display.variable} ${sans.variable} ${mono.variable}`}>
+    <html lang={locale} className="dark">
+      <body className={`${display.variable} ${sans.variable} ${mono.variable}`}>
         <NextIntlClientProvider messages={messages}>
           <AuthProvider>
             {children}
@@ -61,8 +59,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           position="top-right"
           toastOptions={{
             duration: 4000,
-            style: { background: '#363636', color: '#fff' },
-            success: { iconTheme: { primary: '#10b981', secondary: '#fff' } },
+            style: {
+              background: '#141416',
+              color: '#ececea',
+              border: '1px solid rgba(255,255,255,0.09)',
+              fontSize: '14px',
+            },
+            success: { iconTheme: { primary: '#ccff00', secondary: '#0a0a0b' } },
             error: { iconTheme: { primary: '#ef4444', secondary: '#fff' } },
           }}
         />

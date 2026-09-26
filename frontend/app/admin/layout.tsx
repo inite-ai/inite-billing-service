@@ -28,7 +28,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="app flex min-h-screen">
       <Sidebar open={navOpen} onClose={() => setNavOpen(false)} />
 
       <div className="flex min-w-0 flex-1 flex-col">

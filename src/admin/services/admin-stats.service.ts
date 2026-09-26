@@ -23,6 +23,8 @@ export class AdminStatsService {
       activeSubscriptions,
       totalAffiliates,
       totalCommissions,
+      revenueRows,
+      commissionRows,
     ] = await Promise.all([
       this.prisma.order.count(),
       this.prisma.order.count({ where: { status: 'paid' } }),
@@ -38,7 +40,24 @@ export class AdminStatsService {
         where: { status: { in: ['earned', 'paid'] } },
         _sum: { amount: true },
       }),
+      this.prisma.order.groupBy({
+        by: ['currency'],
+        where: { status: 'paid' },
+        _sum: { amount: true },
+      }),
+      this.prisma.affiliateCommission.groupBy({
+        by: ['currency'],
+        where: { status: { in: ['earned', 'paid'] } },
+        _sum: { amount: true },
+      }),
     ]);
+
+    // The flat totals add currencies together and stay only for the existing
+    // response shape; the per-currency lists are the figures to show.
+    const perCurrency = (rows: { currency: string; _sum: { amount: unknown } }[]) =>
+      rows
+        .map((r) => ({ currency: r.currency, amount: String(r._sum.amount ?? '0') }))
+        .sort((a, b) => Number(b.amount) - Number(a.amount));
 
     return {
       totalOrders,
@@ -47,6 +66,8 @@ export class AdminStatsService {
       activeSubscriptions,
       totalAffiliates,
       totalCommissions: totalCommissions._sum.amount?.toString() || '0',
+      revenueByCurrency: perCurrency(revenueRows),
+      commissionsByCurrency: perCurrency(commissionRows),
     };
   }
 

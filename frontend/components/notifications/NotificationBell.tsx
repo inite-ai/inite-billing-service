@@ -1,5 +1,6 @@
 'use client'
 
+import { useFormat } from '@/lib/useFormat'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Bell, Check } from 'lucide-react'
@@ -26,6 +27,7 @@ export default function NotificationBell({
   const [loading, setLoading] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const t = useTranslations('notifications')
+  const f = useFormat()
 
   const fetchUnread = useCallback(async () => {
     try {
@@ -90,7 +92,7 @@ export default function NotificationBell({
       >
         <Bell className="w-[18px] h-[18px]" />
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-violet-500 text-white text-[10px] font-bold flex items-center justify-center">
+          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-[#ccff00] text-[#0a0a0b] text-[10px] font-bold flex items-center justify-center">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
@@ -140,7 +142,7 @@ export default function NotificationBell({
                       </p>
                       <p className="text-xs text-slate-500 line-clamp-2">{n.body}</p>
                       <p className="text-[10px] text-slate-400 mt-1">
-                        {new Date(n.createdAt).toLocaleString()}
+                        {f.dateTime(n.createdAt)}
                       </p>
                     </div>
                     {n.readAt && (

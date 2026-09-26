@@ -16,6 +16,7 @@ import { CopyableId } from '@/components/ui/CopyableId'
 import { CardSkeleton, TableSkeleton } from '@/components/ui/Skeleton'
 import { Table, Thead, Tbody, Tr, Th, Td } from '@/components/ui/Table'
 import api from '@/lib/api'
+import { useFormat } from '@/lib/useFormat'
 import type { AdminStats, Order } from '@/lib/types'
 
 interface Triage {
@@ -31,6 +32,7 @@ interface Triage {
 
 export default function AdminDashboardPage() {
   const t = useTranslations('admin')
+  const f = useFormat()
   const tc = useTranslations('common')
 
   const [stats, setStats] = useState<AdminStats | null>(null)
@@ -140,11 +142,11 @@ export default function AdminDashboardPage() {
   const waiting = queues.reduce((sum, q) => sum + q.count, 0)
 
   const statItems = [
-    { label: t('dashboard.totalRevenue'), value: `$${stats?.totalRevenue ?? '0'}`, icon: DollarSign },
+    { label: t('dashboard.totalRevenue'), value: stats?.revenueByCurrency ? f.totals(stats.revenueByCurrency) || '0' : stats?.totalRevenue ?? '0', icon: DollarSign },
     { label: t('dashboard.totalOrders'), value: stats?.totalOrders ?? 0, icon: Receipt },
     { label: t('dashboard.activeSubscriptions'), value: stats?.activeSubscriptions ?? 0, icon: CreditCard },
     { label: t('dashboard.activeAffiliates'), value: stats?.totalAffiliates ?? 0, icon: Users },
-    { label: t('dashboard.totalCommissions'), value: `$${stats?.totalCommissions ?? '0'}`, icon: Package },
+    { label: t('dashboard.totalCommissions'), value: stats?.commissionsByCurrency ? f.totals(stats.commissionsByCurrency) || '0' : stats?.totalCommissions ?? '0', icon: Package },
     { label: t('dashboard.paidOrders'), value: stats?.paidOrders ?? 0, icon: Activity },
   ]
 

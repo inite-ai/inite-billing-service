@@ -159,7 +159,7 @@ export default function RecommendedOffers({
                 <button
                   onClick={() => buy(offer)}
                   disabled={buying === offer.productId}
-                  className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-purple-600 text-white text-xs font-semibold hover:opacity-90 disabled:opacity-50"
+                  className="px-3 py-1.5 rounded-lg bg-[#ccff00] text-[#0a0a0b] text-xs font-semibold hover:opacity-90 disabled:opacity-50"
                 >
                   {buying === offer.productId ? '…' : t('cta')}
                 </button>

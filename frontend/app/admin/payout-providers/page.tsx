@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useTranslations } from 'next-intl'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -43,18 +43,18 @@ export default function AdminPayoutProvidersPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [form, setForm] = useState({ code: '', name: '', currencies: 'USD', minAmount: '', maxAmount: '', feePercent: '', feeFixed: '' })
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const res = await api.get('/v1/admin/payout-providers')
       setProviders(res.data)
     } catch {
-      toast.error('Failed to load payout providers')
+      toast.error(tc('loadFailed'))
     } finally {
       setLoading(false)
     }
-  }
+  }, [tc])
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [load])
 
   const handleCreate = async () => {
     try {

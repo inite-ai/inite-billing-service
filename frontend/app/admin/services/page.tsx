@@ -36,6 +36,7 @@ function ApiKeyCell({
   copyLabel: string
   regenerateLabel: string
 }) {
+  const t = useTranslations('admin')
   const [visible, setVisible] = useState(false)
   const [fullKey, setFullKey] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
@@ -56,7 +57,7 @@ function ApiKeyCell({
       setFullKey(res.data.apiKey)
       setVisible(true)
     } catch {
-      toast.error('Failed to reveal key')
+      toast.error(t('services.revealFailed'))
     } finally {
       setLoading(false)
     }
@@ -70,7 +71,7 @@ function ApiKeyCell({
         setFullKey(res.data.apiKey)
         await navigator.clipboard.writeText(res.data.apiKey)
       } catch {
-        toast.error('Failed to copy key')
+        toast.error(t('services.copyFailed'))
         return
       }
     } else {

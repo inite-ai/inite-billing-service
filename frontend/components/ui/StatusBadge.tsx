@@ -21,6 +21,7 @@ import { Badge, type BadgeVariant } from './Badge'
 const VARIANT_BY_STATUS: Record<string, BadgeVariant> = {
   active: 'success',
   paid: 'success',
+  succeeded: 'success',
   earned: 'success',
   converted: 'success',
   delivered: 'success',

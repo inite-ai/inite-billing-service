@@ -1,31 +1,103 @@
 @import "tailwindcss";
 
-:root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
-  --sidebar-bg: #0f172a;
-  --sidebar-text: #94a3b8;
-  --sidebar-active: #8b5cf6;
-  --card-bg: #ffffff;
-  --card-border: #e2e8f0;
-  --muted: #64748b;
+/*
+ * One look everywhere: Ledger. The app (cabinet and admin) is dark-only, so
+ * every `dark:` utility applies always (the root carries `.dark`), and the
+ * palettes the app was built with are re-pointed at Ledger's: slate / gray /
+ * zinc / neutral become its warm neutrals, violet / purple / indigo become
+ * the lime accent. Components keep their classes; the world they paint
+ * changes in one place.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-slate-50: #f5f5f2;
+  --color-slate-100: #ececea;
+  --color-slate-200: #d9d9d4;
+  --color-slate-300: #c7c7c1;
+  --color-slate-400: #9a9a94;
+  --color-slate-500: #83837c;
+  --color-slate-600: #5c5c56;
+  --color-slate-700: #2a2a2e;
+  --color-slate-800: #1c1c1f;
+  --color-slate-900: #141416;
+  --color-slate-950: #0a0a0b;
+
+  --color-gray-50: #f5f5f2;
+  --color-gray-100: #ececea;
+  --color-gray-200: #d9d9d4;
+  --color-gray-300: #c7c7c1;
+  --color-gray-400: #9a9a94;
+  --color-gray-500: #83837c;
+  --color-gray-600: #5c5c56;
+  --color-gray-700: #2a2a2e;
+  --color-gray-800: #1c1c1f;
+  --color-gray-900: #141416;
+  --color-gray-950: #0a0a0b;
+
+  --color-zinc-700: #2a2a2e;
+  --color-zinc-800: #1c1c1f;
+  --color-zinc-900: #141416;
+  --color-neutral-700: #2a2a2e;
+  --color-neutral-800: #1c1c1f;
+  --color-neutral-900: #141416;
+
+  --color-violet-50: #f7ffe0;
+  --color-violet-100: #eeffb8;
+  --color-violet-200: #e2ff85;
+  --color-violet-300: #d8ff4d;
+  --color-violet-400: #ccff00;
+  --color-violet-500: #c2f200;
+  --color-violet-600: #b3e000;
+  --color-violet-700: #7a9e00;
+  --color-violet-800: #4f6600;
+  --color-violet-900: #2c3a00;
+  --color-violet-950: #1a2200;
+
+  --color-purple-50: #f7ffe0;
+  --color-purple-100: #eeffb8;
+  --color-purple-200: #e2ff85;
+  --color-purple-300: #d8ff4d;
+  --color-purple-400: #ccff00;
+  --color-purple-500: #c2f200;
+  --color-purple-600: #b3e000;
+  --color-purple-700: #7a9e00;
+  --color-purple-800: #4f6600;
+  --color-purple-900: #2c3a00;
+
+  --color-indigo-400: #ccff00;
+  --color-indigo-500: #c2f200;
+  --color-indigo-600: #b3e000;
+  --color-indigo-900: #2c3a00;
+
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #020617;
-    --foreground: #f1f5f9;
-    --sidebar-bg: #0c1222;
-    --card-bg: rgba(15, 23, 42, 0.8);
-    --card-border: rgba(51, 65, 85, 0.5);
-    --muted: #94a3b8;
-  }
+:root {
+  --background: #0a0a0b;
+  --foreground: #ececea;
+  --sidebar-bg: #0c0c0d;
+  --sidebar-text: #9a9a94;
+  --sidebar-active: #ccff00;
+  --card-bg: #101012;
+  --card-border: rgba(255, 255, 255, 0.09);
+  --muted: #9a9a94;
+  --accent: #ccff00;
+  --accent-ink: #0a0a0b;
+  color-scheme: dark;
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  letter-spacing: -0.01em;
+}
+
+/* Headings in the app take the Ledger display face, like the landing. */
+.app h1 {
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
 
 /* Scrollbar */
@@ -39,104 +111,100 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.2);
+  background: rgba(255, 255, 255, 0.12);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.4);
+  background: rgba(255, 255, 255, 0.22);
 }
 
 ::selection {
-  background: rgba(139, 92, 246, 0.3);
-  color: white;
+  background: rgba(204, 255, 0, 0.3);
+  color: #ececea;
 }
 
 *:focus-visible {
-  outline: 2px solid rgba(139, 92, 246, 0.5);
+  outline: 2px solid rgba(204, 255, 0, 0.55);
   outline-offset: 2px;
 }
 
-/* Gradient text */
+/* Gradient text — now the plain accent, as in the landing's brand. */
 .gradient-text {
-  background: linear-gradient(135deg, #8b5cf6, #a78bfa, #c4b5fd);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--accent);
 }
 
-/* Glass morphism */
+/* Glass: the landing's sticky-nav treatment. */
 .glass {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(226, 232, 240, 0.8);
-}
-
-@media (prefers-color-scheme: dark) {
-  .glass {
-    background: rgba(15, 23, 42, 0.6);
-    border: 1px solid rgba(51, 65, 85, 0.5);
-  }
+  background: rgba(10, 10, 11, 0.8);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
 }
 
 /* Sidebar styles */
 .sidebar {
   background: var(--sidebar-bg);
-  border-right: 1px solid rgba(51, 65, 85, 0.3);
+  border-right: 1px solid rgba(255, 255, 255, 0.07);
 }
 
 .sidebar-item {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.625rem 0.875rem;
-  border-radius: 0.625rem;
+  padding: 0.55rem 0.8rem;
+  border-radius: 0.6rem;
   font-size: 0.875rem;
   font-weight: 500;
   color: var(--sidebar-text);
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
 }
 
 .sidebar-item:hover {
-  background: rgba(139, 92, 246, 0.08);
-  color: #c4b5fd;
+  background: rgba(255, 255, 255, 0.04);
+  color: #ececea;
 }
 
 .sidebar-item.active {
-  background: rgba(139, 92, 246, 0.15);
-  color: #a78bfa;
+  background: rgba(204, 255, 0, 0.07);
+  color: #ececea;
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .sidebar-item.active .sidebar-icon {
-  color: #8b5cf6;
+  color: var(--accent);
 }
 
-/* Stat card gradient backgrounds */
-.stat-gradient-violet {
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(139, 92, 246, 0.05) 100%);
-  border-color: rgba(139, 92, 246, 0.2);
+/* The Ledger mark: a lime tile, tilted. */
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 800;
+  font-size: 14px;
+  transform: rotate(-4deg);
+  flex-shrink: 0;
 }
 
-.stat-gradient-green {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0.05) 100%);
-  border-color: rgba(16, 185, 129, 0.2);
-}
-
-.stat-gradient-blue {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(59, 130, 246, 0.05) 100%);
-  border-color: rgba(59, 130, 246, 0.2);
-}
-
-.stat-gradient-amber {
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(245, 158, 11, 0.05) 100%);
-  border-color: rgba(245, 158, 11, 0.2);
-}
-
+/* Stat cards: one quiet panel, the tint only in the edge. */
+.stat-gradient-violet,
+.stat-gradient-green,
+.stat-gradient-blue,
+.stat-gradient-amber,
 .stat-gradient-emerald {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0.05) 100%);
-  border-color: rgba(16, 185, 129, 0.2);
+  background: linear-gradient(180deg, #141416, #101012);
+  border-color: rgba(255, 255, 255, 0.09);
 }
+.stat-gradient-violet { box-shadow: inset 0 1px 0 rgba(204, 255, 0, 0.25); }
+.stat-gradient-green,
+.stat-gradient-emerald { box-shadow: inset 0 1px 0 rgba(16, 185, 129, 0.3); }
+.stat-gradient-blue { box-shadow: inset 0 1px 0 rgba(59, 130, 246, 0.3); }
+.stat-gradient-amber { box-shadow: inset 0 1px 0 rgba(245, 158, 11, 0.3); }
 
 /* Smooth transitions for layout */
 .page-enter {
@@ -152,7 +220,7 @@ body {
 
 /* Mobile overlay */
 .mobile-overlay {
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(4px);
 }
 
@@ -162,18 +230,12 @@ body {
 }
 
 .table-row-hover:hover {
-  background-color: rgba(139, 92, 246, 0.04);
-}
-
-@media (prefers-color-scheme: dark) {
-  .table-row-hover:hover {
-    background-color: rgba(139, 92, 246, 0.08);
-  }
+  background-color: rgba(255, 255, 255, 0.03);
 }
 
 /* Progress bar */
 .progress-bar {
-  background: linear-gradient(90deg, #8b5cf6, #a78bfa);
+  background: var(--accent);
   border-radius: 999px;
   transition: width 0.6s ease;
 }

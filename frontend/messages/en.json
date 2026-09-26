@@ -52,7 +52,10 @@
       "earned": "earned",
       "converted": "Converted",
       "canceling": "Canceling",
-      "processing": "processing"
+      "processing": "processing",
+      "open": "awaiting payment",
+      "ended": "ended",
+      "succeeded": "succeeded"
     },
     "pagination": {
       "page": "Page {page} of {pages}",
@@ -106,6 +109,18 @@
       "done": "{count, plural, one {Exported # row} other {Exported # rows}}",
       "doneUnknown": "Export downloaded",
       "failed": "Export failed"
+    },
+    "billing": {
+      "perMonth": "/mo",
+      "perYear": "/yr",
+      "monthly": "Monthly",
+      "yearly": "Yearly",
+      "oneTime": "One-time",
+      "modeSubscription": "Subscription",
+      "modePayment": "One-time purchase",
+      "railCrypto": "Crypto",
+      "methodCard": "Card",
+      "methodSbp": "SBP"
     }
   },
   "nav": {
@@ -269,7 +284,13 @@
         "popular_with": "Popular pick",
         "top_seller": "Top seller"
       }
-    }
+    },
+    "untitledSubscription": "Subscription",
+    "endsOn": "Active until {date}",
+    "creditsUsed": "{used} of {total} used",
+    "resets": "Resets {date}",
+    "entitlementsHint": "What your plans unlock in INITE products.",
+    "noEntitlements": "No access granted yet"
   },
   "orders": {
     "title": "Order History",
@@ -299,7 +320,10 @@
     "paymentRail": "Payment Rail",
     "paymentStatus": "Status",
     "paymentMethod": "Method",
-    "completePayment": "Complete Payment"
+    "completePayment": "Complete Payment",
+    "spent": "Spent",
+    "payNow": "Pay",
+    "untitledOrder": "Order"
   },
   "subscriptions": {
     "title": "My Subscriptions",
@@ -330,7 +354,18 @@
     "cancelSubscription": "Cancel Subscription",
     "confirmCancel": "Are you sure you want to cancel this subscription? It will remain active until the end of the current billing period.",
     "cancelSuccess": "Subscription will cancel at period end",
-    "cancelError": "Failed to cancel subscription"
+    "cancelError": "Failed to cancel subscription",
+    "loadError": "Could not load your subscriptions",
+    "cancelTitle": "Cancel the subscription?",
+    "cancelMessage": "It stops renewing and keeps working until {date}. You can resume it until then.",
+    "resume": "Resume subscription",
+    "resumeSuccess": "The subscription will renew again",
+    "resumeError": "Could not resume the subscription",
+    "untitled": "Subscription",
+    "creditsPerPeriodCount": "{count} credits per period",
+    "detailIncludes": "What's included",
+    "detailService": "Service",
+    "detailProduct": "Product"
   },
   "catalog": {
     "title": "Pricing",
@@ -569,7 +604,9 @@
     "minWithdrawal": "Min. withdrawal: ${amount}",
     "requestWithdrawal": "Request Withdrawal",
     "withdrawalRequested": "Withdrawal request submitted!",
-    "withdrawalError": "Failed to request withdrawal"
+    "withdrawalError": "Failed to request withdrawal",
+    "minWithdrawalPlain": "Withdrawals from {amount} in the balance’s currency",
+    "pendingSettlement": "+{amount} still settling"
   },
   "admin": {
     "dashboard": {
@@ -629,7 +666,9 @@
       "regenerateConfirm": "Regenerate API key? The old key will stop working immediately.",
       "keyRegenerated": "API key regenerated",
       "deleteConfirm": "Delete this service? This will fail if products or referral levels exist for it.",
-      "deleteError": "Failed to delete — service may have associated data"
+      "deleteError": "Failed to delete — service may have associated data",
+      "revealFailed": "Could not reveal the key",
+      "copyFailed": "Could not copy the key"
     },
     "products": {
       "title": "Products",
@@ -1563,5 +1602,32 @@
       "success": "You have been unsubscribed. You can re-enable emails anytime in your notification settings.",
       "error": "Invalid or expired unsubscribe link."
     }
+  },
+  "referralLevelForm": {
+    "service": "Service",
+    "selectService": "Choose a service…",
+    "name": "Level name",
+    "namePlaceholder": "Direct referral",
+    "rate": "Commission rate, %",
+    "level": "Level {level}",
+    "criteria": "Qualification (optional)",
+    "criteriaHint": "An affiliate who stops meeting these conditions drops out, and the levels below move up.",
+    "minDirect": "Min direct referrals",
+    "minActive": "Min active referrals",
+    "minPersonal": "Min personal orders",
+    "minDownline": "Min downline orders",
+    "minVolume": "Min monthly volume",
+    "create": "Create level",
+    "personalPurchaseRequired": "Personal purchase required"
+  },
+  "errorPages": {
+    "notFoundTitle": "Nothing here",
+    "notFoundHint": "The page may have moved, or the link is off by a character.",
+    "home": "Home",
+    "pricing": "Pricing",
+    "errorEyebrow": "Error",
+    "errorTitle": "Something broke on our side",
+    "errorHint": "Try again in a moment. The error code below helps us find it.",
+    "retry": "Try again"
   }
 }

@@ -72,7 +72,7 @@ export default function AiInsightsCard({ serviceId }: { serviceId?: string }) {
             <button
               onClick={() => analyze(false)}
               disabled={loading}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-purple-600 text-white text-xs font-semibold hover:opacity-90 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#ccff00] text-[#0a0a0b] text-xs font-semibold hover:opacity-90 disabled:opacity-50"
             >
               {loading ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />

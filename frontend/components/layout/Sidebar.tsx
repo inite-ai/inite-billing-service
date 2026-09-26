@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Server, Package, DollarSign, Receipt,
-  CreditCard, Key, Users, GitBranch, Wallet, Webhook, ArrowLeft, Plug, ChevronRight, Tag, TrendingUp, Coins, UserCheck, Send, Gauge, ShieldAlert, Waypoints, Bitcoin, X
+  CreditCard, Key, Users, GitBranch, Wallet, Webhook, ArrowLeft, Plug, Tag, TrendingUp, Coins, UserCheck, Send, Gauge, ShieldAlert, Waypoints, Bitcoin, X
 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 
@@ -141,8 +141,9 @@ export function Sidebar({ open = false, onClose }: { open?: boolean; onClose?: (
           </button>
         </div>
 
-        <div className="px-5 mb-4">
-          <h2 className="text-lg font-bold text-white">{t('adminPanel')}</h2>
+        <div className="px-5 mb-4 flex items-center gap-2.5">
+          <span className="brand-mark" aria-hidden>IN</span>
+          <h2 className="text-[15px] font-semibold text-white">{t('adminPanel')}</h2>
         </div>
 
         {/* The nav owns the scroll: twenty-one destinations must not move the
@@ -150,7 +151,7 @@ export function Sidebar({ open = false, onClose }: { open?: boolean; onClose?: (
         <nav className="flex-1 overflow-y-auto px-3 pb-6">
           {groups.map((group) => (
             <div key={group.labelKey}>
-              <div className="text-xs uppercase text-slate-500 mb-1 mt-4 px-3 tracking-wider">
+              <div className="font-mono text-[10.5px] uppercase text-slate-500 mb-1 mt-5 px-3 tracking-[0.18em]">
                 {t(group.labelKey)}
               </div>
               <div className="space-y-0.5 pl-1">
@@ -168,9 +169,6 @@ export function Sidebar({ open = false, onClose }: { open?: boolean; onClose?: (
                     >
                       <Icon className={`w-[18px] h-[18px] sidebar-icon shrink-0 ${isActive ? 'text-violet-500' : ''}`} />
                       <span className="flex-1 truncate">{item.label}</span>
-                      {isActive && (
-                        <ChevronRight className="w-3.5 h-3.5 text-violet-500/50 shrink-0" />
-                      )}
                     </Link>
                   )
                 })}

@@ -20,7 +20,7 @@ export function StatsCards({ activeSubscriptions, totalOrders, totalReferrals, p
     { label: t('activeSubscriptions'), value: activeSubscriptions, icon: CreditCard, color: 'text-emerald-500', gradient: gradients[0] },
     { label: t('totalOrders'), value: totalOrders, icon: Receipt, color: 'text-blue-500', gradient: gradients[1] },
     { label: t('totalReferrals'), value: totalReferrals, icon: Users, color: 'text-violet-500', gradient: gradients[2] },
-    { label: t('pendingCommissions'), value: `$${pendingCommissions}`, icon: DollarSign, color: 'text-amber-500', gradient: gradients[3] },
+    { label: t('pendingCommissions'), value: pendingCommissions, icon: DollarSign, color: 'text-amber-500', gradient: gradients[3] },
   ]
 
   return (
@@ -40,7 +40,7 @@ export function StatsCards({ activeSubscriptions, totalOrders, totalReferrals, p
                 <Icon className="w-5 h-5" />
               </div>
             </div>
-            <p className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">{stat.value}</p>
+            <p className="font-mono text-2xl font-semibold text-slate-900 dark:text-white tracking-tight truncate">{stat.value}</p>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{stat.label}</p>
           </motion.div>
         )

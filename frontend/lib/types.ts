@@ -97,6 +97,8 @@ export interface Subscription {
   productFeatures: string[]
   creditsPerPeriod: number | null
   serviceName: string | null
+  /** The service's customer-facing name (metadata.displayName), when set. */
+  serviceDisplayName?: string | null
   serviceCode: string | null
   // Pricing
   amount: string | null
@@ -165,6 +167,8 @@ export interface AffiliateStats {
   totalCommissions: string
   pendingCommissions: string
   paidCommissions: string
+  /** Per currency — the figures to show; the flat totals add currencies together. */
+  balances?: { currency: string; pending: string; available: string; earned: string; paid: string }[]
   upcomingPayout?: Payout
 }
 
@@ -229,6 +233,9 @@ export interface AdminStats {
   activeSubscriptions: number
   totalAffiliates: number
   totalCommissions: string
+  /** Paid revenue per currency — the figure to show; `totalRevenue` adds currencies together. */
+  revenueByCurrency?: { currency: string; amount: string }[]
+  commissionsByCurrency?: { currency: string; amount: string }[]
 }
 
 export interface PaymentProvider {
