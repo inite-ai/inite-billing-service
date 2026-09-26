@@ -1267,7 +1267,9 @@
         "addressFor": "{network} wallet address",
         "placeholder": "Wallet address",
         "pollError": "Last check failed",
-        "lastPoll": "Checked at {time}"
+        "lastPoll": "Checked at {time}",
+        "evmTitle": "EVM networks",
+        "evmDetail": "One 0x address for Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base and Avalanche — the same wallet on all of them. USDT and USDC."
       },
       "keys": {
         "title": "Chain access",
@@ -1277,7 +1279,7 @@
         "toncenterApiKey": "Toncenter API key",
         "webhookSecret": "Indexer webhook secret",
         "solanaRpcUrl": "Solana RPC URL",
-        "etherscanHint": "Required for Ethereum. Free at etherscan.io/apis.",
+        "etherscanHint": "Optional. Without it Ethereum is watched through a public RPC, like the other EVM networks.",
         "trongridHint": "Optional. Free at trongrid.io.",
         "toncenterHint": "Optional. From @tonapibot on Telegram.",
         "solanaHint": "Optional. The public endpoint is rate-limited; a provider URL (Helius, QuickNode) is steadier.",

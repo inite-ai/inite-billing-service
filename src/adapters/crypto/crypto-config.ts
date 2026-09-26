@@ -1,5 +1,5 @@
 import { PrismaService } from '../../common/services/prisma.service';
-import { CHAIN_IDS, ChainId, isValidAddress } from './chains';
+import { CHAINS, CHAIN_IDS, ChainId, EVM_WALLET_KEY, isEvm, isValidAddress } from './chains';
 
 export const CRYPTO_PROVIDER_CODE = 'CRYPTO';
 
@@ -35,6 +35,8 @@ export interface CryptoSettings {
   fxMarkupPercent: number;
   /** Admin-pinned rates, units of the currency per US dollar. Win over any source. */
   fixedRates: Record<string, string>;
+  /** Per-network RPC overrides for the EVM watcher (https only). */
+  rpcUrls: Partial<Record<ChainId, string>>;
 }
 
 export const MAX_FX_MARKUP_PERCENT = 20;
@@ -79,9 +81,17 @@ export function parseCryptoSettings(
   if (!provider) return null;
   const config = (provider.config as Record<string, any>) || {};
   const wallets: Partial<Record<ChainId, string>> = {};
+  // One 0x address is the same wallet on every EVM network, so `wallets.EVM`
+  // serves them all; a network's own entry, if set, wins.
+  const shared = text(config.wallets?.[EVM_WALLET_KEY]);
   for (const chain of CHAIN_IDS) {
-    const address = text(config.wallets?.[chain]);
+    const address = text(config.wallets?.[chain]) ?? (isEvm(chain) ? shared : undefined);
     if (address && isValidAddress(chain, address)) wallets[chain] = address;
+  }
+  const rpcUrls: Partial<Record<ChainId, string>> = {};
+  for (const chain of CHAIN_IDS) {
+    const url = text(config.rpcUrls?.[chain]);
+    if (url && /^https:\/\/\S+$/.test(url) && CHAINS[chain].evm) rpcUrls[chain] = url;
   }
 
   return {
@@ -96,6 +106,7 @@ export function parseCryptoSettings(
     webhookSecret: text(config.webhookSecret),
     fxMarkupPercent: markup(config.fxMarkupPercent),
     fixedRates: fixedRates(config.fixedRates),
+    rpcUrls,
   };
 }
 
@@ -111,9 +122,9 @@ export async function loadCryptoSettings(prisma: PrismaService): Promise<CryptoS
  * Etherscan refuses keyless calls; the others work without a key, slower.
  */
 export function watchable(settings: CryptoSettings, chain: ChainId): boolean {
-  if (!settings.wallets[chain]) return false;
-  if (chain === 'ETH') return !!settings.etherscanApiKey;
-  return true;
+  // Every network is watched through a keyless public API or RPC; Ethereum
+  // uses Etherscan instead when a key is set.
+  return !!settings.wallets[chain];
 }
 
 /**

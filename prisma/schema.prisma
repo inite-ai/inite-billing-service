@@ -1147,3 +1147,18 @@ model FxRate {
   @@map("fx_rates")
   @@schema("billing")
 }
+
+/// How far the EVM watcher has read a network's logs for one token and
+/// wallet, so a restart resumes where it stopped instead of missing blocks or
+/// re-reading days of them.
+model CryptoScanCursor {
+  chain       String   @db.VarChar(20)
+  token       String   @db.VarChar(20)
+  receiverKey String   @map("receiver_key") @db.VarChar(255)
+  lastBlock   BigInt   @map("last_block")
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@id([chain, token, receiverKey])
+  @@map("crypto_scan_cursors")
+  @@schema("billing")
+}

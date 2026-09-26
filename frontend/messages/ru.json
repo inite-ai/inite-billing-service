@@ -1267,7 +1267,9 @@
         "addressFor": "Адрес кошелька {network}",
         "placeholder": "Адрес кошелька",
         "pollError": "Последняя проверка не удалась",
-        "lastPoll": "Проверено в {time}"
+        "lastPoll": "Проверено в {time}",
+        "evmTitle": "EVM-сети",
+        "evmDetail": "Один 0x-адрес для Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base и Avalanche — это один и тот же кошелёк во всех. USDT и USDC."
       },
       "keys": {
         "title": "Доступ к сетям",
@@ -1277,7 +1279,7 @@
         "toncenterApiKey": "API-ключ Toncenter",
         "webhookSecret": "Секрет вебхука индексатора",
         "solanaRpcUrl": "Solana RPC URL",
-        "etherscanHint": "Обязателен для Ethereum. Бесплатно на etherscan.io/apis.",
+        "etherscanHint": "Необязателен. Без него Ethereum отслеживается через публичный RPC, как и другие EVM-сети.",
         "trongridHint": "Необязателен. Бесплатно на trongrid.io.",
         "toncenterHint": "Необязателен. У @tonapibot в Telegram.",
         "solanaHint": "Необязателен. У публичного адреса жёсткие лимиты; адрес провайдера (Helius, QuickNode) надёжнее.",
