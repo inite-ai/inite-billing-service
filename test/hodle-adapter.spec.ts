@@ -166,6 +166,17 @@ describe('HodleAdapter', () => {
       expect(verify({ 'x-hodle-signature': sign(body, ts), 'x-hodle-timestamp': ts })).toBe(true);
     });
 
+    it('lets the registration test through before a secret exists', () => {
+      expect(
+        build().verifyWebhook({
+          rawBody: Buffer.from('{"event":"WEBHOOK_TEST"}'),
+          headers: {},
+          config: {},
+          payload: { event: 'WEBHOOK_TEST' },
+        }),
+      ).toBe(true);
+    });
+
     it('rejects a wrong signature, a stale timestamp and a missing secret', () => {
       const ts = now();
       expect(
