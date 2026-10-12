@@ -61,7 +61,7 @@ function formatLeft(ms: number): string {
   return h ? `${h}:${mm}:${String(s).padStart(2, '0')}` : `${mm}:${String(s).padStart(2, '0')}`
 }
 
-function CopyField({
+export function CopyField({
   label,
   value,
   display,

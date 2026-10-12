@@ -13,6 +13,7 @@ import RecommendedOffers from '@/components/dashboard/RecommendedOffers'
 import { getErrorMessage, getErrorStatus } from '@/lib/api-error'
 import { CryptoInvoice, type CryptoPayment } from '@/components/checkout/CryptoInvoice'
 import { RedirectWaiting } from '@/components/checkout/RedirectWaiting'
+import { PixInvoice, showablePix, type PixPayment } from '@/components/checkout/PixInvoice'
 import { CryptoAssetIcon } from '@/components/checkout/CryptoAssetIcon'
 import { LedgerShell } from '@/components/ledger/LedgerShell'
 
@@ -35,7 +36,7 @@ interface SessionData {
   successUrl: string | null
   errorUrl: string | null
   paymentMethods: PaymentMethod[]
-  payment?: CryptoPayment | null
+  payment?: CryptoPayment | PixPayment | null
   /** A payment the customer is completing on the provider's own page. */
   pending?: { rail: string; status: string; checkoutUrl: string } | null
 }
@@ -44,6 +45,8 @@ interface SessionData {
 const PAYMENT_WINDOW = 'billing-payment'
 const PAYMENT_WINDOW_FEATURES = 'popup,width=520,height=780'
 const RETURNED_MESSAGE = 'billing:payment-returned'
+/** Rails paid on this page itself (crypto invoice, PIX code): no provider window to open. */
+const INLINE_RAILS = new Set(['CRYPTO', 'HODLE'])
 
 interface PaymentOption {
   id: string
@@ -62,7 +65,7 @@ interface PaymentMethod {
 }
 
 /** A crypto invoice worth showing again: one that can still be paid, or that was. */
-function showableCrypto(payment: CryptoPayment | null | undefined): payment is CryptoPayment {
+function showableCrypto(payment: CryptoPayment | PixPayment | null | undefined): payment is CryptoPayment {
   return !!payment && payment.type === 'crypto' && !['cancelled', 'expired'].includes(payment.invoiceStatus)
 }
 
@@ -121,6 +124,8 @@ export default function CheckoutPage() {
   const [payLoading, setPayLoading] = useState(false)
   // An open crypto invoice replaces the form: there is no page to redirect to.
   const [payment, setPayment] = useState<CryptoPayment | null>(null)
+  // An open PIX code replaces the form the same way.
+  const [pix, setPix] = useState<PixPayment | null>(null)
   // A payment on the provider's page (lava.top, Stripe, …): this page waits
   // behind it and checks with the provider until it settles.
   const [redirect, setRedirect] = useState<{ url: string; windowOpened: boolean } | null>(null)
@@ -166,6 +171,12 @@ export default function CheckoutPage() {
           const crypto = data.paymentMethods.find((m) => m.code === 'CRYPTO')
           if (crypto) setSelectedRail('CRYPTO')
           setSelectedOption(`${data.payment.chain}_${data.payment.token}`)
+          return
+        }
+
+        if (showablePix(data.payment) && ['created', 'open', 'paid'].includes(data.status)) {
+          setPix({ ...data.payment, intentStatus: data.status === 'paid' ? 'paid' : data.payment.intentStatus })
+          setSelectedRail('HODLE')
           return
         }
 
@@ -219,6 +230,29 @@ export default function CheckoutPage() {
     return () => clearInterval(id)
   }, [waitingForChain, sessionId])
 
+  // While a PIX code is open, ask Hodle (through the server) whether it was paid;
+  // the webhook usually gets there first, and this picks either up.
+  const waitingForPix = !!pix && pix.intentStatus !== 'paid' && !['EXPIRED', 'FAILED'].includes(pix.depositStatus)
+  useEffect(() => {
+    if (!waitingForPix) return
+    const id = setInterval(async () => {
+      try {
+        const res = await api.post(`/v1/checkout/sessions/${sessionId}/refresh`)
+        const data: SessionData = res.data
+        if (data.payment?.type === 'pix') {
+          setPix({ ...data.payment, intentStatus: data.status === 'paid' ? 'paid' : data.payment.intentStatus })
+        } else if (data.status === 'paid') {
+          setPix((p) => (p ? { ...p, intentStatus: 'paid' } : p))
+        } else if (['expired', 'failed'].includes(data.status) || !data.payment) {
+          setPix((p) => (p ? { ...p, depositStatus: 'EXPIRED' } : p))
+        }
+      } catch {
+        // A missed poll is retried on the next tick.
+      }
+    }, 5000)
+    return () => clearInterval(id)
+  }, [waitingForPix, sessionId])
+
   // Ask the provider (through the server) whether the payment went through.
   const checkRedirect = useCallback(async () => {
     setChecking(true)
@@ -267,6 +301,7 @@ export default function CheckoutPage() {
   // Paid: show the confirmation for a moment, then go where the merchant asked.
   const paidNow =
     (!!payment && (payment.invoiceStatus === 'paid' || payment.intentStatus === 'paid')) ||
+    (!!pix && pix.intentStatus === 'paid') ||
     redirectOutcome === 'paid'
   useEffect(() => {
     if (!paidNow || !session) return
@@ -335,7 +370,7 @@ export default function CheckoutPage() {
     // provider once the server has made the payment. Not for crypto, which
     // has no page to go to, nor for a free order.
     const paymentWindow =
-      !isFree && selectedRail !== 'CRYPTO' ? window.open('', PAYMENT_WINDOW, PAYMENT_WINDOW_FEATURES) : null
+      !isFree && !INLINE_RAILS.has(selectedRail) ? window.open('', PAYMENT_WINDOW, PAYMENT_WINDOW_FEATURES) : null
     try {
       const payload: Record<string, unknown> = {}
       if (!isFree && selectedRail) {
@@ -358,6 +393,12 @@ export default function CheckoutPage() {
       if (res.data.payment?.type === 'crypto') {
         paymentWindow?.close()
         setPayment(res.data.payment)
+        setPayLoading(false)
+        return
+      }
+      if (res.data.payment?.type === 'pix') {
+        paymentWindow?.close()
+        setPix(res.data.payment)
         setPayLoading(false)
         return
       }
@@ -577,6 +618,8 @@ export default function CheckoutPage() {
               onCheck={() => void checkRedirect()}
               errorUrl={session.errorUrl && isSafeRedirect(session.errorUrl) ? session.errorUrl : null}
             />
+          ) : pix ? (
+            <PixInvoice payment={pix} renewing={payLoading} onRenew={handlePay} />
           ) : payment ? (
             <CryptoInvoice
               payment={payment}

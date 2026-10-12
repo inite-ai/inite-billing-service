@@ -6,6 +6,7 @@ import { LavaAdapter } from './lava/lava.adapter';
 import { StripeAdapter } from './stripe/stripe.adapter';
 import { AppleIAPAdapter } from './apple-iap/apple-iap.adapter';
 import { GooglePlayAdapter } from './google-play/google-play.adapter';
+import { HodleAdapter } from './hodle/hodle.adapter';
 
 @Module({
   providers: [
@@ -16,6 +17,7 @@ import { GooglePlayAdapter } from './google-play/google-play.adapter';
     StripeAdapter,
     AppleIAPAdapter,
     GooglePlayAdapter,
+    HodleAdapter,
   ],
   exports: [
     OneAdapter,
@@ -24,6 +26,7 @@ import { GooglePlayAdapter } from './google-play/google-play.adapter';
     StripeAdapter,
     AppleIAPAdapter,
     GooglePlayAdapter,
+    HodleAdapter,
   ],
 })
 export class AdaptersModule {}

@@ -554,7 +554,19 @@
     "order": "Заказ",
     "paidStamp": "ОПЛАЧЕНО",
     "pay_step": "Оплата",
-    "youPay": "К оплате"
+    "youPay": "К оплате",
+    "pix": {
+      "title": "Оплата через PIX",
+      "hint": "Отсканируйте код в приложении банка или скопируйте его и вставьте в PIX Copia e Cola.",
+      "qrAlt": "QR-код PIX",
+      "copyPaste": "PIX Copia e Cola",
+      "waiting": "Ждём оплату. Страница обновится сама.",
+      "paidTitle": "Оплата получена",
+      "paidHint": "Покупка открыта.",
+      "expiredTitle": "Код PIX истёк",
+      "expiredHint": "Создайте новый, это секунда.",
+      "renew": "Новый код PIX"
+    }
   },
   "referrals": {
     "title": "Реферальная программа",
