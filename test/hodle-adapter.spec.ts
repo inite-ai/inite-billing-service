@@ -18,8 +18,16 @@ describe('HodleAdapter', () => {
       text: () => Promise.resolve(JSON.stringify(body)),
     });
 
-  const build = (config: Record<string, unknown> = {}, active = true) => {
+  const build = (
+    config: Record<string, unknown> = {},
+    active = true,
+    intent: Record<string, unknown> | null = null,
+  ) => {
     const prisma: any = {
+      paymentIntent: {
+        findFirst: jest.fn().mockResolvedValue(intent),
+        update: jest.fn().mockResolvedValue({}),
+      },
       paymentProvider: {
         findUnique: jest.fn().mockResolvedValue({
           code: 'HODLE',
@@ -28,7 +36,9 @@ describe('HodleAdapter', () => {
         }),
       },
     };
-    return new HodleAdapter(prisma);
+    const adapter = new HodleAdapter(prisma);
+    (adapter as any).__prisma = prisma;
+    return adapter;
   };
 
   const input = (o: Record<string, any> = {}) => ({
@@ -133,6 +143,23 @@ describe('HodleAdapter', () => {
       expect((await adapter.getIntentStatus('a')).status).toBe('refunded');
     });
 
+    it('reports an accepted contestation as refunded without asking Hodle', async () => {
+      const adapter = build({}, true, {
+        snapshot: { hodleDispute: { status: 'ACCEPTED', disputeId: 'med-1', full: true } },
+      });
+      expect((await adapter.getIntentStatus('ord-1-x')).status).toBe('refunded');
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('keeps the stored PIX code in what it hands back', async () => {
+      fetchMock.mockReturnValueOnce(deposit({ status: 'PENDING' }));
+      const status = await build({}, true, { snapshot: { qrCode: 'q' } }).getIntentStatus('a');
+      expect(status.providerData).toMatchObject({
+        qrCode: 'q',
+        hodleDeposit: { status: 'PENDING' },
+      });
+    });
+
     it('keeps a deposit whose PIX settled as paid even if delivery failed', async () => {
       const adapter = build();
       fetchMock.mockReturnValueOnce(deposit({ status: 'FAILED', paidAt: '2026-10-11T12:00:00Z' }));
@@ -175,6 +202,29 @@ describe('HodleAdapter', () => {
           payload: { event: 'WEBHOOK_TEST' },
         }),
       ).toBe(true);
+    });
+
+    it('accepts any of the secrets of the webhooks Hodle registers per event', () => {
+      const ts = now();
+      const headers = {
+        'x-hodle-signature': sign(body, ts, 'refund-secret'),
+        'x-hodle-timestamp': ts,
+      };
+      expect(
+        verify(headers, {
+          webhookSecret: 'whsec',
+          webhookSecrets: 'refund-secret, dispute-secret',
+        }),
+      ).toBe(true);
+      expect(
+        verify(headers, {
+          webhookSecret: 'whsec',
+          webhookSecrets: ['dispute-secret', 'refund-secret'],
+        }),
+      ).toBe(true);
+      expect(verify(headers, { webhookSecret: 'whsec', webhookSecrets: 'dispute-secret' })).toBe(
+        false,
+      );
     });
 
     it('rejects a wrong signature, a stale timestamp and a missing secret', () => {
@@ -223,6 +273,49 @@ describe('HodleAdapter', () => {
         data: { eventId: 'e4', externalId: 'd' },
       });
       expect(failed.eventType).toBe(HODLE_UNMATCHED_EVENT);
+    });
+
+    const dispute = (event: string, value = 4900) => ({
+      event,
+      data: {
+        eventId: `ev-${event}`,
+        status: event.replace('DISPUTE_', ''),
+        disputeId: 'med-1',
+        endToEndId: 'E123',
+        value,
+        reason: 'fraud',
+        walletCharge: { externalId: 'ord-1-x' },
+      },
+    });
+    const paid = { id: 'pi-1', amount: '49', snapshot: { qrCode: 'q', value: 4900 } };
+
+    it('takes the purchase back when a Pix contestation is accepted in full', async () => {
+      const adapter = build({}, true, paid);
+      const parsed = await adapter.handleWebhook(dispute('DISPUTE_ACCEPTED'));
+      expect(parsed).toMatchObject({ eventType: 'payment.refunded', entityId: 'ord-1-x' });
+      const update = (adapter as any).__prisma.paymentIntent.update.mock.calls[0][0];
+      expect(update.data.snapshot).toMatchObject({
+        qrCode: 'q',
+        hodleDispute: { status: 'ACCEPTED', disputeId: 'med-1', full: true },
+      });
+    });
+
+    it('only records a partial, opened, rejected or cancelled contestation', async () => {
+      const partial = await build({}, true, paid).handleWebhook(dispute('DISPUTE_ACCEPTED', 1000));
+      expect(partial.eventType).toBe(HODLE_UNMATCHED_EVENT);
+      for (const event of ['DISPUTE_CREATED', 'DISPUTE_REJECTED', 'DISPUTE_CANCELED']) {
+        const adapter = build({}, true, paid);
+        expect((await adapter.handleWebhook(dispute(event))).eventType).toBe(HODLE_UNMATCHED_EVENT);
+        expect((adapter as any).__prisma.paymentIntent.update).not.toHaveBeenCalled();
+      }
+    });
+
+    it('records a contestation that names no deposit', async () => {
+      const parsed = await build().handleWebhook({
+        event: 'DISPUTE_ACCEPTED',
+        data: { disputeId: 'med-2', walletCharge: null },
+      });
+      expect(parsed.eventType).toBe(HODLE_UNMATCHED_EVENT);
     });
 
     it('acknowledges the registration test', async () => {
