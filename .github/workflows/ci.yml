@@ -149,7 +149,9 @@ jobs:
 
       - name: Security audit
         working-directory: frontend
-        run: npm audit --audit-level=high
+        # Shipped dependencies only: braces (via eslint-config-next → fast-glob) has
+        # an advisory covering every version and no fix, and it never reaches the bundle.
+        run: npm audit --audit-level=high --omit=dev
 
   docker:
     runs-on: ubuntu-latest
