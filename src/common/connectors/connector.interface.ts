@@ -34,6 +34,13 @@ export interface ConnectorCapabilities {
   statusPolling?: boolean;
   /** Optional allow-lists; empty/undefined means "no restriction declared". */
   currencies?: string[];
+  /**
+   * Currencies the rail can charge a price in another currency in, converted
+   * at the current rate. Such a price is offered only when an admin has ticked
+   * its currency on the provider (`PaymentProvider.currencies`): lava.top takes
+   * reais that way, charging the card the dollar equivalent.
+   */
+  convertsTo?: string[];
   countries?: string[];
 }
 

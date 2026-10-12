@@ -15,6 +15,7 @@ import {
   WebhookParseResult,
 } from '../../common/interfaces/payment-rail-adapter.interface';
 import { PrismaService } from '../../common/services/prisma.service';
+import { FxRates } from '../crypto/fx';
 
 interface LavaProviderConfig {
   apiBaseUrl: string;
@@ -24,7 +25,18 @@ interface LavaProviderConfig {
    * offer of its own: the amount is sent with each invoice.
    */
   defaultOfferId?: string;
+  /**
+   * Currencies lava.top does not take that an admin has ticked on the provider:
+   * a price in one of them is charged in dollars at the current rate.
+   */
+  convertFrom: string[];
+  /** Added to the converted amount, in percent (0–20), to cover the spread. */
+  fxMarkupPercent: number;
 }
+
+/** What a converted price is charged in. */
+const CONVERT_TO = 'USD';
+const MAX_FX_MARKUP_PERCENT = 20;
 
 /** The currencies lava.top invoices in. */
 export const LAVA_CURRENCIES = ['RUB', 'USD', 'EUR'];
@@ -108,7 +120,11 @@ function normaliseStatus(raw: unknown): string {
 export class LavaAdapter implements Connector {
   private readonly logger = new Logger(LavaAdapter.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  readonly fx: FxRates;
+
+  constructor(private readonly prisma: PrismaService) {
+    this.fx = new FxRates(prisma);
+  }
 
   private async getConfig(): Promise<LavaProviderConfig> {
     const provider = await this.prisma.paymentProvider.findUnique({
@@ -128,11 +144,17 @@ export class LavaAdapter implements Connector {
       throw new Error(`LAVA adapter: untrusted API host: ${url.hostname}`);
     }
 
+    const markup = Number(config.fxMarkupPercent);
     return {
       apiBaseUrl: url.origin,
       apiKey: config.apiKey || '',
       defaultOfferId:
         typeof config.defaultOfferId === 'string' ? config.defaultOfferId.trim() : undefined,
+      convertFrom: (provider.currencies ?? [])
+        .map((c) => String(c).toUpperCase())
+        .filter((c) => !LAVA_CURRENCIES.includes(c)),
+      fxMarkupPercent:
+        Number.isFinite(markup) && markup >= 0 && markup <= MAX_FX_MARKUP_PERCENT ? markup : 0,
     };
   }
 
@@ -181,18 +203,55 @@ export class LavaAdapter implements Connector {
       selectableMethods: true,
       statusPolling: true,
       currencies: LAVA_CURRENCIES,
+      convertsTo: [CONVERT_TO],
     };
   }
 
   /** Card, СБП or PayPal — whatever lava.top carries for this currency. */
   async listMethods(context: { currency?: string } = {}): Promise<PaymentMethod[]> {
-    const currency = String(context.currency ?? 'RUB').toUpperCase();
+    const asked = String(context.currency ?? 'RUB').toUpperCase();
+    // A converted price is paid the way a dollar price is, and the customer is told so.
+    const converted = !METHODS[asked];
+    const currency = converted ? CONVERT_TO : asked;
     return (METHODS[currency] ?? []).map((m) => ({
       id: m.id,
       type: m.id === 'SBP' ? 'sbp' : m.id === 'PAYPAL' ? 'paypal' : 'card',
       name: m.id,
-      metadata: { method: m.id },
+      metadata: { method: m.id, ...(converted ? { chargedIn: CONVERT_TO } : {}) },
     }));
+  }
+
+  /**
+   * The dollars to charge for a price in a currency lava.top does not take:
+   * the current rate plus the configured markup, rounded up to the cent so the
+   * shop never receives less than the rate says.
+   */
+  private async convert(
+    amount: number,
+    from: string,
+    config: LavaProviderConfig,
+  ): Promise<{ charged: number; fx: Record<string, unknown> }> {
+    const quote = await this.fx.quote(from);
+    if (!quote) {
+      throw new BadRequestException(
+        `No current exchange rate for ${from}; this price cannot be charged by card right now`,
+      );
+    }
+    const usd = FxRates.toUsd(amount, quote, config.fxMarkupPercent);
+    const charged = Math.ceil(usd.mul(100).toNumber() - 1e-9) / 100;
+    return {
+      charged,
+      fx: {
+        from,
+        amount: Number(amount),
+        to: CONVERT_TO,
+        charged,
+        perUsd: quote.perUsd.toString(),
+        source: quote.source,
+        publishedAt: quote.publishedAt?.toISOString() ?? null,
+        markupPercent: config.fxMarkupPercent,
+      },
+    };
   }
 
   /**
@@ -263,19 +322,43 @@ export class LavaAdapter implements Connector {
 
   async createPaymentIntent(input: CreateIntentInput): Promise<CreateIntentResult> {
     const config = await this.getConfig();
-    const currency = String(input.currency).toUpperCase();
-    if (!LAVA_CURRENCIES.includes(currency)) {
+    const asked = String(input.currency).toUpperCase();
+    const converting = !LAVA_CURRENCIES.includes(asked);
+    if (converting && !config.convertFrom.includes(asked)) {
       throw new BadRequestException(
         `lava.top takes ${LAVA_CURRENCIES.join(', ')}; this price is in ${input.currency}`,
       );
     }
+    if (converting && input.mode === 'SUBSCRIPTION') {
+      throw new BadRequestException(
+        `A subscription in ${asked} cannot be charged by card: lava.top bills subscriptions in its own currencies`,
+      );
+    }
+    const currency = converting ? CONVERT_TO : asked;
 
     const email = input.metadata?.buyerEmail || input.metadata?.email;
     if (!email) {
       throw new BadRequestException('lava.top needs the buyer’s email, and this account has none');
     }
 
-    const { offerId, amount, interval } = await this.resolveOffer(input, config);
+    let offerId: string;
+    let amount: number | undefined;
+    let interval: string | null = null;
+    let fx: Record<string, unknown> | null = null;
+    if (converting) {
+      // Every offer has a price of its own; a converted amount needs the dynamic one.
+      if (!config.defaultOfferId) {
+        throw new BadRequestException(
+          `Charging ${asked} prices by card needs a dynamic-price default offer in the LAVA provider settings`,
+        );
+      }
+      const converted = await this.convert(Number(input.amount), asked, config);
+      offerId = config.defaultOfferId;
+      amount = converted.charged;
+      fx = converted.fx;
+    } else {
+      ({ offerId, amount, interval } = await this.resolveOffer(input, config));
+    }
 
     let periodicity = 'ONE_TIME';
     if (input.mode === 'SUBSCRIPTION') {
@@ -341,6 +424,7 @@ export class LavaAdapter implements Connector {
         buyerEmail: email,
         periodicity,
         order_id: input.orderId,
+        ...(fx ? { fx } : {}),
       },
     };
   }
@@ -379,10 +463,21 @@ export class LavaAdapter implements Connector {
 
     const receipt = invoice?.receipt ?? {};
     const settled = typeof receipt.amount === 'number' ? receipt.amount : undefined;
+    // A converted price was charged in dollars: having received at least the
+    // dollars it was converted to, the order's own amount is what was paid —
+    // stated in the order's currency, which is what the processor compares.
+    const fx = snapshot.fx;
+    const settledFx =
+      fx &&
+      settled !== undefined &&
+      String(receipt.currency ?? fx.to).toUpperCase() === fx.to &&
+      settled >= Number(fx.charged) - 0.005
+        ? { amount: Number(fx.amount), currency: String(fx.from) }
+        : null;
     return {
       status,
       ...(status === 'paid' && settled !== undefined
-        ? { amount: settled, currency: receipt.currency }
+        ? (settledFx ?? { amount: settled, currency: receipt.currency })
         : {}),
       metadata: {
         lava_status: invoice?.status,
@@ -547,8 +642,9 @@ export class LavaAdapter implements Connector {
       const s = (candidate.snapshot as Record<string, any>) || {};
       const sameBuyer = String(s.buyerEmail ?? '').toLowerCase() === String(email).toLowerCase();
       const sameOffer = !offerId || !s.lava_offer_id || s.lava_offer_id === offerId;
-      const sameAmount =
-        !Number.isFinite(amount) || Math.abs(Number(candidate.amount) - amount) < 0.01;
+      // A converted sale was charged — and is refunded — in dollars.
+      const charged = s.fx ? Number(s.fx.charged) : Number(candidate.amount);
+      const sameAmount = !Number.isFinite(amount) || Math.abs(charged - amount) < 0.01;
       return sameBuyer && sameOffer && sameAmount;
     });
 

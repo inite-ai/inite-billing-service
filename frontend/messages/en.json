@@ -535,7 +535,8 @@
       "card": "Card",
       "sbp": "SBP (Faster Payments)",
       "paypal": "PayPal",
-      "rubCardHint": "Cards issued by Russian banks only. For a card from another country, choose a price in dollars or euros if there is one."
+      "rubCardHint": "Cards issued by Russian banks only. For a card from another country, choose a price in dollars or euros if there is one.",
+      "chargedInHint": "Charged in {currency} at today's exchange rate; your bank converts it back."
     },
     "redirect": {
       "titleWindow": "Finish paying in the {provider} window",

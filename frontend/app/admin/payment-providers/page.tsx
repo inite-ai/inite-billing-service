@@ -19,7 +19,7 @@ import { getErrorMessage } from '@/lib/api-error'
 
 const KNOWN_PROVIDERS = [
   { code: 'ONE', name: 'ONE Payment', currencies: ['BRL', 'USD'], countries: ['BR', 'LATAM'], modes: ['PAYMENT', 'SUBSCRIPTION'], description: 'Latin America payment gateway — Pix, cards, bank transfer' },
-  { code: 'LAVA', name: 'Lava.top', currencies: ['RUB', 'USD', 'EUR'], countries: ['RU', 'GLOBAL'], modes: ['PAYMENT', 'SUBSCRIPTION'], description: 'Cards and SBP in roubles, cards and PayPal in USD/EUR. Webhook: https://billing.inite.ai/webhooks/lava' },
+  { code: 'LAVA', name: 'Lava.top', currencies: ['RUB', 'USD', 'EUR'], countries: ['RU', 'GLOBAL'], modes: ['PAYMENT', 'SUBSCRIPTION'], description: 'Cards and SBP in roubles, cards and PayPal in USD/EUR. Tick another currency (e.g. BRL) to charge its prices in USD at the current rate (+ fxMarkupPercent; needs defaultOfferId). Webhook: https://billing.inite.ai/webhooks/lava' },
   { code: 'HODLE', name: 'Hodle (PIX)', currencies: ['BRL'], countries: ['BR'], modes: ['PAYMENT'], description: 'PIX in reais, settled as BRS on the Hodle account. Config: apiKey, webhookSecret, asset (BRS), apiBaseUrl. Webhook: https://billing.inite.ai/webhooks/hodle' },
   { code: 'CRYPTO', name: 'Crypto (stablecoins)', currencies: ['USD'], countries: ['GLOBAL'], modes: ['PAYMENT'], description: 'USDT/USDC to your own wallets — configured under Crypto payments' },
 ]
@@ -34,12 +34,37 @@ const PROVIDER_FIELDS: Record<string, Array<{ key: string; secret?: boolean; pla
     { key: 'webhookKey', secret: true },
     { key: 'defaultOfferId', placeholder: '836b9fc5-7ae9-4a27-9642-592bc44072b7' },
     { key: 'apiBaseUrl', placeholder: 'https://gate.lava.top' },
+    { key: 'fxMarkupPercent', placeholder: '0' },
   ],
   HODLE: [
     { key: 'webhookSecret', secret: true },
     { key: 'asset', placeholder: 'BRS' },
     { key: 'apiBaseUrl', placeholder: 'https://api.hodle.com.br' },
   ],
+}
+
+/** Currencies offered as ticks under the free-text list. */
+const COMMON_CURRENCIES = ['USD', 'EUR', 'RUB', 'BRL', 'ARS', 'MXN', 'GBP']
+
+/**
+ * Ticks for the provider's currencies, kept in step with the comma-separated
+ * field. Ticking one a rail does not take natively (BRL on Lava) makes it
+ * charge that currency's prices converted, where the rail can.
+ */
+function CurrencyTicks({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const list = value.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean)
+  const toggle = (c: string) =>
+    onChange((list.includes(c) ? list.filter((x) => x !== c) : [...list, c]).join(', '))
+  return (
+    <div className="-mt-2 mb-4 flex flex-wrap gap-3">
+      {COMMON_CURRENCIES.map((c) => (
+        <label key={c} className="flex cursor-pointer items-center gap-1.5 text-xs">
+          <input type="checkbox" checked={list.includes(c)} onChange={() => toggle(c)} />
+          {c}
+        </label>
+      ))}
+    </div>
+  )
 }
 
 /** Rails whose credential is a single key — no separate secret to ask for. */
@@ -346,6 +371,7 @@ export default function AdminPaymentProvidersPage() {
             <Input label={t('providers.formName')} value={formName} onChange={(e) => setFormName(e.target.value)} required placeholder="Lava.top" />
           </div>
           <Input label={t('providers.formCurrencies')} value={formCurrencies} onChange={(e) => setFormCurrencies(e.target.value)} placeholder="USD, EUR" />
+          <CurrencyTicks value={formCurrencies} onChange={setFormCurrencies} />
           <Input label={t('providers.formCountries')} value={formCountries} onChange={(e) => setFormCountries(e.target.value)} placeholder="GLOBAL" />
           <Input label={t('providers.formSupportedModes')} value={formModes} onChange={(e) => setFormModes(e.target.value)} placeholder="PAYMENT, SUBSCRIPTION" />
           <Input label={t('providers.formWebhookUrl')} value={formWebhook} onChange={(e) => setFormWebhook(e.target.value)} placeholder="https://billing.inite.ai/webhooks/lava" />
@@ -367,6 +393,7 @@ export default function AdminPaymentProvidersPage() {
         <div className="space-y-4">
           <Input label={t('providers.formName')} value={formName} onChange={(e) => setFormName(e.target.value)} />
           <Input label={t('providers.formCurrencies')} value={formCurrencies} onChange={(e) => setFormCurrencies(e.target.value)} />
+          <CurrencyTicks value={formCurrencies} onChange={setFormCurrencies} />
           <Input label={t('providers.formCountries')} value={formCountries} onChange={(e) => setFormCountries(e.target.value)} />
           <Input label={t('providers.formSupportedModes')} value={formModes} onChange={(e) => setFormModes(e.target.value)} />
           <Input label={t('providers.formWebhookUrl')} value={formWebhook} onChange={(e) => setFormWebhook(e.target.value)} />
