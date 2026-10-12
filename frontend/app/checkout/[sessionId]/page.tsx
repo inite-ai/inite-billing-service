@@ -52,7 +52,7 @@ interface PaymentOption {
   id: string
   name: string
   /** A crypto network/token, or a way to pay within a rail (lava.top: CARD, SBP, PAYPAL). */
-  metadata: { chain?: string; token?: string; chainName?: string; network?: string; method?: string }
+  metadata: { chain?: string; token?: string; chainName?: string; network?: string; method?: string; chargedIn?: string }
 }
 
 interface PaymentMethod {
@@ -704,6 +704,13 @@ export default function CheckoutPage() {
                               Found in a live test — say so before the customer tries. */}
                           {chosenOption?.metadata.method === 'CARD' && currency === 'RUB' && (
                             <p className="note warn mt-3 text-xs">{t('methods.rubCardHint')}</p>
+                          )}
+                          {/* A price in a currency the rail does not take (reais on lava.top)
+                              is charged in its own currency at today's rate. */}
+                          {chosenOption?.metadata.chargedIn && (
+                            <p className="note mt-3 text-xs">
+                              {t('methods.chargedInHint', { currency: chosenOption.metadata.chargedIn })}
+                            </p>
                           )}
                         </fieldset>
                       )}

@@ -407,9 +407,16 @@ export class CheckoutService {
         connector = null;
       }
       const capabilities = connector?.capabilities?.();
+      const currency = String(order.currency).toUpperCase();
+      // A currency the rail cannot take natively is still offered when it can
+      // convert it and the admin ticked that currency on the provider.
+      const converted =
+        !!capabilities?.convertsTo?.length &&
+        provider.currencies.map((c) => c.toUpperCase()).includes(currency);
       if (
         capabilities?.currencies?.length &&
-        !capabilities.currencies.includes(String(order.currency).toUpperCase())
+        !capabilities.currencies.includes(currency) &&
+        !converted
       ) {
         continue;
       }

@@ -21,15 +21,17 @@ describe('LavaAdapter', () => {
       text: () => Promise.resolve(JSON.stringify(body)),
     });
 
-  const provider = (config: Record<string, unknown> = {}) => ({
+  const provider = (config: Record<string, unknown> = {}, currencies = ['RUB', 'USD', 'EUR']) => ({
     code: 'LAVA',
     isActive: true,
+    currencies,
     config: { apiKey: 'lava-api-key', ...config },
   });
 
   const build = (
     opts: {
       config?: Record<string, unknown>;
+      currencies?: string[];
       price?: any;
       intent?: any;
       intents?: any[];
@@ -37,7 +39,9 @@ describe('LavaAdapter', () => {
     } = {},
   ) => {
     const prisma: any = {
-      paymentProvider: { findUnique: jest.fn().mockResolvedValue(provider(opts.config)) },
+      paymentProvider: {
+        findUnique: jest.fn().mockResolvedValue(provider(opts.config, opts.currencies)),
+      },
       price: { findUnique: jest.fn().mockResolvedValue(opts.price ?? null) },
       paymentIntent: {
         findFirst: jest.fn().mockResolvedValue(opts.intent ?? null),
@@ -418,6 +422,84 @@ describe('LavaAdapter', () => {
       await expect(adapter.cancelSubscription({ providerSubscriptionId: 'x' })).resolves.toEqual({
         cancelled: true,
       });
+    });
+  });
+
+  describe('a currency lava.top does not take, ticked on the provider', () => {
+    const { Decimal } = jest.requireActual('@prisma/client/runtime/library');
+    const reais = (o: Record<string, any> = {}) =>
+      input({ amount: 49, currency: 'BRL', method: 'CARD', ...o });
+    const ticked = (config: Record<string, unknown> = {}) => {
+      const built = build({
+        config: { defaultOfferId: 'dyn-offer', ...config },
+        currencies: ['RUB', 'USD', 'EUR', 'BRL'],
+      });
+      jest.spyOn(built.adapter.fx, 'quote').mockResolvedValue({
+        currency: 'BRL',
+        perUsd: new Decimal('5.5'),
+        source: 'open.er-api.com',
+        publishedAt: null,
+      });
+      return built;
+    };
+
+    it('is declared convertible, and offers card and PayPal marked as charged in dollars', async () => {
+      const { adapter } = build();
+      expect(adapter.capabilities().convertsTo).toEqual(['USD']);
+      const methods = await adapter.listMethods({ currency: 'BRL' });
+      expect(methods.map((m) => m.id)).toEqual(['CARD', 'PAYPAL']);
+      expect(methods[0].metadata).toMatchObject({ method: 'CARD', chargedIn: 'USD' });
+    });
+
+    it('charges the dollar equivalent through the dynamic offer, rounded up, with markup', async () => {
+      fetchMock.mockReturnValue(answer(created));
+      const { adapter } = ticked({ fxMarkupPercent: 3 });
+      const result = await adapter.createPaymentIntent(reais());
+
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+      // 49 / 5.5 = 8.909…, +3 % = 9.1767… → 9.18
+      expect(body).toMatchObject({ offerId: 'dyn-offer', currency: 'USD', amount: 9.18 });
+      expect(body.paymentProvider).toBe('UNLIMINT');
+      expect(result.metadata?.fx).toMatchObject({
+        from: 'BRL',
+        amount: 49,
+        to: 'USD',
+        charged: 9.18,
+      });
+    });
+
+    it('refuses it unless ticked, without a dynamic offer, and for a subscription', async () => {
+      await expect(
+        build({ config: { defaultOfferId: 'dyn' } }).adapter.createPaymentIntent(reais()),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        ticked({ defaultOfferId: '' }).adapter.createPaymentIntent(reais()),
+      ).rejects.toThrow(/dynamic-price default offer/);
+      await expect(
+        ticked().adapter.createPaymentIntent(reais({ mode: 'SUBSCRIPTION' })),
+      ).rejects.toThrow(/subscription/);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('reports a paid conversion in the order’s currency, so it reconciles', async () => {
+      fetchMock.mockReturnValue(
+        answer({ id: created.id, status: 'COMPLETED', receipt: { amount: 9.18, currency: 'USD' } }),
+      );
+      const fx = { from: 'BRL', amount: 49, to: 'USD', charged: 9.18 };
+      const { adapter } = build({ intent: { snapshot: { fx } } });
+      const result = await adapter.getIntentStatus(created.id);
+      expect(result).toMatchObject({ status: 'paid', amount: 49, currency: 'BRL' });
+      expect(reconcileAmount({ amount: '49', currency: 'BRL' }, result).ok).toBe(true);
+    });
+
+    it('does not settle a conversion paid short', async () => {
+      fetchMock.mockReturnValue(
+        answer({ id: created.id, status: 'COMPLETED', receipt: { amount: 5, currency: 'USD' } }),
+      );
+      const fx = { from: 'BRL', amount: 49, to: 'USD', charged: 9.18 };
+      const { adapter } = build({ intent: { snapshot: { fx } } });
+      const result = await adapter.getIntentStatus(created.id);
+      expect(reconcileAmount({ amount: '49', currency: 'BRL' }, result).ok).toBe(false);
     });
   });
 });
