@@ -14,6 +14,8 @@ export const RAILS = {
   CRYPTO: 'CRYPTO',
   APPLE_IAP: 'APPLE_IAP',
   GOOGLE_PLAY: 'GOOGLE_PLAY',
+  /** PIX in reais through Hodle (hodle.com.br). */
+  HODLE: 'HODLE',
   /** Virtual rail: a 100%-off promo has no provider/adapter and goes straight
    * to fulfilment. It must never be looked up as a live adapter. */
   PROMO: 'PROMO',

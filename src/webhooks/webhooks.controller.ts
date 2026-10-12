@@ -41,6 +41,7 @@ export class WebhooksController {
     apple: RAILS.APPLE_IAP,
     google: RAILS.GOOGLE_PLAY,
     crypto: RAILS.CRYPTO,
+    hodle: RAILS.HODLE,
   };
 
   constructor(
@@ -51,7 +52,10 @@ export class WebhooksController {
   @Post(':railPath')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Inbound payment webhook (per-rail)' })
-  @ApiParam({ name: 'railPath', enum: ['one', 'lava', 'stripe', 'apple', 'google', 'crypto'] })
+  @ApiParam({
+    name: 'railPath',
+    enum: ['one', 'lava', 'stripe', 'apple', 'google', 'crypto', 'hodle'],
+  })
   @ApiResponse({ status: 200 })
   async handleWebhook(
     @Param('railPath') railPath: string,

@@ -20,6 +20,7 @@ import { getErrorMessage } from '@/lib/api-error'
 const KNOWN_PROVIDERS = [
   { code: 'ONE', name: 'ONE Payment', currencies: ['BRL', 'USD'], countries: ['BR', 'LATAM'], modes: ['PAYMENT', 'SUBSCRIPTION'], description: 'Latin America payment gateway — Pix, cards, bank transfer' },
   { code: 'LAVA', name: 'Lava.top', currencies: ['RUB', 'USD', 'EUR'], countries: ['RU', 'GLOBAL'], modes: ['PAYMENT', 'SUBSCRIPTION'], description: 'Cards and SBP in roubles, cards and PayPal in USD/EUR. Webhook: https://billing.inite.ai/webhooks/lava' },
+  { code: 'HODLE', name: 'Hodle (PIX)', currencies: ['BRL'], countries: ['BR'], modes: ['PAYMENT'], description: 'PIX in reais, settled as BRS on the Hodle account. Config: apiKey, webhookSecret, asset (BRS), apiBaseUrl. Webhook: https://billing.inite.ai/webhooks/hodle' },
   { code: 'CRYPTO', name: 'Crypto (stablecoins)', currencies: ['USD'], countries: ['GLOBAL'], modes: ['PAYMENT'], description: 'USDT/USDC to your own wallets — configured under Crypto payments' },
 ]
 
@@ -34,10 +35,15 @@ const PROVIDER_FIELDS: Record<string, Array<{ key: string; secret?: boolean; pla
     { key: 'defaultOfferId', placeholder: '836b9fc5-7ae9-4a27-9642-592bc44072b7' },
     { key: 'apiBaseUrl', placeholder: 'https://gate.lava.top' },
   ],
+  HODLE: [
+    { key: 'webhookSecret', secret: true },
+    { key: 'asset', placeholder: 'BRS' },
+    { key: 'apiBaseUrl', placeholder: 'https://api.hodle.com.br' },
+  ],
 }
 
 /** Rails whose credential is a single key — no separate secret to ask for. */
-const NO_API_SECRET = new Set(['LAVA', 'CRYPTO'])
+const NO_API_SECRET = new Set(['LAVA', 'CRYPTO', 'HODLE'])
 
 export default function AdminPaymentProvidersPage() {
   const t = useTranslations('admin')

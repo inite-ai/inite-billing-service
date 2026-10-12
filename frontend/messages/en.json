@@ -554,7 +554,19 @@
     "order": "Order",
     "paidStamp": "PAID",
     "pay_step": "Payment",
-    "youPay": "You pay"
+    "youPay": "You pay",
+    "pix": {
+      "title": "Pay with PIX",
+      "hint": "Scan the code in your bank app, or copy it and paste it under PIX Copia e Cola.",
+      "qrAlt": "PIX QR code",
+      "copyPaste": "PIX Copia e Cola",
+      "waiting": "Waiting for the payment. This page updates on its own.",
+      "paidTitle": "Payment received",
+      "paidHint": "Your purchase is open.",
+      "expiredTitle": "This PIX code has expired",
+      "expiredHint": "Make a new one, it takes a second.",
+      "renew": "New PIX code"
+    }
   },
   "referrals": {
     "title": "Referral Program",
