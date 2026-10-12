@@ -152,22 +152,33 @@ export class HodleAdapter implements Connector {
    * the timestamp in Unix seconds. Fails closed without a secret, and refuses
    * a delivery signed outside the five-minute window, so a captured one cannot
    * be replayed later.
+   *
+   * A Hodle webhook listens to one event and has a secret of its own, so the
+   * paid, refunded and dispute webhooks sign with different secrets: the
+   * delivery is accepted if it matches any configured one (`webhookSecret`,
+   * plus `webhookSecrets` — a list, or a string separated by commas or spaces).
    */
   verifyWebhook({ rawBody, headers, config, payload }: WebhookVerifyInput): boolean {
     // Hodle saves a webhook only after its signed WEBHOOK_TEST gets a 2xx, and
     // shows the secret only once the webhook exists. The test settles nothing
     // (handleWebhook records it and stops), so it is let through unsigned.
     if (payload?.event === 'WEBHOOK_TEST') return true;
-    const secret = config.webhookSecret || '';
+    const secrets = webhookSecrets(config);
     const signature = headers['x-hodle-signature'];
     const timestamp = headers['x-hodle-timestamp'];
-    if (!secret || !signature || !timestamp || !/^\d+$/.test(timestamp)) return false;
+    if (!secrets.length || !signature || !timestamp || !/^\d+$/.test(timestamp)) return false;
     if (Math.abs(Date.now() / 1000 - Number(timestamp)) > WEBHOOK_TOLERANCE_SECONDS) return false;
-    const expected = createHmac('sha256', secret)
-      .update(`${timestamp}.`)
-      .update(rawBody)
-      .digest('hex');
-    return safeTimingSafeEqual(expected, signature.trim().toLowerCase());
+    const given = signature.trim().toLowerCase();
+    // Every secret is checked, so the time taken does not tell which one matched.
+    let ok = false;
+    for (const secret of secrets) {
+      const expected = createHmac('sha256', secret)
+        .update(`${timestamp}.`)
+        .update(rawBody)
+        .digest('hex');
+      if (safeTimingSafeEqual(expected, given)) ok = true;
+    }
+    return ok;
   }
 
   async createPaymentIntent(input: CreateIntentInput): Promise<CreateIntentResult> {
@@ -230,8 +241,24 @@ export class HodleAdapter implements Connector {
    * fixed amount, so a settled deposit's `value` is what the customer paid.
    * A delivery that failed after the PIX settled still counts as paid: the
    * money arrived, and Hodle refunds it with a refund event if it gives up.
+   *
+   * A Pix contestation (MED) the payer's bank won is reported as refunded: the
+   * deposit itself does not change when the money goes back, so the accepted
+   * dispute recorded on the intent by {@link handleWebhook} decides.
    */
   async getIntentStatus(providerIntentId: string): Promise<IntentStatusResult> {
+    const intent = await this.prisma.paymentIntent.findFirst({
+      where: { providerIntentId, rail: RAILS.HODLE },
+    });
+    const snapshot = (intent?.snapshot as Record<string, any>) || {};
+    if (snapshot.hodleDispute?.status === 'ACCEPTED' && snapshot.hodleDispute.full !== false) {
+      return {
+        status: 'refunded',
+        metadata: { hodle_dispute_id: snapshot.hodleDispute.disputeId ?? null },
+        providerData: snapshot,
+      };
+    }
+
     const config = await this.getConfig();
     const res = await this.call(
       config,
@@ -253,7 +280,7 @@ export class HodleAdapter implements Connector {
         hodle_end_to_end_id: data.endToEndId ?? null,
         hodle_paid_at: data.paidAt ?? null,
       },
-      providerData: { hodleDeposit: data },
+      providerData: { ...snapshot, hodleDeposit: data },
     };
   }
 
@@ -295,9 +322,11 @@ export class HodleAdapter implements Connector {
   }
 
   /**
-   * A Hodle webhook: `{ event, data }`, with our deposit id in `data.externalId`.
-   * The PIX settling is the sale; a full refund takes it back. A failed delivery
-   * or a partial refund changes nothing on our side and is only recorded.
+   * A Hodle webhook: `{ event, data }`, with our deposit id in `data.externalId`
+   * (in `data.walletCharge.externalId` for a dispute). The PIX settling is the
+   * sale; a full refund, or a dispute the payer's bank won, takes it back. A
+   * failed delivery, a partial refund, and a dispute opened, rejected or
+   * cancelled change nothing on our side and are only recorded.
    */
   async handleWebhook(rawPayload: any): Promise<WebhookParseResult> {
     const event = rawPayload?.event;
@@ -310,6 +339,9 @@ export class HodleAdapter implements Connector {
         rail: RAILS.HODLE,
         payload: rawPayload,
       };
+    }
+    if (typeof event === 'string' && event.startsWith('DISPUTE_')) {
+      return this.handleDispute(event, rawPayload);
     }
     const externalId = data.externalId;
     if (!event || !externalId) {
@@ -333,4 +365,74 @@ export class HodleAdapter implements Connector {
       payload: rawPayload,
     };
   }
+
+  /**
+   * A Pix contestation (MED): the payer's bank reports the transfer as fraud.
+   * Opened, the amount is frozen; accepted, it goes back to the payer, and the
+   * access it paid for goes with it; rejected or cancelled, it stays ours.
+   */
+  private async handleDispute(event: string, rawPayload: any): Promise<WebhookParseResult> {
+    const data = rawPayload?.data ?? {};
+    const externalId = data.walletCharge?.externalId;
+    const disputeId = data.disputeId ?? data.endToEndId ?? 'unknown';
+    const record = (entityId: string): WebhookParseResult => ({
+      webhookId: `hodle_${data.eventId ?? `${disputeId}_${event}`}`,
+      eventType: HODLE_UNMATCHED_EVENT,
+      entityId,
+      rail: RAILS.HODLE,
+      payload: rawPayload,
+    });
+
+    if (!externalId) {
+      this.logger.warn(`Hodle ${event} ${disputeId} names no deposit`);
+      return record(String(disputeId));
+    }
+    if (event === 'DISPUTE_CREATED') {
+      this.logger.warn(`Hodle Pix contested (MED ${disputeId}) for deposit ${externalId}`);
+    }
+    if (event !== 'DISPUTE_ACCEPTED') return record(String(externalId));
+
+    const intent = await this.prisma.paymentIntent.findFirst({
+      where: { providerIntentId: String(externalId), rail: RAILS.HODLE },
+    });
+    if (!intent) {
+      this.logger.warn(`Hodle MED ${disputeId} accepted for unknown deposit ${externalId}`);
+      return record(String(externalId));
+    }
+    // A MED can return part of a Pix; only the whole amount takes the purchase back.
+    const owed = Math.round(Number(intent.amount) * 100);
+    const value = Number(data.value);
+    const full = !Number.isFinite(value) || value >= owed;
+    const snapshot = (intent.snapshot as Record<string, any>) || {};
+    await this.prisma.paymentIntent.update({
+      where: { id: intent.id },
+      data: {
+        snapshot: {
+          ...snapshot,
+          hodleDispute: { status: 'ACCEPTED', disputeId, value, full, reason: data.reason ?? null },
+        },
+      },
+    });
+    if (!full) return record(String(externalId));
+    return {
+      webhookId: `hodle_${data.eventId ?? `${disputeId}_${event}`}`,
+      eventType: 'payment.refunded',
+      entityId: String(externalId),
+      rail: RAILS.HODLE,
+      payload: rawPayload,
+    };
+  }
+}
+
+/** Every webhook secret configured for Hodle: one per webhook, since each listens to one event. */
+function webhookSecrets(config: Record<string, any>): string[] {
+  const extra = config.webhookSecrets;
+  const list = Array.isArray(extra)
+    ? extra
+    : typeof extra === 'string'
+      ? extra.split(/[\s,]+/)
+      : [];
+  return [config.webhookSecret, ...list]
+    .map((x) => (typeof x === 'string' ? x.trim() : ''))
+    .filter(Boolean);
 }

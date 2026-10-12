@@ -38,6 +38,7 @@ const PROVIDER_FIELDS: Record<string, Array<{ key: string; secret?: boolean; pla
   ],
   HODLE: [
     { key: 'webhookSecret', secret: true },
+    { key: 'webhookSecrets', secret: true, placeholder: 'secret-of-refund-webhook, secret-of-dispute-webhook' },
     { key: 'asset', placeholder: 'BRS' },
     { key: 'apiBaseUrl', placeholder: 'https://api.hodle.com.br' },
   ],
