@@ -153,7 +153,11 @@ export class HodleAdapter implements Connector {
    * a delivery signed outside the five-minute window, so a captured one cannot
    * be replayed later.
    */
-  verifyWebhook({ rawBody, headers, config }: WebhookVerifyInput): boolean {
+  verifyWebhook({ rawBody, headers, config, payload }: WebhookVerifyInput): boolean {
+    // Hodle saves a webhook only after its signed WEBHOOK_TEST gets a 2xx, and
+    // shows the secret only once the webhook exists. The test settles nothing
+    // (handleWebhook records it and stops), so it is let through unsigned.
+    if (payload?.event === 'WEBHOOK_TEST') return true;
     const secret = config.webhookSecret || '';
     const signature = headers['x-hodle-signature'];
     const timestamp = headers['x-hodle-timestamp'];

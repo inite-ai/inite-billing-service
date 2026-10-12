@@ -8,13 +8,18 @@ import { reconcileAmount } from './reconcile-amount';
 import { isSubscriptionEvent } from '../payment-orchestrator/payment-orchestrator.service';
 import { UNMATCHED_TRANSFER_EVENT } from '../adapters/crypto/crypto.adapter';
 import { LAVA_UNMATCHED_EVENT } from '../adapters/lava/lava.adapter';
+import { HODLE_UNMATCHED_EVENT } from '../adapters/hodle/hodle.adapter';
 
 /**
  * Events a rail records for an admin rather than settles: money or a refund
  * that matched no order. There is no intent to look up, so the payment path
  * would only fail them.
  */
-const RECORD_ONLY_EVENTS = new Set([UNMATCHED_TRANSFER_EVENT, LAVA_UNMATCHED_EVENT]);
+const RECORD_ONLY_EVENTS = new Set([
+  UNMATCHED_TRANSFER_EVENT,
+  LAVA_UNMATCHED_EVENT,
+  HODLE_UNMATCHED_EVENT,
+]);
 
 /**
  * How long a worker may hold a webhook before another may take it over. Long
