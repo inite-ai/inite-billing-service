@@ -1,4 +1,5 @@
 import type { Price, Product } from './types'
+import { intlTag } from '../i18n/locales'
 
 /** A service with the products it sells, as the storefront returns it. */
 export interface StorefrontService {
@@ -48,7 +49,7 @@ export function formatMoney(amount: number | string, currency: string, locale: s
   const n = typeof amount === 'string' ? Number(amount) : amount
   if (!Number.isFinite(n)) return `${amount} ${currency}`
   try {
-    return new Intl.NumberFormat(locale === 'ru' ? 'ru-RU' : 'en-US', {
+    return new Intl.NumberFormat(intlTag(locale), {
       style: 'currency',
       currency,
       minimumFractionDigits: Number.isInteger(n) ? 0 : 2,
