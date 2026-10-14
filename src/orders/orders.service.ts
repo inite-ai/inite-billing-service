@@ -1,4 +1,4 @@
-import { Injectable, ForbiddenException } from '@nestjs/common';
+import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/services/prisma.service';
 import { OrderResponseDto, PaymentIntentResponseDto } from '../common/dto/order.dto';
 
@@ -38,17 +38,34 @@ export class OrdersService {
     }));
   }
 
-  async getOrderById(orderId: string, userId?: string): Promise<OrderResponseDto> {
+  /**
+   * One order. A user sees their own; a service key (`serviceId`) sees the
+   * orders for its own products, whoever the buyer is — that is how a service
+   * selling to guests (mikefluff.com) learns whether its order was paid, even
+   * after the buyer's INITE account claimed it at checkout.
+   */
+  async getOrderById(
+    orderId: string,
+    userId?: string,
+    serviceId?: string,
+  ): Promise<OrderResponseDto> {
     const where: any = { id: orderId };
     if (userId) {
       where.userId = userId;
     }
 
-    const order = await this.prisma.order.findUnique({
-      where,
-    });
+    const order = serviceId
+      ? await this.prisma.order.findFirst({
+          where: { ...where, price: { product: { serviceId } } },
+        })
+      : await this.prisma.order.findUnique({
+          where,
+        });
 
     if (!order) {
+      // A service asking for another service's order gets the same answer as
+      // for one that does not exist.
+      if (serviceId) throw new NotFoundException('Order not found');
       throw new Error(`Order not found: ${orderId}`);
     }
 

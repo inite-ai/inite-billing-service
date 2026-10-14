@@ -372,9 +372,10 @@ export class CheckoutService {
       throw new NotFoundException('Checkout session not found');
     }
 
-    // If userId provided, verify ownership
+    // If userId provided, verify ownership — or claim a guest order this
+    // user is the first to open.
     if (userId && order.userId !== userId) {
-      throw new ForbiddenException('You do not have access to this session');
+      order.userId = await this.claimGuestOrder(order, userId);
     }
 
     // A service key used to skip the ownership check entirely, which made every
@@ -494,6 +495,56 @@ export class CheckoutService {
   }
 
   /**
+   * A service that sells without accounts (mikefluff.com) opens a checkout
+   * for a namespaced guest id — `mikefluff:<hex>` — that no INITE user has.
+   * The hosted checkout page makes the buyer sign in, and the order then
+   * belongs to someone else, so every guest purchase stopped at "session not
+   * found". The first signed-in user to open such an order takes it, as long
+   * as nothing has happened to it yet: still `created`, no payment started.
+   * The guest id stays in `metadata.guestUserId` for the selling service,
+   * which reconciles by order id. An order owned by a real user is never
+   * claimable. Returns the user id the order now belongs to; throws
+   * Forbidden when it cannot be claimed.
+   */
+  private async claimGuestOrder(
+    order: { id: string; userId: string; status: string; metadata: unknown },
+    userId: string,
+  ): Promise<string> {
+    const forbidden = () => new ForbiddenException('You do not have access to this session');
+    const guestId = order.userId;
+    if (!isGuestUserId(guestId) || isGuestUserId(userId) || order.status !== 'created') {
+      throw forbidden();
+    }
+    const intents = await this.prisma.paymentIntent.count({ where: { orderId: order.id } });
+    if (intents > 0) throw forbidden();
+
+    const metadata = {
+      ...((order.metadata as Record<string, any>) || {}),
+      guestUserId: guestId,
+      claimedAt: new Date().toISOString(),
+    };
+    // Conditional on the guest still owning it and it still being `created`:
+    // two users opening the same link at once — one of them gets it.
+    const claimed = await this.prisma.order.updateMany({
+      where: { id: order.id, userId: guestId, status: 'created' },
+      data: { userId, metadata },
+    });
+    if (claimed.count !== 1) {
+      // Lost a race. Fine if the winner was this same user (two tabs).
+      const now = await this.prisma.order.findUnique({
+        where: { id: order.id },
+        select: { userId: true, metadata: true },
+      });
+      if (now?.userId !== userId) throw forbidden();
+      order.metadata = now.metadata;
+      return userId;
+    }
+    this.logger.log(`Guest order ${order.id} claimed: ${guestId} -> ${userId}`);
+    order.metadata = metadata;
+    return userId;
+  }
+
+  /**
    * Phase 2: Initiate payment for a checkout session.
    * Validates promo code, applies discount, creates PaymentIntent.
    * If amount is 0 (100% discount), fulfills immediately and returns successUrl.
@@ -526,7 +577,7 @@ export class CheckoutService {
     }
 
     if (order.userId !== userId) {
-      throw new ForbiddenException('You do not have access to this session');
+      order.userId = await this.claimGuestOrder(order, userId);
     }
 
     if (order.status !== 'created') {
@@ -819,7 +870,7 @@ export class CheckoutService {
     const order = await this.prisma.order.findUnique({ where: { id: sessionId } });
     if (!order) throw new NotFoundException('Checkout session not found');
     if (order.userId !== userId) {
-      throw new ForbiddenException('You do not have access to this session');
+      order.userId = await this.claimGuestOrder(order, userId);
     }
     const intent = await this.prisma.paymentIntent.findFirst({
       where: { orderId: order.id, status: { in: ['created', 'opened'] } },
@@ -914,4 +965,13 @@ export function checkoutPageUrl(frontendUrl: string, orderId: string, locale?: s
   const url = `${frontendUrl}/checkout/${orderId}`;
   const lang = locale?.trim().toLowerCase().split(/[-_]/)[0];
   return lang && CHECKOUT_LOCALES.includes(lang) ? `${url}?locale=${lang}` : url;
+}
+
+/**
+ * A user id a selling service made up for a buyer without an account:
+ * namespaced, `<service>:<id>`. INITE user ids are uuids and never contain a
+ * colon.
+ */
+export function isGuestUserId(userId: string | null | undefined): boolean {
+  return typeof userId === 'string' && userId.includes(':');
 }

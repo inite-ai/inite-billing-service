@@ -4,7 +4,8 @@ import * as request from 'supertest';
 import { TestAppModule } from './test-app.module';
 import { PrismaService } from '../src/common/services/prisma.service';
 import { JwtAuthGuard } from '../src/auth/guards/jwt-auth.guard';
-import { MockJwtAuthGuard } from './mocks/auth.mock';
+import { JwtOrServiceGuard } from '../src/auth/guards/jwt-or-service.guard';
+import { MockJwtAuthGuard, MockJwtOrServiceGuard } from './mocks/auth.mock';
 import { MockOneAdapter } from './mocks/one-adapter.mock';
 import { PaymentOrchestratorService } from '../src/payment-orchestrator/payment-orchestrator.service';
 import { cleanupTestData } from './helpers/cleanup.helper';
@@ -27,6 +28,8 @@ describe('Orders E2E Tests', () => {
     })
       .overrideGuard(JwtAuthGuard)
       .useClass(MockJwtAuthGuard)
+      .overrideGuard(JwtOrServiceGuard)
+      .useClass(MockJwtOrServiceGuard)
       .compile();
 
     app = moduleFixture.createNestApplication();
