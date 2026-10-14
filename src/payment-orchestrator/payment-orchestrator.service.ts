@@ -13,7 +13,7 @@ import { PrismaService } from '../common/services/prisma.service';
 import { PaymentRailAdapter } from '../common/interfaces/payment-rail-adapter.interface';
 import { ConnectorRegistry } from '../common/connectors/connector-registry.service';
 import { Connector } from '../common/connectors/connector.interface';
-import { calculatePeriodEnd } from './period.util';
+import { calculatePeriodEnd, orderAccessEndsAt } from './period.util';
 import { reconcileAmount } from '../workers/reconcile-amount';
 import {
   isValidTransition,
@@ -505,6 +505,10 @@ export class PaymentOrchestratorService implements OnModuleInit {
   private async grantEntitlementsForOrder(order: any, tx: any): Promise<void> {
     const product = order.price.product;
     const entitlementKeys = this.extractEntitlementKeys(product);
+    const startsAt = new Date();
+    // A one-time order for a priced period (a year paid once) is that period
+    // of access; a price with no interval is kept for good. See orderAccessEndsAt.
+    const expiresAt = orderAccessEndsAt(startsAt, order.price.interval, order.price.graceDays);
 
     for (const key of entitlementKeys) {
       await tx.entitlement.create({
@@ -513,8 +517,8 @@ export class PaymentOrchestratorService implements OnModuleInit {
           key,
           status: 'active',
           source: 'order',
-          startsAt: new Date(),
-          expiresAt: null, // One-time payments don't expire
+          startsAt,
+          expiresAt,
           value: {
             order_id: order.id,
             product_code: product.code,

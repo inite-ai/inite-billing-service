@@ -46,3 +46,23 @@ function addUTCMonthsClamped(date: Date, months: number): void {
   ).getUTCDate();
   date.setUTCDate(Math.min(day, daysInTargetMonth));
 }
+
+/**
+ * When access bought by a one-time order ends.
+ *
+ * A price without an interval is a thing bought once and kept: no end. A price
+ * WITH one, paid once rather than subscribed to, is that period of access -
+ * inite.ai sells its annual Analyzer plan as a twelve-month licence paid once
+ * (owner, 14.10.2026, for Google Merchant). Until then every one-time order
+ * granted `expiresAt: null`, so a year paid once would have been access for
+ * ever. Grace days extend it as they extend a subscription's period.
+ */
+export function orderAccessEndsAt(
+  start: Date,
+  interval: string | null | undefined,
+  graceDays?: number | null,
+): Date | null {
+  if (!interval) return null;
+  const end = calculatePeriodEnd(start, interval);
+  return graceDays ? new Date(end.getTime() + graceDays * 24 * 60 * 60 * 1000) : end;
+}
