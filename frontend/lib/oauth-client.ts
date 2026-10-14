@@ -5,6 +5,7 @@
 
 import { generateCodeVerifier, generateCodeChallenge, generateState } from './pkce';
 import { clearTokens } from './auth-helper';
+import { LOCALE_COOKIE, supportedLocale, type AppLocale } from '@/i18n/locales';
 
 const AUTH_DOMAIN = process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || 'https://auth.inite.ai';
 const CLIENT_ID = process.env.NEXT_PUBLIC_OAUTH_CLIENT_ID || 'inite-billing';
@@ -19,6 +20,20 @@ const SILENT_KEY = 'oauth_silent'
 
 /** What the identity provider answers a silent attempt that needs the person. */
 export const SILENT_SSO_ERRORS = ['login_required', 'interaction_required', 'consent_required', 'account_selection_required']
+
+/**
+ * The language the buyer is reading right now: the page's `<html lang>`
+ * (next-intl's locale for this render, which already honours `?locale=`),
+ * then the `locale` cookie. Null when neither names a supported language —
+ * the identity provider then falls back to its own cookie / the browser.
+ */
+export function currentUiLocale(): AppLocale | null {
+  if (typeof document === 'undefined') return null
+  const fromPage = supportedLocale(document.documentElement?.lang)
+  if (fromPage) return fromPage
+  const match = document.cookie.match(new RegExp(`(?:^|; )${LOCALE_COOKIE}=([^;]+)`))
+  return supportedLocale(match ? decodeURIComponent(match[1]) : null)
+}
 
 export class OAuthClient {
   /**
@@ -62,6 +77,9 @@ export class OAuthClient {
       code_challenge_method: 'S256',
     });
     if (!interactive) params.set('prompt', 'none');
+    // OIDC ui_locales: the INITE login page opens in the checkout's language.
+    const uiLocale = currentUiLocale();
+    if (uiLocale) params.set('ui_locales', uiLocale);
 
     // Off to the identity provider — a different origin, and deliberately a
     // full navigation. The lint rule cannot tell that AUTH_DOMAIN is absolute.
