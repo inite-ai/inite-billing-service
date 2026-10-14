@@ -52,6 +52,16 @@ export class CreateCheckoutSessionDto {
   @IsString()
   @IsOptional()
   userId?: string;
+
+  @ApiPropertyOptional({
+    description:
+      "Buyer's language for the hosted checkout page (en, ru, pt, es; a tag like pt-BR is reduced to its language). Unsupported values are ignored.",
+    example: 'pt',
+  })
+  @IsString()
+  @IsOptional()
+  @MaxLength(16)
+  locale?: string;
 }
 
 export class CheckoutSessionResponseDto {
