@@ -41,6 +41,28 @@ describe('silent SSO', () => {
     expect(OAuthClient.shouldFallBackToInteractive('login_required')).toBe(false)
   })
 
+  it('asks the identity provider for the page language', async () => {
+    document.documentElement.lang = 'pt'
+    await OAuthClient.login({ interactive: true })
+    expect(new URL(assigned).searchParams.get('ui_locales')).toBe('pt')
+    document.documentElement.lang = ''
+  })
+
+  it('falls back to the locale cookie when the page names no language', async () => {
+    document.documentElement.lang = ''
+    document.cookie = 'locale=es; path=/'
+    await OAuthClient.login()
+    expect(new URL(assigned).searchParams.get('ui_locales')).toBe('es')
+    document.cookie = 'locale=; path=/; max-age=0'
+  })
+
+  it('sends no ui_locales when nothing names a supported language', async () => {
+    document.documentElement.lang = 'de'
+    await OAuthClient.login()
+    expect(new URL(assigned).searchParams.has('ui_locales')).toBe(false)
+    document.documentElement.lang = ''
+  })
+
   it('does not fall back on errors that are not about needing the person', async () => {
     await OAuthClient.login()
     expect(OAuthClient.shouldFallBackToInteractive('access_denied')).toBe(false)
