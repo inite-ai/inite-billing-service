@@ -1,6 +1,16 @@
-import { Controller, Get, Param, Query, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  Query,
+  Req,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtOrServiceGuard } from '../auth/guards/jwt-or-service.guard';
 import { User, RequestUser } from '../auth/decorators/user.decorator';
 import { OrdersService } from './orders.service';
 import {
@@ -39,11 +49,21 @@ export class OrdersController {
   }
 
   @Get(':id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtOrServiceGuard)
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Get order by ID' })
+  @ApiOperation({
+    summary: 'Get order by ID',
+    description:
+      "A user sees their own order; a service API key sees orders for its own service's products.",
+  })
   @ApiResponse({ status: 200, type: OrderResponseDto })
-  async getOrder(@User() user: RequestUser, @Param('id') id: string): Promise<OrderResponseDto> {
-    return this.ordersService.getOrderById(id, user.userId);
+  async getOrder(@Req() req: any, @Param('id') id: string): Promise<OrderResponseDto> {
+    // A service selling to guests reconciles by order id, and the order's
+    // user may have changed at checkout (a guest order claimed by the buyer's
+    // account). Without the service path this answered 401 to every key.
+    if (req.user?.isService) {
+      return this.ordersService.getOrderById(id, undefined, req.user.serviceId);
+    }
+    return this.ordersService.getOrderById(id, req.user?.userId);
   }
 }
