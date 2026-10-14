@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getUserToken, shouldRedirectFromAuth, getUserDestination, checkRouteAccess, CLIENT_AUTH_ROUTES } from './lib/middleware/auth';
+import { LOCALE_COOKIE, LOCALE_HEADER, supportedLocale } from './i18n/locales';
 
 function redirect(request: NextRequest, path: string): NextResponse {
   return NextResponse.redirect(new URL(path, request.url));
@@ -15,12 +16,32 @@ function shouldSkipMiddleware(pathname: string): boolean {
   );
 }
 
+/**
+ * `?locale=pt` on any page (a store sends its buyer to `/checkout/<id>?locale=pt`):
+ * this render uses it — passed to i18n/request.ts as a request header, since a
+ * cookie set here is only seen by the next request — and the cookie keeps it.
+ */
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   if (shouldSkipMiddleware(pathname)) {
     return NextResponse.next();
   }
+
+  const locale = supportedLocale(request.nextUrl.searchParams.get('locale'));
+  const response = await route(request, locale);
+  if (locale) {
+    response.cookies.set(LOCALE_COOKIE, locale, { path: '/', maxAge: 31536000, sameSite: 'lax' });
+  }
+  return response;
+}
+
+async function route(request: NextRequest, locale: string | null): Promise<NextResponse> {
+  const pathname = request.nextUrl.pathname;
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.delete(LOCALE_HEADER);
+  if (locale) requestHeaders.set(LOCALE_HEADER, locale);
+  const next = () => NextResponse.next({ request: { headers: requestHeaders } });
 
   const token = await getUserToken(request);
 
@@ -44,7 +65,7 @@ export async function middleware(request: NextRequest) {
   // Client-auth routes handle auth themselves (auto-trigger OAuth)
   const isClientAuth = CLIENT_AUTH_ROUTES.some(r => pathname.startsWith(r));
   if (isClientAuth) {
-    return NextResponse.next();
+    return next();
   }
 
   // Check route access
@@ -53,7 +74,7 @@ export async function middleware(request: NextRequest) {
     return redirect(request, access.redirectTo);
   }
 
-  const response = NextResponse.next();
+  const response = next();
 
   response.headers.set('X-Content-Type-Options', 'nosniff');
   response.headers.set('Referrer-Policy', 'origin-when-cross-origin');

@@ -2,6 +2,7 @@
 
 import { useLocale, useTranslations } from 'next-intl'
 import { formatMoney } from './catalog'
+import { intlTag } from '../i18n/locales'
 
 const RAIL_NAMES: Record<string, string> = {
   LAVA: 'lava.top',
@@ -20,7 +21,7 @@ const RAIL_NAMES: Record<string, string> = {
 export function useFormat() {
   const locale = useLocale()
   const t = useTranslations('common.billing')
-  const tag = locale === 'ru' ? 'ru-RU' : 'en-US'
+  const tag = intlTag(locale)
 
   const money = (amount: string | number | null | undefined, currency: string | null | undefined) =>
     amount === null || amount === undefined || !currency ? '—' : formatMoney(amount, currency, locale)

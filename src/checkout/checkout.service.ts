@@ -340,7 +340,7 @@ export class CheckoutService {
     const frontendUrl = resolveFrontendUrl(this.configService);
     const response: CheckoutSessionResponseDto = {
       sessionId: order.id,
-      checkoutUrl: `${frontendUrl}/checkout/${order.id}`,
+      checkoutUrl: checkoutPageUrl(frontendUrl, order.id, dto.locale),
     };
 
     // Store for idempotency
@@ -844,4 +844,14 @@ export class CheckoutService {
     const payment = adapter?.describeIntent ? await adapter.describeIntent(intent) : null;
     return payment ? { payment } : {};
   }
+}
+
+/** Languages the hosted checkout page has messages for (frontend/i18n/locales.ts). */
+const CHECKOUT_LOCALES = ['en', 'ru', 'pt', 'es'];
+
+/** The hosted checkout page, opened in the buyer's language when one is given and supported. */
+export function checkoutPageUrl(frontendUrl: string, orderId: string, locale?: string): string {
+  const url = `${frontendUrl}/checkout/${orderId}`;
+  const lang = locale?.trim().toLowerCase().split(/[-_]/)[0];
+  return lang && CHECKOUT_LOCALES.includes(lang) ? `${url}?locale=${lang}` : url;
 }

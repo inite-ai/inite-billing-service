@@ -130,6 +130,24 @@ describe('CheckoutService', () => {
 
   // --- createSession() ---
 
+  it("createSession() opens the checkout page in the buyer's language when given", async () => {
+    const result = await service.createSession('user-1', {
+      priceCode: 'pro-monthly',
+      mode: 'SUBSCRIPTION' as any,
+      locale: 'pt-BR',
+    });
+    expect(result.checkoutUrl).toBe('https://billing.test/checkout/order-1?locale=pt');
+  });
+
+  it('createSession() ignores a language the checkout page does not have', async () => {
+    const result = await service.createSession('user-1', {
+      priceCode: 'pro-monthly',
+      mode: 'SUBSCRIPTION' as any,
+      locale: 'de',
+    });
+    expect(result.checkoutUrl).toBe('https://billing.test/checkout/order-1');
+  });
+
   it('createSession() creates order with status created and returns sessionId + checkoutUrl', async () => {
     const result = await service.createSession('user-1', {
       priceCode: 'pro-monthly',
