@@ -337,6 +337,67 @@ describe('CheckoutService', () => {
     });
   });
 
+  it('paySession() records a provider refusal as a failed intent, logs it redacted, and rethrows', async () => {
+    mockPrisma.order.findUnique.mockResolvedValue(mockOrder);
+    const providerError = Object.assign(
+      new Error('Card declined for buyer@example.com (api_key=sk_live_abcdefghijkl1234)'),
+      { code: 'card_declined' },
+    );
+    mockPaymentOrchestrator.getAdapter.mockReturnValue({
+      createPaymentIntent: jest.fn().mockRejectedValue(providerError),
+    });
+    const logError = jest
+      .spyOn((service as any).logger, 'error')
+      .mockImplementation(() => undefined);
+
+    // Same error reaches the caller as before.
+    await expect(
+      service.paySession('order-1', 'user-1', { rail: 'STRIPE', method: 'card' } as any),
+    ).rejects.toBe(providerError);
+
+    expect(mockPrisma.paymentIntent.create).toHaveBeenCalledTimes(1);
+    const { data } = mockPrisma.paymentIntent.create.mock.calls[0][0];
+    expect(data).toMatchObject({
+      orderId: 'order-1',
+      rail: 'STRIPE',
+      status: 'failed',
+      method: 'card',
+      currency: 'USD',
+      snapshot: { providerError: { code: 'card_declined' } },
+    });
+    expect(data.snapshot.providerError.message).not.toContain('buyer@example.com');
+    expect(data.snapshot.providerError.message).not.toContain('sk_live_');
+
+    // The order is left for a retry with another method — no transition, no order update.
+    expect(mockPaymentOrchestrator.applyStateTransition).not.toHaveBeenCalled();
+    expect(mockPrisma.order.update).not.toHaveBeenCalled();
+
+    expect(logError).toHaveBeenCalledTimes(1);
+    const logged = logError.mock.calls[0][0] as string;
+    expect(logged).toContain('order-1');
+    expect(logged).toContain('pro-monthly');
+    expect(logged).toContain('USD');
+    expect(logged).toContain('STRIPE/card');
+    expect(logged).toContain('card_declined');
+    expect(logged).not.toContain('buyer@example.com');
+    expect(logged).not.toContain('sk_live_');
+  });
+
+  it('paySession() still rethrows the provider error when recording the failure fails', async () => {
+    mockPrisma.order.findUnique.mockResolvedValue(mockOrder);
+    const providerError = new Error('Provider unavailable');
+    mockPaymentOrchestrator.getAdapter.mockReturnValue({
+      createPaymentIntent: jest.fn().mockRejectedValue(providerError),
+    });
+    mockPrisma.paymentIntent.create.mockRejectedValue(new Error('db down'));
+    jest.spyOn((service as any).logger, 'error').mockImplementation(() => undefined);
+    jest.spyOn((service as any).logger, 'warn').mockImplementation(() => undefined);
+
+    await expect(service.paySession('order-1', 'user-1', { rail: 'STRIPE' })).rejects.toBe(
+      providerError,
+    );
+  });
+
   it('paySession() rejects already-paid order', async () => {
     mockPrisma.order.findUnique.mockResolvedValue({
       ...mockOrder,

@@ -26,6 +26,7 @@ import { Connector } from '../common/connectors/connector.interface';
 import { CreateIntentInput } from '../common/interfaces/payment-rail-adapter.interface';
 import { moneyToNumber, toMoney } from '../common/money';
 import { resolveFrontendUrl } from '../common/config/frontend-url';
+import { summarizeProviderError } from '../common/helpers/provider-error';
 
 @Injectable()
 export class CheckoutService {
@@ -731,8 +732,22 @@ export class CheckoutService {
       );
     }
 
-    // Create payment intent with adapter
-    const intentResult = await adapter.createPaymentIntent(intentInput);
+    // Create payment intent with adapter. A provider refusal used to leave no
+    // trace but the buyer's error message: record it, then rethrow unchanged.
+    let intentResult: Awaited<ReturnType<Connector['createPaymentIntent']>>;
+    try {
+      intentResult = await adapter.createPaymentIntent(intentInput);
+    } catch (error) {
+      await this.recordProviderFailure(error, {
+        orderId: order.id,
+        priceCode: price.code,
+        rail,
+        method: data.method,
+        amount: orderAmountDecimal,
+        currency: price.currency,
+      });
+      throw error;
+    }
     const crypto = rail === 'CRYPTO' ? intentResult.metadata || {} : null;
 
     // Create payment intent record. The partial unique index
@@ -819,6 +834,51 @@ export class CheckoutService {
       }
     }
     return this.getSession(sessionId, userId);
+  }
+
+  /**
+   * A provider refused to start a payment: log it and keep a `failed` intent
+   * with the provider's (redacted) message and code in `snapshot.providerError`.
+   * The intent goes straight to the DB, not through the orchestrator — a
+   * failed transition there fails the order, and the buyer can still retry
+   * with another method. Never throws: the caller rethrows the provider error.
+   */
+  private async recordProviderFailure(
+    error: unknown,
+    ctx: {
+      orderId: string;
+      priceCode: string;
+      rail: string;
+      method?: string;
+      amount: ReturnType<typeof toMoney>;
+      currency: string;
+    },
+  ): Promise<void> {
+    const providerError = summarizeProviderError(error);
+    this.logger.error(
+      `Payment provider ${ctx.rail}${ctx.method ? `/${ctx.method}` : ''} failed to create intent ` +
+        `for order ${ctx.orderId} (price ${ctx.priceCode}, ${ctx.amount.toString()} ${ctx.currency}): ` +
+        `${providerError.message}${providerError.code ? ` [code ${providerError.code}]` : ''}`,
+    );
+    try {
+      await this.prisma.paymentIntent.create({
+        data: {
+          orderId: ctx.orderId,
+          rail: ctx.rail,
+          status: 'failed',
+          method: ctx.method ?? null,
+          amount: ctx.amount,
+          currency: ctx.currency,
+          snapshot: {
+            providerError: { ...providerError, at: new Date().toISOString() },
+          },
+        },
+      });
+    } catch (persistError: any) {
+      this.logger.warn(
+        `Could not record failed payment intent for order ${ctx.orderId}: ${persistError?.message}`,
+      );
+    }
   }
 
   /**
