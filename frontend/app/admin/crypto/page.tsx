@@ -71,6 +71,22 @@ interface Settings {
       available: boolean
     }>
   }
+  x402: X402Settings
+}
+
+type X402Missing = 'railOff' | 'wallet' | 'organizationId' | 'relayerAddress' | 'key'
+
+/** x402 through Turnkey. The private half of billing's key is never sent here. */
+interface X402Settings {
+  organizationId: string | null
+  relayerAddress: string | null
+  turnkeyUserId: string | null
+  apiPublicKey: string | null
+  wallet: string | null
+  ready: boolean
+  missing: X402Missing[]
+  relayerBalanceWei: string | null
+  policy: string | null
 }
 
 interface InvoiceRow {
@@ -453,6 +469,8 @@ function SettingsForm({ settings, onSaved }: { settings: Settings; onSaved: () =
 
       <FxCard settings={settings} markupPercent={markupPercent} onMarkupChange={setMarkupPercent} onChanged={onSaved} />
 
+      <X402Card x402={settings.x402} onChanged={onSaved} />
+
       <Card>
         <h2 className="text-base font-semibold text-slate-900 dark:text-white">{t('timing.title')}</h2>
         <div className="mt-5 grid gap-5 md:grid-cols-2">
@@ -492,6 +510,133 @@ function SettingsForm({ settings, onSaved }: { settings: Settings; onSaved: () =
         </Button>
       </div>
     </div>
+  )
+}
+
+// ─── x402 ────────────────────────────────────────────────────
+
+/**
+ * Agents paying with signed USDC on Base. Billing makes its own Turnkey API
+ * key: the page shows only the public half, to be added to the API user in
+ * Turnkey, and the policy that user needs, already filled in. Nothing secret
+ * is typed here.
+ */
+function X402Card({ x402, onChanged }: { x402: X402Settings; onChanged: () => void }) {
+  const t = useTranslations('admin.crypto.x402')
+  const [organizationId, setOrganizationId] = useState(x402.organizationId ?? '')
+  const [relayerAddress, setRelayerAddress] = useState(x402.relayerAddress ?? '')
+  const [turnkeyUserId, setTurnkeyUserId] = useState(x402.turnkeyUserId ?? '')
+  const [saving, setSaving] = useState(false)
+  const [rotating, setRotating] = useState(false)
+
+  const save = async () => {
+    setSaving(true)
+    try {
+      await api.put('/v1/admin/crypto/settings', {
+        x402: { organizationId: organizationId.trim() || null, relayerAddress: relayerAddress.trim() || null, turnkeyUserId: turnkeyUserId.trim() || null },
+      })
+      toast.success(t('saved'))
+      onChanged()
+    } catch (e) {
+      toast.error(getErrorMessage(e, t('saveFailed')))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const rotate = async () => {
+    setRotating(true)
+    try {
+      await api.post('/v1/admin/crypto/x402/key')
+      toast.success(x402.apiPublicKey ? t('rotated') : t('created'))
+      onChanged()
+    } catch (e) {
+      toast.error(getErrorMessage(e, t('saveFailed')))
+    } finally {
+      setRotating(false)
+    }
+  }
+
+  const copy = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value)
+      toast.success(t('copied'))
+    } catch {
+      toast.error(t('copyFailed'))
+    }
+  }
+
+  const eth = x402.relayerBalanceWei ? Number(BigInt(x402.relayerBalanceWei) / 10n ** 12n) / 1e6 : null
+
+  return (
+    <Card>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold text-slate-900 dark:text-white">{t('title')}</h2>
+          <p className="mt-1 max-w-prose text-sm text-slate-500 dark:text-slate-400">{t('hint')}</p>
+        </div>
+        {x402.ready ? (
+          <Badge variant="success">{t('ready')}</Badge>
+        ) : (
+          <Badge variant="default">{t('notReady')}</Badge>
+        )}
+      </div>
+
+      {!x402.ready && x402.missing.length > 0 && (
+        <ul className="mt-4 space-y-1 text-sm text-amber-700 dark:text-amber-400">
+          {x402.missing.map((m) => (
+            <li key={m} className="flex items-center gap-1.5">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" /> {t(`missing.${m}`)}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="mt-5 grid gap-5 md:grid-cols-3">
+        <Input label={t('organizationId')} value={organizationId} onChange={(e) => setOrganizationId(e.target.value)} />
+        <Input label={t('relayerAddress')} value={relayerAddress} onChange={(e) => setRelayerAddress(e.target.value)} placeholder="0x…" />
+        <Input label={t('turnkeyUserId')} value={turnkeyUserId} onChange={(e) => setTurnkeyUserId(e.target.value)} />
+      </div>
+      {eth !== null && (
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{t('balance', { eth: eth.toFixed(6) })}</p>
+      )}
+      <div className="mt-4 flex justify-end">
+        <Button size="sm" onClick={save} loading={saving}>
+          {t('save')}
+        </Button>
+      </div>
+
+      <div className="mt-6 border-t border-slate-200 pt-5 dark:border-slate-800">
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-white">{t('keyTitle')}</h3>
+        <p className="mt-1 max-w-prose text-sm text-slate-500 dark:text-slate-400">{t('keyHint')}</p>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          {x402.apiPublicKey ? (
+            <>
+              <code className="break-all rounded bg-slate-100 px-2 py-1 font-mono text-xs dark:bg-slate-800">{x402.apiPublicKey}</code>
+              <Button size="sm" variant="outline" onClick={() => copy(x402.apiPublicKey!)}>
+                {t('copy')}
+              </Button>
+            </>
+          ) : null}
+          <Button size="sm" variant={x402.apiPublicKey ? 'secondary' : 'primary'} onClick={rotate} loading={rotating}>
+            {x402.apiPublicKey ? t('rotate') : t('create')}
+          </Button>
+        </div>
+      </div>
+
+      {x402.policy && (
+        <div className="mt-6 border-t border-slate-200 pt-5 dark:border-slate-800">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">{t('policyTitle')}</h3>
+            <Button size="sm" variant="outline" onClick={() => copy(x402.policy!)}>
+              {t('copy')}
+            </Button>
+          </div>
+          <p className="mt-1 max-w-prose text-sm text-slate-500 dark:text-slate-400">{t('policyHint')}</p>
+          <pre className="mt-3 overflow-x-auto rounded-lg bg-slate-100 p-3 font-mono text-xs dark:bg-slate-800">{x402.policy}</pre>
+        </div>
+      )}
+    </Card>
   )
 }
 

@@ -1508,6 +1508,37 @@
         "addPin": "Add",
         "pinCurrency": "Currency (e.g. RUB)",
         "pinRate": "Units per $1"
+      },
+      "x402": {
+        "title": "x402: agents pay themselves",
+        "hint": "An AI agent with a wallet pays a checkout session in USDC on Base with a signed authorization; the payment lands in the Base wallet above and is settled like any crypto payment. Network fees are paid from a Turnkey wallet. Billing makes its own Turnkey API key: only its public half is shown here.",
+        "ready": "Accepting",
+        "notReady": "Off",
+        "missing": {
+          "railOff": "Turn the crypto rail on",
+          "wallet": "Set the EVM (Base) wallet above",
+          "organizationId": "Fill in the Turnkey organization ID",
+          "relayerAddress": "Fill in the fee wallet address",
+          "key": "Create billing's Turnkey key below"
+        },
+        "organizationId": "Turnkey organization ID",
+        "relayerAddress": "Fee wallet (Turnkey account, 0x…)",
+        "turnkeyUserId": "Turnkey API user ID (for the policy)",
+        "balance": "Fee wallet balance: {eth} ETH",
+        "save": "Save",
+        "saved": "x402 settings saved",
+        "saveFailed": "Could not save",
+        "keyTitle": "Billing's Turnkey key",
+        "keyHint": "Add this public key as an API key of the Turnkey API user (not a root user). The private half never leaves billing. A new key retires the old one at once; then replace the key in Turnkey.",
+        "create": "Create key",
+        "rotate": "Replace key",
+        "created": "Key created — add the public key in Turnkey",
+        "rotated": "Key replaced — update it in Turnkey",
+        "copy": "Copy",
+        "copied": "Copied",
+        "copyFailed": "Could not copy",
+        "policyTitle": "Turnkey policy",
+        "policyHint": "Create this policy in Turnkey. It lets the API user sign only settlements of USDC payments on Base into our wallet, with a fee cap."
       }
     }
   },

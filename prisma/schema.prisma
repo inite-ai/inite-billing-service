@@ -1060,6 +1060,22 @@ model FunnelEvent {
 /// price plus a few smallest units — for as long as a payment against it can
 /// still arrive; a partial unique index enforces that no two live invoices
 /// share one.
+/// The API key billing signs its Turnkey requests with. Made here and never
+/// shown: only the public half leaves billing, to be registered in Turnkey.
+/// The newest one without `retiredAt` is the one in use.
+model X402RelayerKey {
+  id         String    @id @default(uuid()) @db.Uuid
+  /// Compressed P-256 public key, hex — what Turnkey is given.
+  publicKey  String    @unique @map("public_key") @db.VarChar(66)
+  /// P-256 private key, hex. Never returned by any endpoint.
+  privateKey String    @map("private_key") @db.VarChar(64)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  retiredAt  DateTime? @map("retired_at") @db.Timestamptz(6)
+
+  @@map("x402_relayer_keys")
+  @@schema("billing")
+}
+
 /// An x402 authorization we took on to settle: claimed before it is sent, so
 /// one signed payment can never be put on chain or counted twice.
 model X402Payment {

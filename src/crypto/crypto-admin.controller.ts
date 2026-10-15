@@ -72,6 +72,11 @@ class UpdateCryptoSettingsDto {
   @IsOptional()
   @IsObject()
   rpcUrls?: Record<string, string | null>;
+
+  /** `{ organizationId, relayerAddress, turnkeyUserId }` — x402 through Turnkey; null clears. */
+  @IsOptional()
+  @IsObject()
+  x402?: Record<string, string | null>;
 }
 
 class AssignTransferDto {
@@ -146,6 +151,15 @@ export class CryptoAdminController {
   @ApiOperation({ summary: 'Fetch exchange rates now' })
   refreshRates() {
     return this.crypto.refreshRates();
+  }
+
+  @Post('x402/key')
+  @ApiOperation({
+    summary:
+      'Make billing a new Turnkey API key for x402 (retires the old one); returns the public key',
+  })
+  rotateX402Key() {
+    return this.crypto.rotateX402Key();
   }
 
   @Post('poll')

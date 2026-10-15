@@ -15,6 +15,16 @@ export const DEFAULT_EXPIRY_MINUTES = 60;
  */
 export const DEFAULT_LATE_GRACE_HOURS = 24;
 
+/** x402 settlement through Turnkey. Not secrets: the key is billing's own (RelayerKeys). */
+export interface X402Settings {
+  /** Turnkey organization the fee wallet is in. */
+  organizationId?: string;
+  /** The Turnkey wallet account that pays network fees. */
+  relayerAddress?: string;
+  /** The Turnkey API user the policy is written for — only to fill the policy in for the admin. */
+  turnkeyUserId?: string;
+}
+
 export interface CryptoSettings {
   isActive: boolean;
   wallets: Partial<Record<ChainId, string>>;
@@ -37,6 +47,7 @@ export interface CryptoSettings {
   fixedRates: Record<string, string>;
   /** Per-network RPC overrides for the EVM watcher (https only). */
   rpcUrls: Partial<Record<ChainId, string>>;
+  x402: X402Settings;
 }
 
 export const MAX_FX_MARKUP_PERCENT = 20;
@@ -107,6 +118,15 @@ export function parseCryptoSettings(
     fxMarkupPercent: markup(config.fxMarkupPercent),
     fixedRates: fixedRates(config.fixedRates),
     rpcUrls,
+    x402: {
+      organizationId: text(config.x402?.organizationId),
+      relayerAddress:
+        text(config.x402?.relayerAddress) &&
+        isValidAddress('ETH', text(config.x402?.relayerAddress)!)
+          ? text(config.x402?.relayerAddress)
+          : undefined,
+      turnkeyUserId: text(config.x402?.turnkeyUserId),
+    },
   };
 }
 
