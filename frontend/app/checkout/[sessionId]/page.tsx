@@ -8,7 +8,7 @@ import TokenUSDT from '@web3icons/react/icons/tokens/TokenUSDT'
 import TokenUSDC from '@web3icons/react/icons/tokens/TokenUSDC'
 import api from '@/lib/api'
 import { OAuthClient } from '@/lib/oauth-client'
-import { checkoutLinkHeaders, takeCheckoutLink } from '@/lib/checkout-link'
+import { checkoutLinkHeaders, forgetCheckoutLinkInAddressBar, takeCheckoutLink } from '@/lib/checkout-link'
 import toast from 'react-hot-toast'
 import RecommendedOffers from '@/components/dashboard/RecommendedOffers'
 import { getErrorMessage, getErrorStatus } from '@/lib/api-error'
@@ -112,6 +112,7 @@ export default function CheckoutPage() {
   // The store's link opens this order without a billing sign-in.
   const [linkToken] = useState(() => takeCheckoutLink(sessionId))
   const link = checkoutLinkHeaders(linkToken)
+  useEffect(() => forgetCheckoutLinkInAddressBar(), [])
 
   const [session, setSession] = useState<SessionData | null>(null)
   const [loading, setLoading] = useState(true)

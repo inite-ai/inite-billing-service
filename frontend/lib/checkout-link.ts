@@ -20,8 +20,6 @@ export function takeCheckoutLink(sessionId: string): string | null {
     } catch {
       // Private mode: this page load still has it.
     }
-    // Out of the address bar, so a copied link or a screenshot does not carry it.
-    window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search)
     return fromHash
   }
   try {
@@ -34,4 +32,18 @@ export function takeCheckoutLink(sessionId: string): string | null {
 /** Request options for a call made through the link, or none. */
 export function checkoutLinkHeaders(token: string | null): { headers?: Record<string, string> } {
   return token ? { headers: { [CHECKOUT_LINK_HEADER]: token } } : {}
+}
+
+/**
+ * Takes the token out of the address bar, so a copied link or a screenshot
+ * does not carry it. Called after the page has mounted: Next's router writes
+ * the URL it started with back into history while hydrating, which undid a
+ * replaceState made any earlier. Next's own history state is kept.
+ */
+export function forgetCheckoutLinkInAddressBar(): () => void {
+  const id = window.setTimeout(() => {
+    if (!new URLSearchParams(window.location.hash.slice(1)).has('t')) return
+    window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search)
+  }, 0)
+  return () => window.clearTimeout(id)
 }
