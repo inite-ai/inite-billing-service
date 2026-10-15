@@ -200,12 +200,8 @@ export default function CheckoutPage() {
           if (first.options?.length) setSelectedOption(first.options[0].id)
         }
       } catch (e) {
-        // Through the link there is no sign-in to fall back to: a token that
-        // does not open this order means the link is wrong or stale.
-        if (linkToken) {
-          setError('sessionNotFound')
-          return
-        }
+        // Through the link the server never answers 401 or 403: a token that
+        // does not open this order is a 404, and lands on "not found" below.
         if (getErrorStatus(e) === 401) {
           // Not authenticated — auto-trigger OAuth silently
           // Back to this very checkout, ?locale= and all, whichever tab the

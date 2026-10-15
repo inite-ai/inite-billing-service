@@ -209,8 +209,18 @@ describe('checkout: paying through the link', () => {
 
     it('lets a token through and hands it on', async () => {
       const { request, context } = ctx({ [CHECKOUT_LINK_HEADER]: TOKEN });
-      expect(await new CheckoutLinkOrJwtGuard().canActivate(context)).toBe(true);
+      const jwt = { canActivate: jest.fn() };
+      expect(await new CheckoutLinkOrJwtGuard(jwt as any).canActivate(context)).toBe(true);
+      expect(jwt.canActivate).not.toHaveBeenCalled();
       expect(request.checkoutLinkToken).toBe(TOKEN);
+    });
+
+    it('hands a request without a token to the session guard', async () => {
+      const { request, context } = ctx({});
+      const jwt = { canActivate: jest.fn().mockReturnValue(true) };
+      expect(await new CheckoutLinkOrJwtGuard(jwt as any).canActivate(context)).toBe(true);
+      expect(jwt.canActivate).toHaveBeenCalledWith(context);
+      expect(request.checkoutLinkToken).toBeUndefined();
     });
   });
 });
