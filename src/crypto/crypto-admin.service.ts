@@ -32,6 +32,10 @@ import {
 import { LedgerError, LIVE_INVOICE_STATUSES } from '../adapters/crypto/crypto-ledger';
 import { formatUnits } from '../adapters/crypto/amount.util';
 import { CryptoWatcherScheduler } from '../workers/crypto-watcher.scheduler';
+import { RelayerKeys } from '../adapters/crypto/x402/relayer-key';
+import { relayerSigner } from '../adapters/crypto/x402/signer';
+import { turnkeyPolicy } from '../adapters/crypto/x402/policy';
+import { baseClient } from '../adapters/crypto/x402/relayer';
 
 const SECRET_KEYS = [
   'etherscanApiKey',
@@ -56,6 +60,12 @@ export interface CryptoSettingsUpdate {
   fixedRates?: Record<string, string | number | null>;
   /** Per-EVM-network RPC override; null removes it. */
   rpcUrls?: Partial<Record<ChainId, string | null>>;
+  /** x402 through Turnkey; null or '' clears a field. */
+  x402?: {
+    organizationId?: string | null;
+    relayerAddress?: string | null;
+    turnkeyUserId?: string | null;
+  };
 }
 
 function mask(value: unknown): string | null {
@@ -79,11 +89,15 @@ function mapLedgerError(error: unknown): never {
  */
 @Injectable()
 export class CryptoAdminService {
+  private readonly keys: RelayerKeys;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly orchestrator: PaymentOrchestratorService,
     private readonly watcher: CryptoWatcherScheduler,
-  ) {}
+  ) {
+    this.keys = new RelayerKeys(prisma);
+  }
 
   private adapter(): CryptoAdapter {
     return this.orchestrator.getAdapter(RAILS.CRYPTO) as CryptoAdapter;
@@ -146,7 +160,56 @@ export class CryptoAdminService {
       liveInvoices,
       unmatchedTransfers,
       fx: await this.fxOverview(settings),
+      x402: await this.x402Overview(settings),
     };
+  }
+
+  /**
+   * x402 as the settings page shows it: the Turnkey fields, the public half of
+   * billing's own key, what is still missing, the policy to paste into
+   * Turnkey filled in, and the fee wallet's balance. The private key is never
+   * part of it.
+   */
+  private async x402Overview(settings: CryptoSettings) {
+    const key = await this.keys.current();
+    const wallet = settings.wallets.BASE ?? null;
+    const { organizationId, relayerAddress, turnkeyUserId } = settings.x402;
+    const missing = [
+      ...(!settings.isActive ? ['railOff'] : []),
+      ...(!wallet ? ['wallet'] : []),
+      ...(!organizationId ? ['organizationId'] : []),
+      ...(!relayerAddress ? ['relayerAddress'] : []),
+      ...(!key ? ['key'] : []),
+    ];
+    let relayerBalanceWei: string | null = null;
+    if (relayerAddress) {
+      relayerBalanceWei = await baseClient(settings.rpcUrls.BASE)
+        .getBalance({ address: relayerAddress as `0x${string}` })
+        .then((b) => b.toString())
+        .catch(() => null);
+    }
+    return {
+      organizationId: organizationId ?? null,
+      relayerAddress: relayerAddress ?? null,
+      turnkeyUserId: turnkeyUserId ?? null,
+      apiPublicKey: key?.publicKey ?? null,
+      wallet,
+      ready: missing.length === 0 && !!relayerSigner(settings.x402, key),
+      missing,
+      relayerBalanceWei,
+      policy:
+        wallet && relayerAddress
+          ? JSON.stringify(turnkeyPolicy({ turnkeyUserId, relayerAddress, wallet }), null, 2)
+          : null,
+    };
+  }
+
+  /**
+   * Make billing a new Turnkey API key, retiring the old one. Only the public
+   * half is returned — to be added to the API user in Turnkey.
+   */
+  async rotateX402Key() {
+    return this.keys.rotate();
   }
 
   /**
@@ -319,6 +382,29 @@ export class CryptoAdminService {
         pinned.set(currency, text);
       }
       config.fixedRates = Object.fromEntries(pinned);
+    }
+
+    if (update.x402 !== undefined) {
+      const x402 = { ...((config.x402 as Record<string, string>) || {}) };
+      for (const field of ['organizationId', 'relayerAddress', 'turnkeyUserId'] as const) {
+        if (!Object.prototype.hasOwnProperty.call(update.x402 ?? {}, field)) continue;
+        const value = update.x402?.[field];
+        if (value === null || value === undefined || String(value).trim() === '') {
+          delete x402[field];
+          continue;
+        }
+        const trimmed = String(value).trim();
+        if (field === 'relayerAddress' && !isValidAddress('ETH', trimmed)) {
+          throw new BadRequestException(`${trimmed} is not a valid 0x address`);
+        }
+        if (field !== 'relayerAddress' && !/^[A-Za-z0-9-]{1,100}$/.test(trimmed)) {
+          throw new BadRequestException(
+            `The Turnkey ${field === 'organizationId' ? 'organization' : 'user'} id looks wrong`,
+          );
+        }
+        x402[field] = trimmed;
+      }
+      config.x402 = x402;
     }
 
     const next = parseCryptoSettings({ isActive: true, config })!;

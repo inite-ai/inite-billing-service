@@ -1508,6 +1508,37 @@
         "addPin": "Adicionar",
         "pinCurrency": "Moeda (ex.: RUB)",
         "pinRate": "Unidades por US$ 1"
+      },
+      "x402": {
+        "title": "x402: agentes pagam sozinhos",
+        "hint": "Um agente de IA com carteira paga uma sessão em USDC na Base com uma autorização assinada; o dinheiro chega à carteira Base acima e é processado como qualquer pagamento cripto. As taxas de rede saem de uma carteira na Turnkey. O billing cria a própria chave da Turnkey: aqui aparece só a parte pública.",
+        "ready": "Recebendo",
+        "notReady": "Desligado",
+        "missing": {
+          "railOff": "Ligue o trilho cripto",
+          "wallet": "Defina a carteira EVM (Base) acima",
+          "organizationId": "Preencha o ID da organização na Turnkey",
+          "relayerAddress": "Preencha o endereço da carteira de taxas",
+          "key": "Crie a chave do billing para a Turnkey abaixo"
+        },
+        "organizationId": "ID da organização na Turnkey",
+        "relayerAddress": "Carteira de taxas (conta Turnkey, 0x…)",
+        "turnkeyUserId": "ID do usuário de API na Turnkey (para a política)",
+        "balance": "Saldo da carteira de taxas: {eth} ETH",
+        "save": "Salvar",
+        "saved": "Configurações do x402 salvas",
+        "saveFailed": "Não foi possível salvar",
+        "keyTitle": "Chave do billing para a Turnkey",
+        "keyHint": "Adicione esta chave pública como chave de API do usuário de API na Turnkey (não root). A parte privada nunca sai do billing. Uma nova chave aposenta a antiga na hora; depois troque a chave na Turnkey.",
+        "create": "Criar chave",
+        "rotate": "Trocar chave",
+        "created": "Chave criada — adicione a chave pública na Turnkey",
+        "rotated": "Chave trocada — atualize na Turnkey",
+        "copy": "Copiar",
+        "copied": "Copiado",
+        "copyFailed": "Não foi possível copiar",
+        "policyTitle": "Política da Turnkey",
+        "policyHint": "Crie esta política na Turnkey. Ela permite ao usuário de API assinar apenas a liquidação de pagamentos em USDC na Base para a nossa carteira, com limite de taxa."
       }
     }
   },

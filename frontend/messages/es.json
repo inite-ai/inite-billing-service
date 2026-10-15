@@ -1508,6 +1508,37 @@
         "addPin": "Agregar",
         "pinCurrency": "Moneda (p. ej., RUB)",
         "pinRate": "Unidades por $1"
+      },
+      "x402": {
+        "title": "x402: los agentes pagan solos",
+        "hint": "Un agente de IA con billetera paga una sesión en USDC en Base con una autorización firmada; el dinero llega a la billetera Base de arriba y se procesa como cualquier pago cripto. Las comisiones de red salen de una billetera en Turnkey. El billing crea su propia clave de Turnkey: aquí solo se ve la parte pública.",
+        "ready": "Aceptando",
+        "notReady": "Apagado",
+        "missing": {
+          "railOff": "Active el riel cripto",
+          "wallet": "Configure la billetera EVM (Base) arriba",
+          "organizationId": "Indique el ID de la organización en Turnkey",
+          "relayerAddress": "Indique la dirección de la billetera de comisiones",
+          "key": "Cree abajo la clave del billing para Turnkey"
+        },
+        "organizationId": "ID de la organización en Turnkey",
+        "relayerAddress": "Billetera de comisiones (cuenta Turnkey, 0x…)",
+        "turnkeyUserId": "ID del usuario de API en Turnkey (para la política)",
+        "balance": "Saldo de la billetera de comisiones: {eth} ETH",
+        "save": "Guardar",
+        "saved": "Configuración de x402 guardada",
+        "saveFailed": "No se pudo guardar",
+        "keyTitle": "Clave del billing para Turnkey",
+        "keyHint": "Agregue esta clave pública como clave de API del usuario de API en Turnkey (no root). La parte privada nunca sale del billing. Una clave nueva retira la anterior al instante; luego cámbiela en Turnkey.",
+        "create": "Crear clave",
+        "rotate": "Cambiar clave",
+        "created": "Clave creada: agregue la clave pública en Turnkey",
+        "rotated": "Clave cambiada: actualícela en Turnkey",
+        "copy": "Copiar",
+        "copied": "Copiado",
+        "copyFailed": "No se pudo copiar",
+        "policyTitle": "Política de Turnkey",
+        "policyHint": "Cree esta política en Turnkey. Permite al usuario de API firmar solo la liquidación de pagos en USDC en Base hacia nuestra billetera, con límite de comisión."
       }
     }
   },

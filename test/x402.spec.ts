@@ -37,7 +37,6 @@ describe('x402 E2E', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   const realFetch = global.fetch;
-  const env = { ...process.env };
 
   const WALLET = getAddress('0x2222222222222222222222222222222222222222');
   const RELAYER = getAddress('0x3333333333333333333333333333333333333333');
@@ -152,11 +151,6 @@ describe('x402 E2E', () => {
   };
 
   beforeAll(async () => {
-    process.env.TURNKEY_ORGANIZATION_ID = 'org-test';
-    process.env.TURNKEY_API_PUBLIC_KEY = '02' + 'a'.repeat(64);
-    process.env.TURNKEY_API_PRIVATE_KEY = 'b'.repeat(64);
-    process.env.X402_RELAYER_ADDRESS = RELAYER;
-
     // The chain as the crypto watcher reads it: Base's public RPC.
     (global as any).fetch = jest.fn(async (url: string, init?: any) => {
       const body = init?.body ? JSON.parse(init.body) : {};
@@ -193,11 +187,6 @@ describe('x402 E2E', () => {
     await app.init();
     prisma = app.get(PrismaService);
 
-    // The relayer settles on the fake chain, through the fake Turnkey.
-    jest
-      .spyOn(app.get(X402Service) as any, 'relayer')
-      .mockImplementation(async () => new Relayer(signer, client));
-
     await prisma.paymentProvider.deleteMany({});
     const product = await prisma.product.create({
       data: {
@@ -224,9 +213,65 @@ describe('x402 E2E', () => {
       .expect(200);
   });
 
+  it('is set up from the admin page: Turnkey ids there, a key billing makes itself', async () => {
+    asAdmin();
+    const before = (await http().get('/v1/admin/crypto/settings').expect(200)).body.x402;
+    expect(before).toMatchObject({ ready: false, apiPublicKey: null });
+    expect(before.missing).toEqual(['organizationId', 'relayerAddress', 'key']);
+    // Nothing from the environment makes it settle.
+    expect(await (app.get(X402Service) as any).relayer()).toBeNull();
+
+    const made = (await http().post('/v1/admin/crypto/x402/key').expect(201)).body;
+    expect(made).toEqual({ publicKey: expect.stringMatching(/^0[23][0-9a-f]{64}$/) });
+    await http()
+      .put('/v1/admin/crypto/settings')
+      .send({
+        x402: { organizationId: 'org-test', relayerAddress: RELAYER, turnkeyUserId: 'user-x402' },
+      })
+      .expect(200);
+    await http()
+      .put('/v1/admin/crypto/settings')
+      .send({ x402: { relayerAddress: '0x123' } })
+      .expect(400);
+
+    const res = await http().get('/v1/admin/crypto/settings').expect(200);
+    const x402 = res.body.x402;
+    expect(x402).toMatchObject({
+      ready: true,
+      missing: [],
+      apiPublicKey: made.publicKey,
+      organizationId: 'org-test',
+      relayerAddress: RELAYER,
+      wallet: WALLET,
+    });
+    // The policy, filled in: our wallet as the only recipient, this user, this fee wallet.
+    const policy = JSON.parse(x402.policy);
+    expect(policy.consensus).toContain("user.id == 'user-x402'");
+    expect(policy.condition).toContain(
+      `eth.tx.data[98..138] == '${WALLET.slice(2).toLowerCase()}'`,
+    );
+    expect(policy.condition).toContain(`wallet_account.address == '${RELAYER.toLowerCase()}'`);
+
+    // The private half stays in billing: not in any answer.
+    const stored = await prisma.x402RelayerKey.findFirstOrThrow({ where: { retiredAt: null } });
+    expect(JSON.stringify(res.body)).not.toContain(stored.privateKey);
+    expect(JSON.stringify(made)).not.toContain(stored.privateKey);
+    const real = await (app.get(X402Service) as any).relayer();
+    expect(real?.address).toBe(RELAYER);
+
+    // A new key retires the old one.
+    const next = (await http().post('/v1/admin/crypto/x402/key').expect(201)).body;
+    expect(next.publicKey).not.toBe(made.publicKey);
+    expect(await prisma.x402RelayerKey.count({ where: { retiredAt: null } })).toBe(1);
+
+    // From here on the relayer settles on the fake chain, through the fake Turnkey.
+    jest
+      .spyOn(app.get(X402Service) as any, 'relayer')
+      .mockImplementation(async () => new Relayer(signer, client));
+  });
+
   afterAll(async () => {
     (global as any).fetch = realFetch;
-    process.env = env;
     MockJwtAuthGuard.testUserRoles = ['user'];
     await cleanupTestData(prisma);
     await app.close();

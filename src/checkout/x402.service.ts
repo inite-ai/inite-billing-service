@@ -18,7 +18,8 @@ import {
   settlementResponse,
 } from '../adapters/crypto/x402/protocol';
 import { Relayer, baseClient } from '../adapters/crypto/x402/relayer';
-import { RelayerSigner, signerFromEnv } from '../adapters/crypto/x402/signer';
+import { relayerSigner } from '../adapters/crypto/x402/signer';
+import { RelayerKeys } from '../adapters/crypto/x402/relayer-key';
 import { CheckoutService } from './checkout.service';
 import { checkoutLinkMatches } from './checkout-link';
 
@@ -51,21 +52,19 @@ const PAID_STATUSES = ['paid', 'completed', 'fulfilled'];
 @Injectable()
 export class X402Service {
   private readonly logger = new Logger(X402Service.name);
-  private readonly signer: RelayerSigner | null;
+  private readonly keys: RelayerKeys;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly checkout: CheckoutService,
     private readonly config: ConfigService,
   ) {
-    this.signer = signerFromEnv();
+    this.keys = new RelayerKeys(prisma);
   }
 
   /** Whether x402 can take payments now: a relayer, and the rail taking USDC on Base. */
   async available(): Promise<boolean> {
-    if (!this.signer) return false;
-    const settings = await loadCryptoSettings(this.prisma);
-    return !!settings?.isActive && payable(settings, X402_CHAIN);
+    return (await this.relayer()) !== null;
   }
 
   /** The address an agent pays a session at. The link token is what opens it, as on the checkout page. */
@@ -73,11 +72,15 @@ export class X402Service {
     return `${resolveFrontendUrl(this.config)}/v1/x402/sessions/${sessionId}?t=${encodeURIComponent(linkToken)}`;
   }
 
+  /**
+   * The relayer, from the rail's settings and billing's own Turnkey key —
+   * null until the admin has filled in Turnkey and the rail takes Base.
+   */
   private async relayer(): Promise<Relayer | null> {
-    if (!this.signer) return null;
     const settings = await loadCryptoSettings(this.prisma);
     if (!settings?.isActive || !payable(settings, X402_CHAIN)) return null;
-    return new Relayer(this.signer, baseClient(settings.rpcUrls[X402_CHAIN]));
+    const signer = relayerSigner(settings.x402, await this.keys.current());
+    return signer ? new Relayer(signer, baseClient(settings.rpcUrls[X402_CHAIN])) : null;
   }
 
   async handle(
