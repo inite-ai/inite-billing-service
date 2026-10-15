@@ -52,6 +52,16 @@ describe('recommendation tenant scoping', () => {
     expect(whereOf(prisma.order.findMany)).toEqual({ userId: 'user-1', status: 'paid' });
   });
 
+  // product_id is a uuid column; comparing it with text parameters failed in
+  // Postgres (42883) and the checkout page's offers answered 500.
+  it('casts the popularity lookup ids to uuid', async () => {
+    const { prisma, service } = buildService();
+    await (service as any).getPopularityMap(['00000000-0000-0000-0000-000000000001']);
+
+    const sql = prisma.$queryRaw.mock.calls[0][0].sql;
+    expect(sql).toContain('pr.product_id = ANY(?::uuid[])');
+  });
+
   describe('controller', () => {
     const build = (order: any) => {
       const recommendations = { getNextBestOffers: jest.fn().mockResolvedValue([]) };
