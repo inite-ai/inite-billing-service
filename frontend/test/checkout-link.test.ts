@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import api from '@/lib/api'
-import { checkoutLinkHeaders, takeCheckoutLink } from '@/lib/checkout-link'
+import { checkoutLinkHeaders, forgetCheckoutLinkInAddressBar, takeCheckoutLink } from '@/lib/checkout-link'
 
 /**
  * A store's checkout link opens its order without a billing sign-in. The page
@@ -42,10 +42,19 @@ describe('checkout link', () => {
     vi.unstubAllGlobals()
   })
 
-  it('takes the token from the fragment and drops it from the address bar', () => {
+  it('takes the token from the fragment', () => {
     at('/checkout/ord-1', '?locale=ru', '#t=secret')
     expect(takeCheckoutLink('ord-1')).toBe('secret')
+  })
+
+  it('drops it from the address bar once the page has mounted', () => {
+    vi.useFakeTimers()
+    at('/checkout/ord-1', '?locale=ru', '#t=secret')
+    forgetCheckoutLinkInAddressBar()
+    expect(replaceState).not.toHaveBeenCalled()
+    vi.runAllTimers()
     expect(replaceState.mock.calls[0].slice(1)).toEqual(['', '/checkout/ord-1?locale=ru'])
+    vi.useRealTimers()
   })
 
   it('remembers it for the same order on the way back from the provider', () => {
