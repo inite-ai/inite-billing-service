@@ -278,7 +278,7 @@ export class RecommendationsService {
       FROM billing.orders o
       JOIN billing.prices pr ON pr.id = o.price_id
       WHERE o.status = 'paid'
-        AND pr.product_id IN (${Prisma.join(productIds)})
+        AND pr.product_id = ANY(${productIds}::uuid[])
       GROUP BY pr.product_id
     `);
     return new Map(rows.map((r) => [r.product_id, Number(r.cnt)]));
