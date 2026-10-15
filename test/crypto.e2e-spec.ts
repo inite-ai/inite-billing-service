@@ -6,6 +6,10 @@ import { PrismaService } from '../src/common/services/prisma.service';
 import { JwtAuthGuard } from '../src/auth/guards/jwt-auth.guard';
 import { JwtOrServiceGuard } from '../src/auth/guards/jwt-or-service.guard';
 import { MockJwtAuthGuard, MockJwtOrServiceGuard } from './mocks/auth.mock';
+import {
+  CheckoutLinkOrJwtGuard,
+  CheckoutLinkOrJwtOrServiceGuard,
+} from '../src/checkout/checkout-link.guard';
 import { cleanupTestData } from './helpers/cleanup.helper';
 import { WebhookProcessor } from '../src/workers/webhook.processor';
 import { CryptoAdapter } from '../src/adapters/crypto/crypto.adapter';
@@ -100,6 +104,11 @@ describe('Crypto payments E2E', () => {
       .overrideGuard(JwtAuthGuard)
       .useClass(MockJwtAuthGuard)
       .overrideGuard(JwtOrServiceGuard)
+      .useClass(MockJwtOrServiceGuard)
+      // The checkout routes that also take a link token stand in the same way.
+      .overrideGuard(CheckoutLinkOrJwtGuard)
+      .useClass(MockJwtAuthGuard)
+      .overrideGuard(CheckoutLinkOrJwtOrServiceGuard)
       .useClass(MockJwtOrServiceGuard)
       .compile();
 

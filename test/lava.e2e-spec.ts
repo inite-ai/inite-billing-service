@@ -6,6 +6,10 @@ import { PrismaService } from '../src/common/services/prisma.service';
 import { JwtAuthGuard } from '../src/auth/guards/jwt-auth.guard';
 import { JwtOrServiceGuard } from '../src/auth/guards/jwt-or-service.guard';
 import { MockJwtAuthGuard, MockJwtOrServiceGuard } from './mocks/auth.mock';
+import {
+  CheckoutLinkOrJwtGuard,
+  CheckoutLinkOrJwtOrServiceGuard,
+} from '../src/checkout/checkout-link.guard';
 import { cleanupTestData } from './helpers/cleanup.helper';
 import { ProviderStatusScheduler } from '../src/workers/provider-status.scheduler';
 
@@ -59,6 +63,11 @@ describe('lava.top without a webhook (E2E)', () => {
       .overrideGuard(JwtAuthGuard)
       .useClass(MockJwtAuthGuard)
       .overrideGuard(JwtOrServiceGuard)
+      .useClass(MockJwtOrServiceGuard)
+      // The checkout routes that also take a link token stand in the same way.
+      .overrideGuard(CheckoutLinkOrJwtGuard)
+      .useClass(MockJwtAuthGuard)
+      .overrideGuard(CheckoutLinkOrJwtOrServiceGuard)
       .useClass(MockJwtOrServiceGuard)
       .compile();
     app = moduleFixture.createNestApplication();

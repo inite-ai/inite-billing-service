@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  UnauthorizedException,
   Logger,
   Optional,
 } from '@nestjs/common';
@@ -27,6 +28,7 @@ import { CreateIntentInput } from '../common/interfaces/payment-rail-adapter.int
 import { moneyToNumber, toMoney } from '../common/money';
 import { resolveFrontendUrl } from '../common/config/frontend-url';
 import { summarizeProviderError } from '../common/helpers/provider-error';
+import { checkoutLinkMatches, newCheckoutLink } from './checkout-link';
 
 @Injectable()
 export class CheckoutService {
@@ -266,6 +268,7 @@ export class CheckoutService {
     }
 
     // Create order with status 'created' — do NOT create payment intent
+    const link = newCheckoutLink();
     const order = await this.prisma.order.create({
       data: {
         userId,
@@ -295,6 +298,7 @@ export class CheckoutService {
           referralCode: dto.referralCode,
           successUrl: dto.successUrl,
           errorUrl: dto.errorUrl,
+          linkTokenHash: link.hash,
         },
       },
     });
@@ -341,7 +345,7 @@ export class CheckoutService {
     const frontendUrl = resolveFrontendUrl(this.configService);
     const response: CheckoutSessionResponseDto = {
       sessionId: order.id,
-      checkoutUrl: checkoutPageUrl(frontendUrl, order.id, dto.locale),
+      checkoutUrl: `${checkoutPageUrl(frontendUrl, order.id, dto.locale)}#t=${link.token}`,
     };
 
     // Store for idempotency
@@ -356,7 +360,13 @@ export class CheckoutService {
    * Get session details for the checkout page.
    * Returns order info, product, price, and available payment methods.
    */
-  async getSession(sessionId: string, userId?: string, callerServiceId?: string) {
+  async getSession(
+    sessionId: string,
+    userId?: string,
+    callerServiceId?: string,
+    /** The token from the checkout link: opens the order without a session. */
+    linkToken?: string,
+  ) {
     const order = await this.prisma.order.findUnique({
       where: { id: sessionId },
       include: {
@@ -372,9 +382,11 @@ export class CheckoutService {
       throw new NotFoundException('Checkout session not found');
     }
 
-    // If userId provided, verify ownership — or claim a guest order this
-    // user is the first to open.
-    if (userId && order.userId !== userId) {
+    if (linkToken) {
+      this.assertLink(order, linkToken);
+    } else if (userId && order.userId !== userId) {
+      // A signed-in user: their own order — or a guest order they are the
+      // first to open.
       order.userId = await this.claimGuestOrder(order, userId);
     }
 
@@ -558,7 +570,7 @@ export class CheckoutService {
    */
   async paySession(
     sessionId: string,
-    userId: string,
+    userId: string | undefined,
     data: {
       rail?: string;
       promoCode?: string;
@@ -567,6 +579,7 @@ export class CheckoutService {
       method?: string;
     },
     buyerEmail?: string,
+    linkToken?: string,
   ): Promise<PaySessionResponseDto> {
     const order = await this.prisma.order.findUnique({
       where: { id: sessionId },
@@ -583,7 +596,14 @@ export class CheckoutService {
       throw new NotFoundException('Checkout session not found');
     }
 
-    if (order.userId !== userId) {
+    // Paid through the link, the order stays with the buyer the store opened
+    // it for: their DID for a signed-in store, the store's guest id otherwise.
+    if (linkToken) {
+      this.assertLink(order, linkToken);
+      userId = order.userId;
+    } else if (!userId) {
+      throw new UnauthorizedException('Authentication required');
+    } else if (order.userId !== userId) {
       order.userId = await this.claimGuestOrder(order, userId);
     }
 
@@ -873,10 +893,14 @@ export class CheckoutService {
    * the customer comes back from the provider's page, and while it waits —
    * so the order is settled even when no webhook arrives.
    */
-  async refreshPayment(sessionId: string, userId: string) {
+  async refreshPayment(sessionId: string, userId: string | undefined, linkToken?: string) {
     const order = await this.prisma.order.findUnique({ where: { id: sessionId } });
     if (!order) throw new NotFoundException('Checkout session not found');
-    if (order.userId !== userId) {
+    if (linkToken) {
+      this.assertLink(order, linkToken);
+    } else if (!userId) {
+      throw new UnauthorizedException('Authentication required');
+    } else if (order.userId !== userId) {
       order.userId = await this.claimGuestOrder(order, userId);
     }
     const intent = await this.prisma.paymentIntent.findFirst({
@@ -891,7 +915,40 @@ export class CheckoutService {
         this.logger.warn(`Could not check payment ${intent.id}: ${error.message}`);
       }
     }
-    return this.getSession(sessionId, userId);
+    return linkToken
+      ? this.getSession(sessionId, undefined, undefined, linkToken)
+      : this.getSession(sessionId, userId);
+  }
+
+  /**
+   * A promo code checked against this session's price, for its buyer: what the
+   * checkout page asks before paying. Works through the link like the rest of
+   * the session; a signed-in user must own the order.
+   */
+  async validateSessionPromo(
+    sessionId: string,
+    promoCode: string,
+    userId: string | undefined,
+    linkToken?: string,
+  ) {
+    const order = await this.prisma.order.findUnique({ where: { id: sessionId } });
+    if (!order) throw new NotFoundException('Checkout session not found');
+    if (linkToken) {
+      this.assertLink(order, linkToken);
+    } else if (!userId) {
+      throw new UnauthorizedException('Authentication required');
+    } else if (order.userId !== userId) {
+      throw new ForbiddenException('You do not have access to this session');
+    }
+    return this.promoCodesService.validatePromoCode(promoCode, order.priceId, order.userId);
+  }
+
+  /** Throws the same "not found" as a missing order: a wrong token says nothing. */
+  private assertLink(order: { id: string; metadata: unknown }, token: string): void {
+    if (!checkoutLinkMatches(order.metadata, token)) {
+      this.logger.warn(`Checkout ${order.id} denied: link token does not match`);
+      throw new NotFoundException('Checkout session not found');
+    }
   }
 
   /**

@@ -136,7 +136,10 @@ describe('CheckoutService', () => {
       mode: 'SUBSCRIPTION' as any,
       locale: 'pt-BR',
     });
-    expect(result.checkoutUrl).toBe('https://billing.test/checkout/order-1?locale=pt');
+    // The link carries its token in the fragment (#t=…), which opens the order without a sign-in.
+    expect(result.checkoutUrl).toMatch(
+      /^https:\/\/billing\.test\/checkout\/order-1\?locale=pt#t=[\w-]{43}$/,
+    );
   });
 
   it('createSession() ignores a language the checkout page does not have', async () => {
@@ -145,7 +148,8 @@ describe('CheckoutService', () => {
       mode: 'SUBSCRIPTION' as any,
       locale: 'de',
     });
-    expect(result.checkoutUrl).toBe('https://billing.test/checkout/order-1');
+    // The link carries its token in the fragment (#t=…), which opens the order without a sign-in.
+    expect(result.checkoutUrl).toMatch(/^https:\/\/billing\.test\/checkout\/order-1#t=[\w-]{43}$/);
   });
 
   it('createSession() creates order with status created and returns sessionId + checkoutUrl', async () => {
@@ -155,7 +159,8 @@ describe('CheckoutService', () => {
     });
 
     expect(result.sessionId).toBe('order-1');
-    expect(result.checkoutUrl).toBe('https://billing.test/checkout/order-1');
+    // The link carries its token in the fragment (#t=…), which opens the order without a sign-in.
+    expect(result.checkoutUrl).toMatch(/^https:\/\/billing\.test\/checkout\/order-1#t=[\w-]{43}$/);
     expect(mockPrisma.order.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({

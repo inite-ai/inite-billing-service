@@ -7,6 +7,9 @@ import { AffiliatesModule } from '../affiliates/affiliates.module';
 import { PromoCodesModule } from '../promo-codes/promo-codes.module';
 import { FunnelModule } from '../funnel/funnel.module';
 import { RiskModule } from '../risk/risk.module';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtOrServiceGuard } from '../auth/guards/jwt-or-service.guard';
+import { CheckoutLinkOrJwtGuard, CheckoutLinkOrJwtOrServiceGuard } from './checkout-link.guard';
 
 @Module({
   imports: [
@@ -18,7 +21,14 @@ import { RiskModule } from '../risk/risk.module';
     RiskModule,
   ],
   controllers: [CheckoutController],
-  providers: [CheckoutService],
+  providers: [
+    CheckoutService,
+    // The checkout link guards hand everything without a link to these.
+    JwtAuthGuard,
+    JwtOrServiceGuard,
+    CheckoutLinkOrJwtGuard,
+    CheckoutLinkOrJwtOrServiceGuard,
+  ],
   exports: [CheckoutService],
 })
 export class CheckoutModule {}
