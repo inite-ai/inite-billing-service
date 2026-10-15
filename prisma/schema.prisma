@@ -1228,6 +1228,7 @@ model Wallet {
   createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   topups            WalletTopup[]
   withdrawals       WalletWithdrawal[]
+  agents            WalletAgent[]
 
   @@map("wallets")
   @@schema("billing")
@@ -1279,5 +1280,70 @@ model WalletWithdrawal {
 
   @@index([walletId, createdAt])
   @@map("wallet_withdrawals")
+  @@schema("billing")
+}
+
+/// An AI agent the person let pay from their wallet. Its identity and the
+/// person's consent come from INITE Auth (`act.sub`, the `wallet:pay` grant);
+/// the limits are the ones the person approved here with the wallet passkey,
+/// which also made the agent's Turnkey user and its per-payment policy.
+model WalletAgent {
+  id             String               @id @default(uuid()) @db.Uuid
+  walletId       String               @map("wallet_id") @db.Uuid
+  wallet         Wallet               @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  /// The agent's DID (did:web under INITE Auth).
+  agentDid       String               @map("agent_did") @db.VarChar(255)
+  clientId       String               @map("client_id") @db.VarChar(255)
+  /// The app's name, from the agent's DID document.
+  name           String?              @db.VarChar(255)
+  /// pending | active | revoked
+  status         String               @default("pending") @db.VarChar(20)
+  /// Limits from the Auth grant: what the agent asked for, shown to prefill approval.
+  requested      Json
+  /// Limits the person approved: { perPayment, daily, monthly } in USD, merchants?.
+  limits         Json?
+  turnkeyUserId  String?              @map("turnkey_user_id") @db.VarChar(64)
+  policyId       String?              @map("policy_id") @db.VarChar(64)
+  /// The agent's Turnkey API key, made by billing. Erased when the agent is revoked.
+  apiPublicKey   String?              @map("api_public_key") @db.VarChar(66)
+  apiPrivateKey  String?              @map("api_private_key") @db.VarChar(64)
+  /// The Turnkey request the wallet passkey stamps next (user, then policy).
+  pendingStep    String?              @map("pending_step") @db.VarChar(20)
+  pendingRequest String?              @map("pending_request") @db.Text
+  pendingLimits  Json?                @map("pending_limits")
+  approvedAt     DateTime?            @map("approved_at") @db.Timestamptz(6)
+  revokedAt      DateTime?            @map("revoked_at") @db.Timestamptz(6)
+  lastUsedAt     DateTime?            @map("last_used_at") @db.Timestamptz(6)
+  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  payments       WalletAgentPayment[]
+
+  @@unique([walletId, agentDid])
+  @@map("wallet_agents")
+  @@schema("billing")
+}
+
+/// A payment an agent made from the wallet: the x402 authorization billing
+/// signed for it, where it went and how the seller answered.
+model WalletAgentPayment {
+  id          String      @id @default(uuid()) @db.Uuid
+  agentId     String      @map("agent_id") @db.Uuid
+  agent       WalletAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  url         String      @db.Text
+  merchant    String      @db.VarChar(255)
+  payTo       String      @map("pay_to") @db.VarChar(42)
+  valueRaw    String      @map("value_raw") @db.VarChar(78)
+  nonce       String      @unique @db.VarChar(66)
+  validBefore DateTime    @map("valid_before") @db.Timestamptz(6)
+  /// signing | paid | refused | failed | expired
+  status      String      @default("signing") @db.VarChar(20)
+  httpStatus  Int?        @map("http_status")
+  txHash      String?     @map("tx_hash") @db.VarChar(66)
+  description String?     @db.Text
+  error       String?     @db.Text
+  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([agentId, createdAt])
+  @@map("wallet_agent_payments")
   @@schema("billing")
 }

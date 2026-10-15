@@ -1,0 +1,75 @@
+export const metadata = {
+  title: 'Agents pay: x402 and the INITE wallet',
+  description:
+    'Get paid by AI agents over x402, and let people’s AI agents pay from their own INITE wallet within limits they approve with a passkey.',
+  alternates: { canonical: '/docs/wallet' },
+}
+
+# Agents pay: x402 and the INITE wallet
+
+AI agents can now pay with money, both ways:
+
+- **Your shop gets paid by agents.** Every checkout also accepts **x402**: an agent with a wallet pays the order in USDC on Base by itself.
+- **People's agents pay for them.** A person keeps USDC in their own **INITE wallet**. Their AI agent pays from it on any site that takes x402, within limits the person approved.
+
+## For people: the INITE wallet
+
+Your INITE wallet is in your account at [auth.inite.ai](https://auth.inite.ai/account#inite-wallet).
+
+1. **Create it with a passkey.** The passkey (Face ID, Touch ID, Windows Hello or a security key) is the only key to the wallet. INITE shows the wallet and passes on what you sign, and it **cannot move your money**.
+2. **Top it up.**
+   - Send **USDC on the Base network** to the wallet's address from any wallet or exchange. Other tokens or networks will be lost.
+   - In Brazil, pay by **PIX**: the reais are converted and arrive in your wallet as USDC, usually within minutes.
+3. **Withdraw** to any Base address. You confirm with the passkey, and INITE pays the network fee.
+
+**Letting an agent pay.** When an AI agent (Claude, ChatGPT, your own bot) asks to pay from your wallet:
+
+1. You see the request on the INITE sign-in screen and approve it with your passkey.
+2. The agent appears in the wallet section of your account as **waiting for approval**. Set its limits (by default **$10 a payment, $20 a day, $50 a month**) and confirm with the wallet passkey. The browser asks twice: once to add the agent, once for its limit.
+3. From then on the agent pays by itself, and every payment appears in the list.
+4. **Revoke** stops it immediately. So does disconnecting the app under *Connected apps*.
+
+The limits are enforced twice:
+- **INITE billing** keeps the daily and monthly limits, the list of allowed sites and the log.
+- **Turnkey**, where the wallet's key lives, checks the per-payment limit itself. Even INITE can't make the agent's key sign a bigger payment or anything other than a USDC transfer.
+
+Keep the wallet passkey synced (iCloud Keychain, Google Password Manager or a password manager). Losing every copy of it means losing access to the wallet.
+
+## For sellers: get paid by agents over x402
+
+Nothing to build. When the crypto rail takes USDC on Base and x402 is set up in **admin → Crypto**, every checkout session also returns an `x402Url`:
+
+```http
+GET /v1/x402/sessions/<sessionId>?t=<link token>
+→ 402 PAYMENT-REQUIRED: { accepts: [{ scheme: "exact", network: "eip155:8453", amount, asset: USDC, payTo }] }
+
+GET … with PAYMENT-SIGNATURE: <signed USDC authorization>
+→ 200 PAYMENT-RESPONSE: { success: true, transaction }
+```
+
+The agent signs a USDC transfer for the invoice. Billing puts it on chain and pays the fee, and the order completes like any crypto payment. Setup and limits are in [docs/x402.md](https://github.com/inite-ai/inite-billing-service/blob/main/docs/x402.md).
+
+## For agent developers: pay from the person's wallet
+
+Connect your MCP client to **`https://billing.inite.ai/mcp/wallet`**.
+
+- An unauthenticated request gets `401` with `WWW-Authenticate: Bearer resource_metadata=…, scope="wallet:pay"`.
+- Your client registers with INITE Auth (dynamic registration), sends the person to sign in, and asks for the scope **`wallet:pay`**.
+- The token is issued for this resource (`aud`) and names your agent (`act`). A token issued for another site is refused.
+
+| Tool | What it does |
+|---|---|
+| `wallet_balance` | Balance, this agent's limits, and what is left today and this month. |
+| `wallet_address` | The address on Base, for the person to top up. |
+| `pay` | `{ url, method?, headers?, body?, maxAmount }`. Fetches the URL. On `402` with x402 terms in USDC on Base, pays at most `maxAmount` within the limits, repeats the request and returns the site's answer. |
+| `payments` | This agent's recent payments. |
+
+`pay` answers with a `reason` when it doesn't pay:
+- `needs_approval`: the person hasn't approved the agent yet;
+- `over_max_amount`, `over_payment_limit`, `over_daily_limit`, `over_monthly_limit`;
+- `merchant_not_allowed`;
+- `insufficient_funds`;
+- `unsupported_terms`: not x402, or not USDC on Base;
+- `invalid_url`: https and public hosts only.
+
+A payment the site refused still counts against the limits until its authorization expires, unless the site uses it after all.

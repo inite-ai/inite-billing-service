@@ -88,6 +88,10 @@ const FAQ: Record<Locale, Array<{ q: string; a: string }>> = {
       q: 'What can the AI assistant do?',
       a: 'It has 19 tools over your billing data — 14 read-only, plus 5 write actions (cancel a subscription, adjust credits, propose a refund) that require confirmation in the UI before they run.',
     },
+    {
+      q: 'Can AI agents pay?',
+      a: 'Yes, both ways. Every checkout also accepts x402, so an agent with a wallet pays an order in USDC on Base by itself. And people get an INITE wallet: their own USDC, controlled only by their passkey, from which their AI agents pay on any x402 site within the per-payment, daily and monthly limits they approve.',
+    },
   ],
   ru: [
     {
@@ -106,6 +110,10 @@ const FAQ: Record<Locale, Array<{ q: string; a: string }>> = {
       q: 'Что умеет AI-ассистент?',
       a: 'У него 19 инструментов поверх ваших биллинг-данных — 14 на чтение и 5 действий (отмена подписки, корректировка кредитов, предложение возврата), которые выполняются только после подтверждения в интерфейсе.',
     },
+    {
+      q: 'Могут ли платить ИИ-агенты?',
+      a: 'Да, в обе стороны. Каждый заказ принимает и x402, так что агент с кошельком сам оплачивает его в USDC в сети Base. А у людей есть кошелёк INITE: их собственные USDC, которыми распоряжается только их passkey. Их ИИ-агенты платят из него на любом сайте с x402 в пределах одобренных лимитов на платёж, день и месяц.',
+    },
   ],
 }
 
@@ -116,6 +124,8 @@ const featureList = [
   'Multi-level referral engine with automatic payouts',
   'Embedded AI assistant with confirm-before-execute actions',
   'AI retention: dunning, win-back and abandoned-checkout outreach',
+  'x402: AI agents pay checkouts in USDC on Base by themselves',
+  'INITE wallet: people’s own USDC under their passkey, spent by their AI agents within approved limits',
 ]
 
 /** JSON-LD @graph for the landing: Organization + WebSite + SoftwareApplication + FAQPage. */

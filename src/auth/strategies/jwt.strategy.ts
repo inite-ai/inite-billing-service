@@ -13,6 +13,9 @@ export interface JwtPayload {
   email_verified?: boolean;
   /** Who acts for `sub` (RFC 8693): an AI agent, named by its DID. */
   act?: { sub?: string; client_id?: string };
+  aud?: string | string[];
+  scope?: string;
+  authorization_details?: Array<Record<string, unknown>>;
 }
 
 /** Extract JWT from Authorization header OR access_token cookie */
@@ -118,7 +121,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       roles: payload.roles || [],
       email: payload.email,
       emailVerified: payload.email_verified === true,
-      ...(typeof payload.act?.sub === 'string' ? { actor: payload.act.sub } : {}),
+      ...(typeof payload.act?.sub === 'string'
+        ? { actor: payload.act.sub, actorClientId: payload.act.client_id }
+        : {}),
+      audience: payload.aud === undefined ? [] : [payload.aud].flat(),
+      scopes: typeof payload.scope === 'string' ? payload.scope.split(/\s+/).filter(Boolean) : [],
+      ...(Array.isArray(payload.authorization_details)
+        ? { authorizationDetails: payload.authorization_details }
+        : {}),
     };
   }
 }

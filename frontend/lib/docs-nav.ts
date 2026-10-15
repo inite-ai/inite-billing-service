@@ -99,6 +99,11 @@ export const DOCS_GROUPS: DocGroup[] = [
         description: 'Check entitlements, charge credits and open a checkout from inside an agent, over MCP.',
       },
       {
+        slug: 'wallet',
+        title: 'Agents pay: x402 and the INITE wallet',
+        description: 'Get paid by AI agents over x402, and let people’s agents pay from their own wallet within limits.',
+      },
+      {
         slug: 'mcp-gateway',
         title: 'Charge for your MCP server',
         description: 'Put your MCP server behind the billing gateway: per-call pricing, checkout on refusal, a call log.',
