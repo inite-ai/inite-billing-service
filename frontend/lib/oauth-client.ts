@@ -15,8 +15,69 @@ export interface TokenResponse {
   expires_in: number;
 }
 
+export interface CallbackResult extends TokenResponse {
+  /** Where the sign-in was started from, as `login({ returnTo })` recorded it. */
+  returnTo: string | null;
+}
+
 /** Set while a silent (`prompt=none`) attempt is in flight, so the callback knows to fall back. */
 const SILENT_KEY = 'oauth_silent'
+
+/**
+ * A sign-in in flight, by its `state`, in localStorage: `inite_signin:<state>`
+ * → `{ v: code_verifier, r: returnTo, t: started at }`.
+ *
+ * sessionStorage alone belongs to one tab. A magic link from the sign-in email
+ * opens in a new tab, which reached /callback with no verifier, no state and
+ * no returnTo: the code could not be exchanged, the buyer was asked to sign in
+ * again, and that second sign-in ended on /dashboard instead of the checkout
+ * they had started from. localStorage is shared by every tab of this origin.
+ */
+const PENDING_PREFIX = 'inite_signin:'
+/** As long as a magic link or a slow sign-in can reasonably take. */
+const PENDING_TTL_MS = 30 * 60 * 1000
+
+interface PendingSignIn {
+  v: string
+  r: string | null
+  t: number
+}
+
+function readPending(state: string): PendingSignIn | null {
+  try {
+    const raw = localStorage.getItem(PENDING_PREFIX + state)
+    if (!raw) return null
+    const pending = JSON.parse(raw) as Partial<PendingSignIn>
+    if (typeof pending.v !== 'string' || typeof pending.t !== 'number') return null
+    if (Date.now() - pending.t > PENDING_TTL_MS) return null
+    return { v: pending.v, r: typeof pending.r === 'string' ? pending.r : null, t: pending.t }
+  } catch {
+    return null
+  }
+}
+
+function forgetPending(state: string): void {
+  try {
+    localStorage.removeItem(PENDING_PREFIX + state)
+  } catch {
+    // storage unavailable — nothing was kept
+  }
+}
+
+/** Store this sign-in, and drop the expired ones so abandoned attempts do not pile up. */
+function keepPending(state: string, pending: PendingSignIn): void {
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i)
+      if (key?.startsWith(PENDING_PREFIX) && !readPending(key.slice(PENDING_PREFIX.length))) {
+        localStorage.removeItem(key)
+      }
+    }
+    localStorage.setItem(PENDING_PREFIX + state, JSON.stringify(pending))
+  } catch {
+    // Private mode or a full quota: the same-tab sessionStorage path still works.
+  }
+}
 
 /** What the identity provider answers a silent attempt that needs the person. */
 export const SILENT_SSO_ERRORS = ['login_required', 'interaction_required', 'consent_required', 'account_selection_required']
@@ -47,7 +108,10 @@ export class OAuthClient {
    * is top-level, so the provider's session cookie is first-party and this
    * works from any domain, not just *.inite.ai.
    */
-  static async login({ interactive = false }: { interactive?: boolean } = {}): Promise<void> {
+  static async login({
+    interactive = false,
+    returnTo,
+  }: { interactive?: boolean; returnTo?: string | null } = {}): Promise<void> {
     // Always clear existing session before starting new login
     clearTokens();
     try {
@@ -65,6 +129,11 @@ export class OAuthClient {
       sessionStorage.setItem('oauth_state', state);
       if (interactive) sessionStorage.removeItem(SILENT_KEY);
       else sessionStorage.setItem(SILENT_KEY, '1');
+      // The way back travels with the sign-in, so whichever tab finishes it
+      // (a magic link opens a new one) returns to the checkout.
+      const back = returnTo ?? sessionStorage.getItem('returnTo');
+      if (returnTo) sessionStorage.setItem('returnTo', returnTo);
+      keepPending(state, { v: codeVerifier, r: back, t: Date.now() });
     }
 
     const params = new URLSearchParams({
@@ -100,20 +169,25 @@ export class OAuthClient {
     return silent && !!error && SILENT_SSO_ERRORS.includes(error);
   }
 
-  static async handleCallback(code: string, state: string): Promise<TokenResponse> {
+  static async handleCallback(code: string, state: string): Promise<CallbackResult> {
     if (typeof window === 'undefined') {
       throw new Error('Window is not defined');
     }
 
-    const savedState = sessionStorage.getItem('oauth_state');
-    if (state !== savedState) {
+    // This tab started the sign-in, or another tab of this origin did (a
+    // magic link opens a new one). A state nobody here started is refused.
+    const pending = state ? readPending(state) : null;
+    const sameTab = !!state && state === sessionStorage.getItem('oauth_state');
+    if (!sameTab && !pending) {
       throw new Error('State mismatch - possible CSRF attack');
     }
 
-    const codeVerifier = sessionStorage.getItem('code_verifier');
+    const codeVerifier = (sameTab ? sessionStorage.getItem('code_verifier') : null) ?? pending?.v;
     if (!codeVerifier) {
       throw new Error('Code verifier not found');
     }
+    // One use: a replayed callback finds nothing to exchange with.
+    forgetPending(state);
 
     const response = await fetch('/api/auth/token', {
       method: 'POST',
@@ -136,7 +210,7 @@ export class OAuthClient {
     sessionStorage.removeItem('oauth_state');
     sessionStorage.removeItem(SILENT_KEY);
 
-    return tokens;
+    return { ...tokens, returnTo: pending?.r ?? null };
   }
 
   static async refreshToken(): Promise<TokenResponse> {
