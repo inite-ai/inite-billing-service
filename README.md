@@ -55,6 +55,11 @@ provider reduced to a pluggable adapter.
   dunning / win-back / abandoned-checkout outreach; semantic catalog search
   (pgvector); next-best-offer recommendations; AI funnel insights for admins.
   See [docs/ai-features.md](docs/ai-features.md).
+- **AI agents pay, both ways** — every checkout also accepts **x402**, so an
+  agent with a wallet pays in USDC on Base by itself; and people get an
+  **INITE wallet** (their own USDC under their passkey) from which their AI
+  agents pay any x402 site within limits they approve. See
+  [AI agents and money](#ai-agents-and-money).
 - **Built to meter AI products** — credits are not a flat bucket: a metered
   feature registry with per-model-tier rates (tokens/requests/generations),
   windowed quotas with soft-cap warnings, and a backwards-compatible
@@ -69,6 +74,29 @@ provider reduced to a pluggable adapter.
 - **Operable and audited** — append-only migrations, IDOR-hardened endpoints,
   webhook signature verification, SSRF-guarded outbox, idempotency at every
   boundary, secret scanning and CodeQL in CI. See [SECURITY.md](SECURITY.md).
+
+## AI agents and money
+
+**Get paid by agents (x402).** With the crypto rail taking USDC on Base and
+Turnkey set up in admin → Crypto, every checkout session also returns an
+`x402Url`. An agent asks it, gets `402` with the terms, signs a USDC transfer
+for the invoice, and billing settles the order like any crypto payment.
+Guide: [docs/x402.md](docs/x402.md).
+
+**Let people's agents pay (INITE wallet).**
+1. A person opens a wallet in their INITE account with a passkey. It is a
+   Turnkey wallet whose only key is that passkey; billing cannot move the money.
+2. They top it up with USDC on Base, or by PIX (converted and delivered as
+   USDC), and withdraw with the passkey.
+3. An AI agent connects to **`/mcp/wallet`** with an INITE Auth token
+   (`wallet:pay`, issued for this resource, naming the agent in `act`).
+4. The person approves the agent and its limits with the wallet passkey. That
+   makes the agent a Turnkey user whose policy caps each payment.
+5. The agent's `pay` tool fetches a URL and, on `402`, pays within its
+   per-payment, daily and monthly limits.
+
+Guides: [billing.inite.ai/docs/wallet](https://billing.inite.ai/docs/wallet) ·
+[docs/wallet.md](docs/wallet.md).
 
 ## Quick start
 
@@ -122,7 +150,8 @@ Full rendered docs — with diagrams and integration guides — at
 [Meter AI usage with credits](https://billing.inite.ai/docs/metering-credits) ·
 [Gate access with entitlements](https://billing.inite.ai/docs/entitlements) ·
 [Receive billing events](https://billing.inite.ai/docs/webhooks) ·
-[Go to production](https://billing.inite.ai/docs/going-live)
+[Go to production](https://billing.inite.ai/docs/going-live) ·
+[Agents pay: x402 and the INITE wallet](https://billing.inite.ai/docs/wallet)
 
 **Reference** (mirrored in-repo):
 
@@ -132,6 +161,8 @@ Full rendered docs — with diagrams and integration guides — at
 | [docs/architecture.md](docs/architecture.md) | Module map, payment state machine, event flows, data model |
 | [docs/api.md](docs/api.md) | Full REST surface, auth (JWT / service API keys), examples |
 | [docs/ai-features.md](docs/ai-features.md) | Assistant, action layer, outreach, metering, RAG, risk, insights |
+| [docs/x402.md](docs/x402.md) | Getting paid by AI agents over x402: setup in admin, limits, errors |
+| [docs/wallet.md](docs/wallet.md) | INITE wallet: who holds what, top-up, withdrawal, agents and their limits |
 | [docs/operations.md](docs/operations.md) | Deploy, feature flags & rollout order, adding a payment rail |
 | [SECURITY.md](SECURITY.md) | Threat ledger, known limitations, vulnerability reporting |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Hard bars for PRs, conventions, release flow |

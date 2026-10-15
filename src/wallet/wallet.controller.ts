@@ -15,6 +15,7 @@ import { Type } from 'class-transformer';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RequestUser, User } from '../auth/decorators/user.decorator';
 import { WalletService } from './wallet.service';
+import { WalletAgentsService } from './wallet-agents.service';
 
 class PasskeyAttestationDto {
   @IsString() @MaxLength(256) challenge!: string;
@@ -39,6 +40,13 @@ class WithdrawDto {
   @IsString() @MaxLength(24) amount!: string;
 }
 
+class ApproveAgentDto {
+  @IsString() @MaxLength(12) perPayment!: string;
+  @IsString() @MaxLength(12) daily!: string;
+  @IsString() @MaxLength(12) monthly!: string;
+  @IsOptional() @IsArray() @IsString({ each: true }) merchants?: string[];
+}
+
 class ConfirmWithdrawalDto {
   /** The wallet passkey's stamp of the prepared request (Turnkey's X-Stamp-WebAuthn value). */
   @IsString() @MaxLength(8192) stamp!: string;
@@ -56,7 +64,10 @@ class ConfirmWithdrawalDto {
 @UseGuards(JwtAuthGuard)
 @Controller('v1/wallet')
 export class WalletController {
-  constructor(private readonly wallets: WalletService) {}
+  constructor(
+    private readonly wallets: WalletService,
+    private readonly agents: WalletAgentsService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'The wallet, its USDC balance and recent top-ups and withdrawals' })
@@ -103,6 +114,42 @@ export class WalletController {
     @Body() body: ConfirmWithdrawalDto,
   ) {
     return this.wallets.confirmWithdrawal(person(user), id, body.stamp);
+  }
+
+  @Get('agents')
+  @ApiOperation({ summary: 'AI agents that asked for the wallet, with their limits and spending' })
+  listAgents(@User() user: RequestUser) {
+    return this.agents.list(person(user));
+  }
+
+  @Post('agents/:id/approve')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Approve an agent with these limits: the next request for the passkey' })
+  approveAgent(
+    @User() user: RequestUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() body: ApproveAgentDto,
+  ) {
+    return this.agents.prepareApproval(person(user), id, body);
+  }
+
+  @Post('agents/:id/approve/confirm')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({
+    summary: 'Send the request the passkey approved; returns the next one or the agent',
+  })
+  confirmAgent(
+    @User() user: RequestUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() body: ConfirmWithdrawalDto,
+  ) {
+    return this.agents.confirmApproval(person(user), id, body.stamp);
+  }
+
+  @Post('agents/:id/revoke')
+  @ApiOperation({ summary: 'Take the wallet away from an agent; its key is erased at once' })
+  revokeAgent(@User() user: RequestUser, @Param('id', new ParseUUIDPipe()) id: string) {
+    return this.agents.revoke(person(user), id);
   }
 }
 

@@ -292,6 +292,35 @@ export default function LandingClient() {
               </div>
             </div>
 
+            <div className="cell c-3 tex-scan">
+              <div className="tag">{t('featX402Tag')}</div>
+              <div className="ct">{t('featX402Title')}</div>
+              <div className="cd">{t('featX402Desc')}</div>
+              <div className="diagram">
+                <div className="pill">{t('flowAgent')}</div>
+                <span className="arrow">▶</span>
+                <div className="pill">402 · USDC</div>
+                <span className="arrow">▶</span>
+                <div className="core">{t('flowPaid')}</div>
+              </div>
+            </div>
+
+            <div className="cell c-3 mesh">
+              <div className="tag">{t('featWalletTag')}</div>
+              <div className="ct">{t('featWalletTitle')}</div>
+              <div className="cd">{t('featWalletDesc')}</div>
+              <div className="meter">
+                <div className="row">
+                  <span>{t('walletMeterLabel')}</span>
+                  <span className="tnum">$12 / $20</span>
+                </div>
+                <div className="bar">
+                  <i style={{ width: '60%' }} />
+                </div>
+                <div className="quota">{t('walletMeterHint')}</div>
+              </div>
+            </div>
+
             <div className="cell c-3 mesh">
               <div className="tag">{t('featScaleTag')}</div>
               <div className="ct">{t('featScaleTitle')}</div>

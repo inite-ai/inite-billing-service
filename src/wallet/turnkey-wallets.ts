@@ -131,6 +131,15 @@ export class TurnkeyWallets {
    * Submit a request the person's passkey stamped. `body` must be the exact
    * string that was stamped. Returns the completed activity's result.
    */
+  /** Submit a request stamped with an API key billing holds (an agent's, in its user's sub-organization). */
+  async submitWithKey(path: string, body: string, key: RelayerKey): Promise<Record<string, any>> {
+    const stamp = await new ApiKeyStamper({
+      apiPublicKey: key.publicKey,
+      apiPrivateKey: key.privateKey,
+    }).stamp(body);
+    return this.post(path, body, { [stamp.stampHeaderName]: stamp.stampHeaderValue });
+  }
+
   submitStamped(path: string, body: string, stamp: string): Promise<Record<string, any>> {
     return this.post(path, body, { 'X-Stamp-WebAuthn': stamp });
   }

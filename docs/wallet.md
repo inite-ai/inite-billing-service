@@ -1,7 +1,8 @@
 # INITE wallet
 
 A person's own USDC on Base, opened from their INITE ID account. Billing opens
-it and shows it; only the person's passkey can move money out of it. The full
+it and shows it. Only the person's passkey can move money out of it, and so
+can their AI agents within the limits the person approved with that passkey. The full
 design, with agents, is in `docs/design/agent-wallet.md`.
 
 ## Who holds what
@@ -55,6 +56,74 @@ not manage the wallet.
 A withdrawal waits 15 minutes for the passkey. At most 10 withdrawals a day
 per wallet, at least 0.01 USDC each; relayer fees count towards the x402 daily
 budget.
+
+## AI agents
+
+An agent pays from the wallet only after two approvals by the person:
+
+1. **In INITE Auth**, on the consent screen, with a passkey. The agent's MCP
+   client asks for the scope `wallet:pay`, which Auth turns into an
+   `inite_wallet` grant with the default limits. The token names the agent in
+   `act` (its `did:web`) and is issued for `/mcp/wallet` (`aud`).
+2. **In the wallet**, from the account page, with the wallet passkey. The
+   agent's first call records it as `pending`. The person sets its limits,
+   prefilled from the grant, and stamps two Turnkey requests in their
+   sub-organization:
+   - `CREATE_USERS_V4`: the agent's user, with an API key billing generated
+     for it (`wallet_agents`);
+   - `CREATE_POLICY_V3`: that user may sign only EIP-712
+     `TransferWithAuthorization` for USDC on Base, with
+     `eth.eip_712.message['value'] <= per-payment limit`.
+
+### Paying (`/mcp/wallet`, tool `pay`)
+
+1. Billing requests the URL for the agent: https only, public addresses only,
+   no redirects, the answer capped at 256 KB.
+2. On `402` it reads the x402 terms (v2 header or v1 body) and takes the
+   `exact` scheme in USDC on Base.
+3. It checks:
+   - `maxAmount`;
+   - the per-payment limit;
+   - the allowed sites;
+   - the balance;
+   - and, under a per-agent lock, the day (rolling 24 h) and month (calendar
+     month, UTC) limits.
+
+   Then it records the payment.
+4. The agent's key signs the authorization in the person's wallet. Turnkey
+   enforces the policy.
+5. Billing repeats the request with `PAYMENT-SIGNATURE` (v2) or `X-PAYMENT`
+   (v1) and returns the site's answer. The seller settles on chain.
+
+A payment the site refused stays counted until its authorization expires. After that, billing asks the chain whether it was used and marks it `paid` or `expired`.
+
+### Stopping an agent
+
+- **Revoke** in the account erases the agent's key in billing, so it can sign
+  nothing from then on.
+- Disconnecting the app in INITE Auth retires the agent's DID. Billing checks
+  the DID document (cached for a minute) on every call and revokes on 410.
+
+### Agent API (`/mcp/wallet`, MCP over streamable HTTP)
+
+| Tool | |
+|---|---|
+| `wallet_balance` | Balance, limits, spent and left today and this month; while pending, where the person approves |
+| `wallet_address` | Address on Base for top-ups |
+| `pay` | `{ url, method?, headers?, body?, maxAmount }` |
+| `payments` | The agent's last 20 payments |
+
+`GET /.well-known/oauth-protected-resource/mcp/wallet` is the RFC 9728
+metadata: INITE Auth as the authorization server, scope `wallet:pay`.
+
+### Person API for agents
+
+| Request | |
+|---|---|
+| `GET /v1/wallet/agents` | Agents, their requested and approved limits, spending |
+| `POST /v1/wallet/agents/:id/approve` | `{ perPayment, daily, monthly, merchants? }` → the next request to stamp |
+| `POST /v1/wallet/agents/:id/approve/confirm` | `{ stamp }` → the policy request next, then the active agent |
+| `POST /v1/wallet/agents/:id/revoke` | Erase the agent's key |
 
 ## Setup
 

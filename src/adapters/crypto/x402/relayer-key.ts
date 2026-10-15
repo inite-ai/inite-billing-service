@@ -6,6 +6,16 @@ export interface RelayerKey {
   privateKey: string;
 }
 
+/** A fresh P-256 key pair in the form Turnkey's API key stamper takes (hex, compressed public). */
+export function newTurnkeyApiKey(): RelayerKey {
+  const ecdh = createECDH('prime256v1');
+  ecdh.generateKeys();
+  return {
+    publicKey: ecdh.getPublicKey('hex', 'compressed'),
+    privateKey: ecdh.getPrivateKey('hex').padStart(64, '0'),
+  };
+}
+
 /**
  * The key billing signs its Turnkey requests with, made by billing itself.
  *
@@ -33,10 +43,7 @@ export class RelayerKeys {
    * Returns only the public half.
    */
   async rotate(): Promise<{ publicKey: string }> {
-    const ecdh = createECDH('prime256v1');
-    ecdh.generateKeys();
-    const publicKey = ecdh.getPublicKey('hex', 'compressed');
-    const privateKey = ecdh.getPrivateKey('hex').padStart(64, '0');
+    const { publicKey, privateKey } = newTurnkeyApiKey();
     await this.prisma.$transaction([
       this.prisma.x402RelayerKey.updateMany({
         where: { retiredAt: null },

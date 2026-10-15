@@ -376,7 +376,7 @@ jobs:
               # `/mcp` is the MCP endpoint and `/mcp/s/<slug>` the billing gateway.
               # Without this prefix both fell through to the frontend and 404'd:
               # the service answered them, nobody outside could reach it.
-              - "traefik.http.routers.billing-api.rule=Host(\`${{ env.DOMAIN }}\`) && (PathPrefix(\`/v1\`) || PathPrefix(\`/health\`) || PathPrefix(\`/webhooks\`) || PathPrefix(\`/mcp\`))"
+              - "traefik.http.routers.billing-api.rule=Host(\`${{ env.DOMAIN }}\`) && (PathPrefix(\`/v1\`) || PathPrefix(\`/health\`) || PathPrefix(\`/webhooks\`) || PathPrefix(\`/mcp\`) || PathPrefix(\`/.well-known/oauth-protected-resource/mcp\`))"
               - "traefik.http.routers.billing-api.entrypoints=websecure"
               - "traefik.http.routers.billing-api.tls=true"
               - "traefik.http.routers.billing-api.tls.certresolver=letsencrypt"
