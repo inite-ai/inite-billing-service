@@ -163,4 +163,76 @@ describe('claiming guest purchases on sign-in (E2E)', () => {
     const access = await prisma.entitlement.findFirstOrThrow({ where: { key: 'course:other' } });
     expect(access.userId).toBe(GUEST);
   });
+
+  describe('a store that signs its users in itself', () => {
+    let apiKey: string;
+    let ownPriceId: string;
+
+    beforeAll(async () => {
+      apiKey = `sk_claim_${Date.now()}`;
+      const service = await prisma.service.create({
+        data: { code: `claim-store-${Date.now()}`, name: 'Store', apiKey },
+      });
+      const product = await prisma.product.create({
+        data: {
+          code: 'claim-store-book',
+          name: 'Book',
+          moduleScope: 'test',
+          type: 'one_time',
+          isActive: true,
+          serviceId: service.id,
+        },
+      });
+      ownPriceId = (
+        await prisma.price.create({
+          data: {
+            productId: product.id,
+            code: 'claim-store-book-usd',
+            currency: 'USD',
+            amount: 15,
+            isActive: true,
+          },
+        })
+      ).id;
+    });
+
+    const storeClaim = (body: Record<string, unknown>) =>
+      request(app.getHttpServer())
+        .post('/v1/orders/claim-guest-purchases')
+        .set('x-api-key', apiKey)
+        .send(body);
+
+    it('moves only orders for its own products', async () => {
+      const own = await prisma.order.create({
+        data: {
+          userId: 'neuralcosmology:abc',
+          priceId: ownPriceId,
+          mode: 'PAYMENT',
+          status: 'paid',
+          amount: 15,
+          currency: 'USD',
+          metadata: { email: 'buyer@example.com' },
+        },
+      });
+      const elsewhere = await order(GUEST, 'buyer@example.com');
+
+      const res = await storeClaim({ userId: BUYER, email: 'buyer@example.com' }).expect(200);
+      expect(res.body.claimed).toEqual([own.id]);
+      expect((await prisma.order.findUniqueOrThrow({ where: { id: elsewhere.id } })).userId).toBe(
+        GUEST,
+      );
+    });
+
+    it('needs an INITE account to move them to', async () => {
+      await storeClaim({ userId: 'neuralcosmology:abc', email: 'buyer@example.com' }).expect(400);
+      await storeClaim({ userId: BUYER }).expect(400);
+    });
+
+    it('is closed without a service key', async () => {
+      await request(app.getHttpServer())
+        .post('/v1/orders/claim-guest-purchases')
+        .send({ userId: BUYER, email: 'buyer@example.com' })
+        .expect(401);
+    });
+  });
 });

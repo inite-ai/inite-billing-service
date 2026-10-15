@@ -133,15 +133,23 @@ export class OrdersService {
     userId: string,
     email: string | undefined,
     emailVerified: boolean | undefined,
+    /**
+     * A selling service vouching for its own signed-in user: only orders for
+     * that service's products move.
+     */
+    serviceId?: string,
   ): Promise<{ claimed: string[] }> {
     const address = email?.trim().toLowerCase();
     if (!address || !emailVerified || isGuestUserId(userId)) return { claimed: [] };
 
     const rows = await this.prisma.$queryRaw<Array<{ id: string; user_id: string }>>(Prisma.sql`
-      SELECT id, user_id FROM billing.orders
-      WHERE lower(trim(metadata->>'email')) = ${address}
-        AND position(':' in user_id) > 0
-        AND user_id NOT LIKE 'did:%'
+      SELECT o.id, o.user_id FROM billing.orders o
+      JOIN billing.prices pr ON pr.id = o.price_id
+      JOIN billing.products p ON p.id = pr.product_id
+      WHERE lower(trim(o.metadata->>'email')) = ${address}
+        AND position(':' in o.user_id) > 0
+        AND o.user_id NOT LIKE 'did:%'
+        ${serviceId ? Prisma.sql`AND p.service_id = ${serviceId}::uuid` : Prisma.empty}
     `);
 
     const claimed: string[] = [];

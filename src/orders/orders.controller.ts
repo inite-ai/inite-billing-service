@@ -2,6 +2,8 @@ import {
   Controller,
   Get,
   Post,
+  Body,
+  BadRequestException,
   Param,
   Query,
   Req,
@@ -12,6 +14,7 @@ import {
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { JwtOrServiceGuard } from '../auth/guards/jwt-or-service.guard';
+import { ServiceAuthGuard } from '../auth/guards/service-auth.guard';
 import { User, RequestUser } from '../auth/decorators/user.decorator';
 import { OrdersService } from './orders.service';
 import {
@@ -45,6 +48,26 @@ export class OrdersController {
   })
   async claimGuestPurchases(@User() user: RequestUser): Promise<{ claimed: string[] }> {
     return this.ordersService.claimGuestPurchases(user.userId, user.email, user.emailVerified);
+  }
+
+  @Post('claim-guest-purchases')
+  @UseGuards(ServiceAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'A service moves its own guest orders to a user it signed in with a verified email',
+    description:
+      'For a store that signs its users in itself (neuralcosmology.com): it has verified the email with the identity provider and passes it along with the user id. Only orders for the calling service’s products move.',
+  })
+  async claimGuestPurchasesForUser(
+    @Req() req: any,
+    @Body() body: { userId?: string; email?: string },
+  ): Promise<{ claimed: string[] }> {
+    const userId = typeof body?.userId === 'string' ? body.userId : '';
+    const email = typeof body?.email === 'string' ? body.email : '';
+    if (!userId.startsWith('did:') || !email) {
+      throw new BadRequestException('userId (an INITE DID) and email are required');
+    }
+    return this.ordersService.claimGuestPurchases(userId, email, true, req.user.serviceId);
   }
 
   @Get('payment-intents/:id')
