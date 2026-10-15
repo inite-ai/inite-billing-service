@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { CheckoutController } from './checkout.controller';
 import { CheckoutService } from './checkout.service';
+import { X402Controller } from './x402.controller';
+import { X402Service } from './x402.service';
 import { CatalogModule } from '../catalog/catalog.module';
 import { PaymentOrchestratorModule } from '../payment-orchestrator/payment-orchestrator.module';
 import { AffiliatesModule } from '../affiliates/affiliates.module';
@@ -20,9 +22,10 @@ import { CheckoutLinkOrJwtGuard, CheckoutLinkOrJwtOrServiceGuard } from './check
     FunnelModule,
     RiskModule,
   ],
-  controllers: [CheckoutController],
+  controllers: [CheckoutController, X402Controller],
   providers: [
     CheckoutService,
+    X402Service,
     // The checkout link guards hand everything without a link to these.
     JwtAuthGuard,
     JwtOrServiceGuard,

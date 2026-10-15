@@ -70,6 +70,12 @@ export class CheckoutSessionResponseDto {
 
   @ApiProperty({ description: 'Checkout URL to redirect user' })
   checkoutUrl: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Where an AI agent with a wallet pays the session itself over x402 (USDC on Base), when available',
+  })
+  x402Url?: string;
 }
 
 export class PaySessionDto {

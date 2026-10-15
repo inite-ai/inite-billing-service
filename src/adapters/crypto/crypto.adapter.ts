@@ -286,6 +286,7 @@ export class CryptoAdapter implements Connector {
 
     return {
       type: 'crypto',
+      invoiceId: invoice.invoiceId,
       invoiceStatus: invoice.status,
       chain: chainId,
       chainName: chain?.name ?? chainId,
