@@ -303,7 +303,7 @@ export class AgentPaymentsService {
   }
 
   /** The agent's own key signs, in the person's wallet, under the agent's Turnkey policy. */
-  private async sign(wallet: Wallet, agent: WalletAgent, authorization: Authorization) {
+  async sign(wallet: Wallet, agent: WalletAgent, authorization: Authorization) {
     if (!agent.apiPublicKey || !agent.apiPrivateKey) throw new Error('The agent has no key');
     const body = JSON.stringify({
       type: 'ACTIVITY_TYPE_SIGN_RAW_PAYLOAD_V2',
@@ -327,7 +327,7 @@ export class AgentPaymentsService {
     return this.prisma.walletAgentPayment.update({ where: { id }, data }).catch(() => undefined);
   }
 
-  private async usdcBalance(address: `0x${string}`): Promise<bigint> {
+  async usdcBalance(address: `0x${string}`): Promise<bigint> {
     const settings = await loadCryptoSettings(this.prisma);
     return baseClient(settings?.rpcUrls[X402_CHAIN]).readContract({
       address: usdcAddress(),

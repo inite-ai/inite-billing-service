@@ -1229,6 +1229,7 @@ model Wallet {
   topups            WalletTopup[]
   withdrawals       WalletWithdrawal[]
   agents            WalletAgent[]
+  merchants         WalletMerchant[]
 
   @@map("wallets")
   @@schema("billing")
@@ -1294,6 +1295,9 @@ model WalletAgent {
   /// The agent's DID (did:web under INITE Auth).
   agentDid       String               @map("agent_did") @db.VarChar(255)
   clientId       String               @map("client_id") @db.VarChar(255)
+  /// agent — an AI agent (did:web); checkout — the wallet's "INITE checkout"
+  /// user, which pays INITE checkout sessions for sites the person allowed.
+  kind           String               @default("agent") @db.VarChar(20)
   /// The app's name, from the agent's DID document.
   name           String?              @db.VarChar(255)
   /// pending | active | revoked
@@ -1340,10 +1344,35 @@ model WalletAgentPayment {
   txHash      String?     @map("tx_hash") @db.VarChar(66)
   description String?     @db.Text
   error       String?     @db.Text
+  /// For an INITE checkout payment: the site's service and the order it paid.
+  serviceId   String?     @map("service_id") @db.Uuid
+  orderId     String?     @map("order_id") @db.Uuid
   createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@index([agentId, createdAt])
+  @@index([serviceId, createdAt])
   @@map("wallet_agent_payments")
+  @@schema("billing")
+}
+
+/// A site the person allowed to charge their INITE wallet for its own checkout
+/// sessions, within these limits. The money goes only to INITE billing's
+/// receiving wallet — the "INITE checkout" user's Turnkey policy allows nothing else.
+model WalletMerchant {
+  id         String    @id @default(uuid()) @db.Uuid
+  walletId   String    @map("wallet_id") @db.Uuid
+  wallet     Wallet    @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  serviceId  String    @map("service_id") @db.Uuid
+  /// USD (USDC) per payment.
+  perPayment String    @map("per_payment") @db.VarChar(12)
+  /// USD (USDC) per calendar month, UTC.
+  monthly    String    @db.VarChar(12)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([walletId, serviceId])
+  @@map("wallet_merchants")
   @@schema("billing")
 }

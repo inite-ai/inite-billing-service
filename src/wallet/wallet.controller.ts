@@ -1,11 +1,14 @@
 import {
   Body,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
   Param,
   ParseUUIDPipe,
   Post,
+  Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -16,6 +19,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RequestUser, User } from '../auth/decorators/user.decorator';
 import { WalletService } from './wallet.service';
 import { WalletAgentsService } from './wallet-agents.service';
+import { WalletMerchantsService } from './wallet-merchants.service';
 
 class PasskeyAttestationDto {
   @IsString() @MaxLength(256) challenge!: string;
@@ -47,6 +51,15 @@ class ApproveAgentDto {
   @IsOptional() @IsArray() @IsString({ each: true }) merchants?: string[];
 }
 
+class AllowSiteDto {
+  @IsString() @MaxLength(12) perPayment!: string;
+  @IsString() @MaxLength(12) monthly!: string;
+}
+
+class PaySessionDto {
+  @IsString() @MaxLength(64) sessionId!: string;
+}
+
 class ConfirmWithdrawalDto {
   /** The wallet passkey's stamp of the prepared request (Turnkey's X-Stamp-WebAuthn value). */
   @IsString() @MaxLength(8192) stamp!: string;
@@ -67,6 +80,7 @@ export class WalletController {
   constructor(
     private readonly wallets: WalletService,
     private readonly agents: WalletAgentsService,
+    private readonly merchants: WalletMerchantsService,
   ) {}
 
   @Get()
@@ -150,6 +164,66 @@ export class WalletController {
   @ApiOperation({ summary: 'Take the wallet away from an agent; its key is erased at once' })
   revokeAgent(@User() user: RequestUser, @Param('id', new ParseUUIDPipe()) id: string) {
     return this.agents.revoke(person(user), id);
+  }
+
+  @Get('sites')
+  @ApiOperation({ summary: 'Sites allowed to charge the wallet, with their limits' })
+  listSites(@User() user: RequestUser) {
+    return this.merchants.list(person(user));
+  }
+
+  @Get('sites/:service')
+  @ApiOperation({ summary: 'What the approve page shows for a site (and a session of it)' })
+  site(
+    @User() user: RequestUser,
+    @Param('service') service: string,
+    @Query('session') session?: string,
+  ) {
+    return this.merchants.preview(person(user), service, session);
+  }
+
+  @Put('sites/:service')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Allow a site to charge the wallet within these limits' })
+  allowSite(
+    @User() user: RequestUser,
+    @Param('service') service: string,
+    @Body() body: AllowSiteDto,
+  ) {
+    return this.merchants.allow(person(user), service, body);
+  }
+
+  @Delete('sites/:service')
+  @ApiOperation({ summary: 'Stop a site from charging the wallet' })
+  revokeSite(@User() user: RequestUser, @Param('service') service: string) {
+    return this.merchants.revoke(person(user), service);
+  }
+
+  @Post('sites/:service/pay')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({ summary: "Pay one of the site's sessions from the wallet, now" })
+  paySite(
+    @User() user: RequestUser,
+    @Param('service') service: string,
+    @Body() body: PaySessionDto,
+  ) {
+    return this.merchants.payAsPerson(person(user), service, body.sessionId);
+  }
+
+  @Post('checkout/approve')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({
+    summary: "Make the wallet's INITE checkout user: the next request for the passkey",
+  })
+  prepareCheckout(@User() user: RequestUser) {
+    return this.merchants.prepareCheckout(person(user));
+  }
+
+  @Post('checkout/approve/confirm')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Send the request the passkey approved; returns the next one or done' })
+  confirmCheckout(@User() user: RequestUser, @Body() body: ConfirmWithdrawalDto) {
+    return this.merchants.confirmCheckout(person(user), body.stamp);
   }
 }
 

@@ -10,11 +10,20 @@ import { Prisma, type Wallet, type WalletAgent } from '@prisma/client';
 import { formatUnits } from 'viem';
 import { PrismaService } from '../common/services/prisma.service';
 import { newTurnkeyApiKey } from '../adapters/crypto/x402/relayer-key';
-import { AgentLimits, agentPolicy, checkLimits } from './agent-limits';
+import { loadCryptoSettings } from '../adapters/crypto/crypto-config';
+import {
+  AgentLimits,
+  CHECKOUT_MAX_PAYMENT,
+  agentPolicy,
+  checkLimits,
+  checkoutPolicy,
+} from './agent-limits';
 import { TurnkeyRequestError, TurnkeyWallets } from './turnkey-wallets';
 
 const CREATE_USERS_PATH = '/public/v1/submit/create_users';
 const CREATE_POLICY_PATH = '/public/v1/submit/create_policy';
+/** The record of a wallet's "INITE checkout" user among its agents. */
+export const CHECKOUT_AGENT_DID = 'inite:checkout';
 /** How long an agent's DID document is trusted before it is fetched again. */
 const DID_CACHE_MS = 60_000;
 
@@ -99,7 +108,7 @@ export class WalletAgentsService {
   async list(ownerDid: string) {
     const wallet = await this.walletOf(ownerDid);
     const agents = await this.prisma.walletAgent.findMany({
-      where: { walletId: wallet.id },
+      where: { walletId: wallet.id, kind: 'agent' },
       orderBy: { createdAt: 'desc' },
     });
     return Promise.all(agents.map((agent) => this.describe(agent)));
@@ -113,7 +122,12 @@ export class WalletAgentsService {
   async prepareApproval(ownerDid: string, agentId: string, input: Partial<AgentLimits>) {
     const { wallet, agent } = await this.mine(ownerDid, agentId);
     if (agent.status === 'revoked') throw new ConflictException('This agent was revoked');
-    const limits = checkLimits(input);
+    // The checkout user's own cap is the largest single payment; each site's
+    // limits are kept per site (WalletMerchant).
+    const limits =
+      agent.kind === 'checkout'
+        ? checkLimits({ perPayment: CHECKOUT_MAX_PAYMENT, daily: '2000', monthly: '10000' })
+        : checkLimits(input);
 
     // The agent's key is made once, before its Turnkey user exists.
     const key = agent.apiPublicKey && agent.apiPrivateKey ? null : newTurnkeyApiKey();
@@ -121,7 +135,7 @@ export class WalletAgentsService {
     const request =
       step === 'user'
         ? this.createUserRequest(wallet, agent, key?.publicKey ?? agent.apiPublicKey!)
-        : this.createPolicyRequest(wallet, agent, agent.turnkeyUserId!, limits);
+        : await this.createPolicyRequest(wallet, agent, agent.turnkeyUserId!, limits);
     await this.prisma.walletAgent.update({
       where: { id: agent.id },
       data: {
@@ -163,7 +177,7 @@ export class WalletAgentsService {
     if (agent.pendingStep === 'user') {
       const turnkeyUserId = findResult(result, 'userIds')?.[0];
       if (typeof turnkeyUserId !== 'string') throw new Error('Turnkey made no user');
-      const request = this.createPolicyRequest(wallet, agent, turnkeyUserId, limits);
+      const request = await this.createPolicyRequest(wallet, agent, turnkeyUserId, limits);
       await this.prisma.walletAgent.update({
         where: { id: agent.id },
         data: { turnkeyUserId, pendingStep: 'policy', pendingRequest: request },
@@ -325,21 +339,45 @@ export class WalletAgentsService {
     });
   }
 
-  private createPolicyRequest(
+  private async createPolicyRequest(
     wallet: Wallet,
     agent: WalletAgent,
     turnkeyUserId: string,
     limits: AgentLimits,
-  ): string {
+  ): Promise<string> {
+    let parameters;
+    if (agent.kind === 'checkout') {
+      const receiver = (await loadCryptoSettings(this.prisma))?.wallets.BASE;
+      if (!receiver) throw new ConflictException('INITE checkout is not taking USDC on Base now');
+      parameters = checkoutPolicy({ turnkeyUserId, receiver });
+    } else {
+      parameters = agentPolicy({
+        turnkeyUserId,
+        perPayment: limits.perPayment,
+        name: agent.name ?? agent.clientId,
+      });
+    }
     return JSON.stringify({
       type: 'ACTIVITY_TYPE_CREATE_POLICY_V3',
       timestampMs: String(Date.now()),
       organizationId: wallet.subOrganizationId,
-      parameters: agentPolicy({
-        turnkeyUserId,
-        perPayment: limits.perPayment,
-        name: agent.name ?? agent.clientId,
-      }),
+      parameters,
+    });
+  }
+
+  /** The wallet's "INITE checkout" user record, made pending on first use. */
+  async checkoutOf(wallet: Wallet): Promise<WalletAgent> {
+    return this.prisma.walletAgent.upsert({
+      where: { walletId_agentDid: { walletId: wallet.id, agentDid: CHECKOUT_AGENT_DID } },
+      create: {
+        walletId: wallet.id,
+        agentDid: CHECKOUT_AGENT_DID,
+        clientId: 'inite',
+        kind: 'checkout',
+        name: 'INITE checkout',
+        requested: {} as Prisma.InputJsonValue,
+      },
+      update: {},
     });
   }
 }
