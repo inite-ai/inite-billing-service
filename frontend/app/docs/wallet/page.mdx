@@ -10,6 +10,7 @@ export const metadata = {
 AI agents can now pay with money, both ways:
 
 - **Your shop gets paid by agents.** Every checkout also accepts **x402**: an agent with a wallet pays the order in USDC on Base by itself.
+- **Sites charge with permission.** A person allows a site to charge their wallet up to a limit, so the site's agent buys in one step.
 - **People's agents pay for them.** A person keeps USDC in their own **INITE wallet**. Their AI agent pays from it on any site that takes x402, within limits the person approved.
 
 ## For people: the INITE wallet
@@ -34,6 +35,34 @@ The limits are enforced twice:
 - **Turnkey**, where the wallet's key lives, checks the per-payment limit itself. Even INITE can't make the agent's key sign a bigger payment or anything other than a USDC transfer.
 
 Keep the wallet passkey synced (iCloud Keychain, Google Password Manager or a password manager). Losing every copy of it means losing access to the wallet.
+
+## Sites charge the wallet (one step for agents)
+
+A person can allow a site to charge their wallet for that site's own orders, within limits. After that, the site's AI agent (or the site itself) buys without a second connection and without asking again.
+
+**For people.** The first time a site asks, you get one link to a page in your INITE ID account. On it you:
+1. create the wallet, if you have none;
+2. top it up, if this purchase needs more;
+3. allow the site with a limit per payment and per month, and pay this purchase right there.
+
+The first time you allow any site, the browser asks for the wallet passkey twice. This adds an "INITE checkout" key to the wallet that **can only pay INITE invoices**. Allowing further sites needs no extra taps. You can take the permission back on the same page at any time.
+
+**For sites.** After creating a checkout session for a signed-in person:
+
+```http
+POST /v1/checkout/sessions/<id>/pay-from-wallet
+x-api-key: <service key>
+{ "userId": "did:…", "returnTo": "https://your.site/…" }
+```
+
+| Answer | Meaning |
+|---|---|
+| `200 { status: "confirming", orderId, txHash }` | Sent from the wallet. The order completes when the transfer is final on Base, usually 1–2 minutes. |
+| `200 { status: "paid" }` | Already paid. |
+| `409 { status: "needs_approval", reason, approveUrl }` | Send the person to `approveUrl`. `reason` is `no_wallet`, `not_approved`, `over_limit` or `insufficient_funds`. |
+| `404` | Not your session or this person's, or wallet payments are off. Fall back to the payment link. |
+
+The session's price can be in any currency the crypto rail converts. The wallet pays the invoice's exact USDC amount to billing's receiving wallet, and the order completes like any crypto payment.
 
 ## For sellers: get paid by agents over x402
 

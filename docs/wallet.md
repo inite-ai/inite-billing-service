@@ -57,6 +57,26 @@ A withdrawal waits 15 minutes for the passkey. At most 10 withdrawals a day
 per wallet, at least 0.01 USDC each; relayer fees count towards the x402 daily
 budget.
 
+## Sites charging the wallet
+
+A person allows a site (a billing service) to charge the wallet for that site's own checkout sessions, up to a limit per payment and per calendar month (`wallet_merchants`).
+
+- **The "INITE checkout" user.** It is made once per wallet, in the same two passkey stamps as an agent's (`wallet_agents.kind = 'checkout'`). Its policy signs USDC `TransferWithAuthorization` on Base only to billing's receiving wallet on Base (`eth.eip_712.message['to']`), at most 1 000 USDC. If the receiving wallet changes in admin, the policy no longer matches and has to be made again.
+- **`POST /v1/checkout/sessions/:id/pay-from-wallet`** (service key, `{ userId, returnTo? }`):
+  1. checks the session is the caller's (the product's service) and the person's;
+  2. opens the session's Base USDC invoice;
+  3. checks the site's per-payment limit, the month's spending (under a lock) and the balance;
+  4. signs the invoice's exact amount with the checkout user and relays it.
+
+  It answers 200 `confirming`, 409 `needs_approval` with `reason` and `approveUrl`, or 404.
+- **`approveUrl`** is `https://auth.inite.ai/account/wallet/approve?service=&session=&returnTo=`. The page uses the person's endpoints:
+  - `GET /v1/wallet/sites/:service?session=`
+  - `POST /v1/wallet/checkout/approve`, then `…/confirm`
+  - `PUT /v1/wallet/sites/:service { perPayment, monthly }`
+  - `POST /v1/wallet/sites/:service/pay { sessionId }`
+  - `DELETE /v1/wallet/sites/:service`
+  - `GET /v1/wallet/sites`
+
 ## AI agents
 
 An agent pays from the wallet only after two approvals by the person:

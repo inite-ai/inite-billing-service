@@ -11,6 +11,7 @@ export async function cleanupTestData(prisma: PrismaService): Promise<void> {
     await prisma.webhookEvent.deleteMany({});
     await prisma.x402Payment.deleteMany({});
     await prisma.walletAgentPayment.deleteMany({});
+    await prisma.walletMerchant.deleteMany({});
     await prisma.walletAgent.deleteMany({});
     await prisma.walletWithdrawal.deleteMany({});
     await prisma.walletTopup.deleteMany({});

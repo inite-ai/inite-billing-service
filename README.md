@@ -95,6 +95,11 @@ Guide: [docs/x402.md](docs/x402.md).
 5. The agent's `pay` tool fetches a URL and, on `402`, pays within its
    per-payment, daily and monthly limits.
 
+**Let sites charge the wallet in one step.** A person allows a site once, with
+limits, on one page in INITE ID. After that the site calls
+`POST /v1/checkout/sessions/:id/pay-from-wallet` and the order is paid from the
+wallet; the first time, it gets an `approveUrl` to send the person to.
+
 Guides: [billing.inite.ai/docs/wallet](https://billing.inite.ai/docs/wallet) ·
 [docs/wallet.md](docs/wallet.md).
 

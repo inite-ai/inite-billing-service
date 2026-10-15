@@ -95,3 +95,32 @@ export function agentPolicy(input: { turnkeyUserId: string; perPayment: string; 
     notes: 'Made by INITE billing when the wallet owner approved this agent with their passkey.',
   };
 }
+
+/** The most one INITE checkout payment may be, whatever a site's limit says. */
+export const CHECKOUT_MAX_PAYMENT = String(MAX.perPayment);
+
+/**
+ * The Turnkey policy on a wallet's "INITE checkout" user: sign USDC
+ * `TransferWithAuthorization` on Base to INITE billing's receiving wallet, and
+ * nothing else. Sites the person allowed are charged through it; whatever a
+ * site or billing does, this key can pay only INITE checkout invoices.
+ */
+export function checkoutPolicy(input: { turnkeyUserId: string; receiver: string }) {
+  return {
+    policyName: 'INITE checkout: pay INITE invoices',
+    effect: 'EFFECT_ALLOW',
+    consensus: `approvers.any(user, user.id == '${input.turnkeyUserId}')`,
+    condition: [
+      "activity.type == 'ACTIVITY_TYPE_SIGN_RAW_PAYLOAD_V2'",
+      "activity.params.encoding == 'PAYLOAD_ENCODING_EIP712'",
+      "eth.eip_712.domain.name == 'USD Coin'",
+      `eth.eip_712.domain.chain_id == ${CHAINS.BASE.evm!.chainId}`,
+      `eth.eip_712.domain.verifying_contract == '${usdcAddress().toLowerCase()}'`,
+      "eth.eip_712.primary_type == 'TransferWithAuthorization'",
+      `eth.eip_712.message['to'] == '${input.receiver.toLowerCase()}'`,
+      `eth.eip_712.message['value'] <= ${usdc(CHECKOUT_MAX_PAYMENT)}`,
+    ].join(' && '),
+    notes:
+      'Made by INITE billing when the wallet owner allowed sites to charge it, with their passkey.',
+  };
+}
