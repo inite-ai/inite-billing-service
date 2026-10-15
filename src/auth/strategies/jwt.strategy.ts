@@ -9,6 +9,8 @@ export interface JwtPayload {
   sub: string; // inite_user_id (uuid)
   roles?: string[];
   email?: string;
+  /** Whether the identity provider has confirmed the address belongs to this user. */
+  email_verified?: boolean;
 }
 
 /** Extract JWT from Authorization header OR access_token cookie */
@@ -113,6 +115,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       userId: payload.sub,
       roles: payload.roles || [],
       email: payload.email,
+      emailVerified: payload.email_verified === true,
     };
   }
 }

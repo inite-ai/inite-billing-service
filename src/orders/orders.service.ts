@@ -1,5 +1,7 @@
 import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/services/prisma.service';
+import { isGuestUserId } from '../checkout/checkout.service';
 import { OrderResponseDto, PaymentIntentResponseDto } from '../common/dto/order.dto';
 
 @Injectable()
@@ -115,5 +117,61 @@ export class OrdersService {
       createdAt: intent.createdAt,
       updatedAt: intent.updatedAt,
     };
+  }
+
+  /**
+   * A store that sells without accounts (mikefluff.com) opens orders for a
+   * made-up guest id and records the buyer's email. When that buyer signs in
+   * with the same address, confirmed by the identity provider, those orders
+   * and the access they granted become theirs: the dashboard shows them, and
+   * the next purchase is already on the account. The guest id stays in
+   * `metadata.guestUserId`; the order id does not change, so a store that
+   * reconciles by order id sees no difference. An unconfirmed address claims
+   * nothing — anyone can type someone else's email into a store.
+   */
+  async claimGuestPurchases(
+    userId: string,
+    email: string | undefined,
+    emailVerified: boolean | undefined,
+  ): Promise<{ claimed: string[] }> {
+    const address = email?.trim().toLowerCase();
+    if (!address || !emailVerified || isGuestUserId(userId)) return { claimed: [] };
+
+    const rows = await this.prisma.$queryRaw<Array<{ id: string; user_id: string }>>(Prisma.sql`
+      SELECT id, user_id FROM billing.orders
+      WHERE lower(trim(metadata->>'email')) = ${address}
+        AND position(':' in user_id) > 0
+        AND user_id NOT LIKE 'did:%'
+    `);
+
+    const claimed: string[] = [];
+    for (const row of rows) {
+      if (!isGuestUserId(row.user_id)) continue;
+      await this.prisma.$transaction(async (tx) => {
+        const order = await tx.order.findUnique({
+          where: { id: row.id },
+          select: { userId: true, metadata: true },
+        });
+        if (order?.userId !== row.user_id) return;
+        const metadata = {
+          ...((order.metadata as Record<string, unknown>) || {}),
+          guestUserId: row.user_id,
+          claimedAt: new Date().toISOString(),
+        };
+        // Conditional on the guest still owning it: two tabs signing in at
+        // once move it once.
+        const moved = await tx.order.updateMany({
+          where: { id: row.id, userId: row.user_id },
+          data: { userId, metadata },
+        });
+        if (moved.count !== 1) return;
+        await tx.entitlement.updateMany({
+          where: { userId: row.user_id, value: { path: ['order_id'], equals: row.id } },
+          data: { userId },
+        });
+        claimed.push(row.id);
+      });
+    }
+    return { claimed };
   }
 }

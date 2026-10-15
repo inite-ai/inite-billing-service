@@ -7,6 +7,7 @@ import { LedgerShell } from '@/components/ledger/LedgerShell';
 import { OAuthClient } from '@/lib/oauth-client';
 import { storeIdToken, clearTokens } from '@/lib/auth-helper';
 import { safeReturnTo } from '@/lib/safe-redirect';
+import { claimGuestPurchases } from '@/lib/claim-guest-purchases';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTranslations } from 'next-intl';
 
@@ -54,6 +55,7 @@ function CallbackContent() {
           storeIdToken(tokens.id_token);
         }
         await refreshSession();
+        await claimGuestPurchases();
 
         setStatus('success');
 
