@@ -58,7 +58,8 @@ function CallbackContent() {
         setStatus('success');
 
         setTimeout(() => {
-          const requested = searchParams?.get('returnTo') || sessionStorage.getItem('returnTo');
+          const requested =
+            searchParams?.get('returnTo') || tokens.returnTo || sessionStorage.getItem('returnTo');
           sessionStorage.removeItem('returnTo');
           router.push(safeReturnTo(requested));
         }, 1500);

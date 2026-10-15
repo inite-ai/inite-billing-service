@@ -21,10 +21,7 @@ function LoginContent() {
       setError(null);
       // Stored already narrowed to this origin, so nothing off-site can be
       // parked in sessionStorage waiting for the callback to follow it.
-      if (returnTo) {
-        sessionStorage.setItem('returnTo', safeReturnTo(returnTo));
-      }
-      await OAuthClient.login();
+      await OAuthClient.login({ returnTo: returnTo ? safeReturnTo(returnTo) : null });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Authentication failed');
       setIsLoading(false);

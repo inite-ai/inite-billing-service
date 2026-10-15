@@ -197,8 +197,9 @@ export default function CheckoutPage() {
       } catch (e) {
         if (getErrorStatus(e) === 401) {
           // Not authenticated — auto-trigger OAuth silently
-          sessionStorage.setItem('returnTo', `/checkout/${sessionId}`)
-          OAuthClient.login()
+          // Back to this very checkout, ?locale= and all, whichever tab the
+          // sign-in finishes in.
+          OAuthClient.login({ returnTo: `/checkout/${sessionId}${window.location.search}` })
           return
         }
         // Anything else — missing, forbidden, or a server error — reads the
