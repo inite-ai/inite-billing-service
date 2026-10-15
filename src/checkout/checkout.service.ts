@@ -510,7 +510,14 @@ export class CheckoutService {
     order: { id: string; userId: string; status: string; metadata: unknown },
     userId: string,
   ): Promise<string> {
-    const forbidden = () => new ForbiddenException('You do not have access to this session');
+    const forbidden = () => {
+      // Which two ids disagreed: without this a buyer's "session not found"
+      // left nothing on the server to explain it. DIDs are pseudonymous.
+      this.logger.warn(
+        `Checkout ${order.id} denied: owner ${order.userId.slice(0, 20)} requester ${userId.slice(0, 20)} status ${order.status}`,
+      );
+      return new ForbiddenException('You do not have access to this session');
+    };
     const guestId = order.userId;
     if (!isGuestUserId(guestId) || isGuestUserId(userId) || order.status !== 'created') {
       throw forbidden();
