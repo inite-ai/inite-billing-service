@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { useTranslations } from 'next-intl'
+import { useLocale, useTranslations } from 'next-intl'
 import { ArrowRight, Loader2, Tag, Check, X, CreditCard, Lock, Zap, Wallet } from 'lucide-react'
 import TokenUSDT from '@web3icons/react/icons/tokens/TokenUSDT'
 import TokenUSDC from '@web3icons/react/icons/tokens/TokenUSDC'
@@ -17,6 +17,8 @@ import { RedirectWaiting } from '@/components/checkout/RedirectWaiting'
 import { PixInvoice, showablePix, type PixPayment } from '@/components/checkout/PixInvoice'
 import { CryptoAssetIcon } from '@/components/checkout/CryptoAssetIcon'
 import { LedgerShell } from '@/components/ledger/LedgerShell'
+import { defaultPaymentMethod, orderPaymentMethods } from '@/lib/default-rail'
+import { localizeProduct } from '@/lib/product-i18n'
 
 interface SessionData {
   sessionId: string
@@ -26,6 +28,7 @@ interface SessionData {
     code: string
     type: string
     description: string | null
+    i18n?: Record<string, { name?: string; description?: string }>
   }
   price: {
     code: string
@@ -100,6 +103,7 @@ export default function CheckoutPage() {
   const params = useParams()
   const sessionId = params.sessionId as string
   const t = useTranslations('checkout')
+  const locale = useLocale()
   const methodLabel = (option: PaymentOption) => {
     const key = option.metadata.method
     return key === 'CARD' ? t('methods.card') : key === 'SBP' ? t('methods.sbp') : key === 'PAYPAL' ? t('methods.paypal') : option.name
@@ -195,7 +199,7 @@ export default function CheckoutPage() {
         }
 
         if (data.paymentMethods.length > 0) {
-          const first = data.paymentMethods[0]
+          const first = defaultPaymentMethod(data.paymentMethods, data.price.currency)!
           setSelectedRail(first.code)
           if (first.options?.length) setSelectedOption(first.options[0].id)
         }
@@ -504,6 +508,7 @@ export default function CheckoutPage() {
   }
 
   if (!session) return null
+  const productText = localizeProduct(session.product, locale)
 
   const currency = session.price.currency
   const formStage = !redirect && !payment
@@ -528,9 +533,9 @@ export default function CheckoutPage() {
             <p className="eyebrow mb-3">
               <span className="dot">●</span> {t('product')}
             </p>
-            <h1 className="text-[30px] sm:text-[36px]">{session.product.name}</h1>
-            {session.product.description && (
-              <p className="mt-3 text-sm leading-relaxed text-[color:var(--dim)]">{session.product.description}</p>
+            <h1 className="text-[30px] sm:text-[36px]">{productText.name}</h1>
+            {productText.description && (
+              <p className="mt-3 text-sm leading-relaxed text-[color:var(--dim)]">{productText.description}</p>
             )}
           </div>
           <div className="rc-body sm:!px-5">
@@ -662,7 +667,7 @@ export default function CheckoutPage() {
                     <p className="note err">{t('noPaymentMethods')}</p>
                   ) : (
                     <div className="space-y-2">
-                      {session.paymentMethods.map((method) => (
+                      {orderPaymentMethods(session.paymentMethods, session.price.currency).map((method) => (
                         <button
                           key={method.code}
                           type="button"
