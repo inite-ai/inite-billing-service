@@ -50,8 +50,13 @@ api.interceptors.response.use(
         // A hard navigation on purpose: the session is gone and every piece of
         // state fetched under it should go with it. This runs inside an axios
         // interceptor, where there is no router to push with anyway.
+        // The page that asked comes back after sign-in: a buyer opening a
+        // checkout link without a billing session otherwise lands on the
+        // dashboard and loses the order.
+        const { pathname, search } = window.location
+        const back = pathname.startsWith('/login') ? '' : `?returnTo=${encodeURIComponent(pathname + search)}`
         // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-        window.location.href = '/login'
+        window.location.href = `/login${back}`
       }
     }
 
