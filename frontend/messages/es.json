@@ -1537,8 +1537,10 @@
         "copy": "Copiar",
         "copied": "Copiado",
         "copyFailed": "No se pudo copiar",
-        "policyTitle": "Política de Turnkey",
-        "policyHint": "Cree esta política en Turnkey. Permite al usuario de API firmar solo la liquidación de pagos en USDC en Base hacia nuestra billetera, con límite de comisión."
+        "policyTitle": "Política de Turnkey: liquidación",
+        "policyHint": "Cree esta política en Turnkey. Permite al usuario de API firmar solo la liquidación de autorizaciones de USDC en Base: pagos x402 hacia nuestra billetera y retiros de billeteras INITE, con límite de comisión. El destinatario y el monto los fija la firma del pagador.",
+        "walletsPolicyTitle": "Política de Turnkey: billeteras INITE",
+        "walletsPolicyHint": "Cree esta política para el mismo usuario de API. Permite a billing abrir billeteras INITE, cada una en una suborganización cuyo único usuario root es la passkey de la persona. Billing no puede firmar dentro de ellas. Billeteras abiertas: {count}."
       }
     }
   },

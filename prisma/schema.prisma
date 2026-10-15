@@ -1078,24 +1078,30 @@ model X402RelayerKey {
 
 /// An x402 authorization we took on to settle: claimed before it is sent, so
 /// one signed payment can never be put on chain or counted twice.
+/// An EIP-3009 authorization the relayer puts on chain: an x402 payment for an
+/// order, or a withdrawal from an INITE wallet. One table, so both share the
+/// single-use claim on (payer, nonce) and the relayer's daily fee budget.
 model X402Payment {
-  id          String   @id @default(uuid()) @db.Uuid
-  orderId     String   @map("order_id") @db.Uuid
-  /// CryptoInvoice.invoiceId the authorization pays.
-  invoiceId   String   @map("invoice_id") @db.VarChar(255)
-  payer       String   @db.VarChar(64)
+  id           String   @id @default(uuid()) @db.Uuid
+  /// The order an x402 payment pays; null for a withdrawal.
+  orderId      String?  @map("order_id") @db.Uuid
+  /// CryptoInvoice.invoiceId the authorization pays; null for a withdrawal.
+  invoiceId    String?  @map("invoice_id") @db.VarChar(255)
+  /// The wallet withdrawal this authorization carries out.
+  withdrawalId String?  @unique @map("withdrawal_id") @db.Uuid
+  payer        String   @db.VarChar(64)
   /// EIP-3009 nonce, lower-case hex.
-  nonce       String   @db.VarChar(66)
-  valueRaw    String   @map("value_raw") @db.VarChar(78)
-  validBefore DateTime @map("valid_before") @db.Timestamptz(6)
+  nonce        String   @db.VarChar(66)
+  valueRaw     String   @map("value_raw") @db.VarChar(78)
+  validBefore  DateTime @map("valid_before") @db.Timestamptz(6)
   /// claimed | submitted | mined | reverted | failed
-  status      String   @default("claimed") @db.VarChar(20)
-  txHash      String?  @map("tx_hash") @db.VarChar(66)
+  status       String   @default("claimed") @db.VarChar(20)
+  txHash       String?  @map("tx_hash") @db.VarChar(66)
   /// Fees paid, or the most they could be until the receipt is in.
-  feeWei      String?  @map("fee_wei") @db.VarChar(78)
-  error       String?  @db.Text
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  feeWei       String?  @map("fee_wei") @db.VarChar(78)
+  error        String?  @db.Text
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@unique([payer, nonce])
   @@index([orderId])
@@ -1203,5 +1209,75 @@ model CryptoScanCursor {
 
   @@id([chain, token, receiverKey])
   @@map("crypto_scan_cursors")
+  @@schema("billing")
+}
+
+/// A person's INITE wallet: USDC on Base in a Turnkey sub-organization whose
+/// only root user is the person's passkey. Billing made the sub-organization
+/// and cannot sign in it; this row is how billing finds it.
+model Wallet {
+  id                String             @id @default(uuid()) @db.Uuid
+  /// The person, as INITE Auth names them: the access token's `sub`.
+  ownerDid          String             @unique @map("owner_did") @db.VarChar(255)
+  subOrganizationId String             @unique @map("sub_organization_id") @db.VarChar(64)
+  turnkeyWalletId   String             @map("turnkey_wallet_id") @db.VarChar(64)
+  /// Checksummed 0x address.
+  address           String             @unique @db.VarChar(42)
+  /// The wallet passkey's credential id, base64url — so the browser offers it, not the sign-in passkey.
+  credentialId      String             @map("credential_id") @db.VarChar(1024)
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  topups            WalletTopup[]
+  withdrawals       WalletWithdrawal[]
+
+  @@map("wallets")
+  @@schema("billing")
+}
+
+/// A top-up through a payment rail that delivers USDC straight to the wallet's
+/// address (PIX through Hodle). The money never passes through billing.
+model WalletTopup {
+  id         String   @id @default(uuid()) @db.Uuid
+  walletId   String   @map("wallet_id") @db.Uuid
+  wallet     Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  rail       String   @db.VarChar(20)
+  /// The rail's id for it (Hodle's externalId).
+  externalId String   @unique @map("external_id") @db.VarChar(255)
+  /// In the rail's currency's minor units (centavos).
+  value      Int
+  currency   String   @db.VarChar(3)
+  /// pending | paid | expired | failed | refunded
+  status     String   @default("pending") @db.VarChar(20)
+  qrCode     String?  @map("qr_code") @db.Text
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([walletId, createdAt])
+  @@map("wallet_topups")
+  @@schema("billing")
+}
+
+/// A withdrawal the person asked for: the USDC authorization billing prepared,
+/// the Turnkey request their passkey signs, and how it went.
+model WalletWithdrawal {
+  id          String   @id @default(uuid()) @db.Uuid
+  walletId    String   @map("wallet_id") @db.Uuid
+  wallet      Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  to          String   @db.VarChar(42)
+  valueRaw    String   @map("value_raw") @db.VarChar(78)
+  /// EIP-3009 nonce, lower-case hex.
+  nonce       String   @unique @db.VarChar(66)
+  validAfter  DateTime @map("valid_after") @db.Timestamptz(6)
+  validBefore DateTime @map("valid_before") @db.Timestamptz(6)
+  /// The exact Turnkey request body the passkey stamps; billing submits this, never one from the browser.
+  request     String   @db.Text
+  /// prepared | submitted | mined | reverted | failed | expired
+  status      String   @default("prepared") @db.VarChar(20)
+  txHash      String?  @map("tx_hash") @db.VarChar(66)
+  error       String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([walletId, createdAt])
+  @@map("wallet_withdrawals")
   @@schema("billing")
 }

@@ -10,6 +10,9 @@ export async function cleanupTestData(prisma: PrismaService): Promise<void> {
     // Delete in correct order (child -> parent)
     await prisma.webhookEvent.deleteMany({});
     await prisma.x402Payment.deleteMany({});
+    await prisma.walletWithdrawal.deleteMany({});
+    await prisma.walletTopup.deleteMany({});
+    await prisma.wallet.deleteMany({});
     await prisma.x402RelayerKey.deleteMany({});
     await prisma.cryptoTransfer.deleteMany({});
     await prisma.cryptoInvoice.deleteMany({});

@@ -398,7 +398,8 @@ jobs:
               # identity provider signs with auth-api. Unset, this service
               # accepts any token those keys can verify, whoever issued it.
               - JWT_ISSUER=https://auth-api.inite.ai
-              - CORS_ORIGINS=https://${{ env.DOMAIN }}
+              # INITE ID shows the person's wallet from billing (/v1/wallet).
+              - CORS_ORIGINS=https://${{ env.DOMAIN }},https://auth.inite.ai
               - ANTHROPIC_API_KEY=\${ANTHROPIC_API_KEY}
             networks:
               - traefik-global

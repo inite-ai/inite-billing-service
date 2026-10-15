@@ -34,7 +34,7 @@ import { formatUnits } from '../adapters/crypto/amount.util';
 import { CryptoWatcherScheduler } from '../workers/crypto-watcher.scheduler';
 import { RelayerKeys } from '../adapters/crypto/x402/relayer-key';
 import { relayerSigner } from '../adapters/crypto/x402/signer';
-import { turnkeyPolicy } from '../adapters/crypto/x402/policy';
+import { turnkeyPolicy, walletsPolicy } from '../adapters/crypto/x402/policy';
 import { baseClient } from '../adapters/crypto/x402/relayer';
 
 const SECRET_KEYS = [
@@ -165,10 +165,11 @@ export class CryptoAdminService {
   }
 
   /**
-   * x402 as the settings page shows it: the Turnkey fields, the public half of
-   * billing's own key, what is still missing, the policy to paste into
-   * Turnkey filled in, and the fee wallet's balance. The private key is never
-   * part of it.
+   * Turnkey as the settings page shows it: the fields, the public half of
+   * billing's own key, what is still missing, the two policies to paste into
+   * Turnkey filled in (relaying for x402 and withdrawals, opening INITE
+   * wallets), the fee wallet's balance and how many wallets are open. The
+   * private key is never part of it.
    */
   private async x402Overview(settings: CryptoSettings) {
     const key = await this.keys.current();
@@ -197,10 +198,12 @@ export class CryptoAdminService {
       ready: missing.length === 0 && !!relayerSigner(settings.x402, key),
       missing,
       relayerBalanceWei,
-      policy:
-        wallet && relayerAddress
-          ? JSON.stringify(turnkeyPolicy({ turnkeyUserId, relayerAddress, wallet }), null, 2)
-          : null,
+      policy: relayerAddress
+        ? JSON.stringify(turnkeyPolicy({ turnkeyUserId, relayerAddress }), null, 2)
+        : null,
+      // The same API user opens people's INITE wallets: one Turnkey user, two policies.
+      walletsPolicy: JSON.stringify(walletsPolicy({ turnkeyUserId }), null, 2),
+      wallets: await this.prisma.wallet.count(),
     };
   }
 

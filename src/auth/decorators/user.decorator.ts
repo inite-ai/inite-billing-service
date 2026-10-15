@@ -6,6 +6,11 @@ export interface RequestUser {
   email?: string;
   /** The identity provider confirmed `email` belongs to this user. */
   emailVerified?: boolean;
+  /**
+   * The agent acting for the user, when the token is an agent's (INITE Auth
+   * puts it in `act`): its DID. Absent when the person acts themselves.
+   */
+  actor?: string;
   isService?: boolean;
   serviceId?: string;
   serviceCode?: string;

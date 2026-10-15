@@ -244,13 +244,20 @@ describe('x402 E2E', () => {
       relayerAddress: RELAYER,
       wallet: WALLET,
     });
-    // The policy, filled in: our wallet as the only recipient, this user, this fee wallet.
+    // The policy, filled in: this user, this fee wallet, USDC authorizations only.
+    // The recipient is the payer's to choose — withdrawals from INITE wallets go anywhere.
     const policy = JSON.parse(x402.policy);
     expect(policy.consensus).toContain("user.id == 'user-x402'");
     expect(policy.condition).toContain(
-      `eth.tx.data[98..138] == '${WALLET.slice(2).toLowerCase()}'`,
+      `eth.tx.data[0..10] == '${TRANSFER_WITH_AUTHORIZATION_SELECTOR}'`,
     );
+    expect(policy.condition).not.toContain('data[98..138]');
     expect(policy.condition).toContain(`wallet_account.address == '${RELAYER.toLowerCase()}'`);
+    // The same user opens INITE wallets, and may do nothing else with that policy.
+    expect(JSON.parse(x402.walletsPolicy)).toMatchObject({
+      consensus: "approvers.any(user, user.id == 'user-x402')",
+      condition: "activity.type == 'ACTIVITY_TYPE_CREATE_SUB_ORGANIZATION_V8'",
+    });
 
     // The private half stays in billing: not in any answer.
     const stored = await prisma.x402RelayerKey.findFirstOrThrow({ where: { retiredAt: null } });

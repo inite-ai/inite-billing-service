@@ -11,6 +11,8 @@ export interface JwtPayload {
   email?: string;
   /** Whether the identity provider has confirmed the address belongs to this user. */
   email_verified?: boolean;
+  /** Who acts for `sub` (RFC 8693): an AI agent, named by its DID. */
+  act?: { sub?: string; client_id?: string };
 }
 
 /** Extract JWT from Authorization header OR access_token cookie */
@@ -116,6 +118,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       roles: payload.roles || [],
       email: payload.email,
       emailVerified: payload.email_verified === true,
+      ...(typeof payload.act?.sub === 'string' ? { actor: payload.act.sub } : {}),
     };
   }
 }

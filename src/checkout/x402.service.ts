@@ -17,9 +17,8 @@ import {
   paymentRequiredV1,
   settlementResponse,
 } from '../adapters/crypto/x402/protocol';
-import { Relayer, baseClient } from '../adapters/crypto/x402/relayer';
-import { relayerSigner } from '../adapters/crypto/x402/signer';
-import { RelayerKeys } from '../adapters/crypto/x402/relayer-key';
+import { Relayer } from '../adapters/crypto/x402/relayer';
+import { Settlements } from '../adapters/crypto/x402/settlements';
 import { CheckoutService } from './checkout.service';
 import { checkoutLinkMatches } from './checkout-link';
 
@@ -28,12 +27,6 @@ export interface X402Reply {
   headers: Record<string, string>;
   body: unknown;
 }
-
-/** One relayer transaction at a time: its account nonce is read fresh for each. */
-const RELAYER_LOCK = 402_402;
-/** How long to wait for the transaction to land before answering. Base makes a block every 2 s. */
-const RECEIPT_WAIT_MS = 20_000;
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 const PAID_STATUSES = ['paid', 'completed', 'fulfilled'];
 
@@ -52,14 +45,14 @@ const PAID_STATUSES = ['paid', 'completed', 'fulfilled'];
 @Injectable()
 export class X402Service {
   private readonly logger = new Logger(X402Service.name);
-  private readonly keys: RelayerKeys;
+  private readonly settlements: Settlements;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly checkout: CheckoutService,
     private readonly config: ConfigService,
   ) {
-    this.keys = new RelayerKeys(prisma);
+    this.settlements = new Settlements(prisma);
   }
 
   /** Whether x402 can take payments now: a relayer, and the rail taking USDC on Base. */
@@ -72,15 +65,11 @@ export class X402Service {
     return `${resolveFrontendUrl(this.config)}/v1/x402/sessions/${sessionId}?t=${encodeURIComponent(linkToken)}`;
   }
 
-  /**
-   * The relayer, from the rail's settings and billing's own Turnkey key —
-   * null until the admin has filled in Turnkey and the rail takes Base.
-   */
+  /** The relayer — null until the admin has filled in Turnkey and the rail takes Base. */
   private async relayer(): Promise<Relayer | null> {
     const settings = await loadCryptoSettings(this.prisma);
     if (!settings?.isActive || !payable(settings, X402_CHAIN)) return null;
-    const signer = relayerSigner(settings.x402, await this.keys.current());
-    return signer ? new Relayer(signer, baseClient(settings.rpcUrls[X402_CHAIN])) : null;
+    return this.settlements.relayer();
   }
 
   async handle(
@@ -173,14 +162,7 @@ export class X402Service {
    * moved the money to our wallet, and the watcher will match it to the invoice.
    */
   private async alreadyUsed(payment: DecodedPayment, orderId: string): Promise<X402Reply> {
-    const ours = await this.prisma.x402Payment.findUnique({
-      where: {
-        payer_nonce: {
-          payer: payment.authorization.from.toLowerCase(),
-          nonce: payment.authorization.nonce,
-        },
-      },
-    });
+    const ours = await this.settlements.find(payment);
     return this.accepted(payment, orderId, ours?.txHash ?? null);
   }
 
@@ -191,28 +173,13 @@ export class X402Service {
     invoiceId: string,
     required: (error?: string, reason?: string) => X402Reply,
   ): Promise<X402Reply> {
-    const a = payment.authorization;
-    const payer = a.from.toLowerCase();
+    const payer = payment.authorization.from.toLowerCase();
 
     // Claim the authorization first: a second request with the same header —
     // a retry, a replay — finds it taken and is told how the first one went.
-    let claim;
-    try {
-      claim = await this.prisma.x402Payment.create({
-        data: {
-          orderId,
-          invoiceId,
-          payer,
-          nonce: a.nonce,
-          valueRaw: a.value.toString(),
-          validBefore: new Date(Number(a.validBefore) * 1000),
-        },
-      });
-    } catch (error: any) {
-      if (error?.code !== 'P2002') throw error;
-      const existing = await this.prisma.x402Payment.findUnique({
-        where: { payer_nonce: { payer, nonce: a.nonce } },
-      });
+    const claim = await this.settlements.claim(payment, { orderId, invoiceId });
+    if (!claim.claimed) {
+      const existing = claim.existing;
       if (existing?.txHash && existing.status !== 'reverted')
         return this.accepted(payment, orderId, existing.txHash);
       return json(409, { error: 'This payment is already being settled' });
@@ -220,35 +187,10 @@ export class X402Service {
 
     let hash: `0x${string}`;
     try {
-      hash = await this.prisma.$transaction(
-        async (tx) => {
-          await tx.$executeRaw`SELECT pg_advisory_xact_lock(${RELAYER_LOCK})`;
-          const spent = await this.spentSince(new Date(Date.now() - DAY_MS));
-          const sent = await relayer.send(payment, spent);
-          await tx.x402Payment.update({
-            where: { id: claim.id },
-            data: { status: 'submitted', txHash: sent.hash, feeWei: sent.maxCostWei.toString() },
-          });
-          return sent.hash;
-        },
-        { timeout: 45_000, maxWait: 30_000 },
-      );
+      hash = await this.settlements.submit(relayer, payment, claim.row.id);
     } catch (error: any) {
-      if (error instanceof X402Error) {
-        // Refused before anything was sent: the authorization is still the
-        // payer's, free to be used again once the reason is gone.
-        await this.prisma.x402Payment.delete({ where: { id: claim.id } }).catch(() => undefined);
-        return required(error.message, error.reason);
-      }
-      // It may or may not have reached the network. Keep the claim — never
-      // risk sending one authorization twice — and let the watcher tell.
+      if (error instanceof X402Error) return required(error.message, error.reason);
       this.logger.error(`x402 settlement for order ${orderId} failed: ${error?.message}`);
-      await this.prisma.x402Payment
-        .update({
-          where: { id: claim.id },
-          data: { status: 'failed', error: String(error?.message ?? error) },
-        })
-        .catch(() => undefined);
       return json(502, {
         error: 'The payment could not be submitted',
         errorReason: 'unexpected_settle_error',
@@ -256,28 +198,20 @@ export class X402Service {
     }
     this.logger.log(`x402: order ${orderId} paid by ${payer}, tx ${hash}`);
 
-    const receipt = await relayer.receipt(hash, RECEIPT_WAIT_MS);
-    if (receipt) {
-      const fee = receipt.gasUsed * receipt.effectiveGasPrice;
-      const ok = receipt.status === 'success';
-      await this.prisma.x402Payment.update({
-        where: { id: claim.id },
-        data: { status: ok ? 'mined' : 'reverted', feeWei: fee.toString() },
-      });
-      if (!ok) {
-        this.logger.error(`x402 tx ${hash} for order ${orderId} reverted`);
-        return {
-          ...required('The transfer was refused on chain', 'settlement_reverted'),
-          headers: {
-            ...required().headers,
-            ...responseHeaders(payment, {
-              success: false,
-              transaction: hash,
-              errorReason: 'settlement_reverted',
-            }),
-          },
-        };
-      }
+    const mined = await this.settlements.confirm(relayer, hash, claim.row.id);
+    if (mined === false) {
+      this.logger.error(`x402 tx ${hash} for order ${orderId} reverted`);
+      return {
+        ...required('The transfer was refused on chain', 'settlement_reverted'),
+        headers: {
+          ...required().headers,
+          ...responseHeaders(payment, {
+            success: false,
+            transaction: hash,
+            errorReason: 'settlement_reverted',
+          }),
+        },
+      };
     }
     return this.accepted(payment, orderId, hash);
   }
@@ -298,14 +232,6 @@ export class X402Service {
           'Paid. The order completes once the transfer is final on Base, usually within two minutes; this URL then answers status "paid".',
       },
     };
-  }
-
-  private async spentSince(since: Date): Promise<bigint> {
-    const rows = await this.prisma.x402Payment.findMany({
-      where: { createdAt: { gte: since }, feeWei: { not: null } },
-      select: { feeWei: true },
-    });
-    return rows.reduce((sum, row) => sum + BigInt(row.feeWei ?? '0'), 0n);
   }
 }
 

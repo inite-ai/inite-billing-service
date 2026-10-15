@@ -1,4 +1,4 @@
-import { getAddress, isAddress, isHex } from 'viem';
+import { getAddress, getTypesForEIP712Domain, isAddress, isHex, serializeTypedData } from 'viem';
 import { z } from 'zod';
 import { CHAINS } from '../chains';
 
@@ -300,6 +300,20 @@ export function typedData(a: Authorization) {
     primaryType: 'TransferWithAuthorization' as const,
     message: a,
   };
+}
+
+/**
+ * The authorization's typed data as JSON, for a signer that takes EIP-712
+ * text (Turnkey's PAYLOAD_ENCODING_EIP712). The domain's own type is spelled
+ * out: without it viem leaves the domain empty, and the signature would be
+ * for a different message than the one USDC checks.
+ */
+export function typedDataPayload(a: Authorization): string {
+  const data = typedData(a);
+  return serializeTypedData({
+    ...data,
+    types: { EIP712Domain: getTypesForEIP712Domain({ domain: data.domain }), ...data.types },
+  } as any);
 }
 
 /** The settlement answer, sent base64-encoded in `PAYMENT-RESPONSE` / `X-PAYMENT-RESPONSE`. */

@@ -16,6 +16,7 @@ import { WebhooksModule } from '../src/webhooks/webhooks.module';
 import { OutboxModule } from '../src/outbox/outbox.module';
 import { WorkersModule } from '../src/workers/workers.module';
 import { CryptoAdminModule } from '../src/crypto/crypto-admin.module';
+import { WalletModule } from '../src/wallet/wallet.module';
 import { AffiliatesModule } from '../src/affiliates/affiliates.module';
 import { McpModule } from '../src/mcp/mcp.module';
 import { AdminModule } from '../src/admin/admin.module';
@@ -58,6 +59,7 @@ import { OneAdapter } from '../src/adapters/one/one.adapter';
     OutboxModule,
     WorkersModule,
     CryptoAdminModule,
+    WalletModule,
     AffiliatesModule,
     AdminModule,
     McpModule,
