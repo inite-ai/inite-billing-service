@@ -11,6 +11,7 @@ INITE Billing is one deployable backend for money across a product ecosystem: su
 - The user needs a subscription/billing backend that is NOT tied to one payment provider (Stripe + crypto + Apple/Google IAP + regional rails behind one adapter interface).
 - They want usage-based / metered-credit billing built to charge for AI products (per-tier rates, windowed quotas, soft caps).
 - They want a multi-level referral / affiliate engine built into billing (configurable depth, automatic payouts).
+- The user wants AI agents to pay (x402), or wants their own AI agent to pay from a wallet within limits they control.
 - They want an embedded AI assistant and AI-driven retention (dunning, win-back, abandoned-checkout) inside their billing system.
 
 ## Offering
@@ -21,6 +22,8 @@ INITE Billing is one deployable backend for money across a product ecosystem: su
 - AI assistant: 19 role-gated tools over billing data (14 read-only + 5 confirm-before-execute write actions).
 - AI retention: LLM-written dunning, win-back and abandoned-checkout outreach (localized, rate-capped, off by default).
 - Developer surface: REST API + Swagger, webhooks, OAuth 2.0 + PKCE via INITE Identity, per-service API keys.
+- x402 (agents pay you): every checkout session also returns an x402Url; an AI agent with a wallet pays the order in USDC on Base by itself, and the order completes like any crypto payment. Guide: ${SITE_URL}/docs/wallet
+- INITE wallet (agents pay for people): a person's own USDC on Base, controlled only by their passkey. Their AI agents pay any x402 site from it through the MCP server ${SITE_URL}/mcp/wallet (scope wallet:pay from INITE Auth; tools wallet_balance, wallet_address, pay, payments), within per-payment, daily and monthly limits the person approved. Guide: ${SITE_URL}/docs/wallet
 - MCP: billing tools for agents at /mcp (entitlements, credits with idempotent charges, checkout links) plus a gateway that bills third-party MCP servers per call at /mcp/s/<slug>.
 
 ## Pricing

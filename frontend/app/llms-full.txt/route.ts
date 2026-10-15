@@ -45,6 +45,9 @@ Free to integrate — no platform cut of revenue. You only pay the standard proc
 ### What can the AI assistant do?
 It has 19 tools over your billing data — 14 read-only, plus 5 write actions (cancel a subscription, adjust credits, propose a refund) that require confirmation in the UI before they run.
 
+### Can AI agents pay?
+Yes, both ways. Every checkout also accepts x402, so an agent with a wallet pays an order in USDC on Base by itself. And people get an INITE wallet: their own USDC, controlled only by their passkey. Their AI agents pay from it on any x402 site through ${SITE_URL}/mcp/wallet, within the per-payment, daily and monthly limits the person approved. Guide: ${SITE_URL}/docs/wallet
+
 ---
 
 ## Entity & contact
