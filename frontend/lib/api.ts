@@ -25,6 +25,10 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config
 
+    // A call made through a checkout link has no session to refresh or sign
+    // in to: its page shows the error instead of leaving for /login.
+    if (originalRequest?.headers?.['x-checkout-token']) return Promise.reject(error)
+
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true
 

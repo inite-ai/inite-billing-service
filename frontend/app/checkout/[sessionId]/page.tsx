@@ -8,6 +8,7 @@ import TokenUSDT from '@web3icons/react/icons/tokens/TokenUSDT'
 import TokenUSDC from '@web3icons/react/icons/tokens/TokenUSDC'
 import api from '@/lib/api'
 import { OAuthClient } from '@/lib/oauth-client'
+import { checkoutLinkHeaders, takeCheckoutLink } from '@/lib/checkout-link'
 import toast from 'react-hot-toast'
 import RecommendedOffers from '@/components/dashboard/RecommendedOffers'
 import { getErrorMessage, getErrorStatus } from '@/lib/api-error'
@@ -104,6 +105,10 @@ export default function CheckoutPage() {
     return key === 'CARD' ? t('methods.card') : key === 'SBP' ? t('methods.sbp') : key === 'PAYPAL' ? t('methods.paypal') : option.name
   }
 
+  // The store's link opens this order without a billing sign-in.
+  const [linkToken] = useState(() => takeCheckoutLink(sessionId))
+  const link = checkoutLinkHeaders(linkToken)
+
   const [session, setSession] = useState<SessionData | null>(null)
   const [loading, setLoading] = useState(true)
   // The three states this page can end in, each one a translation key. It was
@@ -149,8 +154,8 @@ export default function CheckoutPage() {
     async function fetchSession() {
       try {
         const res = returned
-          ? await api.post(`/v1/checkout/sessions/${sessionId}/refresh`)
-          : await api.get(`/v1/checkout/sessions/${sessionId}`)
+          ? await api.post(`/v1/checkout/sessions/${sessionId}/refresh`, undefined, link)
+          : await api.get(`/v1/checkout/sessions/${sessionId}`, link)
         const data: SessionData = res.data
         setSession(data)
 
@@ -195,6 +200,12 @@ export default function CheckoutPage() {
           if (first.options?.length) setSelectedOption(first.options[0].id)
         }
       } catch (e) {
+        // Through the link there is no sign-in to fall back to: a token that
+        // does not open this order means the link is wrong or stale.
+        if (linkToken) {
+          setError('sessionNotFound')
+          return
+        }
         if (getErrorStatus(e) === 401) {
           // Not authenticated — auto-trigger OAuth silently
           // Back to this very checkout, ?locale= and all, whichever tab the
@@ -220,7 +231,9 @@ export default function CheckoutPage() {
       }
     }
     fetchSession()
-  }, [sessionId])
+    // `link` follows `linkToken`, which is fixed for the page's life.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, linkToken])
 
   // While a crypto invoice is open, watch it: the chain is checked on the
   // server every half minute, and this picks the result up.
@@ -229,7 +242,7 @@ export default function CheckoutPage() {
     if (!waitingForChain) return
     const id = setInterval(async () => {
       try {
-        const res = await api.get(`/v1/checkout/sessions/${sessionId}`)
+        const res = await api.get(`/v1/checkout/sessions/${sessionId}`, link)
         const data: SessionData = res.data
         if (showableCrypto(data.payment)) {
           setPayment({ ...data.payment, intentStatus: data.status === 'paid' ? 'paid' : data.payment.intentStatus })
@@ -239,7 +252,8 @@ export default function CheckoutPage() {
       }
     }, 8000)
     return () => clearInterval(id)
-  }, [waitingForChain, sessionId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waitingForChain, sessionId, linkToken])
 
   // While a PIX code is open, ask Hodle (through the server) whether it was paid;
   // the webhook usually gets there first, and this picks either up.
@@ -248,7 +262,7 @@ export default function CheckoutPage() {
     if (!waitingForPix) return
     const id = setInterval(async () => {
       try {
-        const res = await api.post(`/v1/checkout/sessions/${sessionId}/refresh`)
+        const res = await api.post(`/v1/checkout/sessions/${sessionId}/refresh`, undefined, link)
         const data: SessionData = res.data
         if (data.payment?.type === 'pix') {
           setPix({ ...data.payment, intentStatus: data.status === 'paid' ? 'paid' : data.payment.intentStatus })
@@ -262,13 +276,14 @@ export default function CheckoutPage() {
       }
     }, 5000)
     return () => clearInterval(id)
-  }, [waitingForPix, sessionId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waitingForPix, sessionId, linkToken])
 
   // Ask the provider (through the server) whether the payment went through.
   const checkRedirect = useCallback(async () => {
     setChecking(true)
     try {
-      const res = await api.post(`/v1/checkout/sessions/${sessionId}/refresh`)
+      const res = await api.post(`/v1/checkout/sessions/${sessionId}/refresh`, undefined, link)
       const data: SessionData = res.data
       if (data.status === 'paid') setRedirectOutcome('paid')
       else if (['failed', 'expired'].includes(data.status)) setRedirectOutcome('failed')
@@ -277,7 +292,8 @@ export default function CheckoutPage() {
     } finally {
       setChecking(false)
     }
-  }, [sessionId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, linkToken])
 
   const waitingForProvider = !!redirect && !redirectOutcome
   useEffect(() => {
@@ -327,10 +343,11 @@ export default function CheckoutPage() {
     if (!promoCode.trim() || !session) return
     setPromoLoading(true)
     try {
-      const res = await api.post('/v1/checkout/validate-promo', {
-        promoCode: promoCode.trim(),
-        priceCode: session.price.code,
-      })
+      const res = await api.post(
+        `/v1/checkout/sessions/${sessionId}/validate-promo`,
+        { promoCode: promoCode.trim() },
+        link,
+      )
       if (res.data.isValid) {
         setPromoResult(res.data)
         toast.success(t('promoApplied'))
@@ -399,7 +416,7 @@ export default function CheckoutPage() {
         payload.promoCode = promoCode.trim()
       }
 
-      const res = await api.post(`/v1/checkout/sessions/${sessionId}/pay`, payload)
+      const res = await api.post(`/v1/checkout/sessions/${sessionId}/pay`, payload, link)
 
       if (res.data.payment?.type === 'crypto') {
         paymentWindow?.close()
@@ -757,7 +774,8 @@ export default function CheckoutPage() {
               </button>
 
               {/* Never distract mid-payment */}
-              {!payLoading && <RecommendedOffers sessionId={String(sessionId)} compact />}
+              {/* Offers are bought under a billing account; a buyer here through the store's link has none open. */}
+              {!payLoading && !linkToken && <RecommendedOffers sessionId={String(sessionId)} compact />}
             </>
           )}
         </section>

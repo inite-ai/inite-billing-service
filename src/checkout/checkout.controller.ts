@@ -17,6 +17,8 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { JwtOrServiceGuard } from '../auth/guards/jwt-or-service.guard';
 import { User, RequestUser } from '../auth/decorators/user.decorator';
 import { CheckoutService } from './checkout.service';
+import { CheckoutLinkOrJwtGuard, CheckoutLinkOrJwtOrServiceGuard } from './checkout-link.guard';
+import { CHECKOUT_LINK_HEADER } from './checkout-link';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
 import { CatalogService } from '../catalog/catalog.service';
 import {
@@ -76,9 +78,18 @@ export class CheckoutController {
   }
 
   @Get('sessions/:id')
-  @UseGuards(JwtOrServiceGuard)
+  @UseGuards(CheckoutLinkOrJwtOrServiceGuard)
   @ApiOperation({ summary: 'Get checkout session details' })
+  @ApiHeader({
+    name: CHECKOUT_LINK_HEADER,
+    required: false,
+    description: 'Token from the checkout link',
+  })
   async getCheckoutSession(@Param('id') id: string, @Req() req: any) {
+    // The checkout link opens its own order, signed in or not.
+    if (req.checkoutLinkToken) {
+      return this.checkoutService.getSession(id, undefined, undefined, req.checkoutLinkToken);
+    }
     // A user sees their own session; a service sees its own service's sessions.
     // "No check at all for service keys" made every checkout in the platform
     // readable by any registered module.
@@ -93,26 +104,76 @@ export class CheckoutController {
   @Post('sessions/:id/pay')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 5, ttl: 60000 } })
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(CheckoutLinkOrJwtGuard)
   @ApiOperation({ summary: 'Initiate payment for a checkout session' })
+  @ApiHeader({
+    name: CHECKOUT_LINK_HEADER,
+    required: false,
+    description: 'Token from the checkout link',
+  })
   @ApiResponse({ status: 200, type: PaySessionResponseDto })
   async paySession(
     @Param('id') id: string,
-    @User() user: RequestUser,
+    @Req() req: any,
     @Body() dto: PaySessionDto,
   ): Promise<PaySessionResponseDto> {
-    return this.checkoutService.paySession(id, user.userId, dto, user.email);
+    if (req.checkoutLinkToken) {
+      return this.checkoutService.paySession(id, undefined, dto, undefined, req.checkoutLinkToken);
+    }
+    return this.checkoutService.paySession(id, req.user.userId, dto, req.user.email);
   }
 
   @Post('sessions/:id/refresh')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 30, ttl: 60000 } })
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(CheckoutLinkOrJwtGuard)
   @ApiOperation({
     summary: 'Check the session’s payment with its provider now, and return the session',
   })
-  async refreshPayment(@Param('id') id: string, @User() user: RequestUser) {
-    return this.checkoutService.refreshPayment(id, user.userId);
+  @ApiHeader({
+    name: CHECKOUT_LINK_HEADER,
+    required: false,
+    description: 'Token from the checkout link',
+  })
+  async refreshPayment(@Param('id') id: string, @Req() req: any) {
+    if (req.checkoutLinkToken) {
+      return this.checkoutService.refreshPayment(id, undefined, req.checkoutLinkToken);
+    }
+    return this.checkoutService.refreshPayment(id, req.user.userId);
+  }
+
+  @Post('sessions/:id/validate-promo')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  @UseGuards(CheckoutLinkOrJwtGuard)
+  @ApiOperation({ summary: 'Validate a promo code against this session’s price' })
+  @ApiHeader({
+    name: CHECKOUT_LINK_HEADER,
+    required: false,
+    description: 'Token from the checkout link',
+  })
+  async validateSessionPromo(
+    @Param('id') id: string,
+    @Req() req: any,
+    @Body() body: { promoCode?: string },
+  ) {
+    const code = typeof body?.promoCode === 'string' ? body.promoCode.trim() : '';
+    if (!code) throw new BadRequestException('promoCode is required');
+    const result = await this.checkoutService.validateSessionPromo(
+      id,
+      code,
+      req.checkoutLinkToken ? undefined : req.user?.userId,
+      req.checkoutLinkToken,
+    );
+    return {
+      isValid: result.isValid,
+      error: result.error,
+      errorCode: result.errorCode,
+      originalAmount: result.originalAmount,
+      discountAmount: result.discountAmount,
+      finalAmount: result.finalAmount,
+      promoCodeName: result.promoCode?.name,
+    };
   }
 
   @Post('validate-promo')
