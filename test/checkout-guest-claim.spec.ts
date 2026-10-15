@@ -70,6 +70,10 @@ describe('checkout: claiming a guest order', () => {
     expect(isGuestUserId(GUEST)).toBe(true);
     expect(isGuestUserId(BUYER)).toBe(false);
     expect(isGuestUserId(undefined)).toBe(false);
+    // Real INITE accounts are DIDs and contain colons; they are never guests.
+    expect(
+      isGuestUserId('did:key:zGfHq2tTVk9z4eXgyQNE1gZgV1g8QCoxDSyt62L4evVpHL2WJiVguRZLU7VfW'),
+    ).toBe(false);
   });
 
   it('hands an untouched guest order to the first user who opens it', async () => {

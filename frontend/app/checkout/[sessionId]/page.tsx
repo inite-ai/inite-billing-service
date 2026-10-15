@@ -204,6 +204,16 @@ export default function CheckoutPage() {
         }
         // Anything else — missing, forbidden, or a server error — reads the
         // same to someone holding a checkout link: this session is not usable.
+        // Forbidden usually means this browser is signed in to billing as a
+        // different INITE account than the one the store opened the order for
+        // (an old billing session outliving a new sign-in on the store). Sign
+        // in again once, silently: the provider's current session decides.
+        const reauthKey = `checkout-reauth:${sessionId}`
+        if (getErrorStatus(e) === 403 && !sessionStorage.getItem(reauthKey)) {
+          sessionStorage.setItem(reauthKey, '1')
+          OAuthClient.login({ returnTo: `/checkout/${sessionId}${window.location.search}` })
+          return
+        }
         setError('sessionNotFound')
       } finally {
         setLoading(false)

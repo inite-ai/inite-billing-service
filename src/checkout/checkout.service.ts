@@ -973,5 +973,8 @@ export function checkoutPageUrl(frontendUrl: string, orderId: string, locale?: s
  * colon.
  */
 export function isGuestUserId(userId: string | null | undefined): boolean {
-  return typeof userId === 'string' && userId.includes(':');
+  // INITE accounts are DIDs (`did:key:...`), which contain colons too. Only a
+  // service namespace (`mikefluff:<hex>`) marks a guest; without this every
+  // unpaid order of a real user was claimable by whoever opened its link.
+  return typeof userId === 'string' && userId.includes(':') && !userId.startsWith('did:');
 }
