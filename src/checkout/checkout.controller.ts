@@ -17,6 +17,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { JwtOrServiceGuard } from '../auth/guards/jwt-or-service.guard';
 import { User, RequestUser } from '../auth/decorators/user.decorator';
 import { CheckoutService } from './checkout.service';
+import { X402Service } from './x402.service';
 import { CheckoutLinkOrJwtGuard, CheckoutLinkOrJwtOrServiceGuard } from './checkout-link.guard';
 import { CHECKOUT_LINK_HEADER } from './checkout-link';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
@@ -36,6 +37,7 @@ export class CheckoutController {
     private readonly checkoutService: CheckoutService,
     private readonly promoCodesService: PromoCodesService,
     private readonly catalogService: CatalogService,
+    private readonly x402: X402Service,
   ) {}
 
   @Get('payment-methods')
@@ -68,13 +70,22 @@ export class CheckoutController {
     }
     // Strip userId from dto so it never leaks into metadata or downstream logic
     delete dto.userId;
-    return this.checkoutService.createSession(
+    const session = await this.checkoutService.createSession(
       userId,
       dto,
       idempotencyKey,
       req.ip,
       req.user?.isService ? req.user.serviceId : undefined,
     );
+    // Where an agent with a wallet can pay it itself, over x402.
+    const token = /#t=([^&]+)/.exec(session.checkoutUrl)?.[1];
+    if (token && (await this.x402.available().catch(() => false))) {
+      return {
+        ...session,
+        x402Url: this.x402.urlFor(session.sessionId, decodeURIComponent(token)),
+      };
+    }
+    return session;
   }
 
   @Get('sessions/:id')
