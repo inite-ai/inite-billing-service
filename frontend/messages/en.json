@@ -1537,8 +1537,10 @@
         "copy": "Copy",
         "copied": "Copied",
         "copyFailed": "Could not copy",
-        "policyTitle": "Turnkey policy",
-        "policyHint": "Create this policy in Turnkey. It lets the API user sign only settlements of USDC payments on Base into our wallet, with a fee cap."
+        "policyTitle": "Turnkey policy: relaying",
+        "policyHint": "Create this policy in Turnkey. It lets the API user sign only USDC transfer authorizations on Base: x402 payments into our wallet and withdrawals from INITE wallets, with a fee cap. The payer’s signature fixes the recipient and the amount.",
+        "walletsPolicyTitle": "Turnkey policy: INITE wallets",
+        "walletsPolicyHint": "Create this policy for the same API user. It lets billing open INITE wallets, each a sub-organization whose only root user is the person’s passkey. Billing cannot sign inside them. Wallets open: {count}."
       }
     }
   },

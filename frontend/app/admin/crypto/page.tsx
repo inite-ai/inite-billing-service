@@ -87,6 +87,8 @@ interface X402Settings {
   missing: X402Missing[]
   relayerBalanceWei: string | null
   policy: string | null
+  walletsPolicy: string
+  wallets: number
 }
 
 interface InvoiceRow {
@@ -636,6 +638,19 @@ function X402Card({ x402, onChanged }: { x402: X402Settings; onChanged: () => vo
           <pre className="mt-3 overflow-x-auto rounded-lg bg-slate-100 p-3 font-mono text-xs dark:bg-slate-800">{x402.policy}</pre>
         </div>
       )}
+
+      <div className="mt-6 border-t border-slate-200 pt-5 dark:border-slate-800">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-white">{t('walletsPolicyTitle')}</h3>
+          <Button size="sm" variant="outline" onClick={() => copy(x402.walletsPolicy)}>
+            {t('copy')}
+          </Button>
+        </div>
+        <p className="mt-1 max-w-prose text-sm text-slate-500 dark:text-slate-400">
+          {t('walletsPolicyHint', { count: x402.wallets })}
+        </p>
+        <pre className="mt-3 overflow-x-auto rounded-lg bg-slate-100 p-3 font-mono text-xs dark:bg-slate-800">{x402.walletsPolicy}</pre>
+      </div>
     </Card>
   )
 }

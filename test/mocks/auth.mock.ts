@@ -5,6 +5,8 @@ import { AuthGuard } from '@nestjs/passport';
 export class MockJwtAuthGuard extends AuthGuard('jwt') {
   static testUserId: string = '00000000-0000-0000-0000-000000000001';
   static testUserRoles: string[] = ['user'];
+  /** Set to an agent's DID to act as a token an agent holds for the user (`act`). */
+  static testActor: string | undefined = undefined;
 
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest();
@@ -12,6 +14,7 @@ export class MockJwtAuthGuard extends AuthGuard('jwt') {
       userId: MockJwtAuthGuard.testUserId,
       roles: MockJwtAuthGuard.testUserRoles,
       email: 'test@example.com',
+      ...(MockJwtAuthGuard.testActor ? { actor: MockJwtAuthGuard.testActor } : {}),
     };
     return true;
   }

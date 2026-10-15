@@ -1537,8 +1537,10 @@
         "copy": "Copiar",
         "copied": "Copiado",
         "copyFailed": "Não foi possível copiar",
-        "policyTitle": "Política da Turnkey",
-        "policyHint": "Crie esta política na Turnkey. Ela permite ao usuário de API assinar apenas a liquidação de pagamentos em USDC na Base para a nossa carteira, com limite de taxa."
+        "policyTitle": "Política da Turnkey: liquidação",
+        "policyHint": "Crie esta política na Turnkey. Ela permite ao usuário de API assinar apenas a liquidação de autorizações de USDC na Base: pagamentos x402 para a nossa carteira e saques de carteiras INITE, com limite de taxa. O destinatário e o valor são fixados pela assinatura do pagador.",
+        "walletsPolicyTitle": "Política da Turnkey: carteiras INITE",
+        "walletsPolicyHint": "Crie esta política para o mesmo usuário de API. Ela permite ao billing abrir carteiras INITE, cada uma numa suborganização cujo único usuário root é a passkey da pessoa. O billing não pode assinar dentro delas. Carteiras abertas: {count}."
       }
     }
   },

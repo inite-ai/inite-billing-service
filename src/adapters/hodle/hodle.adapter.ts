@@ -33,6 +33,13 @@ export const HODLE_CURRENCIES = ['BRL'];
 /** Events that are recorded, not processed as a payment — nothing here to settle. */
 export const HODLE_UNMATCHED_EVENT = 'hodle.event.unmatched';
 
+/**
+ * Deposits that top up a person's INITE wallet carry this externalId prefix.
+ * They are not sales: the USDC goes to the person's own address, so their
+ * webhooks are only recorded.
+ */
+export const HODLE_WALLET_TOPUP_PREFIX = 'wallet-';
+
 const ALLOWED_HOSTS = ['api.hodle.com.br', 'sandbox-api.hodle.com.br'];
 const FETCH_TIMEOUT_MS = 20_000;
 /** Hodle's own guidance: refuse deliveries signed more than five minutes away from now. */
@@ -237,6 +244,58 @@ export class HodleAdapter implements Connector {
   }
 
   /**
+   * A PIX that tops up a wallet: Hodle converts the reais into USDC and
+   * delivers it on Base to `address` — the person's own wallet, not our
+   * account. Billing never holds the money.
+   */
+  async depositToAddress(input: {
+    value: number;
+    address: string;
+    externalId: string;
+  }): Promise<{ qrCode: string; externalId: string; fee: number | null }> {
+    if (!input.externalId.startsWith(HODLE_WALLET_TOPUP_PREFIX)) {
+      throw new Error(`A wallet top-up's externalId starts with ${HODLE_WALLET_TOPUP_PREFIX}`);
+    }
+    if (!Number.isInteger(input.value) || input.value < 100) {
+      throw new BadRequestException('PIX through Hodle needs at least R$1.00');
+    }
+    const config = await this.getConfig();
+    let deposit: any;
+    try {
+      deposit = await this.call(config, '/api/deposit/asset', {
+        method: 'POST',
+        body: {
+          value: input.value,
+          asset: 'USDC',
+          network: 'base',
+          address: input.address,
+          externalId: input.externalId,
+        },
+      });
+    } catch (error: any) {
+      if (error.status && error.status >= 400 && error.status < 500 && error.status !== 401) {
+        throw new BadRequestException(
+          `Hodle could not open this PIX: ${String(error.message).replace(/^Hodle \d+: /, '')}`,
+        );
+      }
+      throw error;
+    }
+    if (!deposit?.qrCode) throw new Error('Hodle created no PIX code for this deposit');
+    return {
+      qrCode: deposit.qrCode,
+      externalId: deposit.externalId || input.externalId,
+      fee: typeof deposit.fee === 'number' ? deposit.fee : null,
+    };
+  }
+
+  /** Hodle's status for a deposit, by our externalId (`PENDING`, `FIAT_PAID`, `COMPLETED`, …). */
+  async depositStatus(externalId: string): Promise<string> {
+    const config = await this.getConfig();
+    const res = await this.call(config, `/api/deposit/asset/${encodeURIComponent(externalId)}`);
+    return String(res?.data?.status ?? '').toUpperCase();
+  }
+
+  /**
    * Where a deposit stands, with the reais it settled. The QR code is for a
    * fixed amount, so a settled deposit's `value` is what the customer paid.
    * A delivery that failed after the PIX settled still counts as paid: the
@@ -349,7 +408,9 @@ export class HodleAdapter implements Connector {
     }
 
     let eventType = HODLE_UNMATCHED_EVENT;
-    if (event === 'DEPOSIT_PIX_CONFIRMED' || event === 'DEPOSIT_ASSET_SUCCESS') {
+    if (String(externalId).startsWith(HODLE_WALLET_TOPUP_PREFIX)) {
+      // A wallet top-up: nothing of ours to settle.
+    } else if (event === 'DEPOSIT_PIX_CONFIRMED' || event === 'DEPOSIT_ASSET_SUCCESS') {
       eventType = 'payment.paid';
     } else if (event === 'DEPOSIT_ASSET_REFUNDED' && data.status === 'REFUNDED') {
       eventType = 'payment.refunded';
