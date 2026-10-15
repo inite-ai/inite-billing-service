@@ -29,6 +29,7 @@ import { moneyToNumber, toMoney } from '../common/money';
 import { resolveFrontendUrl } from '../common/config/frontend-url';
 import { summarizeProviderError } from '../common/helpers/provider-error';
 import { checkoutLinkMatches, newCheckoutLink } from './checkout-link';
+import { productTranslations } from '../catalog/product-i18n';
 
 @Injectable()
 export class CheckoutService {
@@ -490,6 +491,8 @@ export class CheckoutService {
         code: order.price.product.code,
         type: order.price.product.type,
         description: (order.price.product.metadata as Record<string, any>)?.description || null,
+        /** Name/description per language; the page picks its own (metadata.i18n). */
+        i18n: productTranslations(order.price.product.metadata),
       },
       price: {
         code: order.price.code,

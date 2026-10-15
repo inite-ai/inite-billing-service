@@ -63,11 +63,16 @@ export class RecommendationsController {
     } else if (order.userId !== user.userId) {
       throw new ForbiddenException('You do not have access to this session');
     }
+    // A checkout offers more of what this shop sells, priced in the currency
+    // the buyer is already paying in — not the platform's whole catalogue.
+    const serviceId = order.price?.product?.serviceId;
+    if (!serviceId) return [];
     return this.recommendationsService.getNextBestOffers(order.userId, {
       surface: 'checkout',
       sessionProductId: order.price?.productId ?? undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
-      serviceId: user.isService ? user.serviceId : undefined,
+      serviceId,
+      currency: order.currency,
     });
   }
 

@@ -73,6 +73,12 @@ export class RecommendationsService {
        * point.
        */
       serviceId?: string;
+      /**
+       * Offer only prices in this currency, and drop products that have none.
+       * A checkout in BRL showing a dollar price is an offer nobody can take
+       * from that page.
+       */
+      currency?: string;
     } = {},
   ): Promise<Offer[]> {
     const limit = Math.min(Math.max(options.limit ?? 3, 1), 10);
@@ -112,6 +118,11 @@ export class RecommendationsService {
       }),
     ]);
 
+    // Test fixtures and unlisted products are in the catalogue to be bought
+    // by link, not to be offered to strangers.
+    const offerable = catalog.filter((product) => !isHiddenFromOffers(product));
+    const wantedCurrency = options.currency?.toUpperCase();
+
     const ownedProductIds = new Set<string>();
     for (const order of paidOrders) {
       if (order.price?.product?.id) ownedProductIds.add(order.price.product.id);
@@ -125,7 +136,11 @@ export class RecommendationsService {
     const candidates: Offer[] = [];
     const push = (product: (typeof catalog)[number], reason: Offer['reason'], extraScore = 0) => {
       if (ownedProductIds.has(product.id)) return;
-      const price = product.prices[0] ?? null;
+      if (!offerable.includes(product)) return;
+      const price = wantedCurrency
+        ? (product.prices.find((p) => p.currency.toUpperCase() === wantedCurrency) ?? null)
+        : (product.prices[0] ?? null);
+      if (wantedCurrency && !price) return;
       candidates.push({
         productId: product.id,
         code: product.code,
@@ -358,4 +373,22 @@ export class RecommendationsService {
       this.logger.warn(`NBO explanation generation failed: ${error.message}`);
     }
   }
+}
+
+/**
+ * Products never put in front of a buyer as an offer: ones the catalogue
+ * marks `unlisted` or `test`, and — since nothing used to mark them — ones
+ * whose code or name says they are a test ("Payment test (100 ₽ / $5)").
+ */
+export function isHiddenFromOffers(product: {
+  code: string;
+  name: string;
+  metadata?: unknown;
+}): boolean {
+  const metadata =
+    product.metadata && typeof product.metadata === 'object'
+      ? (product.metadata as Record<string, unknown>)
+      : {};
+  if (metadata.unlisted === true || metadata.test === true) return true;
+  return /(^|[^a-z])test([^a-z]|$)/i.test(product.code) || /\btest\b/i.test(product.name);
 }
