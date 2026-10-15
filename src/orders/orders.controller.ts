@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Post,
   Param,
   Query,
   Req,
@@ -34,6 +35,16 @@ export class OrdersController {
     @Query() query: GetOrdersQueryDto,
   ): Promise<OrderResponseDto[]> {
     return this.ordersService.getUserOrders(user.userId, query.status);
+  }
+
+  @Post('me/claim-guest-purchases')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Take over the guest orders a store opened for this user’s verified email',
+  })
+  async claimGuestPurchases(@User() user: RequestUser): Promise<{ claimed: string[] }> {
+    return this.ordersService.claimGuestPurchases(user.userId, user.email, user.emailVerified);
   }
 
   @Get('payment-intents/:id')

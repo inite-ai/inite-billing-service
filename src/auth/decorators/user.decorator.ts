@@ -4,6 +4,8 @@ export interface RequestUser {
   userId: string;
   roles: string[];
   email?: string;
+  /** The identity provider confirmed `email` belongs to this user. */
+  emailVerified?: boolean;
   isService?: boolean;
   serviceId?: string;
   serviceCode?: string;
