@@ -11,8 +11,8 @@ import { OrdersService } from '../src/orders/orders.service';
  */
 describe('checkout: claiming a guest order', () => {
   const GUEST = 'mikefluff:0123456789abcdef0123456789abcdef';
-  const BUYER = '11111111-1111-1111-1111-111111111111';
-  const OTHER = '22222222-2222-2222-2222-222222222222';
+  const BUYER = 'did:key:zGfHq2tTVk9z4eXgy1111111111111111111111111111';
+  const OTHER = 'did:key:zGfHq2tTVk9z4eXgy2222222222222222222222222222';
 
   const makeOrder = (over: Record<string, any> = {}) => ({
     id: 'ord-1',

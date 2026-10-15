@@ -969,9 +969,9 @@ export function checkoutPageUrl(frontendUrl: string, orderId: string, locale?: s
 
 /**
  * A user id a selling service made up for a buyer without an account:
- * namespaced, `<service>:<id>`. INITE user ids are uuids and never contain a
- * colon.
+ * namespaced, `<service>:<id>`. INITE user ids are DIDs (`did:key:z…`) — they
+ * contain colons too, so the `did:` scheme is never a guest.
  */
 export function isGuestUserId(userId: string | null | undefined): boolean {
-  return typeof userId === 'string' && userId.includes(':');
+  return typeof userId === 'string' && userId.includes(':') && !userId.startsWith('did:');
 }
