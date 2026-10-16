@@ -12,14 +12,23 @@ import { WalletMerchantsService } from './wallet-merchants.service';
 import { PayFromWalletController } from './pay-from-wallet.controller';
 import { CheckoutModule } from '../checkout/checkout.module';
 import { ServiceAuthGuard } from '../auth/guards/service-auth.guard';
+import { SelfAgentWalletController } from './self-agent-wallet.controller';
+import { SelfAgentWalletService } from './self-agent-wallet.service';
+import { SelfAgentGuard } from './self-agent.guard';
 
 /**
  * INITE wallets: a person's own USDC on Base, held under their passkey in
- * Turnkey, and the AI agents they let pay from it (`/mcp/wallet`).
+ * Turnkey, and the AI agents they let pay from it (`/mcp/wallet`); and the
+ * wallets of agents with their own identity, owned by their key (`/v1/agent-wallet`).
  */
 @Module({
   imports: [AdaptersModule, CheckoutModule],
-  controllers: [WalletController, WalletMcpController, PayFromWalletController],
+  controllers: [
+    WalletController,
+    WalletMcpController,
+    PayFromWalletController,
+    SelfAgentWalletController,
+  ],
   providers: [
     WalletService,
     WalletAgentsService,
@@ -29,6 +38,8 @@ import { ServiceAuthGuard } from '../auth/guards/service-auth.guard';
     PrismaService,
     JwtAuthGuard,
     AgentTokenGuard,
+    SelfAgentWalletService,
+    SelfAgentGuard,
   ],
 })
 export class WalletModule {}

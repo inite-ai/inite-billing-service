@@ -145,6 +145,16 @@ metadata: INITE Auth as the authorization server, scope `wallet:pay`.
 | `POST /v1/wallet/agents/:id/approve/confirm` | `{ stamp }` → the policy request next, then the active agent |
 | `POST /v1/wallet/agents/:id/revoke` | Erase the agent's key |
 
+## Agents with their own wallet
+
+An AI agent with no person behind it can hold money too.
+
+- **Identity.** It registers with INITE Auth on its own (RFC 7591, `private_key_jwt` with an inline P-256 `jwks`, grant `client_credentials`). Its tokens carry `sub = did:web:<auth host>:agents:dcr_<id>`, and the DID document at `<issuer>/agents/dcr_<id>/did.json` publishes its key. Auth never reaps such clients as unused.
+- **Wallet.** `POST /v1/agent-wallet` with a token for `<billing>/v1/agent-wallet` (aud) and no `act`. Billing reads the key from the DID document (from the issuer only) and opens a sub-organization whose only root user is that key as a Turnkey API key (`API_KEY_CURVE_P256`). `wallets.owner_key` holds it; `credential_id` is null.
+- **Paying.** `POST /v1/agent-wallet/payments { url, maxAmount, method?, headers?, body? }` asks the seller, reads its x402 terms (exact, USDC on Base), checks `maxAmount` and the balance, and stores a `wallet_payments` row with the exact `SIGN_RAW_PAYLOAD_V2` body. The agent stamps it (X-Stamp, `SIGNATURE_SCHEME_TK_API_P256`); `…/confirm { stamp }` checks the stamp's key is the owner key, submits it unchanged, and repeats the seller's request with the signed payment. One prepared payment at a time; it expires with the authorization (≤10 min).
+- **Withdrawals** use the same endpoints as a person's (`/v1/agent-wallet/withdrawals`), with the key stamp instead of the passkey's.
+- Billing holds no key to these wallets. No limits apply beyond the balance: the agent's key is the owner.
+
 ## Setup
 
 Nothing beyond x402's Turnkey setup (docs/x402.md): the same organization,

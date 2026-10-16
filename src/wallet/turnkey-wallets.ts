@@ -58,17 +58,25 @@ export class TurnkeyWallets {
   async open(
     organizationId: string,
     key: RelayerKey,
-    input: { name: string; passkey: PasskeyAttestation },
+    input: { name: string } & ({ passkey: PasskeyAttestation } | { ownerKey: string }),
   ): Promise<OpenedWallet> {
-    const request: TurnkeyApiTypes['v1CreateSubOrganizationRequest'] = {
-      type: 'ACTIVITY_TYPE_CREATE_SUB_ORGANIZATION_V8',
-      organizationId,
-      timestampMs: String(Date.now()),
-      parameters: {
-        subOrganizationName: input.name,
-        rootQuorumThreshold: 1,
-        rootUsers: [
-          {
+    // The owner: a person's passkey, or an agent's own P-256 key (compressed
+    // hex) for a wallet the agent alone controls.
+    const owner =
+      'ownerKey' in input
+        ? {
+            userName: 'Agent',
+            apiKeys: [
+              {
+                apiKeyName: 'Agent key',
+                publicKey: input.ownerKey,
+                curveType: 'API_KEY_CURVE_P256' as const,
+              },
+            ],
+            oauthProviders: [],
+            authenticators: [],
+          }
+        : {
             userName: 'Owner',
             apiKeys: [],
             oauthProviders: [],
@@ -86,8 +94,15 @@ export class TurnkeyWallets {
                 },
               },
             ],
-          },
-        ],
+          };
+    const request: TurnkeyApiTypes['v1CreateSubOrganizationRequest'] = {
+      type: 'ACTIVITY_TYPE_CREATE_SUB_ORGANIZATION_V8',
+      organizationId,
+      timestampMs: String(Date.now()),
+      parameters: {
+        subOrganizationName: input.name,
+        rootQuorumThreshold: 1,
+        rootUsers: [owner],
         wallet: {
           walletName: 'INITE wallet',
           accounts: [
@@ -99,7 +114,7 @@ export class TurnkeyWallets {
             },
           ],
         },
-        // No way in but the passkey: no email or SMS sign-in Turnkey would
+        // No way in but the owner's passkey or key: no email or SMS sign-in Turnkey would
         // run on our organization's behalf.
         disableEmailRecovery: true,
         disableEmailAuth: true,
@@ -142,6 +157,11 @@ export class TurnkeyWallets {
 
   submitStamped(path: string, body: string, stamp: string): Promise<Record<string, any>> {
     return this.post(path, body, { 'X-Stamp-WebAuthn': stamp });
+  }
+
+  /** Submit a request an agent stamped with its own key (Turnkey's X-Stamp value). */
+  submitKeyStamped(path: string, body: string, stamp: string): Promise<Record<string, any>> {
+    return this.post(path, body, { 'X-Stamp': stamp });
   }
 
   /** POST a stamped body to Turnkey; the completed activity's result. */

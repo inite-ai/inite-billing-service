@@ -1224,12 +1224,17 @@ model Wallet {
   /// Checksummed 0x address.
   address           String             @unique @db.VarChar(42)
   /// The wallet passkey's credential id, base64url — so the browser offers it, not the sign-in passkey.
-  credentialId      String             @map("credential_id") @db.VarChar(1024)
+  /// Null for an agent's own wallet, whose owner is a key (ownerKey).
+  credentialId      String?            @map("credential_id") @db.VarChar(1024)
+  /// An agent's own wallet: the agent's P-256 public key (compressed hex), the
+  /// sub-organization's only root user. The agent stamps every request itself.
+  ownerKey          String?            @map("owner_key") @db.VarChar(130)
   createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   topups            WalletTopup[]
   withdrawals       WalletWithdrawal[]
   agents            WalletAgent[]
   merchants         WalletMerchant[]
+  payments          WalletPayment[]
 
   @@map("wallets")
   @@schema("billing")
@@ -1281,6 +1286,37 @@ model WalletWithdrawal {
 
   @@index([walletId, createdAt])
   @@map("wallet_withdrawals")
+  @@schema("billing")
+}
+
+/// A payment an agent makes from its own wallet to an x402 seller: prepared by
+/// billing, stamped by the agent's key, then sent with the seller's request.
+model WalletPayment {
+  id          String   @id @default(uuid()) @db.Uuid
+  walletId    String   @map("wallet_id") @db.Uuid
+  wallet      Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  url         String   @db.VarChar(2000)
+  /// The seller's request as the agent asked for it: method, headers, body.
+  call        Json
+  /// The seller's accepted terms (x402 `accepts` entry) and version.
+  terms       Json
+  payTo       String   @map("pay_to") @db.VarChar(42)
+  valueRaw    String   @map("value_raw") @db.VarChar(78)
+  nonce       String   @unique @db.VarChar(66)
+  validAfter  DateTime @map("valid_after") @db.Timestamptz(6)
+  validBefore DateTime @map("valid_before") @db.Timestamptz(6)
+  /// The exact Turnkey request body the agent's key stamps.
+  request     String   @db.Text
+  /// prepared | signing | paid | refused | failed | expired
+  status      String   @default("prepared") @db.VarChar(20)
+  httpStatus  Int?     @map("http_status")
+  txHash      String?  @map("tx_hash") @db.VarChar(66)
+  error       String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([walletId, createdAt])
+  @@map("wallet_payments")
   @@schema("billing")
 }
 

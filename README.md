@@ -95,6 +95,13 @@ Guide: [docs/x402.md](docs/x402.md).
 5. The agent's `pay` tool fetches a URL and, on `402`, pays within its
    per-payment, daily and monthly limits.
 
+**Agents with a wallet of their own.** An agent registers with INITE Auth by
+itself (its own P-256 key, `client_credentials`) and gets a did:web identity.
+It opens its own wallet at `POST /v1/agent-wallet`: the Turnkey owner is the
+agent's key, so only the agent can spend. Anyone funds the address with USDC on
+Base. To pay, billing prepares the Turnkey request for an x402 URL and the agent
+stamps it with its key (`/v1/agent-wallet/payments`, then `/confirm`).
+
 **Let sites charge the wallet in one step.** A person allows a site once, with
 limits, on one page in INITE ID. After that the site calls
 `POST /v1/checkout/sessions/:id/pay-from-wallet` and the order is paid from the
