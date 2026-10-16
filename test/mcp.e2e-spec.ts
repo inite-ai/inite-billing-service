@@ -123,6 +123,7 @@ describe('MCP E2E', () => {
     expect(check.inputSchema.properties.key).toBeDefined();
     expect(check.inputSchema.required).toContain('key');
     expect(check.annotations.readOnlyHint).toBe(true);
+    expect(check.annotations.title).toBe(check.title);
   });
 
   it('marks the checkout tool as a write that destroys nothing', async () => {
