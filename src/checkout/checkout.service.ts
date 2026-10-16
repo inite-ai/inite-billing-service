@@ -1,3 +1,4 @@
+import { checkItem, itemTemplate } from '../catalog/item-entitlements';
 import {
   Injectable,
   NotFoundException,
@@ -257,6 +258,19 @@ export class CheckoutService {
       );
     }
 
+    // A product sold per item (a chapter, an episode): the selling service
+    // names the item, never the buyer, and it must fit the product's patterns.
+    let item: Record<string, string> | undefined;
+    const template = itemTemplate(product);
+    if (template) {
+      if (!callerServiceId) {
+        throw new BadRequestException(
+          `Product ${product.code} is sold per item; its site opens the checkout`,
+        );
+      }
+      item = checkItem(template, (dto.metadata as Record<string, unknown> | undefined)?.item);
+    }
+
     // Handle referral code if provided
     if (dto.referralCode) {
       const affiliate = await this.affiliatesService.getAffiliateByCode(dto.referralCode);
@@ -298,10 +312,12 @@ export class CheckoutService {
           productName: product.name,
           productType: product.type,
           serviceId: product.serviceId ?? null,
+          ...(item ? { item } : {}),
           capturedAt: new Date().toISOString(),
         },
         metadata: {
           ...dto.metadata,
+          ...(item ? { item } : {}),
           referralCode: dto.referralCode,
           successUrl: dto.successUrl,
           errorUrl: dto.errorUrl,
