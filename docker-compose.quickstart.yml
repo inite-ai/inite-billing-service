@@ -1,0 +1,80 @@
+# Quick start: the released multi-arch image (linux/amd64 + linux/arm64)
+# with Postgres (pgvector) and Redis. No clone or build needed — see
+# "Quick start" in README.md. Secrets come from a .env next to this file:
+#
+#   POSTGRES_PASSWORD=…  JWT_SECRET=…  KEY_SEAL_SECRET=…  (32 bytes, base64)
+#
+#   docker compose -f docker-compose.quickstart.yml up -d --wait
+#
+# The container applies its own migrations on boot (scripts/migrate.sh).
+# Development mode keeps Swagger on /api. For production settings see
+# docs/operations.md.
+#
+# BILLING_VERSION pins the image tag. `X.Y` follows the newest patch of that
+# minor release; `vX.Y.Z` pins one build. Do not use `:latest` — it tracks
+# the rolling main deploy, not a release.
+
+services:
+  billing:
+    image: mikefluff/inite-billing-service:${BILLING_VERSION:-1.4}
+    restart: unless-stopped
+    ports:
+      - "${BILLING_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/inite_billing?schema=billing
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      KEY_SEAL_SECRET: ${KEY_SEAL_SECRET:?set KEY_SEAL_SECRET in .env}
+      # The INITE Auth deployment whose tokens this service accepts. The
+      # default is the auth quick start on the same machine.
+      JWT_ISSUER: ${JWT_ISSUER:-http://localhost:3002}
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://host.docker.internal:3002}
+      FRONTEND_URL: http://localhost:3001
+      CORS_ORIGINS: http://localhost:3001
+      # Optional: the assistant and AI outreach stay off without a key.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health/ready"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 20s
+
+  postgres:
+    image: pgvector/pgvector:pg15
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: inite_billing
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:
+  redis_data:

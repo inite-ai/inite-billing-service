@@ -7,21 +7,19 @@
 <h1 align="center">INITE Billing Service</h1>
 
 <p align="center">
-  <b>Payment-rail-agnostic, AI-first billing gateway — subscriptions, metered credits, entitlements, affiliates.</b><br>
-  One deployable service that is the single source of truth for money across the INITE ecosystem:<br>
-  Stripe, crypto (ETH/SOL/TON/TRON), Apple/Google IAP and regional rails behind one state machine,<br>
-  with an embedded Claude assistant, AI dunning/win-back outreach, and usage metering for AI products.
+  <b>Self-hosted billing service: subscriptions, metered credits and entitlements over Stripe, crypto, app-store and regional payment rails.</b>
 </p>
 
 <p align="center">
   <a href="https://github.com/inite-ai/inite-billing-service/actions/workflows/ci.yml"><img src="https://github.com/inite-ai/inite-billing-service/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/inite-ai/inite-billing-service/releases/latest"><img src="https://img.shields.io/github/package-json/v/inite-ai/inite-billing-service?label=release&color=8b5cf6" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue.svg" alt="License: AGPL-3.0"></a>
-  <a href="https://github.com/inite-ai/inite-billing-service/releases"><img src="https://img.shields.io/github/v/release/inite-ai/inite-billing-service?sort=semver&color=8b5cf6" alt="Release"></a>
+  <a href="https://hub.docker.com/r/mikefluff/inite-billing-service"><img src="https://img.shields.io/docker/pulls/mikefluff/inite-billing-service" alt="Docker pulls"></a>
+  <a href="https://hub.docker.com/r/mikefluff/inite-billing-service/tags"><img src="https://img.shields.io/badge/image-arm64%20%7C%20amd64-2496ed.svg" alt="Image: arm64 | amd64"></a>
   <a href="https://github.com/inite-ai/inite-billing-service/stargazers"><img src="https://img.shields.io/github/stars/inite-ai/inite-billing-service?style=flat" alt="Stars"></a>
   <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs welcome"></a>
   <img src="https://img.shields.io/badge/TypeScript-3178c6.svg" alt="TypeScript">
   <img src="https://img.shields.io/badge/NestJS-e0234e.svg" alt="NestJS">
-  <img src="https://img.shields.io/badge/AI--first-Claude-8b5cf6.svg" alt="AI-first">
 </p>
 
 <p align="center">
@@ -35,6 +33,68 @@
 </p>
 
 ---
+
+## Quick start
+
+Needs Docker with Compose v2 and `openssl`. Runs the released image
+(`linux/amd64` and `linux/arm64`) with Postgres (pgvector) and Redis; no clone,
+no build.
+
+```bash
+mkdir inite-billing && cd inite-billing
+curl -fsSLO https://raw.githubusercontent.com/inite-ai/inite-billing-service/main/docker-compose.quickstart.yml
+cat > .env <<EOF
+BILLING_VERSION=1.4
+POSTGRES_PASSWORD=$(openssl rand -hex 24)
+JWT_SECRET=$(openssl rand -hex 48)
+KEY_SEAL_SECRET=$(openssl rand -base64 32)
+EOF
+docker compose -f docker-compose.quickstart.yml up -d --wait
+curl http://localhost:3000/health/ready
+open http://localhost:3000/api   # Swagger (xdg-open on Linux)
+```
+
+The container applies its migrations on boot. `BILLING_VERSION` takes `X.Y`
+(newest patch of that release) or `vX.Y.Z`; `:latest` follows the main-branch
+deploy, not a release. In this development setup billing checks HS256
+tokens against `JWT_SECRET` and the issuer in `JWT_ISSUER` (default
+`http://localhost:3002`, the
+[auth quick start](https://github.com/inite-ai/inite-auth-service#quick-start));
+give both `.env` files the same `JWT_SECRET` to sign in through it. Production
+verifies RS256 against the JWKS at `AUTH_SERVICE_URL`. Add `ANTHROPIC_API_KEY`
+to `.env` for the assistant.
+Working on the code instead: [Run from source](#run-from-source).
+
+## Why not Lago, Stripe Billing or Kill Bill?
+
+- **Stripe Billing** needs nothing to run, and it does tax (Stripe Tax),
+  invoice documents and revenue recognition. INITE Billing does none of those:
+  its invoice is a record per paid order with the provider's receipt link.
+  Stripe Billing only charges through Stripe; here Stripe is one adapter
+  beside crypto (ETH/SOL/TON/TRON), Apple and Google in-app purchases, ONE and
+  Lava, all driving the same order state machine.
+- **Lago** is also open source and AGPL, and is built for high-volume usage
+  events and invoicing on top of them. It hands payment collection to Stripe,
+  Adyen or GoCardless. INITE Billing collects payment through its own rail
+  adapters, and grants entitlements and credits from the same state change.
+  Its metering is a credit ledger (per-model-tier rates, windowed quotas, one
+  `consume` call), not an event-aggregation pipeline.
+- **Kill Bill** has run in production for over a decade, with a plugin system
+  for payment gateways and a full invoicing engine. INITE Billing is a newer
+  NestJS/TypeScript service with a smaller surface, and less history behind it.
+- **AI agents as payers.** Every checkout session also answers x402, so an
+  agent with a USDC wallet on Base pays by itself; people can let their agents
+  spend from an INITE wallet within limits they approve with a passkey. See
+  [AI agents and money](#ai-agents-and-money).
+- **Retention work in the same service.** Affiliates with NET-15 payouts,
+  promo codes, LLM-written dunning and win-back outreach, and an admin
+  assistant with confirm-before-execute actions.
+
+**Part of the INITE Triad:** [INITE Auth](https://github.com/inite-ai/inite-auth-service)
+issues the tokens that Billing and
+[INITE Brain](https://github.com/inite-ai/inite-brain-service) verify; the
+contract between them is
+[triad-compatibility.md](https://github.com/inite-ai/inite-ecosystem/blob/main/docs/triad-compatibility.md).
 
 ## Why INITE Billing
 
@@ -115,7 +175,7 @@ wallet; the first time, it gets an `approveUrl` to send the person to.
 Guides: [billing.inite.ai/docs/wallet](https://billing.inite.ai/docs/wallet) ·
 [docs/wallet.md](docs/wallet.md).
 
-## Quick start
+## Run from source
 
 ```bash
 git clone git@github.com:inite-ai/inite-billing-service.git
