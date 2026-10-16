@@ -1,4 +1,5 @@
-import { IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { IsUserId } from '../../common/validators/is-user-id';
+import { IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 
 /**
  * Body for POST /v1/subscriptions/trial. `userId` is honoured only for service
@@ -11,6 +12,6 @@ export class StartTrialDto {
   priceCode!: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsUserId()
   userId?: string;
 }

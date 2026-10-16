@@ -1,4 +1,5 @@
-import { IsIn, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { IsUserId } from '../../common/validators/is-user-id';
+import { IsIn, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 
 /** Body for POST /v1/conversations. `userId` is honoured for service callers only. */
 export class GetOrCreateConversationDto {
@@ -8,7 +9,7 @@ export class GetOrCreateConversationDto {
   mode?: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsUserId()
   userId?: string;
 }
 
