@@ -1,4 +1,4 @@
-import { Controller, All, Req, Res, UseGuards, Logger } from '@nestjs/common';
+import { Controller, All, Req, Res, UseFilters, UseGuards, Logger } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { ApiTags, ApiOperation, ApiExcludeEndpoint } from '@nestjs/swagger';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -7,6 +7,7 @@ import { JwtOrServiceGuard } from '../auth/guards/jwt-or-service.guard';
 import { User, RequestUser } from '../auth/decorators/user.decorator';
 import { McpCaller, McpToolsService } from './mcp-tools.service';
 import { MCP_SERVER_NAME, MCP_SERVER_VERSION } from './mcp.constants';
+import { McpChallengeFilter, McpResourceGuard } from './mcp-resource';
 
 /**
  * This billing service, spoken as MCP.
@@ -23,7 +24,8 @@ import { MCP_SERVER_NAME, MCP_SERVER_VERSION } from './mcp.constants';
  */
 @ApiTags('MCP')
 @Controller('mcp')
-@UseGuards(JwtOrServiceGuard)
+@UseGuards(JwtOrServiceGuard, McpResourceGuard)
+@UseFilters(McpChallengeFilter)
 export class McpController {
   private readonly logger = new Logger(McpController.name);
 
@@ -96,15 +98,15 @@ export class McpController {
     const server = new McpServer(
       { name: MCP_SERVER_NAME, version: MCP_SERVER_VERSION },
       {
+        // What the server is, not what the model should do: Claude's
+        // directory reviews server text for instructions to the model.
         instructions:
-          'Billing for the INITE platform. Before doing paid work call check_entitlement or ' +
-          'get_credit_balance; after doing it call consume_credits with an idempotency_key. ' +
-          'When a customer has neither entitlement nor credits, create_checkout_session returns ' +
-          'a URL to send them to rather than an error.',
+          'Billing for the INITE platform: entitlements, credit balances, subscriptions, the ' +
+          'product catalogue, and links to hosted checkout pages.',
       },
     );
 
-    for (const tool of this.tools.list()) {
+    for (const tool of this.tools.listFor(caller)) {
       // Cast at the boundary: `registerTool` infers its callback's argument
       // type from a *literal* schema, and these come out of an array at
       // runtime, which sends the inference infinite. The shapes themselves are

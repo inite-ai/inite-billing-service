@@ -6,6 +6,7 @@ import { McpProxyService } from './mcp-proxy.service';
 import { McpServersController } from './mcp-servers.controller';
 import { McpServersService } from './mcp-servers.service';
 import { McpAdminController } from './mcp-admin.controller';
+import { McpMetadataController } from './mcp-resource';
 import { PrismaService } from '../common/services/prisma.service';
 import { AuthModule } from '../auth/auth.module';
 import { CreditsModule } from '../credits/credits.module';
@@ -30,7 +31,13 @@ import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
     CheckoutModule,
     SubscriptionsModule,
   ],
-  controllers: [McpController, McpProxyController, McpServersController, McpAdminController],
+  controllers: [
+    McpController,
+    McpMetadataController,
+    McpProxyController,
+    McpServersController,
+    McpAdminController,
+  ],
   providers: [McpToolsService, McpProxyService, McpServersService, PrismaService],
   exports: [McpToolsService, McpProxyService, McpServersService],
 })
