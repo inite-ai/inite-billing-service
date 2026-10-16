@@ -1684,5 +1684,21 @@
     "errorTitle": "Something broke on our side",
     "errorHint": "Try again in a moment. The error code below helps us find it.",
     "retry": "Try again"
+  },
+  "fund": {
+    "title": "Top up this wallet",
+    "agentWallet": "An AI agent's INITE wallet",
+    "personWallet": "INITE wallet",
+    "lead": "The money goes straight to this wallet's address. INITE can't take it out.",
+    "balance": "Balance",
+    "usdcTitle": "Send USDC on Base",
+    "address": "Address",
+    "usdcWarning": "Only USDC on the Base network. Other tokens or networks will be lost.",
+    "pixTitle": "Pay by PIX (Brazil)",
+    "pixAmount": "Amount, R$",
+    "pixButton": "Get a PIX code",
+    "pixNote": "The reais are converted and arrive as USDC, usually within minutes.",
+    "pixFailed": "The PIX code could not be created",
+    "notFound": "This is not an INITE wallet"
   }
 }

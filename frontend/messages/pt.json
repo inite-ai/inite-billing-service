@@ -1684,5 +1684,21 @@
     "errorTitle": "Algo quebrou do nosso lado",
     "errorHint": "Tente novamente em instantes. O código de erro abaixo nos ajuda a encontrar o problema.",
     "retry": "Tentar novamente"
+  },
+  "fund": {
+    "title": "Abastecer esta carteira",
+    "agentWallet": "Carteira INITE de um agente de IA",
+    "personWallet": "Carteira INITE",
+    "lead": "O dinheiro vai direto para o endereço desta carteira. A INITE não pode retirá-lo.",
+    "balance": "Saldo",
+    "usdcTitle": "Enviar USDC na rede Base",
+    "address": "Endereço",
+    "usdcWarning": "Apenas USDC na rede Base. Outros tokens ou redes serão perdidos.",
+    "pixTitle": "Pagar com PIX",
+    "pixAmount": "Valor, R$",
+    "pixButton": "Gerar código PIX",
+    "pixNote": "Os reais são convertidos e chegam como USDC, normalmente em poucos minutos.",
+    "pixFailed": "Não foi possível gerar o código PIX",
+    "notFound": "Esta não é uma carteira INITE"
   }
 }

@@ -10,6 +10,14 @@ import { AgentTokenGuard, walletResource } from './agent-token.guard';
 import { limitsFromGrant, WALLET_SCOPE } from './agent-limits';
 import { AgentContext } from './wallet-agents.service';
 import { AgentPaymentsService, PaymentRefused } from './agent-payments.service';
+import { SelfAgentWalletService } from './self-agent-wallet.service';
+import {
+  WALLET_WIDGET_HTML,
+  WALLET_WIDGET_URI,
+  WIDGET_MIME,
+  addressQr,
+  walletWidgetMeta,
+} from './wallet-widget';
 
 const INSTRUCTIONS =
   'The INITE wallet of the person you act for: their own USDC on Base. ' +
@@ -17,6 +25,13 @@ const INSTRUCTIONS =
   'within maxAmount and the limits the person set, and you get the site’s answer. ' +
   '`wallet_balance` shows the balance and what is left of the limits. ' +
   'If the agent is not approved yet, tell the person to approve it in their INITE account.';
+
+const SELF_INSTRUCTIONS =
+  'Your own INITE wallet: USDC on Base that belongs to you, the agent. ' +
+  '`wallet` opens it if needed and shows the address, balance and a top-up link to give a person. ' +
+  '`pay` fetches a URL and, if it answers 402 (x402), pays at most maxAmount from the wallet. ' +
+  'If INITE keeps your key, that is the whole payment; if you hold your own key, `pay` returns a ' +
+  'Turnkey request to stamp with it, and `pay_confirm` sends the stamp.';
 
 /**
  * The INITE wallet, spoken as MCP to AI agents (`/mcp/wallet`).
@@ -31,6 +46,7 @@ export class WalletMcpController {
 
   constructor(
     private readonly payments: AgentPaymentsService,
+    private readonly agentWallets: SelfAgentWalletService,
     private readonly config: ConfigService,
   ) {}
 
@@ -68,13 +84,16 @@ export class WalletMcpController {
         });
       return;
     }
-    const context: AgentContext = {
-      ownerDid: user.userId,
-      agentDid: user.actor!,
-      clientId: user.actorClientId ?? '',
-      requested: limitsFromGrant(user.authorizationDetails),
-    };
-    const server = this.server(context);
+    // AgentTokenGuard let in either an agent acting for a person (`act`) or
+    // an agent on its own (its did:web as `sub`).
+    const server = user.actor
+      ? this.server({
+          ownerDid: user.userId,
+          agentDid: user.actor,
+          clientId: user.actorClientId ?? '',
+          requested: limitsFromGrant(user.authorizationDetails),
+        })
+      : this.selfServer(user.userId);
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
     res.on('close', () => {
       void transport.close();
@@ -93,18 +112,134 @@ export class WalletMcpController {
     }
   }
 
+  /** The wallet MCP for an agent on its own: its own wallet, opened on first use. */
+  private selfServer(did: string): McpServer {
+    const server = new McpServer(
+      { name: 'inite-wallet', version: '1.1.0' },
+      { instructions: SELF_INSTRUCTIONS },
+    );
+    const register = annotated(server);
+    registerWidget(server);
+    const fail = (error: any) => ({
+      ...text({ message: error?.response?.message ?? error?.message ?? 'Failed' }),
+      isError: true,
+    });
+    const run = async (fn: () => Promise<unknown>) => {
+      try {
+        return text(await fn());
+      } catch (error) {
+        return fail(error);
+      }
+    };
+    const card = async () => {
+      let o: any = await this.agentWallets.overview(did);
+      if (!o.wallet) o = await this.agentWallets.open(did);
+      return {
+        address: o.wallet.address,
+        balance: o.wallet.balance,
+        custody: o.wallet.custody,
+        network: o.wallet.network,
+        asset: 'USDC',
+        fundUrl: o.fundUrl,
+        fund: o.fund,
+        qrSvg: await addressQr(o.wallet.address),
+        payments: o.payments,
+      };
+    };
+
+    register(
+      'wallet',
+      {
+        title: 'My wallet',
+        description:
+          'Your own INITE wallet (opened on first call): address on Base, USDC balance, who keeps the key, a top-up link for a person (QR, PIX), recent payments.',
+        inputSchema: {},
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+        _meta: walletWidgetMeta,
+      },
+      () => cardResult(card),
+    );
+    register(
+      'pay',
+      {
+        title: 'Fetch a URL, paying with x402 if asked',
+        description:
+          'Request a URL. If the site answers 402 with x402 terms (USDC on Base), pay at most maxAmount from your wallet and return the site’s answer. With your own key, returns the request to stamp; then call pay_confirm.',
+        inputSchema: {
+          url: z
+            .string()
+            .url()
+            .describe('https URL of the paid resource, e.g. a checkout’s x402Url'),
+          method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']).optional(),
+          headers: z.record(z.string()).optional(),
+          body: z.string().max(100_000).optional(),
+          maxAmount: z.string().describe('The most you agree to pay, in USDC, e.g. "15"'),
+        },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: false,
+          openWorldHint: true,
+        },
+      },
+      (args) => run(() => this.agentWallets.pay(did, args as any)),
+    );
+    register(
+      'pay_confirm',
+      {
+        title: 'Send a payment you stamped',
+        description:
+          'For a wallet you own by your key: send the X-Stamp you made over the request `pay` returned.',
+        inputSchema: {
+          paymentId: z.string().uuid(),
+          stamp: z
+            .string()
+            .max(4096)
+            .describe('Turnkey X-Stamp value (ApiKeyStamper) over the exact request'),
+        },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: false,
+          openWorldHint: true,
+        },
+      },
+      (args) => run(() => this.agentWallets.confirm(did, args.paymentId, args.stamp)),
+    );
+    register(
+      'withdraw',
+      {
+        title: 'Send USDC out',
+        description:
+          'Send USDC from your wallet to a Base address. With an INITE-kept key it is sent at once; with your own key you get the request to stamp.',
+        inputSchema: {
+          to: z.string().describe('Base address, 0x…'),
+          amount: z.string().describe('USDC, e.g. "5"'),
+        },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: true,
+          idempotentHint: false,
+          openWorldHint: true,
+        },
+      },
+      (args) => run(() => this.agentWallets.withdraw(did, args as any)),
+    );
+    return server;
+  }
+
   private server(context: AgentContext): McpServer {
     const server = new McpServer(
       { name: 'inite-wallet', version: '1.0.0' },
       { instructions: INSTRUCTIONS },
     );
-    // Cast at the boundary, as the billing MCP does: registerTool's inference
-    // over literal zod schemas recurses too deep. The schemas still validate.
-    const register = server.registerTool.bind(server) as (
-      name: string,
-      config: Record<string, unknown>,
-      cb: (args: Record<string, any>) => Promise<unknown>,
-    ) => unknown;
+    const register = annotated(server);
+    const runCard = (fn: () => Promise<Record<string, unknown>>) => cardResult(fn);
     const run = async (fn: () => Promise<unknown>) => {
       try {
         return text(await fn());
@@ -117,6 +252,21 @@ export class WalletMcpController {
       }
     };
 
+    registerWidget(server);
+    const card = async () => {
+      const b: any = await this.payments.balance(context);
+      const history = await this.payments.history(context).catch(() => []);
+      return {
+        ...b,
+        qrSvg: await addressQr(b.address),
+        // The person tops up in their INITE ID account, or on the public page.
+        fundUrl: b.address ? this.agentWallets.fundUrl(b.address) : null,
+        limits: b.limits
+          ? `Limits: ${b.limits.perPayment} a payment · ${b.limits.daily} a day · ${b.limits.monthly} a month`
+          : null,
+        payments: history.map((p: any) => ({ ...p, currency: 'USDC' })),
+      };
+    };
     register(
       'wallet_balance',
       {
@@ -125,8 +275,9 @@ export class WalletMcpController {
           'USDC balance of the person’s INITE wallet, this agent’s limits, and how much of today’s and this month’s limit is left.',
         inputSchema: {},
         annotations: { readOnlyHint: true },
+        _meta: walletWidgetMeta,
       },
-      () => run(() => this.payments.balance(context)),
+      () => runCard(card),
     );
     register(
       'wallet_address',
@@ -136,12 +287,9 @@ export class WalletMcpController {
           'The wallet’s address on Base, for the person to top it up with USDC. Only USDC on Base can be sent there.',
         inputSchema: {},
         annotations: { readOnlyHint: true },
+        _meta: walletWidgetMeta,
       },
-      () =>
-        run(async () => {
-          const b = await this.payments.balance(context);
-          return { address: b.address, network: b.network, asset: b.asset };
-        }),
+      () => runCard(card),
     );
     register(
       'pay',
@@ -177,6 +325,80 @@ export class WalletMcpController {
     );
     return server;
   }
+}
+
+/**
+ * registerTool with all four hints filled (app directories flag tools without
+ * them; read-only tools touch nothing outside the wallet), cast at the
+ * boundary: registerTool's inference over literal zod schemas recurses too deep.
+ */
+function annotated(server: McpServer) {
+  const bound = server.registerTool.bind(server) as (
+    name: string,
+    config: Record<string, unknown>,
+    cb: (args: Record<string, any>) => Promise<unknown>,
+  ) => unknown;
+  return (
+    name: string,
+    config: Record<string, unknown>,
+    cb: (args: Record<string, any>) => Promise<unknown>,
+  ) => {
+    const a = (config.annotations ?? {}) as Record<string, boolean | undefined>;
+    const readOnly = a.readOnlyHint ?? false;
+    return bound(
+      name,
+      {
+        ...config,
+        annotations: {
+          ...a,
+          title: config.title,
+          readOnlyHint: readOnly,
+          destructiveHint: a.destructiveHint ?? false,
+          idempotentHint: a.idempotentHint ?? readOnly,
+          openWorldHint: a.openWorldHint ?? !readOnly,
+        },
+      },
+      cb,
+    );
+  };
+}
+
+async function cardResult(fn: () => Promise<Record<string, unknown>>) {
+  try {
+    const data = await fn();
+    const { qrSvg: _qr, ...rest } = data;
+    // Text for clients without UI (no SVG in it); the card reads structuredContent.
+    return { ...text(rest), structuredContent: data };
+  } catch (error: any) {
+    return {
+      ...text({ message: error?.response?.message ?? error?.message ?? 'Failed' }),
+      isError: true,
+    };
+  }
+}
+
+/** The wallet card (MCP Apps / ChatGPT Apps SDK), served as a ui:// resource. */
+function registerWidget(server: McpServer) {
+  (server.registerResource.bind(server) as any)(
+    'wallet-card',
+    WALLET_WIDGET_URI,
+    { title: 'INITE wallet', mimeType: WIDGET_MIME },
+    async () => ({
+      contents: [
+        {
+          uri: WALLET_WIDGET_URI,
+          mimeType: WIDGET_MIME,
+          text: WALLET_WIDGET_HTML,
+          _meta: {
+            ui: { prefersBorder: true },
+            'openai/widgetPrefersBorder': true,
+            'openai/widgetDescription':
+              'The INITE wallet: balance, address to top up, recent payments.',
+          },
+        },
+      ],
+    }),
+  );
 }
 
 function text(value: unknown) {
