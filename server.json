@@ -1,0 +1,42 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.inite-ai/inite-billing-service",
+  "title": "INITE Billing & Wallet",
+  "description": "Billing for AI agents: entitlements, credits, checkout links, an agent wallet paying over x402.",
+  "version": "1.3.0",
+  "websiteUrl": "https://billing.inite.ai",
+  "repository": {
+    "url": "https://github.com/inite-ai/inite-billing-service",
+    "source": "github"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://billing.inite.ai/mcp/wallet"
+    },
+    {
+      "type": "streamable-http",
+      "url": "https://billing.inite.ai/mcp",
+      "headers": [
+        {
+          "name": "X-Api-Key",
+          "description": "Service key for a product module acting for its customers. Leave empty to sign in with your INITE account (OAuth).",
+          "isRequired": false,
+          "isSecret": true
+        }
+      ]
+    }
+  ],
+  "_meta": {
+    "io.modelcontextprotocol.registry/publisher-provided": {
+      "auth": {
+        "https://billing.inite.ai/mcp/wallet": "OAuth 2.0 (RFC 9728) via https://auth-api.inite.ai, scope wallet:pay — an agent acting for a person within passkey-approved limits, or on its own did:web identity",
+        "https://billing.inite.ai/mcp": "OAuth 2.0 (RFC 9728) via https://auth-api.inite.ai, scope billing:account — or a service key"
+      },
+      "payments": [
+        "x402"
+      ],
+      "license": "AGPL-3.0-or-later"
+    }
+  }
+}

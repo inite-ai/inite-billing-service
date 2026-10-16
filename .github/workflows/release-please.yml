@@ -37,3 +37,15 @@ jobs:
     with:
       tag: ${{ needs.release-please.outputs.tag_name }}
     secrets: inherit
+
+  # Same run, same reason as the image: a release-please tag cannot trigger
+  # another workflow on its own.
+  mcp-registry:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    uses: ./.github/workflows/publish-mcp-registry.yml
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}
+    permissions:
+      id-token: write
+      contents: read

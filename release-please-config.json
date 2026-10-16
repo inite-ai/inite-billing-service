@@ -3,7 +3,14 @@
   "packages": {
     ".": {
       "release-type": "node",
-      "package-name": "inite-billing-service"
+      "package-name": "inite-billing-service",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "server.json",
+          "jsonpath": "$.version"
+        }
+      ]
     }
   }
 }
