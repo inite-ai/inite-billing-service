@@ -244,64 +244,113 @@ export class TreasuryService {
     return { checkoutUrl: session.checkoutUrl, sessionId: session.sessionId };
   }
 
-  /** Paid card top-ups get their USDC; runs every minute and on demand. */
+  /**
+   * Paid card top-ups get their USDC; runs every minute and on demand.
+   *
+   * Exactly once, whatever crashes or runs twice:
+   * - one payout row per order (unique order_id), made under a per-treasury
+   *   lock that also counts the daily limit, so two runs can't both pass it;
+   * - each attempt's EIP-3009 nonce and expiry are saved before signing;
+   * - an attempt that failed or got stuck is retried only when the chain says
+   *   its nonce was never used and its authorization has expired: from then
+   *   on it can never be executed, so a new attempt can't double the payout.
+   *   A used nonce means it was paid: marked mined.
+   */
   @Cron(CronExpression.EVERY_MINUTE)
   async payOut(): Promise<void> {
     const t = await this.current();
     if (!t) return;
+    await this.reconcile(t);
+    // Payouts made but never attempted (no relayer at the time).
+    for (const p of await this.prisma.treasuryPayout.findMany({
+      where: { treasuryId: t.id, status: 'signing', nonce: null },
+      take: 20,
+    })) {
+      await this.attempt(t, p.id);
+    }
     const paid = await this.prisma.order.findMany({
       where: {
         status: 'paid',
         price: { product: { code: TOPUP_PRODUCT } },
         createdAt: { gte: new Date(Date.now() - 30 * DAY_MS) },
+        // Orders that have no payout yet.
+        NOT: {
+          id: {
+            in: (await this.prisma.treasuryPayout.findMany({ select: { orderId: true } })).map(
+              (p) => p.orderId,
+            ),
+          },
+        },
       },
       include: { price: true },
       take: 20,
     });
     for (const order of paid) {
-      const exists = await this.prisma.treasuryPayout.findUnique({ where: { orderId: order.id } });
-      if (exists) continue;
       const to = (order.metadata as any)?.walletTopup?.address;
       if (!to || !isAddress(to, { strict: false })) continue;
-      await this.send(t, order.id, getAddress(to), parseUnits(String(order.price.amount), 6)).catch(
-        (error) => this.logger.error(`Top-up payout for ${order.id} failed: ${error?.message}`),
+      const payout = await this.open(
+        t,
+        order.id,
+        getAddress(to),
+        parseUnits(String(order.price.amount), 6),
       );
+      if (payout?.status === 'signing') await this.attempt(t, payout.id);
     }
   }
 
-  private async send(t: Treasury, orderId: string, to: `0x${string}`, value: bigint) {
-    // Claim the order first: one payout per order, whatever runs at once.
-    let payout;
+  /** The payout row for an order, made once, under the treasury lock (daily limit). */
+  private async open(t: Treasury, orderId: string, to: `0x${string}`, value: bigint) {
     try {
-      payout = await this.prisma.treasuryPayout.create({
-        data: { treasuryId: t.id, orderId, to, valueRaw: value.toString() },
+      return await this.prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${t.id}))`;
+        const existing = await tx.treasuryPayout.findUnique({ where: { orderId } });
+        if (existing) return null;
+        const sent = await this.sentSince(t.id, new Date(Date.now() - DAY_MS), tx);
+        const over =
+          value > parseUnits(t.perTransfer, 6) || sent + value > parseUnits(t.dailyLimit, 6);
+        return tx.treasuryPayout.create({
+          data: {
+            treasuryId: t.id,
+            orderId,
+            to,
+            valueRaw: value.toString(),
+            status: over ? 'held' : 'signing',
+            ...(over ? { error: 'Over the treasury limit; an admin sends it by hand' } : {}),
+          },
+        });
       });
     } catch (error: any) {
-      if (error?.code === 'P2002') return;
+      if (error?.code === 'P2002') return null;
       throw error;
     }
-    const mark = (data: Record<string, unknown>) =>
-      this.prisma.treasuryPayout.update({ where: { id: payout.id }, data });
+  }
 
-    const sent = await this.sentSince(t.id, new Date(Date.now() - DAY_MS), payout.id);
-    if (value > parseUnits(t.perTransfer, 6) || sent + value > parseUnits(t.dailyLimit, 6)) {
-      await mark({ status: 'held', error: 'Over the treasury limit; an admin sends it by hand' });
-      return;
-    }
+  /** One attempt: a fresh nonce saved first, then sign, relay, record. */
+  private async attempt(t: Treasury, payoutId: string): Promise<void> {
     const relayer = await this.settlements.relayer();
-    if (!relayer) {
-      await this.prisma.treasuryPayout.delete({ where: { id: payout.id } });
-      return; // tried again next minute
-    }
+    if (!relayer) return; // stays "signing" with no nonce: tried next minute
     const now = Math.floor(Date.now() / 1000);
+    const nonce = `0x${randomBytes(32).toString('hex')}` as `0x${string}`;
+    const validBefore = now + 600;
+    // Take the attempt: only a payout with no live attempt gets a nonce.
+    const taken = await this.prisma.treasuryPayout.updateMany({
+      where: { id: payoutId, status: 'signing', nonce: null },
+      data: { nonce, validBefore: new Date(validBefore * 1000), attempts: { increment: 1 } },
+    });
+    if (taken.count === 0) return;
+    const payout = await this.prisma.treasuryPayout.findUniqueOrThrow({ where: { id: payoutId } });
+    const mark = (data: Record<string, unknown>) =>
+      this.prisma.treasuryPayout.update({ where: { id: payoutId }, data });
     const authorization: Authorization = {
       from: t.address as `0x${string}`,
-      to,
-      value,
+      to: payout.to as `0x${string}`,
+      value: BigInt(payout.valueRaw),
       validAfter: 0n,
-      validBefore: BigInt(now + 600),
-      nonce: `0x${randomBytes(32).toString('hex')}`,
+      validBefore: BigInt(validBefore),
+      nonce,
     };
+    let hash: `0x${string}` | null = null;
+    let claimId: string | null = null;
     try {
       const result = await this.turnkey.submitWithKey(
         SIGN_RAW_PAYLOAD_PATH,
@@ -328,31 +377,99 @@ export class TreasuryService {
       };
       await relayer.verify(payment);
       const claim = await this.settlements.claim(payment, {
-        orderId,
-        invoiceId: `treasury:${payout.id}`,
+        orderId: payout.orderId,
+        invoiceId: `treasury:${payout.id}:${payout.attempts}`,
       });
-      if (!claim.claimed) throw new ConflictException('Already under way');
-      const hash = await this.settlements.submit(relayer, payment, claim.row.id);
-      await mark({ status: 'submitted', txHash: hash });
-      const mined = await this.settlements.confirm(relayer, hash, claim.row.id);
-      if (mined !== null) await mark({ status: mined ? 'mined' : 'reverted' });
-      this.logger.log(`Top-up ${orderId}: ${formatUnits(value, 6)} USDC to ${to}, tx ${hash}`);
+      if (!claim.claimed) throw new ConflictException('This authorization is already under way');
+      claimId = claim.row.id;
+      hash = await this.settlements.submit(relayer, payment, claimId);
+      await mark({ status: 'submitted', txHash: hash, error: null });
     } catch (error: any) {
-      await mark({ status: 'failed', error: String(error?.message ?? error).slice(0, 500) });
+      // Never overwrite a submitted attempt: the reconcile reads the chain.
+      if (!hash)
+        await mark({ status: 'failed', error: String(error?.message ?? error).slice(0, 500) });
+      this.logger.warn(`Top-up payout ${payoutId} attempt failed: ${error?.message}`);
+      return;
+    }
+    try {
+      const mined = await this.settlements.confirm(relayer, hash, claimId!);
+      if (mined !== null)
+        await mark(mined ? { status: 'mined' } : { error: 'Transaction reverted' });
+      this.logger.log(
+        `Top-up ${payout.orderId}: ${formatUnits(BigInt(payout.valueRaw), 6)} USDC to ${payout.to}, tx ${hash}`,
+      );
+    } catch (error: any) {
+      this.logger.warn(
+        `Top-up payout ${payoutId} sent (${hash}), not confirmed yet: ${error?.message}`,
+      );
     }
   }
 
-  private async sentSince(treasuryId: string, since: Date, except?: string): Promise<bigint> {
-    const rows = await this.prisma.treasuryPayout.findMany({
+  /**
+   * Settle attempts that are not known to be done, from the chain: a used
+   * nonce is paid; an unused one whose authorization expired can never be
+   * used, so the payout gets a fresh attempt.
+   */
+  private async reconcile(t: Treasury): Promise<void> {
+    const open = await this.prisma.treasuryPayout.findMany({
+      where: {
+        treasuryId: t.id,
+        status: { in: ['signing', 'submitted', 'failed'] },
+        nonce: { not: null },
+      },
+      take: 20,
+    });
+    if (open.length === 0) return;
+    const settings = await loadCryptoSettings(this.prisma);
+    const client = baseClient(settings?.rpcUrls[X402_CHAIN]);
+    for (const p of open) {
+      const used = await client
+        .readContract({
+          address: usdcAddress(),
+          abi: USDC_ABI,
+          functionName: 'authorizationState',
+          args: [t.address as `0x${string}`, p.nonce as `0x${string}`],
+        })
+        .catch(() => null);
+      if (used === null) continue; // can't tell: leave it
+      if (used) {
+        await this.prisma.treasuryPayout.update({
+          where: { id: p.id },
+          data: { status: 'mined', error: null },
+        });
+        continue;
+      }
+      // Unused, and past its expiry (with a margin for block time): dead for good.
+      if (p.validBefore && p.validBefore.getTime() < Date.now() - 120_000) {
+        if (p.attempts >= 5) {
+          await this.prisma.treasuryPayout.update({
+            where: { id: p.id },
+            data: {
+              status: 'held',
+              error: `Not paid after ${p.attempts} attempts; an admin looks at it`,
+            },
+          });
+          continue;
+        }
+        const reset = await this.prisma.treasuryPayout.updateMany({
+          where: { id: p.id, nonce: p.nonce },
+          data: { status: 'signing', nonce: null, validBefore: null, txHash: null },
+        });
+        if (reset.count === 1) await this.attempt(t, p.id);
+      }
+    }
+  }
+
+  private async sentSince(treasuryId: string, since: Date, db: any = this.prisma): Promise<bigint> {
+    const rows = await db.treasuryPayout.findMany({
       where: {
         treasuryId,
         createdAt: { gte: since },
-        status: { in: ['pending', 'submitted', 'mined'] },
-        ...(except ? { id: { not: except } } : {}),
+        status: { in: ['signing', 'submitted', 'mined', 'failed'] },
       },
       select: { valueRaw: true },
     });
-    return rows.reduce((sum, r) => sum + BigInt(r.valueRaw), 0n);
+    return rows.reduce((sum: bigint, r: { valueRaw: string }) => sum + BigInt(r.valueRaw), 0n);
   }
 
   private async balance(address: `0x${string}`): Promise<bigint> {

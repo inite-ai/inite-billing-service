@@ -1448,8 +1448,14 @@ model TreasuryPayout {
   orderId     String   @unique @map("order_id") @db.Uuid
   to          String   @db.VarChar(42)
   valueRaw    String   @map("value_raw") @db.VarChar(78)
-  /// pending | submitted | mined | reverted | failed | held
-  status      String   @default("pending") @db.VarChar(20)
+  /// signing | submitted | mined | failed | held. A failed or stuck payout is
+  /// retried only once the chain says its nonce was never used and its
+  /// authorization has expired, so it can't be paid twice.
+  status      String   @default("signing") @db.VarChar(20)
+  /// The EIP-3009 nonce of the current attempt, saved before it is signed.
+  nonce       String?  @unique @db.VarChar(66)
+  validBefore DateTime? @map("valid_before") @db.Timestamptz(6)
+  attempts    Int      @default(0)
   txHash      String?  @map("tx_hash") @db.VarChar(66)
   error       String?  @db.Text
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
