@@ -16,6 +16,7 @@ import { ConfigService } from '@nestjs/config';
 import { ApiExcludeEndpoint } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { RequestUser } from '../auth/decorators/user.decorator';
+import { primaryIssuer } from '../auth/token-contract';
 
 /**
  * Billing's MCP endpoint as an OAuth protected resource (RFC 9728).
@@ -123,9 +124,7 @@ export class McpMetadataController {
       .json({
         resource: billingMcpResource(this.config),
         resource_name: 'INITE billing',
-        authorization_servers: [
-          this.config.get<string>('JWT_ISSUER') || 'https://auth-api.inite.ai',
-        ],
+        authorization_servers: [primaryIssuer(this.config)],
         scopes_supported: [BILLING_ACCOUNT_SCOPE],
         bearer_methods_supported: ['header'],
         resource_documentation: 'https://billing.inite.ai/docs',

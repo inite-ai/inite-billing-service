@@ -4,9 +4,11 @@ import { ExtractJwt, Strategy, StrategyOptionsWithoutRequest } from 'passport-jw
 import { ConfigService } from '@nestjs/config';
 import { passportJwtSecret } from 'jwks-rsa';
 import { Request } from 'express';
+import { acceptedAudiences, acceptedIssuers } from '../token-contract';
 
 export interface JwtPayload {
-  sub: string; // inite_user_id (uuid)
+  /** The person's DID (did:key:…), or an agent's own did:web — never a UUID. */
+  sub: string;
   roles?: string[];
   email?: string;
   /** Whether the identity provider has confirmed the address belongs to this user. */
@@ -36,11 +38,14 @@ export function buildJwtOptions(configService: ConfigService): StrategyOptionsWi
   // Pin the token issuer. Without it any token this JWKS can verify is accepted,
   // including one minted by a different issuer that happens to publish keys we
   // trust. passport-jwt forwards it to jsonwebtoken.verify, which enforces `iss`.
+  // JWT_ISSUER may list several issuers (comma-separated) while an issuer moves;
+  // a trailing slash on either side is the same issuer.
   //
   // Required in production, for the same reason AUTH_SERVICE_URL is: an
   // unpinned issuer is a configuration mistake, and the failure it produces is
   // silent acceptance rather than a visible error.
-  const issuer = configService.get<string>('JWT_ISSUER') || undefined;
+  const issuers = acceptedIssuers(configService.get<string>('JWT_ISSUER'));
+  const issuer = issuers.length > 0 ? issuers : undefined;
   const isProduction = configService.get<string>('NODE_ENV') === 'production';
   if (isProduction && !issuer) {
     throw new Error(
@@ -52,16 +57,25 @@ export function buildJwtOptions(configService: ConfigService): StrategyOptionsWi
     );
   }
 
-  // Audience stays optional on purpose, and is NOT enforced by default.
+  // Audience: pinned when JWT_AUDIENCE is set, and then billing's own OAuth
+  // resources (/mcp, /mcp/wallet, /v1/agent-wallet) are always part of the
+  // accepted set — they are what an RFC 8707 client is issued, so pinning the
+  // first-party client id alone would lock every MCP client and agent out.
   //
-  // The INITE identity provider does not put an `aud` claim on user access
-  // tokens — it carries `client_id` instead — and jsonwebtoken rejects a token
-  // with no `aud` when an audience is configured. Requiring it here would lock
-  // out every real user rather than tighten anything. Deployments whose IdP
-  // does set `aud` can opt in.
-  const audience = configService.get<string>('JWT_AUDIENCE') || undefined;
-  if (issuer) logger.log(`Pinning JWT issuer: ${issuer}`);
-  if (audience) logger.log(`Pinning JWT audience: ${audience}`);
+  // INITE Auth stamps `aud` on every access token (the RFC 8707 resource when
+  // one was asked for, otherwise the client id), so pinning is safe. It stays
+  // opt-in for one minor so existing deployments are not broken on upgrade
+  // (Triad contract, backward-compat policy); unset in production is warned.
+  const audience = acceptedAudiences(configService);
+  if (issuer) logger.log(`Pinning JWT issuer: ${issuer.join(', ')}`);
+  if (audience) logger.log(`Pinning JWT audience: ${audience.join(', ')}`);
+  else if (isProduction) {
+    logger.warn(
+      'JWT_AUDIENCE is not set: a token INITE Auth issued for another service is ' +
+        'accepted outside the MCP and wallet endpoints. Set it to the billing ' +
+        "frontend's OAuth client id (inite-billing).",
+    );
+  }
 
   const base = {
     jwtFromRequest: extractJwt,
@@ -82,7 +96,8 @@ export function buildJwtOptions(configService: ConfigService): StrategyOptionsWi
   // provider, which meant a deployment that forgot to set AUTH_SERVICE_URL
   // silently validated its users' tokens against someone else's JWKS instead
   // of failing. A missing issuer is a configuration error, not a default.
-  if (!authServiceUrl) {
+  const authBase = authServiceUrl?.replace(/\/+$/, '');
+  if (!authBase) {
     throw new Error(
       'AUTH_SERVICE_URL is required: it is the identity provider whose JWKS ' +
         'validates access tokens (expects {AUTH_SERVICE_URL}/.well-known/jwks.json). ' +
@@ -90,11 +105,11 @@ export function buildJwtOptions(configService: ConfigService): StrategyOptionsWi
     );
   }
 
-  logger.log(`Using JWKS endpoint: ${authServiceUrl}/.well-known/jwks.json`);
+  logger.log(`Using JWKS endpoint: ${authBase}/.well-known/jwks.json`);
   return {
     ...base,
     secretOrKeyProvider: passportJwtSecret({
-      jwksUri: `${authServiceUrl}/.well-known/jwks.json`,
+      jwksUri: `${authBase}/.well-known/jwks.json`,
       cache: true,
       cacheMaxEntries: 5,
       cacheMaxAge: 600000,

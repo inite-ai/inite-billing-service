@@ -18,6 +18,7 @@ import {
   addressQr,
   walletWidgetMeta,
 } from './wallet-widget';
+import { primaryIssuer } from '../auth/token-contract';
 
 const INSTRUCTIONS =
   'The INITE wallet of the person you act for: their own USDC on Base. ' +
@@ -60,9 +61,7 @@ export class WalletMcpController {
       .json({
         resource: walletResource(this.config),
         resource_name: 'INITE wallet',
-        authorization_servers: [
-          this.config.get<string>('JWT_ISSUER') || 'https://auth-api.inite.ai',
-        ],
+        authorization_servers: [primaryIssuer(this.config)],
         scopes_supported: [WALLET_SCOPE],
         bearer_methods_supported: ['header'],
         resource_documentation: 'https://billing.inite.ai/docs/wallet',

@@ -5,10 +5,10 @@ import { buildJwtOptions } from '../src/auth/strategies/jwt.strategy';
  * whoever issued it. The pin is forwarded to jsonwebtoken.verify and is
  * mandatory in production — where, until this, nothing was pinned at all.
  *
- * Audience deliberately stays optional: the identity provider does not put an
- * `aud` claim on user access tokens (it carries `client_id`), and jsonwebtoken
- * rejects a token with no `aud` once an audience is configured. Requiring it
- * would have locked out every real user while tightening nothing.
+ * Audience stays opt-in for one minor (Triad contract backward-compat policy).
+ * INITE Auth does stamp `aud` on every access token; when JWT_AUDIENCE is set,
+ * billing's own OAuth resources join the accepted set so MCP clients and agents
+ * are not locked out by the pin.
  */
 describe('buildJwtOptions issuer/audience pinning', () => {
   const cfg = (env: Record<string, string | undefined>) => ({ get: (k: string) => env[k] }) as any;
@@ -27,8 +27,7 @@ describe('buildJwtOptions issuer/audience pinning', () => {
     ).toThrow(/JWT_ISSUER/);
   });
 
-  it('does not require an audience in production', () => {
-    // Enforcing `aud` against a provider that omits it rejects every token.
+  it('does not require an audience in production (yet)', () => {
     const opts = buildJwtOptions(
       cfg({
         NODE_ENV: 'production',
@@ -36,7 +35,7 @@ describe('buildJwtOptions issuer/audience pinning', () => {
         JWT_ISSUER: 'https://auth-api.example.com',
       }),
     ) as any;
-    expect(opts.issuer).toBe('https://auth-api.example.com');
+    expect(opts.issuer).toEqual(['https://auth-api.example.com', 'https://auth-api.example.com/']);
     expect(opts.audience).toBeUndefined();
   });
 
@@ -50,7 +49,7 @@ describe('buildJwtOptions issuer/audience pinning', () => {
         JWT_ISSUER: 'https://auth-api.example.com',
       }),
     ) as any;
-    expect(opts.issuer).not.toBe('https://auth.example.com');
+    expect(opts.issuer).not.toContain('https://auth.example.com');
   });
 
   it('pins issuer and audience when configured (HS256 path)', () => {
@@ -62,8 +61,13 @@ describe('buildJwtOptions issuer/audience pinning', () => {
         JWT_AUDIENCE: 'inite-billing',
       }),
     ) as any;
-    expect(opts.issuer).toBe('https://auth.inite.ai');
-    expect(opts.audience).toBe('inite-billing');
+    expect(opts.issuer).toEqual(['https://auth.inite.ai', 'https://auth.inite.ai/']);
+    expect(opts.audience).toEqual([
+      'inite-billing',
+      'https://billing.inite.ai/mcp',
+      'https://billing.inite.ai/mcp/wallet',
+      'https://billing.inite.ai/v1/agent-wallet',
+    ]);
     expect(opts.algorithms).toEqual(['HS256']);
   });
 
@@ -76,8 +80,8 @@ describe('buildJwtOptions issuer/audience pinning', () => {
         JWT_AUDIENCE: 'billing',
       }),
     ) as any;
-    expect(opts.issuer).toBe('https://auth.example.com');
-    expect(opts.audience).toBe('billing');
+    expect(opts.issuer).toContain('https://auth.example.com');
+    expect(opts.audience).toContain('billing');
     expect(opts.algorithms).toEqual(['RS256']);
     expect(typeof opts.secretOrKeyProvider).toBe('function');
   });
