@@ -351,6 +351,14 @@ jobs:
         set_env OAUTH_CLIENT_SECRET "${{ secrets.BILLING_OAUTH_CLIENT_SECRET }}"
         set_env ANTHROPIC_API_KEY "${{ secrets.ANTHROPIC_API_KEY }}"
         set_env DOCKERHUB_USERNAME "${{ secrets.DOCKERHUB_USERNAME }}"
+        # Seals the private keys billing keeps (src/common/key-seal.ts). Losing
+        # it loses those keys, so it is never generated here: without it the
+        # deploy stops rather than start a billing that cannot open them.
+        if [ -z "${{ secrets.BILLING_KEY_SEAL_SECRET }}" ]; then
+          echo "BILLING_KEY_SEAL_SECRET is not set" >&2
+          exit 1
+        fi
+        set_env KEY_SEAL_SECRET "${{ secrets.BILLING_KEY_SEAL_SECRET }}"
 
         # The versions this deploy is putting into service, and the ones it can
         # go back to. Compose reads both from .env, so what is running is
