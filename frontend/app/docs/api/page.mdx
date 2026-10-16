@@ -16,7 +16,7 @@ Two principals, three guards:
 
 | Caller | How | Guard behavior |
 |---|---|---|
-| **End user** | `Authorization: Bearer <jwt>` (issued by INITE Auth; RS256 via JWKS, HS256 fallback for dev; `iss`/`aud`/`sub` rules: [Triad token contract](https://github.com/inite-ai/inite-ecosystem/blob/main/docs/triad-compatibility.md)) | `userId` always comes from the token — endpoints ignore user IDs in params/body for non-service callers (IDOR guard) |
+| **End user** | `Authorization: Bearer <jwt>` (issued by INITE Auth; RS256 via JWKS, HS256 fallback for dev; `iss`/`aud`/`sub` rules: [Triad token contract](https://github.com/inite-ai/inite-triad/blob/main/docs/compatibility.md)) | `userId` always comes from the token — endpoints ignore user IDs in params/body for non-service callers (IDOR guard) |
 | **INITE module (service)** | `x-api-key: <Service.apiKey>` (created in admin UI, revocable) | May act on behalf of any user; `serviceId` is auto-injected from the key |
 
 `JwtOrServiceGuard` picks the principal from the headers: an `x-api-key` is resolved to an active

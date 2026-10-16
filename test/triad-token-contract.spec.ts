@@ -16,7 +16,7 @@ import { McpResourceGuard } from '../src/mcp/mcp-resource';
  * and signed the way Auth signs them: jsonwebtoken (via @nestjs/jwt), RS256,
  * `kid` in the header, keys served at /.well-known/jwks.json. The JWT
  * strategy runs for real against a stub JWKS. The contract:
- * inite-ecosystem/docs/triad-compatibility.md.
+ * inite-triad/docs/compatibility.md.
  */
 
 const ISSUER = 'https://auth-api.triad.test';

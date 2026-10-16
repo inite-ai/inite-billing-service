@@ -4,7 +4,7 @@ import { ConfigService } from '@nestjs/config';
  * Which `iss` and `aud` values billing accepts on a token from INITE Auth.
  *
  * The rules are the INITE Triad token contract
- * (inite-ecosystem/docs/triad-compatibility.md):
+ * (inite-triad/docs/compatibility.md):
  *  - `iss` is compared exactly, but JWT_ISSUER may be a comma-separated list
  *    (an issuer migration accepts old and new for one minor) and a trailing
  *    slash is not a different issuer. The FIRST entry is this deployment's
