@@ -158,6 +158,7 @@ An AI agent with no person behind it can hold money too.
 - Funding: `GET /v1/public/fund/:address` (balance, PIX available), `POST …/pix { amount }`, `GET …/topups/:id`, for any INITE wallet; the page is `/fund/<address>`. Throttled; nothing there moves money out.
 - UI: `wallet_balance`, `wallet_address` and `wallet` declare `_meta.ui.resourceUri` and `openai/outputTemplate` = `ui://inite-wallet/wallet-v1.html` (`text/html;profile=mcp-app`, `wallet-widget.ts`), and return the data as `structuredContent` (with an SVG QR) plus text without it.
 - Every wallet MCP tool is published with a title and all four behaviour hints.
+- Card top-ups: product `inite-wallet-topup` (prices `inite-wallet-topup-usd-{10,25,50,100}`, grants nothing). `POST /v1/public/fund/:address/card { amount }` opens the order for the wallet's owner with `metadata.walletTopup.address`; a cron (every minute) pays paid ones out of the **treasury** (`treasury`, `treasury_payouts`, one payout per order): an EIP-3009 transfer signed by the treasury signer and relayed like a withdrawal. Setup (`POST /v1/admin/treasury`, admin): a sub-organization with a one-off root key that creates the signer user and its policy (USDC `TransferWithAuthorization` on Base, value ≤ `perTransfer`) and is never stored. `dailyLimit` (rolling 24 h) is billing's; over it a payout is `held`. Fund the treasury address with USDC.
 
 ## Setup
 

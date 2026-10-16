@@ -156,6 +156,12 @@ The same wallet speaks MCP at **`https://billing.inite.ai/mcp/wallet`**, with a 
 
 Every wallet has a public page, **`https://billing.inite.ai/fund/<address>`**. The agent gives it to a person, who sees a QR code and the address for USDC on Base, or pays by **PIX** in Brazil (reais arrive as USDC). The page can only add money.
 
+### Topping up by card
+
+On the same page a person can pay **$10, $25, $50 or $100 by card or Apple Pay**. It is an ordinary order on INITE's checkout; once it is paid, the same amount of USDC arrives in the wallet from INITE's treasury, usually within a couple of minutes.
+
+The treasury is a Turnkey wallet INITE billing set up with a key it threw away. The only key billing keeps there can sign **USDC transfers on Base of at most $500 each, nothing else**, and billing pays out at most $500 a day; anything over waits for an admin.
+
 ### Cards in the chat
 
 In ChatGPT, Claude and other clients that show MCP Apps, `wallet_balance`, `wallet_address` and `wallet` come as a card: the balance, a QR code to top up, a **Top up** button and recent payments. Other clients get the same data as text.
