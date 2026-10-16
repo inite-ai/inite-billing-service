@@ -12,7 +12,8 @@ import type { Wallet, WalletPayment } from '@prisma/client';
 import { formatUnits, parseUnits } from 'viem';
 import { PrismaService } from '../common/services/prisma.service';
 import { loadCryptoSettings } from '../adapters/crypto/crypto-config';
-import { RelayerKeys } from '../adapters/crypto/x402/relayer-key';
+import { ApiKeyStamper } from '@turnkey/api-key-stamper';
+import { RelayerKeys, newTurnkeyApiKey } from '../adapters/crypto/x402/relayer-key';
 import { USDC_ABI, baseClient } from '../adapters/crypto/x402/relayer';
 import {
   Authorization,
@@ -22,7 +23,7 @@ import {
   usdcAddress,
 } from '../adapters/crypto/x402/protocol';
 import { TurnkeyRequestError, TurnkeyWallets } from './turnkey-wallets';
-import { joinSignature } from './wallet.service';
+import { WalletService, joinSignature } from './wallet.service';
 import { SelfAgentError, checkKeyStamp, resolveAgentKey } from './self-agent';
 import {
   PaymentTerms,
@@ -39,6 +40,9 @@ const BLOCKED_HEADERS = /^(host|cookie|authorization|proxy-|x-payment|payment-|c
 /** How long a prepared payment waits for the agent's stamp. */
 const STAMP_WINDOW_SECONDS = 10 * 60;
 
+/** Who keeps the wallet's owner key: the agent, or INITE for it. */
+export type Custody = 'own' | 'inite';
+
 export interface SelfAgentPayInput {
   url: string;
   maxAmount: string;
@@ -50,12 +54,15 @@ export interface SelfAgentPayInput {
 /**
  * The wallet of an AI agent that exists on its own (self-agent.ts).
  *
- * The agent opens it with its INITE token; the sub-organization's only root
- * user is the agent's key from its DID document. Paying is two calls: billing
- * reads the seller's x402 terms and prepares the exact Turnkey request; the
- * agent stamps it with its key and sends the stamp back; billing submits it,
- * and repeats the seller's request with the signed payment. Billing holds no
- * key to this wallet and can move nothing on its own.
+ * The agent opens it with its INITE token. The sub-organization's only root
+ * user is one key, kept by one of two:
+ * - the agent ("own"): the P-256 key in its DID document. Paying is two
+ *   calls: billing reads the seller's x402 terms and prepares the exact
+ *   Turnkey request; the agent stamps it and sends the stamp back. Billing
+ *   holds no key to this wallet and can move nothing on its own.
+ * - INITE ("inite"), for an agent that can't keep a key (one that registered
+ *   with a client secret): billing makes the key, keeps it, and stamps the
+ *   agent's payments itself, so paying is one call.
  */
 @Injectable()
 export class SelfAgentWalletService {
@@ -66,6 +73,7 @@ export class SelfAgentWalletService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly wallets: WalletService,
   ) {
     this.keys = new RelayerKeys(prisma);
   }
@@ -78,12 +86,21 @@ export class SelfAgentWalletService {
     );
   }
 
+  /** A page a person opens to fund this wallet: address, QR, PIX. */
+  fundUrl(address: string): string {
+    const base = (this.config.get<string>('FRONTEND_URL') || 'https://billing.inite.ai').replace(
+      /\/$/,
+      '',
+    );
+    return `${base}/fund/${address}`;
+  }
+
   async overview(did: string) {
     const wallet = await this.find(did);
     if (!wallet) {
       return {
         wallet: null,
-        open: 'POST /v1/agent-wallet opens it: an address on Base whose only owner is your key.',
+        open: 'POST /v1/agent-wallet opens it: an address on Base. With a P-256 key in your DID document you own it; without one INITE keeps its key for you ({ "custody": "inite" } asks for that either way).',
       };
     }
     const [balance, payments] = await Promise.all([
@@ -100,25 +117,35 @@ export class SelfAgentWalletService {
         network: X402_NETWORK,
         asset: 'USDC',
         balance: balance === null ? null : formatUnits(balance, 6),
+        custody: (wallet.ownerPrivateKey ? 'inite' : 'own') as Custody,
         ownerKey: wallet.ownerKey,
         createdAt: wallet.createdAt,
       },
-      fund: `Send USDC on Base to ${wallet.address}. Fees are paid by INITE; the wallet needs no ETH.`,
+      fund: `Send USDC on Base to ${wallet.address}, or give a person ${this.fundUrl(wallet.address)} (QR, PIX). Fees are paid by INITE; the wallet needs no ETH.`,
+      fundUrl: this.fundUrl(wallet.address),
       payments: payments.map(describe),
     };
   }
 
-  async open(did: string) {
+  async open(did: string, custody?: Custody) {
     if (await this.find(did)) return this.overview(did);
     const access = await this.turnkeyAccess();
     if (!access) throw new ServiceUnavailableException('INITE wallets are not available yet');
-    let ownerKey: string;
+    let agentKey: string | null;
     try {
-      ownerKey = await resolveAgentKey(did, this.issuer());
+      agentKey = await resolveAgentKey(did, this.issuer());
     } catch (error) {
       if (error instanceof SelfAgentError) throw new BadRequestException(error.message);
       throw error;
     }
+    if (custody === 'own' && !agentKey) {
+      throw new BadRequestException(
+        'Your DID document has no P-256 key to own the wallet: register with private_key_jwt and an EC P-256 key, or let INITE keep the key (custody "inite")',
+      );
+    }
+    // INITE keeps a key for an agent without one, or one that asks for it.
+    const managed = custody === 'inite' || !agentKey ? newTurnkeyApiKey() : null;
+    const ownerKey = managed ? managed.publicKey : agentKey!;
     let opened;
     try {
       opened = await this.turnkey.open(access.organizationId, access.key, {
@@ -134,6 +161,7 @@ export class SelfAgentWalletService {
         data: {
           ownerDid: did,
           ownerKey,
+          ownerPrivateKey: managed?.privateKey ?? null,
           subOrganizationId: opened.subOrganizationId,
           turnkeyWalletId: opened.turnkeyWalletId,
           address: opened.address,
@@ -145,6 +173,41 @@ export class SelfAgentWalletService {
     }
     this.logger.log(`Agent wallet opened: ${opened.address}`);
     return this.overview(did);
+  }
+
+  /**
+   * Pay an x402 URL. With an INITE-kept key this is the whole payment; with
+   * the agent's own key it returns the request to stamp (then `confirm`).
+   */
+  async pay(did: string, input: SelfAgentPayInput) {
+    const prepared = await this.prepare(did, input);
+    const wallet = await this.require(did);
+    if (!prepared.payment || !wallet.ownerPrivateKey) return prepared;
+    return this.confirm(
+      did,
+      prepared.payment.id,
+      await this.stampFor(wallet, prepared.payment.request),
+    );
+  }
+
+  /** Send USDC out; one call with an INITE-kept key, else the request to stamp. */
+  async withdraw(did: string, input: { to: string; amount: string }) {
+    const wallet = await this.require(did);
+    const prepared = await this.wallets.prepareWithdrawal(did, input);
+    if (!wallet.ownerPrivateKey) return prepared;
+    return this.wallets.confirmWithdrawal(
+      did,
+      prepared.id,
+      await this.stampFor(wallet, prepared.request),
+    );
+  }
+
+  private async stampFor(wallet: Wallet, body: string): Promise<string> {
+    const stamp = await new ApiKeyStamper({
+      apiPublicKey: wallet.ownerKey!,
+      apiPrivateKey: wallet.ownerPrivateKey!,
+    }).stamp(body);
+    return stamp.stampHeaderValue;
   }
 
   /**

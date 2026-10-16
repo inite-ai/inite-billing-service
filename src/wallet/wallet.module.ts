@@ -15,6 +15,7 @@ import { ServiceAuthGuard } from '../auth/guards/service-auth.guard';
 import { SelfAgentWalletController } from './self-agent-wallet.controller';
 import { SelfAgentWalletService } from './self-agent-wallet.service';
 import { SelfAgentGuard } from './self-agent.guard';
+import { WalletFundController } from './wallet-fund.controller';
 
 /**
  * INITE wallets: a person's own USDC on Base, held under their passkey in
@@ -28,6 +29,7 @@ import { SelfAgentGuard } from './self-agent.guard';
     WalletMcpController,
     PayFromWalletController,
     SelfAgentWalletController,
+    WalletFundController,
   ],
   providers: [
     WalletService,

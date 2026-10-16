@@ -37,6 +37,11 @@ describe('Agent with its own identity and wallet E2E', () => {
 
   const AGENT_ID = 'dcr_0123456789abcdef0123456789abcdef';
   const AGENT = `did:web:auth-api.inite.ai:agents:${AGENT_ID}`;
+  // An agent that registered with a client secret: no key in its DID document.
+  const SECRET_ID = 'dcr_ffffffffffffffffffffffffffffffff';
+  const SECRET_AGENT = `did:web:auth-api.inite.ai:agents:${SECRET_ID}`;
+  const managedChain = privateKeyToAccount(generatePrivateKey());
+  let managedRootKey = '';
   let RESOURCE = '';
   const SHOP = getAddress('0x5555555555555555555555555555555555555555');
   const onchain = privateKeyToAccount(generatePrivateKey());
@@ -90,6 +95,9 @@ describe('Agent with its own identity and wallet E2E', () => {
       const headers = Object.fromEntries(
         Object.entries(init?.headers ?? {}).map(([k, v]) => [k.toLowerCase(), String(v)]),
       );
+      if (url.host === 'auth-api.inite.ai' && url.pathname === `/agents/${SECRET_ID}/did.json`) {
+        return reply(200, { id: SECRET_AGENT, verificationMethod: [] });
+      }
       if (url.host === 'auth-api.inite.ai' && url.pathname === `/agents/${AGENT_ID}/did.json`) {
         return reply(200, {
           id: AGENT,
@@ -104,6 +112,16 @@ describe('Agent with its own identity and wallet E2E', () => {
         const done = (result: unknown) =>
           reply(200, { activity: { status: 'ACTIVITY_STATUS_COMPLETED', result } });
         if (url.pathname.endsWith('/create_sub_organization')) {
+          const root = body.parameters.rootUsers[0].apiKeys[0]?.publicKey;
+          if (root && root !== agentKey.publicKey) {
+            managedRootKey = root;
+            return done({
+              createSubOrganizationResultV8: {
+                subOrganizationId: 'managed-sub',
+                wallet: { walletId: 'w2', addresses: [managedChain.address] },
+              },
+            });
+          }
           return done({
             createSubOrganizationResultV8: {
               subOrganizationId: 'agent-sub',
@@ -116,11 +134,17 @@ describe('Agent with its own identity and wallet E2E', () => {
           const stamped = JSON.parse(
             Buffer.from(headers['x-stamp'] ?? '', 'base64url').toString() || '{}',
           );
-          if (stamped.publicKey !== agentKey.publicKey || body.organizationId !== 'agent-sub') {
+          const owner =
+            body.organizationId === 'agent-sub'
+              ? { key: agentKey.publicKey, account: onchain }
+              : body.organizationId === 'managed-sub'
+                ? { key: managedRootKey, account: managedChain }
+                : null;
+          if (!owner || stamped.publicKey !== owner.key) {
             return reply(403, { message: 'denied' });
           }
           const sig = parseSignature(
-            await onchain.signTypedData(JSON.parse(body.parameters.payload)),
+            await owner.account.signTypedData(JSON.parse(body.parameters.payload)),
           );
           return done({
             signRawPayloadResult: {
@@ -348,5 +372,110 @@ describe('Agent with its own identity and wallet E2E', () => {
       .send({ userId: AGENT })
       .expect(404);
     await prisma.service.deleteMany({ where: { code: 'agentshop' } });
+  });
+
+  it('keeps the key for an agent without one: opening and paying are one call each', async () => {
+    const asSecret = (claims: Record<string, unknown> = {}) =>
+      token({ sub: SECRET_AGENT, client_id: SECRET_ID, ...claims });
+    await http()
+      .post('/v1/agent-wallet')
+      .set('Authorization', asSecret())
+      .send({ custody: 'own' })
+      .expect(400);
+    const opened = await http().post('/v1/agent-wallet').set('Authorization', asSecret()).send({});
+    expect(opened.status).toBe(201);
+    expect(opened.body.wallet).toMatchObject({ address: managedChain.address, custody: 'inite' });
+    expect(opened.body.fundUrl).toMatch(new RegExp(`/fund/${managedChain.address}$`));
+    // The private half never leaves billing.
+    expect(JSON.stringify(opened.body)).not.toMatch(/"ownerPrivateKey"/);
+
+    const paid = await http()
+      .post('/v1/agent-wallet/payments')
+      .set('Authorization', asSecret())
+      .send({ url: 'https://shop.example/book', maxAmount: '2' })
+      .expect(201);
+    expect(paid.body.payment).toMatchObject({ status: 'paid', amount: '1.5', httpStatus: 200 });
+    expect(JSON.parse(paid.body.response.body)).toEqual({ book: 'yours' });
+  });
+
+  it('speaks MCP to an agent on its own: tools with every hint, the wallet card, its wallet', async () => {
+    const { walletResource } = await import('../src/wallet/agent-token.guard');
+    const aud = walletResource(app.get(ConfigService));
+    const mcp = (body: object) =>
+      http()
+        .post('/mcp/wallet')
+        .set('Authorization', token({ aud }))
+        .set('Accept', 'application/json, text/event-stream')
+        .send(body);
+    const parse = (res: request.Response) =>
+      JSON.parse(
+        String(res.text)
+          .split('\n')
+          .find((l) => l.startsWith('data: '))!
+          .slice(6),
+      );
+    const init = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2025-06-18',
+        capabilities: {},
+        clientInfo: { name: 't', version: '1' },
+      },
+    };
+    expect((await mcp(init)).status).toBe(200);
+
+    const list = parse(await mcp({ jsonrpc: '2.0', id: 2, method: 'tools/list' }));
+    const names = list.result.tools.map((t: any) => t.name);
+    expect(names).toEqual(['wallet', 'pay', 'pay_confirm', 'withdraw']);
+    for (const t of list.result.tools) {
+      expect(t.title).toBeTruthy();
+      expect(Object.keys(t.annotations).sort()).toEqual([
+        'destructiveHint',
+        'idempotentHint',
+        'openWorldHint',
+        'readOnlyHint',
+        'title',
+      ]);
+    }
+    const walletTool = list.result.tools.find((t: any) => t.name === 'wallet');
+    expect(walletTool._meta).toMatchObject({
+      ui: { resourceUri: 'ui://inite-wallet/wallet-v1.html' },
+      'openai/outputTemplate': 'ui://inite-wallet/wallet-v1.html',
+    });
+
+    const card = parse(
+      await mcp({
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'resources/read',
+        params: { uri: 'ui://inite-wallet/wallet-v1.html' },
+      }),
+    );
+    expect(card.result.contents[0].mimeType).toBe('text/html;profile=mcp-app');
+    expect(card.result.contents[0].text).toContain('ui/notifications/tool-result');
+
+    const called = parse(
+      await mcp({
+        jsonrpc: '2.0',
+        id: 4,
+        method: 'tools/call',
+        params: { name: 'wallet', arguments: {} },
+      }),
+    );
+    expect(called.result.structuredContent).toMatchObject({
+      address: onchain.address,
+      custody: 'own',
+    });
+    expect(called.result.structuredContent.qrSvg).toContain('<svg');
+    expect(called.result.content[0].text).not.toContain('<svg');
+  });
+
+  it('lets anyone with the link see the wallet and fund it, never take from it', async () => {
+    const shown = await http().get(`/v1/public/fund/${onchain.address}`).expect(200);
+    expect(shown.body).toMatchObject({ address: onchain.address, owner: 'agent', asset: 'USDC' });
+    await http().get('/v1/public/fund/0x000000000000000000000000000000000000dEaD').expect(404);
+    await http().get('/v1/public/fund/nonsense').expect(404);
   });
 });

@@ -1,11 +1,16 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import { IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsIn, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
 import { RequestUser, User } from '../auth/decorators/user.decorator';
 import { SelfAgentGuard } from './self-agent.guard';
 import { SelfAgentWalletService } from './self-agent-wallet.service';
 import { WalletService } from './wallet.service';
+
+class OpenDto {
+  /** "own": the P-256 key in the agent's DID document owns it; "inite": INITE keeps the key. Default: own if there is one. */
+  @IsOptional() @IsIn(['own', 'inite']) custody?: 'own' | 'inite';
+}
 
 class PayDto {
   @IsString() @MaxLength(2000) url!: string;
@@ -49,19 +54,20 @@ export class SelfAgentWalletController {
   @Post()
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @ApiOperation({
-    summary: 'Open the wallet; its only owner is the agent’s key from its DID document',
+    summary: 'Open the wallet, owned by the agent’s key or by one INITE keeps for it',
   })
-  open(@User() user: RequestUser) {
-    return this.agentWallets.open(user.userId);
+  open(@User() user: RequestUser, @Body() body: OpenDto) {
+    return this.agentWallets.open(user.userId, body?.custody);
   }
 
   @Post('payments')
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @ApiOperation({
-    summary: 'Read an x402 seller’s terms and prepare the payment for the agent’s stamp',
+    summary:
+      'Pay an x402 URL: at once with an INITE-kept key, else the request for the agent’s stamp',
   })
-  prepare(@User() user: RequestUser, @Body() body: PayDto) {
-    return this.agentWallets.prepare(user.userId, body);
+  pay(@User() user: RequestUser, @Body() body: PayDto) {
+    return this.agentWallets.pay(user.userId, body);
   }
 
   @Post('payments/:id/confirm')
@@ -77,9 +83,12 @@ export class SelfAgentWalletController {
 
   @Post('withdrawals')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  @ApiOperation({ summary: 'Prepare a transfer out of the wallet for the agent’s stamp' })
+  @ApiOperation({
+    summary:
+      'Send USDC out: at once with an INITE-kept key, else the request for the agent’s stamp',
+  })
   prepareWithdrawal(@User() user: RequestUser, @Body() body: WithdrawDto) {
-    return this.wallets.prepareWithdrawal(user.userId, body);
+    return this.agentWallets.withdraw(user.userId, body);
   }
 
   @Post('withdrawals/:id/confirm')

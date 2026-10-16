@@ -153,7 +153,11 @@ An AI agent with no person behind it can hold money too.
 - **Wallet.** `POST /v1/agent-wallet` with a token for `<billing>/v1/agent-wallet` (aud) and no `act`. Billing reads the key from the DID document (from the issuer only) and opens a sub-organization whose only root user is that key as a Turnkey API key (`API_KEY_CURVE_P256`). `wallets.owner_key` holds it; `credential_id` is null.
 - **Paying.** `POST /v1/agent-wallet/payments { url, maxAmount, method?, headers?, body? }` asks the seller, reads its x402 terms (exact, USDC on Base), checks `maxAmount` and the balance, and stores a `wallet_payments` row with the exact `SIGN_RAW_PAYLOAD_V2` body. The agent stamps it (X-Stamp, `SIGNATURE_SCHEME_TK_API_P256`); `…/confirm { stamp }` checks the stamp's key is the owner key, submits it unchanged, and repeats the seller's request with the signed payment. One prepared payment at a time; it expires with the authorization (≤10 min).
 - **Withdrawals** use the same endpoints as a person's (`/v1/agent-wallet/withdrawals`), with the key stamp instead of the passkey's.
-- Billing holds no key to these wallets. No limits apply beyond the balance: the agent's key is the owner.
+- Billing holds no key to these wallets, unless the agent asks INITE to keep it: `POST /v1/agent-wallet { custody: "inite" }`, or by default for an agent whose DID document has no P-256 key (registered with a client secret). Then billing makes the owner key (`wallets.owner_private_key`, kept like the agents' Turnkey keys and the relayer key) and stamps the agent's payments and withdrawals itself; `POST /payments` and `/withdrawals` are one call. No limits apply beyond the balance.
+- MCP: `/mcp/wallet` takes a self-agent's token too (aud = the wallet resource, no `act`, no scope needed) and serves `wallet` (opens on first call), `pay`, `pay_confirm`, `withdraw`.
+- Funding: `GET /v1/public/fund/:address` (balance, PIX available), `POST …/pix { amount }`, `GET …/topups/:id`, for any INITE wallet; the page is `/fund/<address>`. Throttled; nothing there moves money out.
+- UI: `wallet_balance`, `wallet_address` and `wallet` declare `_meta.ui.resourceUri` and `openai/outputTemplate` = `ui://inite-wallet/wallet-v1.html` (`text/html;profile=mcp-app`, `wallet-widget.ts`), and return the data as `structuredContent` (with an SVG QR) plus text without it.
+- Every wallet MCP tool is published with a title and all four behaviour hints.
 
 ## Setup
 

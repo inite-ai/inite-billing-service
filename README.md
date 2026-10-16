@@ -100,7 +100,12 @@ itself (its own P-256 key, `client_credentials`) and gets a did:web identity.
 It opens its own wallet at `POST /v1/agent-wallet`: the Turnkey owner is the
 agent's key, so only the agent can spend. Anyone funds the address with USDC on
 Base. To pay, billing prepares the Turnkey request for an x402 URL and the agent
-stamps it with its key (`/v1/agent-wallet/payments`, then `/confirm`).
+stamps it with its key (`/v1/agent-wallet/payments`, then `/confirm`). An agent
+that can't keep a key registers with a client secret, and INITE keeps the wallet
+key for it: paying is then one call. Agents use the same wallet over MCP
+(`/mcp/wallet`: `wallet`, `pay`, `pay_confirm`, `withdraw`), and hand a person
+`/fund/<address>` to top it up (QR, PIX). In ChatGPT and other MCP Apps clients
+the wallet tools show as a card with the balance, a QR and a Top up button.
 
 **Let sites charge the wallet in one step.** A person allows a site once, with
 limits, on one page in INITE ID. After that the site calls

@@ -9,6 +9,7 @@ import { AuthGuard } from '@nestjs/passport';
 import type { Request, Response } from 'express';
 import type { RequestUser } from '../auth/decorators/user.decorator';
 import { WALLET_GRANT_TYPE, WALLET_SCOPE } from './agent-limits';
+import { selfAgentId } from './self-agent';
 
 /** The wallet's MCP endpoint: the OAuth resource agents get tokens for. */
 export function walletResource(config: ConfigService): string {
@@ -26,8 +27,9 @@ export function walletResourceMetadataUrl(config: ConfigService): string {
  * - for this resource (`aud`) — a token an agent got for some other site
  *   cannot be replayed here to spend the person's money;
  * - naming the agent (`act`) — the person's own token is for the account
- *   page, not for paying as an agent;
- * - with the wallet grant (`wallet:pay`, or an `inite_wallet` detail).
+ *   page, not for paying as an agent — with the wallet grant (`wallet:pay`,
+ *   or an `inite_wallet` detail);
+ * - or an agent on its own (its did:web as `sub`, no `act`): its own wallet.
  *
  * A request without a usable token gets 401 with `WWW-Authenticate` pointing
  * at the resource metadata (RFC 9728), which is how an MCP client finds INITE
@@ -59,8 +61,15 @@ export class AgentTokenGuard extends AuthGuard('jwt') {
       challenge('invalid_token');
       throw new UnauthorizedException('This token was not issued for the INITE wallet');
     }
+    const issuer = (this.config.get<string>('JWT_ISSUER') || 'https://auth-api.inite.ai').replace(
+      /\/$/,
+      '',
+    );
+    if (!user.actor && selfAgentId(user.userId, issuer)) return true;
     if (!user.actor) {
-      throw new ForbiddenException('The wallet MCP is for AI agents acting for a person');
+      throw new ForbiddenException(
+        'The wallet MCP is for AI agents: acting for a person, or on their own INITE identity',
+      );
     }
     const granted =
       user.scopes?.includes(WALLET_SCOPE) ||

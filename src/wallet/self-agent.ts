@@ -47,14 +47,15 @@ export function compressedP256(jwk: Record<string, unknown>): string {
 }
 
 /**
- * The agent's key, from its DID document at INITE Auth. Fetched from the
- * issuer only, never from a URL the caller chose.
+ * The agent's P-256 key, from its DID document at INITE Auth, or null when it
+ * registered with a client secret and has no key. Fetched from the issuer
+ * only, never from a URL the caller chose.
  */
 export async function resolveAgentKey(
   did: string,
   issuer: string,
   fetchFn: typeof fetch = fetch,
-): Promise<string> {
+): Promise<string | null> {
   const id = selfAgentId(did, issuer);
   if (!id) throw new SelfAgentError('Not an agent registered on its own');
   const url = `${issuer.replace(/\/$/, '')}/agents/${id}/did.json`;
@@ -70,12 +71,7 @@ export async function resolveAgentKey(
   const jwk = document.verificationMethod?.find(
     (m) => m.publicKeyJwk?.kty === 'EC' && m.publicKeyJwk?.crv === 'P-256',
   )?.publicKeyJwk;
-  if (!jwk) {
-    throw new SelfAgentError(
-      'The agent registered no P-256 key; a wallet needs one (ES256, the key Turnkey signs with)',
-    );
-  }
-  return compressedP256(jwk);
+  return jwk ? compressedP256(jwk) : null;
 }
 
 /**

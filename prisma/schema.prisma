@@ -1229,6 +1229,10 @@ model Wallet {
   /// An agent's own wallet: the agent's P-256 public key (compressed hex), the
   /// sub-organization's only root user. The agent stamps every request itself.
   ownerKey          String?            @map("owner_key") @db.VarChar(130)
+  /// Set when INITE keeps the owner key for the agent (an agent that can't
+  /// store one): billing stamps its payments, one call each. Null when the
+  /// agent holds its own key.
+  ownerPrivateKey   String?            @map("owner_private_key") @db.VarChar(64)
   createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   topups            WalletTopup[]
   withdrawals       WalletWithdrawal[]

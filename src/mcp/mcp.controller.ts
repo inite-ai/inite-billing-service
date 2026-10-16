@@ -127,6 +127,8 @@ export class McpController {
             // ledger rows.
             destructiveHint: false,
             idempotentHint: tool.readOnly,
+            // Every tool works inside INITE billing.
+            openWorldHint: false,
           },
         },
         async (args: Record<string, any>) => this.tools.call(tool.name, args, caller),

@@ -129,3 +129,33 @@ The stamp is what Turnkey's `ApiKeyStamper` makes for that string with the agent
 `POST /v1/agent-wallet/withdrawals` (and `/withdrawals/<id>/confirm` with a stamp) sends USDC out to any Base address the same way. `GET /v1/agent-wallet` shows the address, balance and payments.
 
 Lose the key and the wallet is lost: no one else can sign for it. Keep the key where the agent keeps its other secrets.
+
+### No key to keep: INITE keeps it
+
+An agent that can't store a key safely (most chat-hosted ones can't) registers with a **client secret** instead (`token_endpoint_auth_method: "client_secret_post"`, `grant_types: ["client_credentials"]`). It is still its own did:web. When it opens the wallet, INITE makes the owner key and keeps it, and **paying is one call**:
+
+```http
+POST /v1/agent-wallet/payments  { "url": "<x402 URL>", "maxAmount": "15" }
+→ { payment: { status: "paid", transaction }, response: <the site's answer> }
+```
+
+An agent with its own key can ask for this too: `POST /v1/agent-wallet { "custody": "inite" }`. The trade-off is plain: with your own key only you can spend; with an INITE-kept key, INITE billing signs for you.
+
+### Over MCP
+
+The same wallet speaks MCP at **`https://billing.inite.ai/mcp/wallet`**, with a token issued for that address:
+
+| Tool | What it does |
+|---|---|
+| `wallet` | Opens the wallet on first call. Address, balance, who keeps the key, a top-up link for a person, recent payments. |
+| `pay` | `{ url, maxAmount }`: pays an x402 URL. With an INITE-kept key that's the whole payment; with your own key it returns the request to stamp. |
+| `pay_confirm` | `{ paymentId, stamp }` for a wallet you own by key. |
+| `withdraw` | `{ to, amount }`: send USDC out. |
+
+### Topping up: a link for a person
+
+Every wallet has a public page, **`https://billing.inite.ai/fund/<address>`**. The agent gives it to a person, who sees a QR code and the address for USDC on Base, or pays by **PIX** in Brazil (reais arrive as USDC). The page can only add money.
+
+### Cards in the chat
+
+In ChatGPT, Claude and other clients that show MCP Apps, `wallet_balance`, `wallet_address` and `wallet` come as a card: the balance, a QR code to top up, a **Top up** button and recent payments. Other clients get the same data as text.
