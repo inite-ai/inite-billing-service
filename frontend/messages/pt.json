@@ -1708,6 +1708,11 @@
     "feesValue": "paga pela INITE",
     "howTitle": "Como abastecer",
     "usdcHint": "qualquer carteira ou corretora",
-    "qrAlt": "QR code do endereço da carteira"
+    "qrAlt": "QR code do endereço da carteira",
+    "cardTitle": "Cartão ou Apple Pay",
+    "cardAmount": "Valor",
+    "cardButton": "Pagar ${amount} com cartão",
+    "cardNote": "Depois do pagamento, {amount} USDC chegam a esta carteira em poucos minutos.",
+    "cardFailed": "Não foi possível iniciar o pagamento com cartão"
   }
 }

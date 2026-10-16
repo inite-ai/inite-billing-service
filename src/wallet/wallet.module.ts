@@ -16,6 +16,8 @@ import { SelfAgentWalletController } from './self-agent-wallet.controller';
 import { SelfAgentWalletService } from './self-agent-wallet.service';
 import { SelfAgentGuard } from './self-agent.guard';
 import { WalletFundController } from './wallet-fund.controller';
+import { TreasuryService } from './treasury.service';
+import { TreasuryAdminController } from './treasury-admin.controller';
 
 /**
  * INITE wallets: a person's own USDC on Base, held under their passkey in
@@ -30,6 +32,7 @@ import { WalletFundController } from './wallet-fund.controller';
     PayFromWalletController,
     SelfAgentWalletController,
     WalletFundController,
+    TreasuryAdminController,
   ],
   providers: [
     WalletService,
@@ -42,6 +45,7 @@ import { WalletFundController } from './wallet-fund.controller';
     AgentTokenGuard,
     SelfAgentWalletService,
     SelfAgentGuard,
+    TreasuryService,
   ],
 })
 export class WalletModule {}

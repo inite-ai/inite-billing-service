@@ -9,10 +9,17 @@ import {
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import { IsString, MaxLength } from 'class-validator';
+import { IsOptional, IsString, MaxLength } from 'class-validator';
 import { getAddress, isAddress } from 'viem';
 import { PrismaService } from '../common/services/prisma.service';
 import { WalletService } from './wallet.service';
+import { TreasuryService } from './treasury.service';
+
+class FundCardDto {
+  /** USD: 10, 25, 50 or 100. */
+  @IsString() @MaxLength(4) amount!: string;
+  @IsOptional() @IsString() @MaxLength(5) locale?: string;
+}
 
 class FundPixDto {
   /** Reais, e.g. "50". */
@@ -31,6 +38,7 @@ export class WalletFundController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly wallets: WalletService,
+    private readonly treasury: TreasuryService,
   ) {}
 
   @Get(':address')
@@ -46,6 +54,7 @@ export class WalletFundController {
       balance: overview.wallet?.balance ?? null,
       owner: wallet.ownerKey ? 'agent' : 'person',
       pix: overview.topups?.pix ?? false,
+      card: (await this.treasury.current()) ? ['10', '25', '50', '100'] : [],
     };
   }
 
@@ -55,6 +64,13 @@ export class WalletFundController {
   async pix(@Param('address') address: string, @Body() body: FundPixDto) {
     const wallet = await this.find(address);
     return this.wallets.topUpByPix(wallet.ownerDid, body.amount);
+  }
+
+  @Post(':address/card')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Top up by card: an order for $N; USDC goes to this address once paid' })
+  card(@Param('address') address: string, @Body() body: FundCardDto) {
+    return this.treasury.startCardTopup(address, body.amount, body.locale);
   }
 
   @Get(':address/topups/:id')

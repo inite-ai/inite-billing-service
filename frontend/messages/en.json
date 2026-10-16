@@ -1708,6 +1708,11 @@
     "feesValue": "paid by INITE",
     "howTitle": "How to top up",
     "usdcHint": "any wallet or exchange",
-    "qrAlt": "QR code of the wallet address"
+    "qrAlt": "QR code of the wallet address",
+    "cardTitle": "Card or Apple Pay",
+    "cardAmount": "Amount",
+    "cardButton": "Pay ${amount} by card",
+    "cardNote": "After payment, {amount} USDC arrives in this wallet within a couple of minutes.",
+    "cardFailed": "The card payment could not be started"
   }
 }

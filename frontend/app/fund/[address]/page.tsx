@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import Image from 'next/image'
 import { useParams } from 'next/navigation'
-import { useTranslations } from 'next-intl'
+import { useLocale, useTranslations } from 'next-intl'
 import QRCode from 'qrcode'
-import { Bot, Loader2, Wallet as WalletIcon, Zap } from 'lucide-react'
+import { Bot, CreditCard, Loader2, Wallet as WalletIcon, Zap } from 'lucide-react'
 import TokenUSDC from '@web3icons/react/icons/tokens/TokenUSDC'
 import { API_URL } from '@/lib/config'
 import { LedgerShell } from '@/components/ledger/LedgerShell'
@@ -17,6 +17,8 @@ interface Wallet {
   balance: string | null
   owner: 'agent' | 'person'
   pix: boolean
+  /** USD amounts a card top-up can be, when INITE's treasury pays them out. */
+  card?: string[]
 }
 
 interface Topup {
@@ -26,7 +28,7 @@ interface Topup {
   qrCode: string | null
 }
 
-type Method = 'usdc' | 'pix'
+type Method = 'usdc' | 'pix' | 'card'
 
 const DEPOSIT: Record<string, string> = {
   pending: 'PENDING',
@@ -48,6 +50,8 @@ const PIX_AMOUNTS = ['50', '100', '250']
  */
 export default function FundPage() {
   const t = useTranslations('fund')
+  const locale = useLocale()
+  const [cardAmount, setCardAmount] = useState('25')
   const { address } = useParams<{ address: string }>()
   const [wallet, setWallet] = useState<Wallet | null>(null)
   const [missing, setMissing] = useState(false)
@@ -65,6 +69,11 @@ export default function FundPage() {
     if (res.status === 404) return setMissing(true)
     if (res.ok) setWallet(await res.json())
   }, [base])
+
+  const cardAvailable = !!wallet?.card?.length
+  useEffect(() => {
+    if (cardAvailable) setMethod((m) => (m === 'usdc' ? 'card' : m))
+  }, [cardAvailable])
 
   useEffect(() => {
     void load()
@@ -109,6 +118,25 @@ export default function FundPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : t('pixFailed'))
     } finally {
+      setBusy(false)
+    }
+  }
+
+  // A card top-up is an order on billing's checkout; USDC follows once it is paid.
+  const startCard = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(`${base}/card`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: cardAmount, locale }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok || !body?.checkoutUrl) throw new Error(body?.message ?? t('cardFailed'))
+      window.location.href = body.checkoutUrl
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('cardFailed'))
       setBusy(false)
     }
   }
@@ -205,6 +233,19 @@ export default function FundPage() {
                 <span className="dot">●</span> {t('howTitle')}
               </p>
               <div className="mb-6 space-y-2">
+                {!!wallet.card?.length && (
+                  <button type="button" className="opt" aria-pressed={method === 'card'} onClick={() => setMethod('card')}>
+                    <span className="radio" aria-hidden />
+                    <span
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-[color:var(--line)] bg-white/[0.04] text-[color:var(--ink)]"
+                      aria-hidden
+                    >
+                      <CreditCard className="h-4 w-4" />
+                    </span>
+                    <span className="ui min-w-0 flex-1 truncate text-[15px]">{t('cardTitle')}</span>
+                    <span className="mono shrink-0 text-[11.5px] text-[color:var(--dim)]">USD</span>
+                  </button>
+                )}
                 <button type="button" className="opt" aria-pressed={method === 'usdc'} onClick={() => setMethod('usdc')}>
                   <span className="radio" aria-hidden />
                   <TokenUSDC variant="background" size={28} className="shrink-0 rounded-full" />
@@ -226,7 +267,31 @@ export default function FundPage() {
                 )}
               </div>
 
-              {method === 'usdc' ? (
+              {method === 'card' ? (
+                <div className="space-y-4">
+                  <div>
+                    <p className="eyebrow mb-3">{t('cardAmount')}</p>
+                    <div className="grid grid-cols-4 gap-2">
+                      {(wallet.card ?? []).map((a) => (
+                        <button
+                          key={a}
+                          type="button"
+                          className="opt !justify-center !py-2"
+                          aria-pressed={cardAmount === a}
+                          onClick={() => setCardAmount(a)}
+                        >
+                          <span className="mono text-sm">${a}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <button type="button" className="btn acc block" disabled={busy} onClick={startCard}>
+                    {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : t('cardButton', { amount: cardAmount })}
+                  </button>
+                  {error && <p className="note err">{error}</p>}
+                  <p className="text-xs leading-relaxed text-[color:var(--dim)]">{t('cardNote', { amount: cardAmount })}</p>
+                </div>
+              ) : method === 'usdc' ? (
                 <div className="space-y-4">
                   {qr && (
                     <div className="flex justify-center">

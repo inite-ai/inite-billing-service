@@ -1708,6 +1708,11 @@
     "feesValue": "la paga INITE",
     "howTitle": "Cómo recargar",
     "usdcHint": "cualquier billetera o exchange",
-    "qrAlt": "Código QR de la dirección"
+    "qrAlt": "Código QR de la dirección",
+    "cardTitle": "Tarjeta o Apple Pay",
+    "cardAmount": "Monto",
+    "cardButton": "Pagar ${amount} con tarjeta",
+    "cardNote": "Tras el pago, {amount} USDC llegan a esta billetera en un par de minutos.",
+    "cardFailed": "No se pudo iniciar el pago con tarjeta"
   }
 }

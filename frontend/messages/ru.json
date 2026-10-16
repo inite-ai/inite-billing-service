@@ -1708,6 +1708,11 @@
     "feesValue": "платит INITE",
     "howTitle": "Как пополнить",
     "usdcHint": "любой кошелёк или биржа",
-    "qrAlt": "QR-код адреса кошелька"
+    "qrAlt": "QR-код адреса кошелька",
+    "cardTitle": "Картой или Apple Pay",
+    "cardAmount": "Сумма",
+    "cardButton": "Оплатить ${amount} картой",
+    "cardNote": "После оплаты на кошелёк придёт {amount} USDC, обычно за пару минут.",
+    "cardFailed": "Не удалось начать оплату картой"
   }
 }

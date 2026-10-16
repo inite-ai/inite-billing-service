@@ -1416,3 +1416,46 @@ model WalletMerchant {
   @@map("wallet_merchants")
   @@schema("billing")
 }
+
+/// INITE's treasury on Base: USDC that card top-ups of INITE wallets are paid
+/// out of. A Turnkey sub-organization whose root key was thrown away after
+/// setup; the only key billing holds is a signer whose Turnkey policy lets it
+/// sign USDC transfers on Base of at most `per_transfer`, nothing else.
+model Treasury {
+  id                String    @id @default(uuid()) @db.Uuid
+  subOrganizationId String    @unique @map("sub_organization_id") @db.VarChar(64)
+  address           String    @unique @db.VarChar(42)
+  turnkeyUserId     String    @map("turnkey_user_id") @db.VarChar(64)
+  signerPublicKey   String    @map("signer_public_key") @db.VarChar(130)
+  signerPrivateKey  String    @map("signer_private_key") @db.VarChar(64)
+  /// USDC, decimal string; enforced by Turnkey per transfer.
+  perTransfer       String    @map("per_transfer") @db.VarChar(20)
+  /// USDC per rolling 24 h; enforced by billing.
+  dailyLimit        String    @map("daily_limit") @db.VarChar(20)
+  retiredAt         DateTime? @map("retired_at") @db.Timestamptz(6)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  payouts           TreasuryPayout[]
+
+  @@map("treasury")
+  @@schema("billing")
+}
+
+/// USDC sent from the treasury to an INITE wallet for a paid card top-up order.
+model TreasuryPayout {
+  id          String   @id @default(uuid()) @db.Uuid
+  treasuryId  String   @map("treasury_id") @db.Uuid
+  treasury    Treasury @relation(fields: [treasuryId], references: [id])
+  orderId     String   @unique @map("order_id") @db.Uuid
+  to          String   @db.VarChar(42)
+  valueRaw    String   @map("value_raw") @db.VarChar(78)
+  /// pending | submitted | mined | reverted | failed | held
+  status      String   @default("pending") @db.VarChar(20)
+  txHash      String?  @map("tx_hash") @db.VarChar(66)
+  error       String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([treasuryId, createdAt])
+  @@map("treasury_payouts")
+  @@schema("billing")
+}
