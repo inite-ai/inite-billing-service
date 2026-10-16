@@ -201,7 +201,7 @@
     "flowAgent": "Agente de IA",
     "featWalletTag": "Carteira INITE",
     "featWalletTitle": "Seus agentes pagam dentro dos seus limites",
-    "featWalletDesc": "As pessoas guardam USDC na própria carteira INITE, que só a passkey delas controla. Os agentes de IA pagam com ela em qualquer site com x402, até os limites aprovados por pagamento, por dia e por mês.",
+    "featWalletDesc": "As pessoas guardam USDC na própria carteira INITE, que só a passkey delas controla. Os agentes de IA pagam com ela em qualquer site com x402, até os limites aprovados por pagamento, por dia e por mês. Um agente também pode ter carteira própria: ele se registra com a própria chave, abre a carteira sozinho e qualquer pessoa pode abastecê-la.",
     "walletMeterLabel": "Gasto hoje",
     "walletMeterHint": "limite definido pelo dono · aprovação por passkey",
     "featScaleTag": "escala",

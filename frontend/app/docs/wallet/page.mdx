@@ -12,6 +12,7 @@ AI agents can now pay with money, both ways:
 - **Your shop gets paid by agents.** Every checkout also accepts **x402**: an agent with a wallet pays the order in USDC on Base by itself.
 - **Sites charge with permission.** A person allows a site to charge their wallet up to a limit, so the site's agent buys in one step.
 - **People's agents pay for them.** A person keeps USDC in their own **INITE wallet**. Their AI agent pays from it on any site that takes x402, within limits the person approved.
+- **Agents with a wallet of their own.** An agent signs up with INITE by itself, with its own key, and opens its own wallet. Whoever wants to fund it sends USDC to the address.
 
 ## For people: the INITE wallet
 
@@ -102,3 +103,29 @@ Connect your MCP client to **`https://billing.inite.ai/mcp/wallet`**.
 - `invalid_url`: https and public hosts only.
 
 A payment the site refused still counts against the limits until its authorization expires, unless the site uses it after all.
+
+## Agents with their own identity and wallet
+
+An agent doesn't need a person's account to have money. It can be somebody on its own:
+
+1. **It signs up by itself.** The agent makes a P-256 key pair and registers with INITE Auth (dynamic registration, `POST https://auth-api.inite.ai/v1/oauth/register`) with `token_endpoint_auth_method: "private_key_jwt"`, `grant_types: ["client_credentials"]` and its public key in `jwks`. Nobody approves this.
+2. **It has an identity.** Its tokens (`client_credentials`, signed with its key, ES256) carry its own **did:web** as `sub`: `did:web:auth-api.inite.ai:agents:dcr_…`. The DID document at `https://auth-api.inite.ai/agents/dcr_…/did.json` publishes its key, so anyone it pays or calls can check who it is.
+3. **It opens its wallet.** With a token for `https://billing.inite.ai/v1/agent-wallet` (the `audience` it asks for), `POST /v1/agent-wallet` returns an address on Base. The wallet's only owner in Turnkey is the agent's key. **INITE can't move this money**: every payment needs the agent's own signature.
+4. **Anyone funds it.** Send USDC on Base to the address. The wallet needs no ETH: INITE pays the network fee.
+5. **It pays.** Two calls:
+
+```http
+POST /v1/agent-wallet/payments
+{ "url": "<an x402 URL, e.g. a checkout's x402Url>", "maxAmount": "15" }
+→ { payment: { id, amount, payTo, request } }     // request: the exact Turnkey request to sign
+
+POST /v1/agent-wallet/payments/<id>/confirm
+{ "stamp": "<X-Stamp of request, made with the agent's key>" }
+→ { payment: { status: "paid", transaction }, response: <the site's answer> }
+```
+
+The stamp is what Turnkey's `ApiKeyStamper` makes for that string with the agent's key. Billing checks that it's by the wallet's owner key and passes it to Turnkey unchanged.
+
+`POST /v1/agent-wallet/withdrawals` (and `/withdrawals/<id>/confirm` with a stamp) sends USDC out to any Base address the same way. `GET /v1/agent-wallet` shows the address, balance and payments.
+
+Lose the key and the wallet is lost: no one else can sign for it. Keep the key where the agent keeps its other secrets.

@@ -25,6 +25,7 @@ import {
 import { Settlements } from '../adapters/crypto/x402/settlements';
 import { HODLE_WALLET_TOPUP_PREFIX, HodleAdapter } from '../adapters/hodle/hodle.adapter';
 import { PasskeyAttestation, TurnkeyRequestError, TurnkeyWallets } from './turnkey-wallets';
+import { SelfAgentError, checkKeyStamp } from './self-agent';
 
 const USDC_DECIMALS = 6;
 /** How long the person has to approve a withdrawal with their passkey. */
@@ -298,7 +299,18 @@ export class WalletService {
       await this.setStatus(withdrawal.id, 'expired');
       throw new ConflictException('This withdrawal expired; start it again');
     }
-    checkStamp(stamp);
+    // A person's wallet takes their passkey's stamp; an agent's own wallet,
+    // the stamp of the agent's key.
+    if (wallet.ownerKey) {
+      try {
+        checkKeyStamp(stamp, wallet.ownerKey);
+      } catch (error) {
+        if (error instanceof SelfAgentError) throw new BadRequestException(error.message);
+        throw error;
+      }
+    } else {
+      checkStamp(stamp);
+    }
     const relayer = await this.settlements.relayer();
     if (!relayer) throw new ServiceUnavailableException('Withdrawals are not available right now');
 
@@ -311,11 +323,9 @@ export class WalletService {
 
     let signature: `0x${string}`;
     try {
-      const result = await this.turnkey.submitStamped(
-        SIGN_RAW_PAYLOAD_PATH,
-        withdrawal.request,
-        stamp,
-      );
+      const result = wallet.ownerKey
+        ? await this.turnkey.submitKeyStamped(SIGN_RAW_PAYLOAD_PATH, withdrawal.request, stamp)
+        : await this.turnkey.submitStamped(SIGN_RAW_PAYLOAD_PATH, withdrawal.request, stamp);
       signature = joinSignature(result.signRawPayloadResult);
     } catch (error: any) {
       await this.setStatus(withdrawal.id, 'failed', error?.message);

@@ -201,7 +201,7 @@
     "flowAgent": "AI agent",
     "featWalletTag": "INITE wallet",
     "featWalletTitle": "Your agents pay, within your limits",
-    "featWalletDesc": "People keep USDC in their own INITE wallet, which only their passkey controls. Their AI agents pay from it on any x402 site, up to the per-payment, daily and monthly limits they approved.",
+    "featWalletDesc": "People keep USDC in their own INITE wallet, which only their passkey controls. Their AI agents pay from it on any x402 site, up to the per-payment, daily and monthly limits they approved. An agent can also have a wallet of its own: it signs up with its own key, opens the wallet itself, and anyone can fund it.",
     "walletMeterLabel": "Spent today",
     "walletMeterHint": "limit set by the owner · passkey to approve",
     "featScaleTag": "scale",

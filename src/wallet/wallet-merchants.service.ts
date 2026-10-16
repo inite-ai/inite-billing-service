@@ -1,3 +1,4 @@
+import { selfAgentId } from './self-agent';
 import { randomBytes } from 'node:crypto';
 import {
   BadRequestException,
@@ -221,6 +222,15 @@ export class WalletMerchantsService {
       approveUrl: this.approveUrl(input.serviceCode, order.id, input.returnTo),
     });
     const wallet = await this.prisma.wallet.findUnique({ where: { ownerDid: input.ownerDid } });
+    // An agent with its own wallet signs every payment itself: no site can
+    // charge it, and no person approves it. It pays the session's x402Url
+    // through /v1/agent-wallet; the site falls back to that (404 = not here).
+    const issuer = process.env.JWT_ISSUER || 'https://auth-api.inite.ai';
+    if (wallet?.ownerKey || selfAgentId(input.ownerDid, issuer)) {
+      throw new NotFoundException(
+        'An agent with its own wallet pays by x402 itself (/v1/agent-wallet)',
+      );
+    }
     if (!wallet) return needs('no_wallet');
     const checkoutUser = await this.prisma.walletAgent.findFirst({
       where: { walletId: wallet.id, kind: 'checkout', status: 'active' },

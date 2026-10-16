@@ -1,4 +1,6 @@
 import { lookup } from 'node:dns/promises';
+import { lookup as lookupCallback } from 'node:dns';
+import { Agent } from 'undici';
 import { isIP } from 'node:net';
 import { getAddress, isAddress } from 'viem';
 import {
@@ -92,7 +94,28 @@ export async function checkSellerUrl(raw: string): Promise<URL> {
   return url;
 }
 
-/** One request to the seller: no redirects followed, a timeout, a size cap. */
+/**
+ * Connections to sellers check the address they actually connect to, not
+ * only the one checkSellerUrl saw: a host that answers DNS with a public
+ * address first and a private one next (DNS rebinding) is refused at connect.
+ */
+const sellerAgent = new Agent({
+  connect: {
+    lookup: (hostname, options, callback) =>
+      lookupCallback(hostname, { ...options, all: true }, (error, addresses) => {
+        if (error) return callback(error, '', 0);
+        const list = (addresses as unknown as { address: string; family: number }[]) ?? [];
+        const safe = list.filter((a) => isPublicAddress(a.address));
+        if (safe.length === 0 || safe.length !== list.length) {
+          return callback(new X402ClientError('This address is not on the public internet'), '', 0);
+        }
+        if ((options as { all?: boolean }).all) return callback(null, safe as any, 0);
+        return callback(null, safe[0]!.address, safe[0]!.family);
+      }),
+  },
+});
+
+/** One request to the seller: no redirects followed, a timeout, a size cap, public addresses only. */
 export async function callSeller(
   url: URL,
   init: { method: string; headers: Record<string, string>; body?: string },
@@ -103,6 +126,8 @@ export async function callSeller(
     body: init.body,
     redirect: 'manual',
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    // @ts-expect-error Node's fetch takes an undici dispatcher; DOM typings don't know it
+    dispatcher: sellerAgent,
   });
   const headers: Record<string, string> = {};
   response.headers.forEach((value, name) => (headers[name.toLowerCase()] = value));
