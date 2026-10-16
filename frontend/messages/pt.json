@@ -1691,14 +1691,23 @@
     "personWallet": "Carteira INITE",
     "lead": "O dinheiro vai direto para o endereço desta carteira. A INITE não pode retirá-lo.",
     "balance": "Saldo",
-    "usdcTitle": "Enviar USDC na rede Base",
+    "usdcTitle": "USDC na rede Base",
     "address": "Endereço",
     "usdcWarning": "Apenas USDC na rede Base. Outros tokens ou redes serão perdidos.",
     "pixTitle": "Pagar com PIX",
     "pixAmount": "Valor, R$",
-    "pixButton": "Gerar código PIX",
+    "pixButton": "Gerar código PIX de R$ {amount}",
     "pixNote": "Os reais são convertidos e chegam como USDC, normalmente em poucos minutos.",
     "pixFailed": "Não foi possível gerar o código PIX",
-    "notFound": "Esta não é uma carteira INITE"
+    "notFound": "Esta não é uma carteira INITE",
+    "walletLabel": "carteira",
+    "step": "recarga",
+    "network": "Rede",
+    "asset": "Ativo",
+    "fees": "Taxa da rede",
+    "feesValue": "paga pela INITE",
+    "howTitle": "Como abastecer",
+    "usdcHint": "qualquer carteira ou corretora",
+    "qrAlt": "QR code do endereço da carteira"
   }
 }

@@ -1691,14 +1691,23 @@
     "personWallet": "Кошелёк INITE",
     "lead": "Деньги приходят прямо на адрес этого кошелька. INITE не может их забрать.",
     "balance": "Баланс",
-    "usdcTitle": "Отправить USDC в сети Base",
+    "usdcTitle": "USDC в сети Base",
     "address": "Адрес",
     "usdcWarning": "Только USDC в сети Base. Другие токены и сети пропадут.",
     "pixTitle": "Оплатить через PIX (Бразилия)",
     "pixAmount": "Сумма, R$",
-    "pixButton": "Получить PIX-код",
+    "pixButton": "Получить PIX-код на R$ {amount}",
     "pixNote": "Реалы конвертируются и приходят в USDC, обычно за несколько минут.",
     "pixFailed": "Не удалось создать PIX-код",
-    "notFound": "Это не кошелёк INITE"
+    "notFound": "Это не кошелёк INITE",
+    "walletLabel": "кошелёк",
+    "step": "пополнение",
+    "network": "Сеть",
+    "asset": "Актив",
+    "fees": "Комиссия сети",
+    "feesValue": "платит INITE",
+    "howTitle": "Как пополнить",
+    "usdcHint": "любой кошелёк или биржа",
+    "qrAlt": "QR-код адреса кошелька"
   }
 }

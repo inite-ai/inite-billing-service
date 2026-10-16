@@ -1691,14 +1691,23 @@
     "personWallet": "Billetera INITE",
     "lead": "El dinero va directo a la dirección de esta billetera. INITE no puede retirarlo.",
     "balance": "Saldo",
-    "usdcTitle": "Enviar USDC en la red Base",
+    "usdcTitle": "USDC en la red Base",
     "address": "Dirección",
     "usdcWarning": "Solo USDC en la red Base. Otros tokens o redes se perderán.",
     "pixTitle": "Pagar con PIX (Brasil)",
     "pixAmount": "Monto, R$",
-    "pixButton": "Obtener código PIX",
+    "pixButton": "Obtener código PIX de R$ {amount}",
     "pixNote": "Los reales se convierten y llegan como USDC, normalmente en pocos minutos.",
     "pixFailed": "No se pudo crear el código PIX",
-    "notFound": "Esta no es una billetera INITE"
+    "notFound": "Esta no es una billetera INITE",
+    "walletLabel": "billetera",
+    "step": "recarga",
+    "network": "Red",
+    "asset": "Activo",
+    "fees": "Comisión de red",
+    "feesValue": "la paga INITE",
+    "howTitle": "Cómo recargar",
+    "usdcHint": "cualquier billetera o exchange",
+    "qrAlt": "Código QR de la dirección"
   }
 }
