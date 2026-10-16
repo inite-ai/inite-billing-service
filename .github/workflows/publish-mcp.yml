@@ -1,0 +1,69 @@
+name: Publish @inite/billing-mcp to npm
+
+# The README tells agents to run `npx -y @inite/billing-mcp`, and nothing
+# published it — npm answered 404. One run publishes mcp/ at the version its
+# package.json names; a version npm already has is refused (bump, never
+# overwrite). Uses npm trusted publishing (OIDC) once it is configured for
+# the package on npmjs.com; until then the NPM_TOKEN repository secret (an
+# automation token that bypasses 2FA). Provenance is attached either way.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch, tag or commit to publish from (default: the default branch).'
+        required: false
+        type: string
+      dry_run:
+        description: Build, pack and show what would be published without publishing.
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # OIDC for npm trusted publishing + provenance attestation.
+      id-token: write
+    defaults:
+      run:
+        working-directory: mcp
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Refuse a version npm already has
+        run: |
+          NAME="$(node -p "require('./package.json').name")"
+          VERSION="$(node -p "require('./package.json').version")"
+          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+            echo "::error::$NAME@$VERSION is already on npm — bump the version in mcp/package.json"
+            exit 1
+          fi
+          echo "publishing $NAME@$VERSION"
+
+      - name: Pack (what would ship)
+        run: npm pack --dry-run
+
+      - name: Publish
+        if: ${{ !inputs.dry_run }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public --provenance
