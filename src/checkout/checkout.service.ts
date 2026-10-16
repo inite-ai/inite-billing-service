@@ -245,7 +245,13 @@ export class CheckoutService {
     if (dto.mode === 'SUBSCRIPTION' && product.type !== 'subscription') {
       throw new BadRequestException(`Product ${product.code} is not a subscription product`);
     }
-    if (dto.mode === 'PAYMENT' && product.type === 'subscription') {
+    // A subscription product's price with a period may also be bought once:
+    // a year paid up front, no renewal, access for exactly that period
+    // (grantEntitlementsForOrder → orderAccessEndsAt, #191). Refusing it here
+    // left #191 unreachable — every one-time annual licence on inite.ai was
+    // answered 400 at checkout. A price without a period on a subscription
+    // product still has to be bought as a subscription.
+    if (dto.mode === 'PAYMENT' && product.type === 'subscription' && !price.interval) {
       throw new BadRequestException(
         `Product ${product.code} is a subscription product, use SUBSCRIPTION mode`,
       );
