@@ -1,0 +1,120 @@
+# INITE Billing Privacy Policy
+
+**Effective:** 16 October 2026
+
+This policy covers the hosted INITE Billing service at `billing.inite.ai`: its web app (catalog, checkout and account pages), its API, its MCP endpoints (`billing.inite.ai/mcp` and `billing.inite.ai/mcp/wallet`), and the INITE Billing connector for Claude. The rest of INITE's websites are covered by the [INITE privacy policy](https://inite.ai/en/privacy). If you run INITE Billing yourself from the open-source code, you are the operator and this policy does not apply to your deployment.
+
+## 1. Who is responsible
+
+The controller is **inite LLC** (trading as INITE), a Wyoming limited liability company, 1621 Central Ave, Cheyenne, WY 82001, USA.
+
+INITE Billing sells and meters access to INITE products and to products built on it. When a product that uses INITE Billing sends us its customers' purchases or usage, that product decides what it sells and to whom.
+
+Contact: **privacy@inite.ai** for privacy requests, **security@inite.ai** for security reports.
+
+## 2. What INITE Billing stores
+
+You sign in through INITE's sign-in service at `auth.inite.ai`. INITE Billing does not keep your password. It knows you by the identifier that sign-in issues (a DID), and keeps your purchases and balances under it.
+
+- **Orders and payments:** what you bought, the price, currency and status, which payment method type was used (for example "card" or "pix"), and the payment processor's reference for the payment.
+- **Subscriptions and entitlements:** your plans, their periods and renewal state, and which features you have access to.
+- **Credits:** your credit balances and a ledger of every top-up and charge, with the feature and description it was for.
+- **Contact details:** your email address and interface language, used for receipts and billing notices, and whether you have unsubscribed.
+- **Notifications** sent to you: the address, the title and text, and the email provider's message id.
+- **Promo codes and referrals:** which codes you used; if you are an affiliate, your referrals, commissions and the payout details you give us (bank, crypto or PayPal).
+- **Crypto payments:** the invoice, the network, the amount, and the sending wallet address and transaction as they appear on the public blockchain.
+- **Wallet records** (only if you create an INITE wallet): the wallet address, the identifier of the passkey that controls it, top-ups, withdrawals and their destination addresses, the agents you authorized with their spending limits, and each payment an agent made, including the site it paid and the request it sent there.
+- **Assistant conversations** (only if you use the billing assistant): your messages, the assistant's replies, the actions it proposed and any feedback you give.
+- **Fraud checks:** for some payments, the IP address of the request, a risk score and the signals behind it.
+- **Checkout analytics:** first-party events such as catalog viewed, checkout started and checkout abandoned, tied to a session id and, when signed in, your identifier. No third-party analytics tool is used.
+- **Records of processor notifications:** the notifications payment processors send us about a payment, stored as received, and the events we send on to the INITE product you bought.
+- **MCP call records:** which tool was called, when, the outcome, credits charged and how long it took. Tool arguments are not stored.
+
+**Card numbers are never sent to or stored by INITE Billing.** Card payments are entered on the payment processor's own hosted page.
+
+We do not sell your data, and we do not use it to train AI models.
+
+### What INITE Billing receives from Claude
+
+When you connect INITE Billing to Claude, it does **not** read your Claude conversations, chat history or files. It receives only:
+
+- the arguments of the INITE Billing tools that Claude calls (for example the price you asked to buy);
+- the identity and the `billing:account` permission your sign-in grants.
+
+Through the connector Claude can read your entitlements, credit balance, subscriptions and the catalog, and open a checkout. It **cannot charge your credits or move money.** Opening a checkout charges nothing: it returns a link to the hosted checkout page, where you review and pay yourself.
+
+### The INITE wallet for agents
+
+The wallet endpoint (`billing.inite.ai/mcp/wallet`) lets an AI agent pay websites that ask for payment over the x402 protocol (USDC on Base). An agent can use it only with the `wallet:pay` permission, which you approve with your wallet passkey together with the limits it may spend: per payment, per day, per month, and optionally only at certain sites. Payments outside those limits are refused. You can revoke an agent at any time.
+
+## 3. How it is used
+
+- To sell you products, take payment, grant and renew access, and meter usage.
+- To send receipts and billing notices, such as a payment that failed or a subscription about to end. You can unsubscribe from non-essential emails.
+- To prevent fraud and to run, secure and debug the service.
+- To pay affiliates their commissions.
+
+The legal bases, for users in the EU, EEA and UK, are:
+
+- **performance of our contract** with you;
+- **legal obligations**, such as keeping records of payments;
+- **legitimate interests** in preventing fraud and operating the service.
+
+## 4. Who processes it for us
+
+| Processor | What it receives | Why |
+|---|---|---|
+| **Stripe** | The amount, product, order reference and, when known, your email | Card payments on Stripe's hosted checkout |
+| **Lava** (lava.top) | The amount, product, order reference and your email | Card, SBP and PayPal payments on Lava's hosted page |
+| **ONE** (one.lat) | The amount, product, order reference and your email | Payments on ONE's hosted checkout |
+| **Hodle** | The amount and an order reference; for a wallet top-up, your wallet address | PIX payments in Brazilian reais |
+| **Apple** and **Google** | The purchase receipt your app sends | Verifying App Store and Google Play purchases |
+| **Turnkey** | Wallet signing requests stamped with your passkey | Keeping and signing for INITE wallets |
+| **Public blockchains** and their data providers | Wallet addresses and transactions, which are public | Detecting and sending crypto payments |
+| **Anthropic** | Your assistant messages; for billing-notice emails, the product, amount and dates (not your name or email) | The billing assistant and the wording of notices |
+| **OpenAI** | Product descriptions and assistant search queries | Product search |
+| **Resend** | Your email address and the message | Sending email |
+| **INITE sign-in service** (auth.inite.ai, operated by INITE) | Your account identity | Sign-in and permissions |
+
+When you pay with a processor, you also give your payment details directly to it, and its own privacy policy applies to them.
+
+The service runs on servers in the **United States** (San Francisco region). If you are outside the US, your data is transferred there. Where the law requires it, transfers rely on appropriate safeguards such as standard contractual clauses.
+
+## 5. How long it is kept
+
+- **Checkout orders that were never paid** are deleted automatically after 24 hours.
+- Everything else, including orders, payments, subscriptions, the credit ledger and assistant conversations, is kept while your account is active and until you ask us to delete it, except where we must keep a record to meet a legal obligation or resolve a dispute.
+
+## 6. Your rights
+
+You can access, export, correct and delete your data, object to or restrict processing, and complain to your data protection authority. Write to **privacy@inite.ai** from the email linked to your account. We answer within the time the law requires, for example one month under the GDPR.
+
+Some records cannot be deleted while the law requires us to keep them, such as payment records. Transactions on a public blockchain cannot be deleted by anyone.
+
+If you bought through a product that uses INITE Billing, we may forward your request to it.
+
+## 7. Security
+
+- **Scoped access.** Every request is tied to the signed-in person or to a product's service key. A token issued for another service is refused, and a connector token works only with the `billing:account` permission.
+- **No card data.** Card details stay with the payment processor.
+- **Encryption in transit.** Traffic is encrypted with TLS.
+
+## 8. Cookies
+
+The web app at `billing.inite.ai` sets only first-party cookies:
+
+| Cookie | Purpose | Lifetime |
+|---|---|---|
+| `access_token` | Keeps you signed in | until the session token expires |
+| `refresh_token` | Renews your session | 7 days |
+| `locale` | Remembers your interface language | 1 year |
+
+During sign-in the app also keeps the sign-in state in your browser's storage, and the catalog remembers the currency you picked. There are no analytics or advertising cookies.
+
+## 9. Children
+
+INITE Billing is not directed at children under 16 and we do not knowingly collect their data.
+
+## 10. Changes
+
+We will post changes here and update the effective date. For material changes, we will also notify account holders by email.
