@@ -11,6 +11,7 @@ import { ConfigService } from '@nestjs/config';
 import type { Wallet, WalletPayment } from '@prisma/client';
 import { formatUnits, parseUnits } from 'viem';
 import { PrismaService } from '../common/services/prisma.service';
+import { openKey, sealKey } from '../common/key-seal';
 import { loadCryptoSettings } from '../adapters/crypto/crypto-config';
 import { ApiKeyStamper } from '@turnkey/api-key-stamper';
 import { RelayerKeys, newTurnkeyApiKey } from '../adapters/crypto/x402/relayer-key';
@@ -159,7 +160,7 @@ export class SelfAgentWalletService {
         data: {
           ownerDid: did,
           ownerKey,
-          ownerPrivateKey: managed?.privateKey ?? null,
+          ownerPrivateKey: managed ? sealKey(managed.privateKey, managed.publicKey) : null,
           subOrganizationId: opened.subOrganizationId,
           turnkeyWalletId: opened.turnkeyWalletId,
           address: opened.address,
@@ -203,7 +204,7 @@ export class SelfAgentWalletService {
   private async stampFor(wallet: Wallet, body: string): Promise<string> {
     const stamp = await new ApiKeyStamper({
       apiPublicKey: wallet.ownerKey!,
-      apiPrivateKey: wallet.ownerPrivateKey!,
+      apiPrivateKey: openKey(wallet.ownerPrivateKey!, wallet.ownerKey!),
     }).stamp(body);
     return stamp.stampHeaderValue;
   }

@@ -388,6 +388,9 @@ describe('Agent with its own identity and wallet E2E', () => {
     expect(opened.body.fundUrl).toMatch(new RegExp(`/fund/${managedChain.address}$`));
     // The private half never leaves billing.
     expect(JSON.stringify(opened.body)).not.toMatch(/"ownerPrivateKey"/);
+    // And it is kept sealed: the row holds nothing that can stamp.
+    const kept = await prisma.wallet.findFirstOrThrow({ where: { ownerDid: SECRET_AGENT } });
+    expect(kept.ownerPrivateKey).toMatch(/^sealed:v1:/);
 
     const paid = await http()
       .post('/v1/agent-wallet/payments')

@@ -1,5 +1,6 @@
 import { createECDH } from 'node:crypto';
 import { PrismaService } from '../../../common/services/prisma.service';
+import { openKey, sealKey } from '../../../common/key-seal';
 
 export interface RelayerKey {
   publicKey: string;
@@ -20,7 +21,8 @@ export function newTurnkeyApiKey(): RelayerKey {
  * The key billing signs its Turnkey requests with, made by billing itself.
  *
  * Nobody types, copies or receives the private half: it is generated here,
- * kept in billing's database, and used only to stamp requests to Turnkey. The
+ * kept in billing's database sealed (key-seal.ts), and used only to stamp
+ * requests to Turnkey. The
  * admin page shows the public half, which is registered in Turnkey for the
  * API user the relayer policy is written for — so even this key can sign
  * nothing but settlements of real payments into our wallet.
@@ -30,11 +32,13 @@ export class RelayerKeys {
 
   /** The key in use, or null before one is made. */
   async current(): Promise<RelayerKey | null> {
-    return this.prisma.x402RelayerKey.findFirst({
+    const row = await this.prisma.x402RelayerKey.findFirst({
       where: { retiredAt: null },
       orderBy: { createdAt: 'desc' },
       select: { publicKey: true, privateKey: true },
     });
+    if (!row) return null;
+    return { publicKey: row.publicKey, privateKey: openKey(row.privateKey, row.publicKey) };
   }
 
   /**
@@ -49,7 +53,9 @@ export class RelayerKeys {
         where: { retiredAt: null },
         data: { retiredAt: new Date() },
       }),
-      this.prisma.x402RelayerKey.create({ data: { publicKey, privateKey } }),
+      this.prisma.x402RelayerKey.create({
+        data: { publicKey, privateKey: sealKey(privateKey, publicKey) },
+      }),
     ]);
     return { publicKey };
   }

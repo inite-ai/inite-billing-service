@@ -25,6 +25,7 @@ import { WebhookProcessor } from '../src/workers/webhook.processor';
 import { X402Service } from '../src/checkout/x402.service';
 import { Relayer, TRANSFER_WITH_AUTHORIZATION_SELECTOR } from '../src/adapters/crypto/x402/relayer';
 import { Authorization, typedData, usdcAddress } from '../src/adapters/crypto/x402/protocol';
+import { openKey } from '../src/common/key-seal';
 
 /**
  * An agent pays a checkout session over x402, end to end against a real
@@ -261,8 +262,12 @@ describe('x402 E2E', () => {
 
     // The private half stays in billing: not in any answer.
     const stored = await prisma.x402RelayerKey.findFirstOrThrow({ where: { retiredAt: null } });
-    expect(JSON.stringify(res.body)).not.toContain(stored.privateKey);
-    expect(JSON.stringify(made)).not.toContain(stored.privateKey);
+    const privateHalf = openKey(stored.privateKey, stored.publicKey);
+    expect(JSON.stringify(res.body)).not.toContain(privateHalf);
+    expect(JSON.stringify(made)).not.toContain(privateHalf);
+    // Kept sealed: the row holds nothing that can stamp.
+    expect(stored.privateKey).toMatch(/^sealed:v1:/);
+    expect(stored.privateKey).not.toContain(privateHalf);
     const real = await (app.get(X402Service) as any).relayer();
     expect(real?.address).toBe(RELAYER);
 
