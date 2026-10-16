@@ -19,6 +19,7 @@ import {
   checkoutPolicy,
 } from './agent-limits';
 import { TurnkeyRequestError, TurnkeyWallets } from './turnkey-wallets';
+import { primaryIssuer } from '../auth/token-contract';
 
 const CREATE_USERS_PATH = '/public/v1/submit/create_users';
 const CREATE_POLICY_PATH = '/public/v1/submit/create_policy';
@@ -313,7 +314,7 @@ export class WalletAgentsService {
 
   /** did:web:<issuer host>:agents:<id> → its document URL; null for any other DID. */
   private didUrl(agentDid: string): string | null {
-    const issuer = new URL(this.config.get<string>('JWT_ISSUER') || 'https://auth-api.inite.ai');
+    const issuer = new URL(primaryIssuer(this.config));
     const host = issuer.port ? `${issuer.hostname}%3A${issuer.port}` : issuer.hostname;
     const match = /^did:web:([^:]+):agents:([0-9a-f-]{36})$/i.exec(agentDid);
     if (!match || match[1] !== host) return null;

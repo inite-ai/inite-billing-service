@@ -34,6 +34,7 @@ import {
   readTerms,
   settledTransaction,
 } from './x402-client';
+import { primaryIssuer } from '../auth/token-contract';
 
 const SIGN_RAW_PAYLOAD_PATH = '/public/v1/submit/sign_raw_payload';
 const BLOCKED_HEADERS = /^(host|cookie|authorization|proxy-|x-payment|payment-|content-length)/i;
@@ -80,10 +81,7 @@ export class SelfAgentWalletService {
 
   /** INITE Auth's issuer: the only place agent DID documents are read from. */
   issuer(): string {
-    return (this.config.get<string>('JWT_ISSUER') || 'https://auth-api.inite.ai').replace(
-      /\/$/,
-      '',
-    );
+    return primaryIssuer(this.config);
   }
 
   /** A page a person opens to fund this wallet: address, QR, PIX. */

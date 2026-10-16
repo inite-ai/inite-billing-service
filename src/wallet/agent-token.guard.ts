@@ -10,6 +10,7 @@ import type { Request, Response } from 'express';
 import type { RequestUser } from '../auth/decorators/user.decorator';
 import { WALLET_GRANT_TYPE, WALLET_SCOPE } from './agent-limits';
 import { selfAgentId } from './self-agent';
+import { primaryIssuer } from '../auth/token-contract';
 
 /** The wallet's MCP endpoint: the OAuth resource agents get tokens for. */
 export function walletResource(config: ConfigService): string {
@@ -61,10 +62,7 @@ export class AgentTokenGuard extends AuthGuard('jwt') {
       challenge('invalid_token');
       throw new UnauthorizedException('This token was not issued for the INITE wallet');
     }
-    const issuer = (this.config.get<string>('JWT_ISSUER') || 'https://auth-api.inite.ai').replace(
-      /\/$/,
-      '',
-    );
+    const issuer = primaryIssuer(this.config);
     if (!user.actor && selfAgentId(user.userId, issuer)) return true;
     if (!user.actor) {
       throw new ForbiddenException(
