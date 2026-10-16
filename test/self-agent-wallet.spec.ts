@@ -313,4 +313,40 @@ describe('Agent with its own identity and wallet E2E', () => {
     const overview = await http().get('/v1/agent-wallet').set('Authorization', token()).expect(200);
     expect(overview.body.payments[0]).toMatchObject({ amount: '1.5', status: 'paid' });
   });
+
+  it('is never charged by a site: pay-from-wallet answers 404 and the agent pays x402 itself', async () => {
+    const service = await prisma.service.create({
+      data: { code: 'agentshop', name: 'Agent shop', apiKey: 'agentshop-key-0123456789' },
+    });
+    const product = await prisma.product.create({
+      data: {
+        code: 'agentbook',
+        name: 'A book',
+        moduleScope: 'agentshop',
+        type: 'one_time',
+        isActive: true,
+        serviceId: service.id,
+      },
+    });
+    await prisma.price.create({
+      data: {
+        productId: product.id,
+        code: 'agentbook-usd',
+        currency: 'USD',
+        amount: 4,
+        isActive: true,
+      },
+    });
+    const session = await http()
+      .post('/v1/checkout/sessions')
+      .set('x-api-key', 'agentshop-key-0123456789')
+      .send({ priceCode: 'agentbook-usd', mode: 'PAYMENT', userId: AGENT });
+    expect(session.status).toBe(201);
+    await http()
+      .post(`/v1/checkout/sessions/${session.body.sessionId}/pay-from-wallet`)
+      .set('x-api-key', 'agentshop-key-0123456789')
+      .send({ userId: AGENT })
+      .expect(404);
+    await prisma.service.deleteMany({ where: { code: 'agentshop' } });
+  });
 });
