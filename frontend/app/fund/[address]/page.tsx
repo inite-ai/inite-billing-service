@@ -5,7 +5,8 @@ import Image from 'next/image'
 import { useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import QRCode from 'qrcode'
-import { Loader2 } from 'lucide-react'
+import { Bot, Loader2, Wallet as WalletIcon, Zap } from 'lucide-react'
+import TokenUSDC from '@web3icons/react/icons/tokens/TokenUSDC'
 import { API_URL } from '@/lib/config'
 import { LedgerShell } from '@/components/ledger/LedgerShell'
 import { CopyField } from '@/components/checkout/CryptoInvoice'
@@ -25,6 +26,8 @@ interface Topup {
   qrCode: string | null
 }
 
+type Method = 'usdc' | 'pix'
+
 const DEPOSIT: Record<string, string> = {
   pending: 'PENDING',
   paid: 'FIAT_PAID',
@@ -34,10 +37,14 @@ const DEPOSIT: Record<string, string> = {
   refunded: 'REFUNDED',
 }
 
+const PIX_AMOUNTS = ['50', '100', '250']
+
 /**
  * Funding an INITE wallet by its address: the link an AI agent hands a
- * person ("top up my wallet"). USDC on Base from any wallet or exchange, or
- * PIX in reais that arrives as USDC. Nothing here can take money out.
+ * person ("top up my wallet"). Laid out like the checkout: the wallet on the
+ * left as the receipt, the ways to fund it on the right. USDC on Base from
+ * any wallet or exchange, or PIX in reais that arrives as USDC. Nothing here
+ * can take money out.
  */
 export default function FundPage() {
   const t = useTranslations('fund')
@@ -45,6 +52,7 @@ export default function FundPage() {
   const [wallet, setWallet] = useState<Wallet | null>(null)
   const [missing, setMissing] = useState(false)
   const [qr, setQr] = useState<string | null>(null)
+  const [method, setMethod] = useState<Method>('usdc')
   const [amount, setAmount] = useState('50')
   const [topup, setTopup] = useState<Topup | null>(null)
   const [busy, setBusy] = useState(false)
@@ -60,14 +68,18 @@ export default function FundPage() {
 
   useEffect(() => {
     void load()
+    // The balance moves when someone sends USDC; keep it current while open.
+    const timer = setInterval(() => void load(), 15000)
+    return () => clearInterval(timer)
   }, [load])
 
+  const walletAddress = wallet?.address
   useEffect(() => {
-    if (!wallet) return
-    QRCode.toDataURL(`ethereum:${wallet.address}@8453`, { margin: 1, width: 320 })
+    if (!walletAddress) return
+    QRCode.toDataURL(`ethereum:${walletAddress}@8453`, { margin: 1, width: 360, errorCorrectionLevel: 'M' })
       .then(setQr)
       .catch(() => setQr(null))
-  }, [wallet])
+  }, [walletAddress])
 
   // A PIX top-up: ask until it is paid, then refresh the balance.
   useEffect(() => {
@@ -104,14 +116,16 @@ export default function FundPage() {
   if (missing) {
     return (
       <LedgerShell>
-        <h1 className="text-xl font-semibold">{t('notFound')}</h1>
+        <section className="panel rise w-full max-w-[420px] p-9 text-center">
+          <h1 className="text-[28px]">{t('notFound')}</h1>
+        </section>
       </LedgerShell>
     )
   }
   if (!wallet) {
     return (
       <LedgerShell>
-        <Loader2 className="h-5 w-5 animate-spin" />
+        <Loader2 className="h-6 w-6 animate-spin text-[color:var(--dim)]" />
       </LedgerShell>
     )
   }
@@ -126,55 +140,144 @@ export default function FundPage() {
           depositStatus: DEPOSIT[topup.status] ?? 'PENDING',
         }
       : null
+  const short = `${wallet.address.slice(0, 6)}…${wallet.address.slice(-4)}`
 
   return (
     <LedgerShell>
-      <div className="space-y-6">
-        <div>
-          <p className="text-xs uppercase tracking-wide text-[var(--text-muted,#6b6b6b)]">
-            {wallet.owner === 'agent' ? t('agentWallet') : t('personWallet')}
-          </p>
-          <h1 className="mt-1 text-2xl font-semibold">{t('title')}</h1>
-          <p className="mt-2 text-sm opacity-80">{t('lead')}</p>
-          <p className="mt-3 text-sm">
-            {t('balance')}: <strong>{wallet.balance ?? '—'} USDC</strong>
-          </p>
-        </div>
+      <div className="grid w-full max-w-[980px] gap-4 md:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] md:items-start md:gap-5">
+        {/* The wallet, as the receipt: whose it is and what it holds. */}
+        <aside className="receipt rise d1">
+          <div className="rc-top sm:!px-5">
+            <span className="path">
+              {t('walletLabel')} <span>{short}</span>
+            </span>
+            <span className="live">
+              <i />
+              {t('step')}
+            </span>
+          </div>
+          <div className="mesh px-4 pb-3 pt-6 sm:px-5">
+            <p className="eyebrow mb-3">
+              <span className="dot">●</span> {wallet.owner === 'agent' ? t('agentWallet') : t('personWallet')}
+            </p>
+            <h1 className="flex items-center gap-3 text-[30px] sm:text-[36px]">
+              {wallet.owner === 'agent' ? (
+                <Bot className="h-8 w-8 shrink-0 text-[color:var(--accent)]" aria-hidden />
+              ) : (
+                <WalletIcon className="h-8 w-8 shrink-0 text-[color:var(--accent)]" aria-hidden />
+              )}
+              {t('title')}
+            </h1>
+            <p className="mt-3 text-sm leading-relaxed text-[color:var(--dim)]">{t('lead')}</p>
+          </div>
+          <div className="rc-body sm:!px-5">
+            <div className="rc-line">
+              <span className="k">{t('network')}</span>
+              <span className="v">Base</span>
+            </div>
+            <div className="rc-line">
+              <span className="k">{t('asset')}</span>
+              <span className="v">USDC</span>
+            </div>
+            <div className="rc-line">
+              <span className="k">{t('fees')}</span>
+              <span className="v ok">{t('feesValue')}</span>
+            </div>
+          </div>
+          <div className="px-4 pb-5 pt-4 sm:px-5">
+            <div className="flex items-baseline justify-between gap-4">
+              <span className="text-sm text-[color:var(--dim)]">{t('balance')}</span>
+              <span className="text-right font-[family-name:var(--display)] text-[34px] font-bold leading-none tracking-[-0.02em]">
+                {wallet.balance ?? '—'}{' '}
+                <span className="mono text-base font-medium text-[color:var(--dim)]">USDC</span>
+              </span>
+            </div>
+          </div>
+        </aside>
 
-        <section className="space-y-3">
-          <h2 className="font-medium">{t('usdcTitle')}</h2>
-          {qr && (
-            <Image src={qr} alt="" width={160} height={160} unoptimized className="rounded-lg border bg-white p-1" />
-          )}
-          <CopyField label={t('address')} value={wallet.address} />
-          <p className="text-xs opacity-75">{t('usdcWarning')}</p>
-        </section>
-
-        {wallet.pix && (
-          <section className="space-y-3">
-            <h2 className="font-medium">{t('pixTitle')}</h2>
-            {pixPayment ? (
-              <PixInvoice payment={pixPayment} onRenew={() => setTopup(null)} renewing={false} />
-            ) : (
-              <div className="flex flex-wrap items-end gap-2">
-                <label className="text-sm">
-                  {t('pixAmount')}
-                  <input
-                    className="ml-2 w-28 rounded border px-2 py-1"
-                    inputMode="decimal"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value.replace(',', '.'))}
-                  />
-                </label>
-                <button className="btn btn-primary" disabled={busy} onClick={startPix}>
-                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : t('pixButton')}
+        {/* The ways to fund it. */}
+        <section className="panel rise d2 p-5 sm:p-7">
+          {pixPayment ? (
+            <PixInvoice payment={pixPayment} onRenew={() => setTopup(null)} renewing={false} />
+          ) : (
+            <>
+              <p className="eyebrow mb-3">
+                <span className="dot">●</span> {t('howTitle')}
+              </p>
+              <div className="mb-6 space-y-2">
+                <button type="button" className="opt" aria-pressed={method === 'usdc'} onClick={() => setMethod('usdc')}>
+                  <span className="radio" aria-hidden />
+                  <TokenUSDC variant="background" size={28} className="shrink-0 rounded-full" />
+                  <span className="ui min-w-0 flex-1 truncate text-[15px]">{t('usdcTitle')}</span>
+                  <span className="mono shrink-0 text-[11.5px] text-[color:var(--dim)]">{t('usdcHint')}</span>
                 </button>
+                {wallet.pix && (
+                  <button type="button" className="opt" aria-pressed={method === 'pix'} onClick={() => setMethod('pix')}>
+                    <span className="radio" aria-hidden />
+                    <span
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-[color:var(--line)] bg-white/[0.04] text-[color:var(--ink)]"
+                      aria-hidden
+                    >
+                      <Zap className="h-4 w-4" />
+                    </span>
+                    <span className="ui min-w-0 flex-1 truncate text-[15px]">{t('pixTitle')}</span>
+                    <span className="mono shrink-0 text-[11.5px] text-[color:var(--dim)]">BRL</span>
+                  </button>
+                )}
               </div>
-            )}
-            {error && <p className="text-sm text-red-600">{error}</p>}
-            <p className="text-xs opacity-75">{t('pixNote')}</p>
-          </section>
-        )}
+
+              {method === 'usdc' ? (
+                <div className="space-y-4">
+                  {qr && (
+                    <div className="flex justify-center">
+                      <Image
+                        src={qr}
+                        alt={t('qrAlt')}
+                        width={200}
+                        height={200}
+                        unoptimized
+                        className="rounded-xl bg-white p-2"
+                      />
+                    </div>
+                  )}
+                  <CopyField label={t('address')} value={wallet.address} />
+                  <p className="note warn text-xs">{t('usdcWarning')}</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <p className="eyebrow mb-3">{t('pixAmount')}</p>
+                    <div className="mb-2 flex gap-2">
+                      {PIX_AMOUNTS.map((a) => (
+                        <button
+                          key={a}
+                          type="button"
+                          className="opt !justify-center !py-2"
+                          aria-pressed={amount === a}
+                          onClick={() => setAmount(a)}
+                        >
+                          <span className="mono text-sm">R$ {a}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <input
+                      className="field"
+                      inputMode="decimal"
+                      value={amount}
+                      aria-label={t('pixAmount')}
+                      onChange={(e) => setAmount(e.target.value.replace(',', '.'))}
+                    />
+                  </div>
+                  <button type="button" className="btn acc block" disabled={busy || !amount} onClick={startPix}>
+                    {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : t('pixButton', { amount })}
+                  </button>
+                  {error && <p className="note err">{error}</p>}
+                  <p className="text-xs leading-relaxed text-[color:var(--dim)]">{t('pixNote')}</p>
+                </div>
+              )}
+            </>
+          )}
+        </section>
       </div>
     </LedgerShell>
   )

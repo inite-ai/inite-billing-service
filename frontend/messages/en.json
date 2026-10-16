@@ -1691,14 +1691,23 @@
     "personWallet": "INITE wallet",
     "lead": "The money goes straight to this wallet's address. INITE can't take it out.",
     "balance": "Balance",
-    "usdcTitle": "Send USDC on Base",
+    "usdcTitle": "USDC on Base",
     "address": "Address",
     "usdcWarning": "Only USDC on the Base network. Other tokens or networks will be lost.",
     "pixTitle": "Pay by PIX (Brazil)",
     "pixAmount": "Amount, R$",
-    "pixButton": "Get a PIX code",
+    "pixButton": "Get a PIX code for R$ {amount}",
     "pixNote": "The reais are converted and arrive as USDC, usually within minutes.",
     "pixFailed": "The PIX code could not be created",
-    "notFound": "This is not an INITE wallet"
+    "notFound": "This is not an INITE wallet",
+    "walletLabel": "wallet",
+    "step": "top-up",
+    "network": "Network",
+    "asset": "Asset",
+    "fees": "Network fees",
+    "feesValue": "paid by INITE",
+    "howTitle": "How to top up",
+    "usdcHint": "any wallet or exchange",
+    "qrAlt": "QR code of the wallet address"
   }
 }
