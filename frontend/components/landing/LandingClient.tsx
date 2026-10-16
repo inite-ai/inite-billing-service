@@ -479,6 +479,7 @@ export default function LandingClient() {
               {t('footerGithub')}
             </a>
             <a href="mailto:support@inite.ai">{t('footerSupport')}</a>
+            <Link href="/privacy">{t('footerPrivacy')}</Link>
           </div>
         </div>
       </footer>

@@ -4,7 +4,7 @@ import { DOCS_PAGES } from '@/lib/docs-nav'
 import { getAllPosts } from '@/lib/blog'
 
 /**
- * Public + indexable routes: the marketing landing, the price list and the docs. Everything
+ * Public + indexable routes: the marketing landing, the price list, the docs, the blog and the privacy policy. Everything
  * else is auth-gated (see robots). i18n is cookie-based (no [lang] path), so
  * EN and RU share one URL — no per-language sitemap entries.
  */
@@ -27,5 +27,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'monthly' as const,
       priority: 0.6,
     })),
+    { url: `${SITE_URL}/privacy`, lastModified: now, changeFrequency: 'yearly' as const, priority: 0.3 },
   ]
 }
