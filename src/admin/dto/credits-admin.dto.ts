@@ -1,3 +1,4 @@
+import { IsUserId } from '../../common/validators/is-user-id';
 import { Type } from 'class-transformer';
 import { IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
 
@@ -13,7 +14,7 @@ import { IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-
  * handler never read — every manual adjustment recorded `undefined`.
  */
 export class AdminAdjustCreditsDto {
-  @IsUUID()
+  @IsUserId()
   userId!: string;
 
   @IsOptional()

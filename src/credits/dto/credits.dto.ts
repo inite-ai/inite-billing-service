@@ -1,3 +1,4 @@
+import { IsUserId } from '../../common/validators/is-user-id';
 import { Type } from 'class-transformer';
 import {
   IsInt,
@@ -22,7 +23,7 @@ import {
  */
 export class ConsumeCreditsDto {
   @IsOptional()
-  @IsUUID()
+  @IsUserId()
   userId?: string;
 
   @IsOptional()
@@ -71,7 +72,7 @@ export class ConsumeCreditsDto {
  */
 export class AdjustCreditsDto {
   @IsOptional()
-  @IsUUID()
+  @IsUserId()
   userId?: string;
 
   @IsOptional()

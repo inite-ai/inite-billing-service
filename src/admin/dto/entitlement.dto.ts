@@ -1,4 +1,5 @@
-import { IsDateString, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { IsUserId } from '../../common/validators/is-user-id';
+import { IsDateString, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 
 /**
  * Body for POST /v1/admin/entitlements — a manual access grant, so the target
@@ -6,7 +7,7 @@ import { IsDateString, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } fro
  * entitlement payloads are module-defined.
  */
 export class CreateEntitlementDto {
-  @IsUUID()
+  @IsUserId()
   userId!: string;
 
   @IsString()
