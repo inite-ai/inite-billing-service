@@ -32,6 +32,29 @@ The entitlement `key` is derived from the **Product's `metadata`** at grant time
 So a "Pro" product with `code: "pro"` and no metadata grants the key `pro`. A bundle can grant
 several: `metadata.entitlements = ["pro", "api_access", "priority_support"]`.
 
+### Selling per item (one price for any chapter, episode, report)
+
+When every unit costs the same, make **one product** and let the key name the unit:
+
+```json
+{ "entitlementTemplate": "mysite:chapter:{book}:{chapter}",
+  "itemParams": { "book": "^[a-z0-9-]{1,60}$", "chapter": "^[A-Za-z0-9_-]{1,40}$" } }
+```
+
+Your site names the unit when it opens the checkout, with its service key:
+
+```http
+POST /v1/checkout/sessions
+x-api-key: <service key>
+{ "priceCode": "mysite-chapter-usd", "mode": "PAYMENT", "userId": "did:…",
+  "metadata": { "item": { "book": "celestial-code", "chapter": "ch-3" } } }
+```
+
+- Billing checks `item` against `itemParams` (whole values only, nothing extra) and answers 400 otherwise.
+- Only the site can name the item: a checkout the buyer opens with their own token is refused for such a product, so nobody can buy one chapter and get another.
+- On payment the buyer gets exactly one key, `mysite:chapter:celestial-code:ch-3`. A refund takes it back like any order's entitlement.
+- Everything else is as for any order: card, PIX, crypto, `x402Url` for agents, paying from the INITE wallet.
+
 ## 2. It's granted automatically on payment
 
 You don't call a "grant" endpoint. When an order or subscription reaches `paid`, the orchestrator

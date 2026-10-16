@@ -1,3 +1,4 @@
+import { checkItem, itemKey, itemTemplate } from '../catalog/item-entitlements';
 import {
   Injectable,
   Logger,
@@ -504,7 +505,20 @@ export class PaymentOrchestratorService implements OnModuleInit {
 
   private async grantEntitlementsForOrder(order: any, tx: any): Promise<void> {
     const product = order.price.product;
-    const entitlementKeys = this.extractEntitlementKeys(product);
+    // Sold per item: exactly the key for the item named at checkout.
+    const template = itemTemplate(product);
+    let entitlementKeys: string[];
+    if (template) {
+      const item = (order.metadata as Record<string, unknown> | null)?.item;
+      try {
+        entitlementKeys = [itemKey(template, checkItem(template, item))];
+      } catch {
+        this.logger.error(`Order ${order.id} is for an item product but names no valid item`);
+        return;
+      }
+    } else {
+      entitlementKeys = this.extractEntitlementKeys(product);
+    }
     const startsAt = new Date();
     // A one-time order for a priced period (a year paid once) is that period
     // of access; a price with no interval is kept for good. See orderAccessEndsAt.
