@@ -3,7 +3,7 @@
   "name": "io.github.inite-ai/inite-billing-service",
   "title": "INITE Billing & Wallet",
   "description": "Billing for AI agents: entitlements, credits, checkout links, an agent wallet paying over x402.",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "websiteUrl": "https://billing.inite.ai",
   "repository": {
     "url": "https://github.com/inite-ai/inite-billing-service",
