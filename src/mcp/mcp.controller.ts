@@ -124,6 +124,9 @@ export class McpController {
           description: tool.description,
           inputSchema: tool.inputSchema,
           annotations: {
+            // Claude's directory reads the listing name from here as well as
+            // from the top-level title.
+            title: tool.title,
             readOnlyHint: tool.readOnly,
             // Nothing here deletes anything; the writes create orders and
             // ledger rows.
