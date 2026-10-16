@@ -94,7 +94,7 @@ Working on the code instead: [Run from source](#run-from-source).
 issues the tokens that Billing and
 [INITE Brain](https://github.com/inite-ai/inite-brain-service) verify; the
 contract between them is
-[triad-compatibility.md](https://github.com/inite-ai/inite-ecosystem/blob/main/docs/triad-compatibility.md).
+[the Triad contract](https://github.com/inite-ai/inite-triad/blob/main/docs/compatibility.md).
 Run all three with one compose file:
 [inite-ai/inite-triad](https://github.com/inite-ai/inite-triad).
 
