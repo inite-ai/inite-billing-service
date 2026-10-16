@@ -145,7 +145,11 @@ describe('MCP tools', () => {
         },
       });
 
-      const result: any = await service.call('consume_credits', { amount: 5 }, asUser);
+      const result: any = await service.call(
+        'consume_credits',
+        { user_id: 'user-1', amount: 5 },
+        asService,
+      );
 
       expect(result.isError).toBeUndefined();
       expect(structured(result)).toMatchObject({ success: false, error: 'Insufficient credits' });
@@ -217,6 +221,50 @@ describe('MCP tools', () => {
         undefined,
         'svc-a',
       );
+    });
+  });
+
+  describe('what a person is offered', () => {
+    // A person's own client (Claude's connector) reads their account and gets
+    // checkout links; charging credits stays a product module's step.
+    it('lists everything but the service-only charging tool', () => {
+      const { service } = build();
+      const names = service.listFor(asUser).map((t) => t.name);
+      expect(names).not.toContain('consume_credits');
+      expect(names).toEqual(
+        expect.arrayContaining([
+          'check_entitlement',
+          'get_credit_balance',
+          'create_checkout_session',
+        ]),
+      );
+      expect(service.listFor(asService).map((t) => t.name)).toContain('consume_credits');
+    });
+
+    it('refuses the charging tool to a person who calls it by name', async () => {
+      const { service, credits } = build();
+      const result: any = await service.call(
+        'consume_credits',
+        { amount: 5, idempotency_key: 'x' },
+        asUser,
+      );
+      expect(result.isError).toBe(true);
+      expect(credits.consume).not.toHaveBeenCalled();
+    });
+
+    it('describes tools without telling the model what to do or naming other tools', () => {
+      const { service } = build();
+      const tools = service.list();
+      const names = tools.map((t) => t.name);
+      for (const tool of tools) {
+        for (const other of names) {
+          if (other !== tool.name)
+            expect(`${tool.name}: ${tool.description}`).not.toMatch(new RegExp(`\\b${other}\\b`));
+        }
+        expect(tool.description).not.toMatch(
+          /\b(call this|use this|you should|you must|before doing)\b/i,
+        );
+      }
     });
   });
 });

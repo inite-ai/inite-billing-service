@@ -26,6 +26,13 @@ export interface McpToolDefinition {
   inputSchema: z.ZodRawShape;
   /** Read-only tools are safe to retry and safe to call speculatively. */
   readOnly: boolean;
+  /**
+   * Offered to service keys only. Charging a customer's credits is the
+   * product module's step after doing paid work; a person's own client
+   * (Claude, say) has no work to charge for, and a directory connector
+   * that moves value is not accepted.
+   */
+  serviceOnly?: boolean;
   handler: (args: Record<string, any>, caller: McpCaller) => Promise<unknown>;
 }
 
@@ -68,13 +75,18 @@ export class McpToolsService {
     private readonly subscriptions: SubscriptionsService,
   ) {}
 
+  /** The tools this caller is offered: everything for a service key, all but the service-only ones for a person. */
+  listFor(caller: McpCaller): McpToolDefinition[] {
+    return this.list().filter((tool) => caller.isService || !tool.serviceOnly);
+  }
+
   list(): McpToolDefinition[] {
     return [
       {
         name: 'check_entitlement',
         title: 'Check an entitlement',
         description:
-          'Answer whether a customer currently holds a named entitlement — the check to run before doing paid work. Returns granted=false rather than an error when they do not.',
+          'Whether a customer currently holds a named entitlement. Returns granted=false rather than an error when they do not.',
         readOnly: true,
         inputSchema: {
           key: z.string().describe('Entitlement key, e.g. "access.pro"'),
@@ -152,8 +164,9 @@ export class McpToolsService {
         name: 'consume_credits',
         title: 'Charge credits',
         description:
-          'Debit a customer for work done. Pass an idempotency_key: agents retry, and a retry must not charge twice. Returns success=false with the remaining balance when there are not enough credits, rather than failing the call.',
+          'Debits a customer for work done. The idempotency_key makes a retried call charge once. Returns success=false with the remaining balance when there are not enough credits, rather than failing the call.',
         readOnly: false,
+        serviceOnly: true,
         inputSchema: {
           user_id: z.string().optional().describe('Customer id. Required with a service key.'),
           amount: z.number().int().positive().optional().describe('Flat number of credits.'),
@@ -210,7 +223,7 @@ export class McpToolsService {
         name: 'create_checkout_session',
         title: 'Open a checkout',
         description:
-          'Start a purchase and get back a URL to send the customer to. This is the answer when check_entitlement says no or consume_credits reports an empty balance.',
+          'Starts a purchase and returns the URL of the hosted checkout page, where the customer reviews and pays. This call charges nothing.',
         readOnly: false,
         inputSchema: {
           price_code: z.string().describe('Which price to sell.'),
@@ -269,7 +282,9 @@ export class McpToolsService {
    * internals.
    */
   async call(name: string, args: Record<string, any>, caller: McpCaller) {
-    const tool = this.list().find((t) => t.name === name);
+    // listFor, not list: a service-only tool is as absent for a person
+    // calling it by name as it is from their tool list.
+    const tool = this.listFor(caller).find((t) => t.name === name);
     if (!tool) {
       return this.errorResult(`No such tool: ${name}`);
     }

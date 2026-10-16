@@ -103,11 +103,12 @@ describe('MCP E2E', () => {
     const res = await post(rpc('tools/list', {}, 2));
     const body = parseBody(res);
 
+    // The mock caller is a person: charging credits is a service key's step
+    // and is not offered to them (McpToolsService.listFor).
     const names = body.result.tools.map((t: any) => t.name).sort();
     expect(names).toEqual(
       [
         'check_entitlement',
-        'consume_credits',
         'create_checkout_session',
         'get_credit_balance',
         'list_catalog',
@@ -124,12 +125,12 @@ describe('MCP E2E', () => {
     expect(check.annotations.readOnlyHint).toBe(true);
   });
 
-  it('marks the charging tool as not read-only', async () => {
+  it('marks the checkout tool as a write that destroys nothing', async () => {
     await initialize();
     const body = parseBody(await post(rpc('tools/list', {}, 3)));
 
-    const consume = body.result.tools.find((t: any) => t.name === 'consume_credits');
-    expect(consume.annotations.readOnlyHint).toBe(false);
+    const checkout = body.result.tools.find((t: any) => t.name === 'create_checkout_session');
+    expect(checkout.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false });
   });
 
   it('answers a call with tool content', async () => {
