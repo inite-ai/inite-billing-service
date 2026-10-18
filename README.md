@@ -245,9 +245,23 @@ Full rendered docs — with diagrams and integration guides — at
 | [docs/operations.md](docs/operations.md) | Deploy, feature flags & rollout order, adding a payment rail |
 | [SECURITY.md](SECURITY.md) | Threat ledger, known limitations, vulnerability reporting |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Hard bars for PRs, conventions, release flow |
-| [CLAUDE.md](CLAUDE.md) | Repo map for AI coding agents |
+| [AGENTS.md](AGENTS.md) | Rules, zones, gates and module map for AI coding agents (and humans) |
 
 ## Contributing
+
+### Contribute with an AI agent
+
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/inite-ai/inite-billing-service)
+
+The Codespace comes up with Node 22, Postgres (pgvector), Redis, dependencies
+installed and migrations applied. Open the repo in your agent and say
+`/contribute` (Claude Code), or "read AGENTS.md and help me add …" (Cursor,
+Codex, Copilot, Gemini CLI, Windsurf). [AGENTS.md](AGENTS.md) holds the rules,
+the risky zones, and the exact CI gates the agent runs before opening a PR.
+Only want to propose something? `/spec-idea`, or the *Product idea* issue
+form. Looking for a first task: [`good first issue`](https://github.com/inite-ai/inite-billing-service/issues?q=is%3Aopen+label%3A%22good+first+issue%22).
+
+### By hand
 
 PRs land on `main` only through pull requests — CI (`build-test`) is a
 required check, titles follow Conventional Commits (release-please cuts

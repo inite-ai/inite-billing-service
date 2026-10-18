@@ -87,14 +87,17 @@ export class NewRailAdapter implements PaymentRailAdapter {
 }
 ```
 
-2. Register it in `main.ts` (`orchestrator.registerAdapter(...)`).
+2. Decorate it with `@RegisterConnector(RAILS.NEW_RAIL)` (add the rail to
+   `src/common/connectors/rail.ts`) and list it in `AdaptersModule` — the
+   `ConnectorRegistry` discovers it and the orchestrator registers it on
+   module init; there is no hand-kept list in `main.ts`.
 3. Add a webhook endpoint in `src/webhooks/` if the provider pushes events —
    store to `webhook_events` and let the BullMQ processor validate and apply.
 4. Add provider credentials via the admin UI (`payment_providers`).
 
 ```mermaid
 flowchart LR
-  a["1 · implement<br/>PaymentRailAdapter"] --> b["2 · register in main.ts<br/>registerAdapter(...)"]
+  a["1 · implement<br/>PaymentRailAdapter"] --> b["2 · @RegisterConnector<br/>+ AdaptersModule"]
   b --> c["3 · webhook endpoint<br/>if the provider pushes events"]
   c --> d["4 · credentials via admin UI<br/>payment_providers.config"]
   d --> e(["orchestrator · subs · credits<br/>need NO changes"])

@@ -21,7 +21,7 @@ flowchart LR
     be["backend<br/>NestJS · :3000"]
     subgraph compose["docker compose"]
       pg[("PostgreSQL<br/>pgvector · :5433")]
-      redis[("Redis<br/>:6381")]
+      redis[("Redis<br/>:6380")]
     end
   end
   auth["auth.inite.ai<br/>JWT · JWKS"]
@@ -54,7 +54,7 @@ This starts:
 | Service | Image | Host port |
 |---|---|---|
 | PostgreSQL | `pgvector/pgvector:pg15` | 5433 |
-| Redis | `redis:7-alpine` | 6381 |
+| Redis | `redis:7-alpine` | 6380 |
 
 > **pgvector is required.** The embeddings migration runs
 > `CREATE EXTENSION vector` — a plain `postgres` image will fail to migrate.
