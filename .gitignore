@@ -47,3 +47,6 @@ lerna-debug.log*
 # Claude Code — machine-local permission grants. Holds host names and command
 # allowlists specific to one developer's machine; never part of the repo.
 .claude/settings.local.json
+
+# Claude Code — stray lock files
+.claude/*.lock

@@ -11,10 +11,14 @@ that means concretely.
 
 - **New here?** Browse [`good first issue`](../../issues?q=is%3Aopen+label%3A%22good+first+issue%22)
   and skim the [Code of Conduct](CODE_OF_CONDUCT.md). PRs of any size are welcome.
-- **Read [CLAUDE.md](CLAUDE.md) and [SECURITY.md](SECURITY.md)** — the module
-  map, domain concepts, and the security ledger answer most "why is it done
-  this way" questions.
-- **Skim the migrations** in `prisma/migrations/`. Numbered, append-only;
+- **Read [AGENTS.md](AGENTS.md) and [SECURITY.md](SECURITY.md)** — the module
+  map, zones, exact CI gates and the security ledger answer most "why is it
+  done this way" questions. AGENTS.md is the source of truth for AI coding
+  agents; if this file and it disagree, AGENTS.md wins and this file is the
+  bug.
+- **Working with an AI agent?** Open a Codespace (`.devcontainer/`) and run
+  `/contribute` in Claude Code, or tell any agent to read AGENTS.md first.
+- **Skim the migrations** in `prisma/migrations/`. Timestamped, append-only;
   every schema change lands as a new directory. They're a diary of what shipped.
 - **Read the recent commit log.** Commit messages explain the *why* — they're
   the closest thing this repo has to ADRs.
@@ -26,7 +30,8 @@ git clone git@github.com:inite-ai/inite-billing-service.git
 cd inite-billing-service
 npm install
 
-# Bring up Postgres (pgvector) + Redis
+# Bring up Postgres (pgvector) :5433 + Redis :6380
+# (or skip all of this: open a Codespace — .devcontainer/ does it for you)
 docker compose up -d postgres redis
 
 # Copy + fill env (ANTHROPIC_API_KEY needed for the assistant)
@@ -75,7 +80,8 @@ optional. Breaking changes need a `/v2` route and a migration story.
 
 ### 4. Migrations are append-only
 
-`prisma/migrations/NNNN_description/` in numeric order. **Never edit a
+`prisma/migrations/<YYYYMMDDHHMMSS>_<name>/`, created by
+`npx prisma migrate dev --name <name>`. **Never edit a
 shipped migration** — once applied, Prisma records it and silently skips the
 file on other environments; your edit becomes drift.
 
@@ -107,8 +113,8 @@ use obvious placeholders.
   `@@schema("billing")`; raw SQL prefixes tables with `billing.`.
 - Feature flags default **off** (`OUTREACH_ENABLED`, `RISK_BLOCKING_ENABLED`,
   `EMBEDDINGS_ENABLED`, ...) — new subsystems ship dark.
-- i18n: every user-facing string lands in both `frontend/messages/en.json`
-  and `ru.json`.
+- i18n: every user-facing string lands in all four
+  `frontend/messages/{en,ru,pt,es}.json`.
 
 ## Releases
 

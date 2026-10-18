@@ -1,0 +1,34 @@
+{
+  // Codespaces / "Reopen in Container": Node 22, Postgres (pgvector) and Redis,
+  // dependencies installed and both databases migrated. See AGENTS.md → Setup.
+  "name": "inite-billing-service",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "shutdownAction": "stopCompose",
+  "forwardPorts": [3000, 3001],
+  "portsAttributes": {
+    "3000": { "label": "API (Swagger at /api)" },
+    "3001": { "label": "Frontend" },
+    "5433": { "label": "Postgres", "onAutoForward": "ignore" },
+    "6380": { "label": "Redis", "onAutoForward": "ignore" }
+  },
+  // Jest reads TEST_* (test/setup-e2e.ts); the defaults there assume Redis on
+  // 6381, the compose service here listens on 6380 like docker-compose.yml.
+  "containerEnv": {
+    "TEST_DATABASE_URL": "postgresql://postgres:postgres@localhost:5433/inite_billing_test?schema=billing",
+    "TEST_REDIS_URL": "redis://localhost:6380"
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "Prisma.prisma",
+        "bradlc.vscode-tailwindcss",
+        "github.vscode-github-actions"
+      ]
+    }
+  }
+}

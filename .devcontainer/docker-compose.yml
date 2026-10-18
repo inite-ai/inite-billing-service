@@ -1,0 +1,43 @@
+# Dev container stack. The app container shares the database container's
+# network, so Postgres and Redis are on localhost at the same ports as the
+# root docker-compose.yml and env.example (5433, 6380).
+services:
+  app:
+    image: mcr.microsoft.com/devcontainers/typescript-node:1-22-bookworm
+    command: sleep infinity
+    volumes:
+      - ../..:/workspaces:cached
+    network_mode: service:postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  postgres:
+    # pgvector: the embeddings migration runs CREATE EXTENSION vector.
+    image: pgvector/pgvector:pg15
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: inite_billing
+      # The server and the init scripts both read PGPORT.
+      PGPORT: 5433
+    volumes:
+      - devcontainer_pg_data:/var/lib/postgresql/data
+      - ./init-test-db.sql:/docker-entrypoint-initdb.d/10-test-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -p 5433"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--port", "6380"]
+    network_mode: service:postgres
+
+volumes:
+  devcontainer_pg_data:

@@ -344,7 +344,7 @@ Other model groups on top of that spine:
   `OutreachMessage` (unique `triggerKey`), `RiskAssessment`.
 - Affiliates: `Affiliate`, `Referral`, `ReferralLevel`, `AffiliateCommission`, `AffiliatePayout`.
 
-Migrations are append-only (`prisma/migrations/NNNN_*`) — never edit a shipped migration.
+Migrations are append-only (`prisma/migrations/<timestamp>_<name>/`) — never edit a shipped migration.
 
 ## Background workers (BullMQ + cron)
 
