@@ -67,7 +67,7 @@ jobs:
             printf '## ❌ CI is red — a few things before this can merge\n\n'
             printf 'Thanks for the contribution! Per the [contributing guide](%s/%s/blob/main/CONTRIBUTING.md), every PR has these hard bars:\n\n' "$SERVER" "$GH_REPO"
             printf '1. **Tests pass** — `npm test` must be green (money paths — checkout, webhooks, credits — need a test for the failure/abuse property, not just the happy path).\n'
-            printf '2. **Migrations are append-only** — schema changes ship as a new numbered `prisma/migrations/NNNN_*`; never edit a shipped migration.\n'
+            printf '2. **Migrations are append-only** — schema changes ship as a new `prisma/migrations/<timestamp>_<name>/`; never edit a shipped migration.\n'
             printf '3. **No new dependencies without justification** — call out the why in the PR description (be extra wary of payment, crypto and templating libs).\n'
             printf '4. **No secrets** — `gitleaks` runs in CI; never commit keys, even in tests.\n'
             printf '5. **Conventional PR title** — the title check requires it (e.g. `fix: ...`, `feat: ...`, `docs: ...`).\n\n'

@@ -1,0 +1,44 @@
+name: 💡 Product idea
+description: Something you'd like billing to do — in plain words. No code or technical detail needed.
+title: '[idea] '
+labels: ['idea']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the idea the way you'd explain it to a colleague. If an AI agent
+        helped you (for example `/spec-idea` in Claude Code), paste its spec at the
+        bottom. Ideas that touch payments, migrations, wallets or sign-in are
+        reviewed by a maintainer before anyone writes code.
+
+        ⚠️ Security problems do not go here — follow SECURITY.md.
+  - type: textarea
+    id: possible
+    attributes:
+      label: What do you want to be possible?
+      description: What could someone do that they can't do today?
+      placeholder: 'Customers can pause a subscription for a month instead of cancelling it.'
+    validations:
+      required: true
+  - type: textarea
+    id: who
+    attributes:
+      label: Who is it for, and why?
+      description: Customers, admins, a service integrating with billing, an AI agent… and what it gets them.
+    validations:
+      required: true
+  - type: textarea
+    id: works
+    attributes:
+      label: How would you know it works?
+      description: What you'd check or see when it's done.
+      placeholder: "A paused subscription isn't charged, and comes back active on the date I picked."
+    validations:
+      required: true
+  - type: textarea
+    id: spec
+    attributes:
+      label: Spec
+      description: Optional. Problem · behaviour · API/UI change · data change · risks · out of scope · zone (see AGENTS.md).
+    validations:
+      required: false
