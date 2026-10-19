@@ -638,7 +638,7 @@ export class LavaAdapter implements Connector {
           take: 200,
         })
       : [];
-    const intent = candidates.find((candidate) => {
+    const matches = candidates.filter((candidate) => {
       const s = (candidate.snapshot as Record<string, any>) || {};
       const sameBuyer = String(s.buyerEmail ?? '').toLowerCase() === String(email).toLowerCase();
       const sameOffer = !offerId || !s.lava_offer_id || s.lava_offer_id === offerId;
@@ -647,10 +647,16 @@ export class LavaAdapter implements Connector {
       const sameAmount = !Number.isFinite(amount) || Math.abs(charged - amount) < 0.01;
       return sameBuyer && sameOffer && sameAmount;
     });
+    // The event names no contract, so a buyer with two sales alike is a guess
+    // either way: taking one back by order of creation could revoke the wrong
+    // access. Two or more matches are recorded for a person to settle.
+    const intent = matches.length === 1 ? matches[0] : undefined;
 
     if (!intent?.providerIntentId) {
       this.logger.warn(
-        `lava.top ${rawPayload.event_type} ${eventId} matches no paid order (${email}, ${amount})`,
+        matches.length > 1
+          ? `lava.top ${rawPayload.event_type} ${eventId} matches ${matches.length} paid orders (${email}, ${amount}); left for review`
+          : `lava.top ${rawPayload.event_type} ${eventId} matches no paid order (${email}, ${amount})`,
       );
       return {
         webhookId: `lava_${eventId}_${rawPayload.event_type}`,

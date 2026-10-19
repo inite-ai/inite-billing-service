@@ -1,8 +1,11 @@
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { PrismaService } from '../common/services/prisma.service';
-import { canSeal, sealLegacyKeys } from '../common/key-seal';
+import { canSeal, sealLegacyConfigs, sealLegacyKeys } from '../common/key-seal';
 
-/** At boot, seals the private keys written before they were sealed (key-seal.ts). */
+/**
+ * At boot, seals the private keys and rail configs written before they were
+ * sealed (key-seal.ts, provider-config-seal.ts).
+ */
 @Injectable()
 export class KeySealBackfill implements OnApplicationBootstrap {
   private readonly logger = new Logger(KeySealBackfill.name);
@@ -19,6 +22,8 @@ export class KeySealBackfill implements OnApplicationBootstrap {
     try {
       const sealed = await sealLegacyKeys(this.prisma);
       if (sealed > 0) this.logger.log(`Sealed ${sealed} private key(s) stored bare`);
+      const configs = await sealLegacyConfigs(this.prisma);
+      if (configs > 0) this.logger.log(`Sealed ${configs} provider config(s) stored bare`);
     } catch (error: any) {
       this.logger.error(`Could not seal stored private keys: ${error?.message}`);
     }
