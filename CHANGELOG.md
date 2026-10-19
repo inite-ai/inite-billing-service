@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.1](https://github.com/inite-ai/inite-billing-service/compare/inite-billing-service-v1.4.0...inite-billing-service-v1.4.1) (2026-10-19)
+
+
+### Bug Fixes
+
+* **queues:** BullMQ reads the password, user, db and TLS from REDIS_URL ([#240](https://github.com/inite-ai/inite-billing-service/issues/240)) ([f73f0e6](https://github.com/inite-ai/inite-billing-service/commit/f73f0e647d141b3969223676bca08ff1e3572fab))
+* **security:** rail credentials sealed at rest; an ambiguous lava.top refund is left for review ([#246](https://github.com/inite-ai/inite-billing-service/issues/246)) ([3ec3c45](https://github.com/inite-ai/inite-billing-service/commit/3ec3c4559330e260d6843ec182f6a99f7a571ca0))
+
 ## [1.4.0](https://github.com/inite-ai/inite-billing-service/compare/inite-billing-service-v1.3.0...inite-billing-service-v1.4.0) (2026-10-16)
 
 
