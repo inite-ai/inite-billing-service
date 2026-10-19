@@ -336,6 +336,13 @@ describe('LavaAdapter', () => {
       ).toBe(LAVA_UNMATCHED_EVENT);
     });
 
+    it('leaves a refund that fits two sales alike for review instead of guessing', async () => {
+      const twin = { ...paidIntent, id: 'pi-2', providerIntentId: 'other-contract' };
+      const { adapter, prisma } = build({ intents: [paidIntent, twin] });
+      expect((await adapter.handleWebhook(refund())).eventType).toBe(LAVA_UNMATCHED_EVENT);
+      expect(prisma.paymentIntent.update).not.toHaveBeenCalled();
+    });
+
     it('treats a chargeback as money taken back', async () => {
       const { adapter } = build({ intents: [paidIntent] });
       const parsed = await adapter.handleWebhook({

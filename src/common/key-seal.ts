@@ -116,3 +116,34 @@ export async function sealLegacyKeys(prisma: KeyRows): Promise<number> {
   }
   return sealed;
 }
+
+interface ConfigRows {
+  $queryRawUnsafe<T = unknown>(query: string): Promise<T>;
+  paymentProvider: { update(args: object): Promise<unknown> };
+  payoutProvider: { update(args: object): Promise<unknown> };
+}
+
+/**
+ * Seal every rail config still stored as a plain object. The raw read sees
+ * what is on disk; the write goes through PrismaService, whose middleware
+ * (provider-config-seal.ts) seals it. Returns how many configs were sealed.
+ */
+export async function sealLegacyConfigs(prisma: ConfigRows): Promise<number> {
+  let sealed = 0;
+  for (const [table, model] of [
+    ['payment_providers', 'paymentProvider'],
+    ['payout_providers', 'payoutProvider'],
+  ] as const) {
+    const rows = await prisma.$queryRawUnsafe<{ id: string; config: unknown }[]>(
+      `SELECT id, config FROM "billing"."${table}"
+        WHERE config IS NOT NULL AND config <> '{}'::jsonb
+          AND NOT (jsonb_typeof(config) = 'object' AND config ? 'sealed'
+                   AND (SELECT count(*) FROM jsonb_object_keys(config)) = 1)`,
+    );
+    for (const row of rows) {
+      await prisma[model].update({ where: { id: row.id }, data: { config: row.config } });
+      sealed += 1;
+    }
+  }
+  return sealed;
+}

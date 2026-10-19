@@ -601,7 +601,7 @@ model PayoutProvider {
   maxAmount  Decimal? @map("max_amount") @db.Decimal(19, 4)
   feePercent Decimal? @map("fee_percent") @db.Decimal(5, 4)
   feeFixed   Decimal? @map("fee_fixed") @db.Decimal(19, 4)
-  config     Json?    @default("{}") // API keys, secrets
+  config     Json?    @default("{}") // API keys, secrets — sealed at rest (provider-config-seal.ts)
   metadata   Json?    @default("{}") // display info, description
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -621,7 +621,7 @@ model PaymentProvider {
   currencies     String[] @default([]) // USD, EUR, BRL
   countries      String[] @default([]) // BR, US, EU, GLOBAL
   webhookUrl     String?  @map("webhook_url") @db.Text
-  config         Json?    @default("{}") // API keys, secrets (encrypted in prod)
+  config         Json?    @default("{}") // API keys, secrets — sealed at rest (provider-config-seal.ts)
   metadata       Json?    @default("{}") // display info, logo, description
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
