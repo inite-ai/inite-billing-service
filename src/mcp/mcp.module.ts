@@ -7,6 +7,7 @@ import { McpServersController } from './mcp-servers.controller';
 import { McpServersService } from './mcp-servers.service';
 import { McpAdminController } from './mcp-admin.controller';
 import { McpMetadataController } from './mcp-resource';
+import { McpGatewayMetadataController } from './mcp-gateway-resource';
 import { PrismaService } from '../common/services/prisma.service';
 import { AuthModule } from '../auth/auth.module';
 import { CreditsModule } from '../credits/credits.module';
@@ -34,6 +35,7 @@ import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
   controllers: [
     McpController,
     McpMetadataController,
+    McpGatewayMetadataController,
     McpProxyController,
     McpServersController,
     McpAdminController,

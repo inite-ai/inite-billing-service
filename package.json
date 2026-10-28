@@ -88,7 +88,7 @@
     "rxjs": "^7.8.1",
     "undici": "7.30.1",
     "viem": "2.57.1",
-    "zod": "^3.22.4"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.24",
@@ -197,5 +197,8 @@
         "lines": 85
       }
     }
+  },
+  "overrides": {
+    "multer": "^2.5.0"
   }
 }
