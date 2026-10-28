@@ -1,10 +1,11 @@
-import { Controller, All, Param, Req, Res, UseGuards, Logger } from '@nestjs/common';
+import { Controller, All, Param, Req, Res, UseFilters, UseGuards, Logger } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { ApiTags, ApiExcludeEndpoint } from '@nestjs/swagger';
 import { JwtOrServiceGuard } from '../auth/guards/jwt-or-service.guard';
 import { User, RequestUser } from '../auth/decorators/user.decorator';
 import { McpProxyService } from './mcp-proxy.service';
 import { McpCaller } from './mcp-tools.service';
+import { McpGatewayChallengeFilter, McpGatewayResourceGuard } from './mcp-gateway-resource';
 
 /**
  * The billed front door to somebody else's MCP server.
@@ -13,10 +14,14 @@ import { McpCaller } from './mcp-tools.service';
  * authenticates the caller, decides whether the call is paid for, forwards it
  * to the operator's own server, and meters what came back. The operator writes
  * no billing code and the agent needs no special client.
+ *
+ * A user token must have been issued for this gateway (or billing's /mcp):
+ * McpGatewayResourceGuard, family MCP plan S5.
  */
 @ApiTags('MCP')
 @Controller('mcp/s')
-@UseGuards(JwtOrServiceGuard)
+@UseGuards(JwtOrServiceGuard, McpGatewayResourceGuard)
+@UseFilters(McpGatewayChallengeFilter)
 export class McpProxyController {
   private readonly logger = new Logger(McpProxyController.name);
 
