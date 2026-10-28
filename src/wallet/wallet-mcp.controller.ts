@@ -175,7 +175,7 @@ export class WalletMcpController {
             .url()
             .describe('https URL of the paid resource, e.g. a checkout’s x402Url'),
           method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']).optional(),
-          headers: z.record(z.string()).optional(),
+          headers: z.record(z.string(), z.string()).optional(),
           body: z.string().max(100_000).optional(),
           maxAmount: z.string().describe('The most you agree to pay, in USDC, e.g. "15"'),
         },
@@ -299,7 +299,7 @@ export class WalletMcpController {
         inputSchema: {
           url: z.string().url().describe('https URL of the paid resource'),
           method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']).optional(),
-          headers: z.record(z.string()).optional().describe('Extra request headers'),
+          headers: z.record(z.string(), z.string()).optional().describe('Extra request headers'),
           body: z.string().max(100_000).optional().describe('Request body, e.g. JSON text'),
           maxAmount: z.string().describe('The most you agree to pay, in USDC, e.g. "1.50"'),
         },
