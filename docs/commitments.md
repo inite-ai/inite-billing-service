@@ -188,7 +188,8 @@ person:
 ## The API
 
 Service calls carry an INITE Auth `client_credentials` token:
-`aud = <billing>/v1/services`, scope `billing:commitments` (stakes) or
+`aud = <billing>/v1/services` (`SERVICE_API_AUDIENCE` overrides; the
+product's `BILLING_AUDIENCE` must be the same string), scope `billing:commitments` (stakes) or
 `billing:checkout` (ordinary purchases such as supplements). Billing
 verifies the signature against INITE Auth's JWKS, `iss`, `aud`, the scope,
 that `sub` is not a person (`did:`), and maps `client_id` to the `Service`
@@ -198,7 +199,9 @@ one of these tokens or an admin session.
 
 | Method | Path | Who |
 |---|---|---|
+| GET | `/v1/commitments/policy?product=` | service. Tiers, fee, credits, limits |
 | GET | `/v1/commitments/quote?product=&tier=` | service |
+| GET | `/v1/commitments/exposure?userId=` | service. What the person has at stake against the cap |
 | POST | `/v1/commitments` | service. Body: `userId`, `externalRef`, `productCode`, `tier`, `charityCode`, `endsAt`, `verification`, `successUrl`, `errorUrl`, `locale`. Header `idempotency-key`. Returns the commitment, the quote, `checkoutUrl`, `x402Url` |
 | POST | `/v1/commitments/:id/pay-from-wallet` | service. Pays the stake order from the person's INITE wallet (409 `needs_approval` + `approveUrl`) |
 | GET | `/v1/commitments/:id`, `/v1/commitments?userId=&externalRef=` | service |
@@ -315,3 +318,17 @@ on return from checkout and never trusts a redirect alone.
   chooses rails per country.
 - Open: the charity list and the exact disclosure text need the owner and,
   ideally, a lawyer.
+
+## Setting up a product (ops)
+
+1. In INITE Auth, an OAuth client for the product's backend with the
+   `client_credentials` grant, scopes `billing:commitments billing:checkout`,
+   audience `<billing>/v1/services`.
+2. In billing: the Service gets `auth_client_id` = that client id and a
+   `webhookUrl` (its `apiKey` is the webhook signing secret).
+3. A one-time product (e.g. `break3-stake`) of that service with
+   `metadata.commitment` (the policy above), then
+   `POST /v1/admin/commitments/products/break3-stake/sync`.
+4. Charities: `POST /v1/admin/commitments/charities`.
+5. The treasury must be set up (`docs/wallet.md`) for money to go back to
+   wallets; until then releases wait in `owed_to_user`.

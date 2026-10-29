@@ -20,6 +20,8 @@ import { WalletModule } from '../src/wallet/wallet.module';
 import { AffiliatesModule } from '../src/affiliates/affiliates.module';
 import { McpModule } from '../src/mcp/mcp.module';
 import { AdminModule } from '../src/admin/admin.module';
+import { CommitmentsModule } from '../src/commitments/commitments.module';
+import { ServiceApiModule } from '../src/service-api/service-api.module';
 import { MockOneAdapter } from './mocks/one-adapter.mock';
 import { PaymentOrchestratorService } from '../src/payment-orchestrator/payment-orchestrator.service';
 
@@ -63,6 +65,8 @@ import { OneAdapter } from '../src/adapters/one/one.adapter';
     AffiliatesModule,
     AdminModule,
     McpModule,
+    ServiceApiModule,
+    CommitmentsModule,
   ],
   providers: [
     MockOneAdapter,

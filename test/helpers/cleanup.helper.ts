@@ -8,6 +8,13 @@ import { PrismaService } from '../../src/common/services/prisma.service';
 export async function cleanupTestData(prisma: PrismaService): Promise<void> {
   try {
     // Delete in correct order (child -> parent)
+    await prisma.commitmentLedgerEntry.deleteMany({});
+    await prisma.commitmentTransition.deleteMany({});
+    await prisma.commitment.deleteMany({});
+    await prisma.charityPayout.deleteMany({});
+    await prisma.charity.deleteMany({});
+    await prisma.creditUsage.deleteMany({});
+    await prisma.creditBalance.deleteMany({});
     await prisma.webhookEvent.deleteMany({});
     await prisma.x402Payment.deleteMany({});
     await prisma.walletAgentPayment.deleteMany({});

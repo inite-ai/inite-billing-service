@@ -231,6 +231,8 @@ describe('affiliate ledger', () => {
             currency: 'USD',
           }),
         },
+        // Not a stake order (src/commitments): nothing to hold or void.
+        commitment: { findUnique: jest.fn().mockResolvedValue(null) },
         invoice: { updateMany: jest.fn() },
         affiliate: { update: jest.fn() },
         affiliateCommission: { updateMany: jest.fn(), count: jest.fn().mockResolvedValue(0) },
@@ -320,6 +322,8 @@ describe('affiliate ledger', () => {
             price: { product: { serviceId: 'svc-1', metadata: {} } },
           }),
         },
+        // Not a stake order (src/commitments): nothing to hold or void.
+        commitment: { findUnique: jest.fn().mockResolvedValue(null) },
         invoice: { create: jest.fn() },
         entitlement: { create: jest.fn(), findFirst: jest.fn().mockResolvedValue(null) },
       };

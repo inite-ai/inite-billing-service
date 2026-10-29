@@ -298,6 +298,24 @@ export class TreasuryService {
     }
   }
 
+  /**
+   * Pay money back to a person's INITE wallet for an order that is not a
+   * top-up — a stake released or cancelled (src/commitments). The same rules
+   * as a top-up: one payout per order whatever runs twice, the per-transfer
+   * policy in Turnkey, the daily limit (over it the payout is held for an
+   * admin). Returns null when there is no treasury yet; the caller retries.
+   */
+  async payOrderToWallet(orderId: string, address: string, amountUsd: string) {
+    const t = await this.current();
+    if (!t) return null;
+    if (!isAddress(address, { strict: false })) throw new BadRequestException('Not an address');
+    const existing = await this.prisma.treasuryPayout.findUnique({ where: { orderId } });
+    if (existing) return existing;
+    const payout = await this.open(t, orderId, getAddress(address), parseUnits(amountUsd, 6));
+    if (payout?.status === 'signing') await this.attempt(t, payout.id);
+    return this.prisma.treasuryPayout.findUnique({ where: { orderId } });
+  }
+
   /** The payout row for an order, made once, under the treasury lock (daily limit). */
   private async open(t: Treasury, orderId: string, to: `0x${string}`, value: bigint) {
     try {

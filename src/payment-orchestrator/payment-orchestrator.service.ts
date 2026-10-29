@@ -22,6 +22,7 @@ import {
   IntentStatus,
 } from '../common/types/payment-state.types';
 import { OutboxService } from '../outbox/outbox.service';
+import { holdCommitmentForOrder, voidCommitmentForOrder } from '../commitments/commitment-hold';
 import { AffiliatesService } from '../affiliates/affiliates.service';
 import { FunnelService } from '../funnel/funnel.service';
 import { CreditsService } from '../credits/credits.service';
@@ -339,8 +340,16 @@ export class PaymentOrchestratorService implements OnModuleInit {
       await this.handleSubscriptionPayment(order, tx);
     }
 
+    // A stake: the money is now held against its promise, in this same
+    // transaction (docs/commitments.md). A deposit is not a sale, so it earns
+    // no affiliate commission.
+    const isStake = await holdCommitmentForOrder(order, tx, {
+      outbox: this.outboxService,
+      credits: this.creditsService,
+    });
+
     // Handle affiliate commission (only for first payment)
-    await this.handleAffiliateCommission(order, tx);
+    if (!isStake) await this.handleAffiliateCommission(order, tx);
 
     // Grant credits if product defines them
     await this.handleCreditsGrant(order, tx);
@@ -450,6 +459,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
     });
 
     await this.releasePromoCodeUsage(order.id, tx);
+    await voidCommitmentForOrder(order.id, tx, { outbox: this.outboxService });
 
     // Emit event
     await this.outboxService.emit(

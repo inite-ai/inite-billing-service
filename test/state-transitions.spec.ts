@@ -25,6 +25,8 @@ describe('State Transitions', () => {
         findUnique: jest.fn(),
         update: jest.fn(),
       },
+      // Not a stake order (src/commitments): nothing to hold or void.
+      commitment: { findUnique: jest.fn().mockResolvedValue(null) },
       invoice: {
         create: jest.fn(),
         updateMany: jest.fn(),
