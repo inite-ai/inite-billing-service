@@ -479,6 +479,7 @@
     "title": "Finalizar compra",
     "orderSummary": "Resumo do pedido",
     "product": "Produto",
+    "cartTitle": "Seu pedido",
     "price": "Preço",
     "interval": "Cobrança",
     "oneTime": "Pagamento único",

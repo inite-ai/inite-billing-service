@@ -49,5 +49,6 @@ import { KeySealBackfill } from './key-seal-backfill';
     TreasuryService,
     KeySealBackfill,
   ],
+  exports: [WalletMerchantsService],
 })
 export class WalletModule {}

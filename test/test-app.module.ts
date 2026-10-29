@@ -19,6 +19,7 @@ import { CryptoAdminModule } from '../src/crypto/crypto-admin.module';
 import { WalletModule } from '../src/wallet/wallet.module';
 import { AffiliatesModule } from '../src/affiliates/affiliates.module';
 import { McpModule } from '../src/mcp/mcp.module';
+import { ServiceApiModule } from '../src/service-api/service-api.module';
 import { AdminModule } from '../src/admin/admin.module';
 import { MockOneAdapter } from './mocks/one-adapter.mock';
 import { PaymentOrchestratorService } from '../src/payment-orchestrator/payment-orchestrator.service';
@@ -63,6 +64,7 @@ import { OneAdapter } from '../src/adapters/one/one.adapter';
     AffiliatesModule,
     AdminModule,
     McpModule,
+    ServiceApiModule,
   ],
   providers: [
     MockOneAdapter,

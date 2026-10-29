@@ -36,6 +36,7 @@ import { RagModule } from './rag/rag.module';
 import { RecommendationsModule } from './recommendations/recommendations.module';
 import { RiskModule } from './risk/risk.module';
 import { InsightsModule } from './insights/insights.module';
+import { ServiceApiModule } from './service-api/service-api.module';
 
 @Module({
   imports: [
@@ -79,6 +80,7 @@ import { InsightsModule } from './insights/insights.module';
     RecommendationsModule,
     RiskModule,
     InsightsModule,
+    ServiceApiModule,
   ],
   providers: [
     {
