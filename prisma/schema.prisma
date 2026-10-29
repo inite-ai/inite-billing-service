@@ -113,6 +113,10 @@ model Service {
   isActive            Boolean  @default(true) @map("is_active")
   webhookUrl          String?  @map("webhook_url") @db.VarChar(500)
   minWithdrawalAmount Decimal? @map("min_withdrawal_amount") @db.Decimal(19, 4)
+  /// The INITE Auth OAuth client (client_credentials) that acts as this
+  /// service on the token-authenticated service API (/v1/commitments,
+  /// /v1/service-checkout). Null: the service has no token identity.
+  authClientId        String?  @unique @map("auth_client_id") @db.VarChar(255)
   metadata            Json?    @default("{}")
   createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -1464,5 +1468,161 @@ model TreasuryPayout {
 
   @@index([treasuryId, createdAt])
   @@map("treasury_payouts")
+  @@schema("billing")
+}
+
+// ── Commitments: money held against a promise (docs/commitments.md) ──
+
+enum CommitmentStatus {
+  pending_payment
+  held
+  released_money
+  released_credits
+  forfeited
+  auto_released
+  refunded_on_cancel
+  disputed
+  void
+
+  @@schema("billing")
+}
+
+/// A charity a forfeited stake can go to. Chosen by the person at creation.
+model Charity {
+  id            String   @id @default(uuid()) @db.Uuid
+  code          String   @unique @db.VarChar(64)
+  name          String   @db.VarChar(255)
+  url           String?  @db.VarChar(500)
+  /// { en, ru, pt, es } short descriptions.
+  description   Json?    @default("{}")
+  /// How INITE hands the money over (bank, USDC address, platform). Admin-only.
+  payoutMethod  String?  @map("payout_method") @db.Text
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  commitments Commitment[]
+  payouts     CharityPayout[]
+
+  @@map("charities")
+  @@schema("billing")
+}
+
+/// A batch of forfeits handed over to one charity, recorded by an admin.
+model CharityPayout {
+  id         String    @id @default(uuid()) @db.Uuid
+  charityId  String    @map("charity_id") @db.Uuid
+  amount     Decimal   @db.Decimal(19, 4)
+  currency   String    @db.VarChar(10)
+  periodFrom DateTime? @map("period_from") @db.Timestamptz(6)
+  periodTo   DateTime  @map("period_to") @db.Timestamptz(6)
+  /// recorded (batch made, money not yet sent) | sent (reference recorded)
+  status     String    @default("recorded") @db.VarChar(20)
+  /// The transfer id, tx hash or receipt number, published.
+  reference  String?   @db.VarChar(500)
+  createdBy  String    @map("created_by") @db.VarChar(255)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  sentAt     DateTime? @map("sent_at") @db.Timestamptz(6)
+
+  charity     Charity      @relation(fields: [charityId], references: [id])
+  commitments Commitment[]
+
+  @@index([charityId, createdAt])
+  @@map("charity_payouts")
+  @@schema("billing")
+}
+
+/// One stake: money a person paid and billing holds until the product names
+/// the outcome, or the clock does.
+model Commitment {
+  id               String           @id @default(uuid()) @db.Uuid
+  serviceId        String           @map("service_id") @db.Uuid
+  /// The product's own id for the promise; unique per service.
+  externalRef      String           @map("external_ref") @db.VarChar(255)
+  userId           String           @map("user_id") @db.VarChar(255)
+  orderId          String           @unique @map("order_id") @db.Uuid
+  productCode      String           @map("product_code") @db.VarChar(100)
+  priceCode        String           @map("price_code") @db.VarChar(100)
+  stakeAmount      Decimal          @map("stake_amount") @db.Decimal(19, 4)
+  feeAmount        Decimal          @map("fee_amount") @db.Decimal(19, 4)
+  currency         String           @db.VarChar(10)
+  creditsBonusPct  Decimal          @default(0) @map("credits_bonus_pct") @db.Decimal(7, 4)
+  creditsPerUsd    Int              @default(0) @map("credits_per_usd")
+  creditsServiceId String?          @map("credits_service_id") @db.Uuid
+  charityId        String           @map("charity_id") @db.Uuid
+  /// { referee: boolean, proof: boolean }
+  verification     Json             @default("{}")
+  endsAt           DateTime         @map("ends_at") @db.Timestamptz(6)
+  autoReleaseAt    DateTime         @map("auto_release_at") @db.Timestamptz(6)
+  cancelUntil      DateTime?        @map("cancel_until") @db.Timestamptz(6)
+  status           CommitmentStatus @default(pending_payment)
+  /// money | credits, once released
+  releaseAs        String?          @map("release_as") @db.VarChar(10)
+  creditsGranted   Int?             @map("credits_granted")
+  /// How the stake was paid (the order's paid rail), read at hold.
+  paidRail         String?          @map("paid_rail") @db.VarChar(50)
+  heldAt           DateTime?        @map("held_at") @db.Timestamptz(6)
+  settledAt        DateTime?        @map("settled_at") @db.Timestamptz(6)
+  /// Money owed back to the person's INITE wallet (release, auto-release,
+  /// cancel on a rail that can't refund): none | awaiting_wallet | queued | sent
+  payoutState      String           @default("none") @map("payout_state") @db.VarChar(20)
+  charityPayoutId  String?          @map("charity_payout_id") @db.Uuid
+  version          Int              @default(0)
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  charity       Charity                 @relation(fields: [charityId], references: [id])
+  charityPayout CharityPayout?          @relation(fields: [charityPayoutId], references: [id])
+  transitions   CommitmentTransition[]
+  ledger        CommitmentLedgerEntry[]
+
+  @@unique([serviceId, externalRef])
+  @@index([userId, status])
+  @@index([status, autoReleaseAt])
+  @@index([charityId, status])
+  @@map("commitments")
+  @@schema("billing")
+}
+
+/// The journal of a commitment: one row per change of state.
+model CommitmentTransition {
+  id             String   @id @default(uuid()) @db.Uuid
+  commitmentId   String   @map("commitment_id") @db.Uuid
+  fromStatus     String   @map("from_status") @db.VarChar(30)
+  toStatus       String   @map("to_status") @db.VarChar(30)
+  /// system | service | admin
+  actor          String   @db.VarChar(20)
+  actorId        String?  @map("actor_id") @db.VarChar(255)
+  reason         String?  @db.Text
+  idempotencyKey String   @map("idempotency_key") @db.VarChar(255)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  commitment Commitment              @relation(fields: [commitmentId], references: [id], onDelete: Restrict)
+  entries    CommitmentLedgerEntry[]
+
+  @@unique([commitmentId, idempotencyKey])
+  @@index([commitmentId, createdAt])
+  @@map("commitment_transitions")
+  @@schema("billing")
+}
+
+/// Double-entry lines: every transition's debits equal its credits.
+model CommitmentLedgerEntry {
+  id           String   @id @default(uuid()) @db.Uuid
+  commitmentId String?  @map("commitment_id") @db.Uuid
+  transitionId String?  @map("transition_id") @db.Uuid
+  payoutId     String?  @map("payout_id") @db.Uuid
+  account      String   @db.VarChar(100)
+  debit        Decimal  @default(0) @db.Decimal(19, 4)
+  credit       Decimal  @default(0) @db.Decimal(19, 4)
+  currency     String   @db.VarChar(10)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  commitment Commitment?           @relation(fields: [commitmentId], references: [id], onDelete: Restrict)
+  transition CommitmentTransition? @relation(fields: [transitionId], references: [id], onDelete: Restrict)
+
+  @@index([account])
+  @@index([commitmentId])
+  @@map("commitment_ledger")
   @@schema("billing")
 }

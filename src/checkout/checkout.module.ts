@@ -32,6 +32,6 @@ import { CheckoutLinkOrJwtGuard, CheckoutLinkOrJwtOrServiceGuard } from './check
     CheckoutLinkOrJwtGuard,
     CheckoutLinkOrJwtOrServiceGuard,
   ],
-  exports: [CheckoutService],
+  exports: [CheckoutService, X402Service],
 })
 export class CheckoutModule {}

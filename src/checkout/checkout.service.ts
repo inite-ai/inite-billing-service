@@ -23,6 +23,7 @@ import {
   CheckoutSessionResponseDto,
   PaySessionResponseDto,
 } from '../common/dto/checkout.dto';
+import { readPolicy } from '../commitments/commitment-policy';
 import { randomUUID } from 'node:crypto';
 import { Connector } from '../common/connectors/connector.interface';
 import { CreateIntentInput } from '../common/interfaces/payment-rail-adapter.interface';
@@ -639,6 +640,11 @@ export class CheckoutService {
     const price = order.price;
     const product = price.product;
     const metadata = (order.metadata as Record<string, any>) || {};
+    // A stake is the person's own money held against a promise, not a sale: a
+    // discount would hold less than the promise says (docs/commitments.md).
+    if (data.promoCode && readPolicy(product.metadata)) {
+      throw new BadRequestException('Promo codes do not apply to a stake');
+    }
     // Decimal is what is stored and what is written back; the number below is
     // only for the adapter interface, which takes one.
     let orderAmountDecimal = toMoney(order.amount);

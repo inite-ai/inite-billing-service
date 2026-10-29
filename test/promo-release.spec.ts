@@ -22,6 +22,8 @@ describe('promo code release on a failed order', () => {
           price: { product: { serviceId: 'svc-1' } },
         }),
       },
+      // Not a stake order (src/commitments): nothing to hold or void.
+      commitment: { findUnique: jest.fn().mockResolvedValue(null) },
       invoice: { updateMany: jest.fn() },
       promoCode: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
     };
