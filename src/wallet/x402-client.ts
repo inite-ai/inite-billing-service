@@ -2,6 +2,7 @@ import { lookup } from 'node:dns/promises';
 import { lookup as lookupCallback } from 'node:dns';
 import { Agent } from 'undici';
 import { isIP } from 'node:net';
+import { isPrivateAddress } from '../workers/ssrf-guard';
 import { getAddress, isAddress } from 'viem';
 import {
   Authorization,
@@ -35,35 +36,14 @@ export interface SellerResponse {
   truncated: boolean;
 }
 
-/** Private, loopback, link-local and other non-public addresses. */
+/**
+ * Public internet addresses only. The one SSRF judgement billing has, so a
+ * seller URL and a webhook URL cannot disagree about what is internal — the
+ * copy that used to live here took `::ffff:7f00:1` (127.0.0.1 as `new URL`
+ * spells it) for a public address.
+ */
 export function isPublicAddress(ip: string): boolean {
-  if (isIP(ip) === 4) {
-    const [a, b] = ip.split('.').map(Number) as [number, number];
-    return !(
-      a === 0 ||
-      a === 10 ||
-      a === 127 ||
-      (a === 100 && b >= 64 && b <= 127) ||
-      (a === 169 && b === 254) ||
-      (a === 172 && b >= 16 && b <= 31) ||
-      (a === 192 && b === 168) ||
-      (a === 198 && (b === 18 || b === 19)) ||
-      a >= 224
-    );
-  }
-  const v6 = ip.toLowerCase();
-  if (v6.startsWith('::ffff:')) return isPublicAddress(v6.slice(7));
-  return !(
-    v6 === '::' ||
-    v6 === '::1' ||
-    v6.startsWith('fc') ||
-    v6.startsWith('fd') ||
-    v6.startsWith('fe8') ||
-    v6.startsWith('fe9') ||
-    v6.startsWith('fea') ||
-    v6.startsWith('feb') ||
-    v6.startsWith('ff')
-  );
+  return !isPrivateAddress(ip);
 }
 
 /**
