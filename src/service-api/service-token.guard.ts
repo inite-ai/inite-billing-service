@@ -70,7 +70,11 @@ export class ServiceTokenGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest();
     const header = String(request.headers?.authorization ?? '');
-    const token = /^Bearer\s+(.+)$/i.exec(header)?.[1]?.trim();
+    // No regex over the header: `\s+(.+)` is polynomial on many spaces.
+    const token =
+      header.length <= 8192 && header.slice(0, 7).toLowerCase() === 'bearer '
+        ? header.slice(7).trim()
+        : '';
     if (!token) throw new UnauthorizedException('A service token is required');
 
     const payload = await this.verify(token);
