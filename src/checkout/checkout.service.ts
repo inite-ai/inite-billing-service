@@ -6,6 +6,7 @@ import {
   ConflictException,
   ForbiddenException,
   UnauthorizedException,
+  UnprocessableEntityException,
   Logger,
   Optional,
 } from '@nestjs/common';
@@ -31,6 +32,17 @@ import { resolveFrontendUrl } from '../common/config/frontend-url';
 import { summarizeProviderError } from '../common/helpers/provider-error';
 import { checkoutLinkMatches, newCheckoutLink } from './checkout-link';
 import { productTranslations } from '../catalog/product-i18n';
+import {
+  checkBounds,
+  checkRef,
+  openConfig,
+  openEntitlementKey,
+  openPriceCode,
+  parseOpenAmount,
+  sanitizeTitle,
+  SAFE_REF,
+} from './open-product';
+import { OpenSalePolicy } from './open-sale.policy';
 
 @Injectable()
 export class CheckoutService {
@@ -54,6 +66,7 @@ export class CheckoutService {
     private readonly funnelService: FunnelService,
     private readonly configService: ConfigService,
     @Optional() private readonly riskService?: RiskService,
+    @Optional() private readonly openPolicy?: OpenSalePolicy,
   ) {}
 
   /**
@@ -539,6 +552,201 @@ export class CheckoutService {
   }
 
   /**
+   * An open line: one item a service prices and names itself, sold through
+   * one of its open products (see open-product.ts). The service names the
+   * amount, currency, title and ref; billing checks them against the
+   * product's bounds, the service's daily cap and the rails' minimums, keeps
+   * them on the order, and on payment grants the product's template with the
+   * ref put in (or nothing, for goods the service fulfils from its webhook).
+   * Every attempt is audited, refused ones with the reason.
+   */
+  async createOpenSession(
+    userId: string,
+    input: OpenSessionInput,
+    idempotencyKey: string,
+    caller: { serviceId: string; serviceCode: string; clientId?: string | null },
+  ): Promise<OpenSessionResponse> {
+    if (!this.openPolicy) throw new BadRequestException('Open products are not sold here');
+    const idemKey = `checkout:open:${caller.serviceId}:${userId}:${idempotencyKey}`;
+    const claim = await this.idempotencyClaim(idemKey);
+    if (claim.kind === 'completed') return claim.value as OpenSessionResponse;
+    if (claim.kind === 'in_flight') {
+      throw new ConflictException('A checkout with this idempotency key is already being created');
+    }
+    try {
+      const response = await this.buildOpenSession(userId, input, caller);
+      await this.idempotencySet(idemKey, response);
+      return response;
+    } catch (error) {
+      await this.idempotencyRelease(idemKey);
+      const line = input.line;
+      await this.openPolicy.audit({
+        serviceId: caller.serviceId,
+        clientId: caller.clientId,
+        productCode: String(line.productCode ?? ''),
+        userId,
+        outcome: 'refused',
+        reason: (error as Error)?.message ?? 'refused',
+        currency: typeof line.currency === 'string' ? line.currency.slice(0, 10) : null,
+        quantity: Number.isInteger(line.quantity) ? line.quantity : null,
+        ref: typeof line.ref === 'string' && SAFE_REF.test(line.ref) ? line.ref : null,
+      });
+      throw error;
+    }
+  }
+
+  private async buildOpenSession(
+    userId: string,
+    input: OpenSessionInput,
+    caller: { serviceId: string; serviceCode: string; clientId?: string | null },
+  ): Promise<OpenSessionResponse> {
+    const line = input.line;
+    const product = await this.prisma.product.findUnique({
+      where: { code: String(line.productCode) },
+      include: { service: true },
+    });
+    // Another service's product reads as unknown, as a price does.
+    if (!product || product.serviceId !== caller.serviceId || !product.service) {
+      throw new NotFoundException(`Product not found: ${line.productCode}`);
+    }
+    if (!product.isActive) throw new BadRequestException(`Product ${product.code} is not active`);
+    const config = openConfig(product, caller.serviceCode);
+
+    const currency = String(line.currency ?? '').toUpperCase();
+    const unit = parseOpenAmount(line.amount);
+    checkBounds(unit, currency, config);
+    const title = sanitizeTitle(line.title);
+    const ref = checkRef(line.ref, config);
+    const quantity = line.quantity ?? 1;
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > CART_MAX_QTY) {
+      throw new BadRequestException(`An open line's quantity is 1 to ${CART_MAX_QTY}`);
+    }
+    const entitlementKey = openEntitlementKey(config, ref);
+    // Access is granted once, whatever the quantity: one of it is all one can buy.
+    if (entitlementKey && quantity !== 1) {
+      throw new BadRequestException('A line that grants access is bought once (quantity 1)');
+    }
+    const amount = roundMoney(unit.mul(quantity));
+
+    await this.openPolicy!.assertWithinCap(product.service, currency, amount);
+    const rails = await this.openPolicy!.eligibleRails(currency, amount);
+    if (rails.length === 0) {
+      throw new UnprocessableEntityException(
+        `No payment method takes ${amount.toFixed(2)} ${currency}: it is below every provider's minimum`,
+      );
+    }
+
+    // The order hangs on one internal price per product and currency, amount
+    // 0, never sold by its code (CatalogService.getPriceByCode refuses it).
+    const priceCode = openPriceCode(product.code, currency);
+    if (priceCode.length > 100) {
+      throw new BadRequestException(`Product code ${product.code} is too long to sell open`);
+    }
+    const price = await this.prisma.price.upsert({
+      where: { code: priceCode },
+      create: {
+        productId: product.id,
+        code: priceCode,
+        currency,
+        amount: 0,
+        metadata: { open: true },
+      },
+      update: {},
+    });
+    if (price.productId !== product.id || !price.isActive) {
+      throw new BadRequestException(`Product ${product.code} is not sold in ${currency} now`);
+    }
+
+    const item = {
+      priceCode,
+      productCode: product.code,
+      productName: title,
+      quantity,
+      unitAmount: unit.toFixed(2),
+      lineAmount: amount.toFixed(2),
+      ref,
+    };
+    const open = { ...item, title, entitlementKey };
+    const link = newCheckoutLink();
+    const order = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.order.create({
+        data: {
+          userId,
+          priceId: price.id,
+          mode: 'PAYMENT',
+          status: 'created',
+          amount,
+          currency,
+          externalId: `order_${randomUUID()}`,
+          snapshot: {
+            priceCode,
+            priceAmount: amount.toString(),
+            currency,
+            interval: null,
+            trialDays: null,
+            productCode: product.code,
+            productName: title,
+            productType: 'open',
+            serviceId: product.serviceId,
+            open,
+            cart: [item],
+            capturedAt: new Date().toISOString(),
+          },
+          metadata: {
+            ...(input.metadata ?? {}),
+            open,
+            cart: [item],
+            // The per-item grant the orchestrator already makes on payment.
+            ...(entitlementKey ? { item: { ref } } : { item: null }),
+            successUrl: input.successUrl,
+            errorUrl: input.errorUrl,
+            linkTokenHash: link.hash,
+          },
+        },
+      });
+      await tx.openSaleAudit.create({
+        data: {
+          serviceId: caller.serviceId,
+          clientId: caller.clientId ?? null,
+          productCode: product.code,
+          orderId: created.id,
+          userId,
+          outcome: 'opened',
+          amount,
+          currency,
+          quantity,
+          title,
+          ref,
+          entitlementKey,
+        },
+      });
+      return created;
+    });
+
+    this.funnelService.track({
+      userId,
+      eventType: 'checkout_started',
+      stage: 'checkout',
+      orderId: order.id,
+      productId: product.id,
+      serviceId: product.serviceId ?? undefined,
+      amount: moneyToNumber(amount),
+      currency,
+      properties: { priceCode, open: true },
+    });
+
+    const frontendUrl = resolveFrontendUrl(this.configService);
+    return {
+      sessionId: order.id,
+      checkoutUrl: `${checkoutPageUrl(frontendUrl, order.id, input.locale)}#t=${link.token}`,
+      amount: amount.toFixed(2),
+      currency,
+      rails,
+      ...(entitlementKey ? { entitlementKey } : {}),
+    };
+  }
+
+  /**
    * Get session details for the checkout page.
    * Returns order info, product, price, and available payment methods.
    */
@@ -625,6 +833,16 @@ export class CheckoutService {
         continue;
       }
       paymentMethods.push(provider);
+    }
+    // An open product's amount is the seller's: a rail whose provider minimum
+    // it does not meet is not offered (fixed prices are left as they were).
+    if (order.price.product.type === 'open' && this.openPolicy) {
+      const eligible = new Set(
+        await this.openPolicy.eligibleRails(order.currency, toMoney(order.amount)),
+      );
+      for (let i = paymentMethods.length - 1; i >= 0; i--) {
+        if (!eligible.has(paymentMethods[i].code)) paymentMethods.splice(i, 1);
+      }
     }
 
     // The payment already under way, for a rail with no page of its own: the
@@ -925,8 +1143,18 @@ export class CheckoutService {
 
     // Determine rail for payment
     let rail: string;
+    const open = product.type === 'open';
+    if (open && !this.openPolicy) {
+      throw new BadRequestException('Open products are not sold here');
+    }
     if (data.rail) {
       rail = data.rail;
+    } else if (open) {
+      const [first] = await this.openPolicy!.eligibleRails(order.currency, orderAmountDecimal);
+      if (!first) {
+        throw new BadRequestException('No payment method takes an amount this small');
+      }
+      rail = first;
     } else {
       const activeProvider = await this.prisma.paymentProvider.findFirst({
         where: { isActive: true },
@@ -935,6 +1163,21 @@ export class CheckoutService {
         throw new BadRequestException('No payment providers are configured.');
       }
       rail = activeProvider.code;
+    }
+
+    if (open) {
+      // The minimum the checkout page applied, enforced: a rail named directly
+      // is held to it too. Then the service's day, counting this order once.
+      if (!(await this.openPolicy!.railTakes(rail, order.currency, orderAmountDecimal))) {
+        throw new BadRequestException(
+          `${rail} does not take ${orderAmountDecimal.toFixed(2)} ${order.currency}; choose another payment method`,
+        );
+      }
+      const service = product.serviceId
+        ? await this.prisma.service.findUnique({ where: { id: product.serviceId } })
+        : null;
+      if (!service) throw new BadRequestException('This open product has no service');
+      await this.openPolicy!.assertWithinCap(service, order.currency, orderAmountDecimal, order.id);
     }
 
     let adapter: Connector | null;
@@ -1244,6 +1487,33 @@ export function isGuestUserId(userId: string | null | undefined): boolean {
 /** The most lines and the most of one line a cart may hold. */
 export const CART_MAX_LINES = 20;
 export const CART_MAX_QTY = 99;
+
+/** One open line, as the service sent it (checked in createOpenSession). */
+export interface OpenLineInput {
+  productCode: string;
+  amount: string;
+  currency: string;
+  title: string;
+  ref: string;
+  quantity?: number;
+}
+
+export interface OpenSessionInput {
+  line: OpenLineInput;
+  successUrl: string;
+  errorUrl: string;
+  metadata?: Record<string, unknown>;
+  locale?: string;
+}
+
+export interface OpenSessionResponse extends CheckoutSessionResponseDto {
+  amount: string;
+  currency: string;
+  /** The rails that can take this amount; a provider whose minimum it misses is left out. */
+  rails: string[];
+  /** What payment grants, when the product grants anything. */
+  entitlementKey?: string;
+}
 
 export interface CartSessionInput {
   lines: Array<{ priceCode: string; quantity: number }>;

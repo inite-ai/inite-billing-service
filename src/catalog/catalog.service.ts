@@ -19,7 +19,8 @@ export class CatalogService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getProducts(serviceId?: string): Promise<ProductResponseDto[]> {
-    const where: any = { isActive: true };
+    // An open product has no price to show: its service names one per sale.
+    const where: any = { isActive: true, type: { not: 'open' } };
     if (serviceId) where.serviceId = serviceId;
 
     const products = await this.prisma.product.findMany({
@@ -69,7 +70,7 @@ export class CatalogService {
         orderBy: { name: 'asc' },
       }),
       this.prisma.product.findMany({
-        where: { isActive: true, serviceId: { not: null } },
+        where: { isActive: true, serviceId: { not: null }, type: { not: 'open' } },
         include: { prices: { where: { isActive: true }, orderBy: { amount: 'asc' } } },
         orderBy: { createdAt: 'asc' },
       }),
@@ -133,6 +134,8 @@ export class CatalogService {
     if (serviceId) {
       where.product = { ...where.product, serviceId };
     }
+    // An open product's anchor prices (amount 0) are not prices to show.
+    where.product = { ...where.product, type: { not: 'open' } };
 
     const prices = await this.prisma.price.findMany({
       where,
@@ -159,7 +162,10 @@ export class CatalogService {
       include: { product: true },
     });
 
-    if (!price || !price.isActive) {
+    // An open product's prices only anchor its orders (amount 0): sold by
+    // price code, one would go through as a free order. They are reached only
+    // through an open line (CheckoutService.createOpenSession).
+    if (!price || !price.isActive || price.product?.type === 'open') {
       throw new NotFoundException(`Price not found: ${code}`);
     }
 

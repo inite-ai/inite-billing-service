@@ -215,6 +215,7 @@ export function ProductForm({ initial, services, onSubmit, onCancel }: ProductFo
           { value: 'one_time', label: t('typeOneTime') },
           { value: 'subscription', label: t('typeSubscription') },
           { value: 'usage', label: t('typeUsage') },
+          { value: 'open', label: t('typeOpen') },
         ]}
       />
       <Select

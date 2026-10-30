@@ -67,6 +67,8 @@ Admin endpoints additionally require the `admin` role in the JWT.
 | `GET /v1/checkout/sessions/:id` | JWT or service | Session details incl. payment methods |
 | `POST /v1/checkout/sessions/:id/pay` | JWT or service | Pay (promo applied inside this transaction) |
 | `POST /v1/checkout/validate-promo` | JWT or service | Dry-run promo validation |
+| `POST /v1/service-checkout/sessions` | service token (`billing:checkout`) | One price, a cart of `{priceCode, quantity}` lines, or one open line `{productCode, amount, currency, title, ref, quantity}` — see [open-product.md](open-product.md) |
+| `GET /v1/service-checkout/sessions/:id` | service token | Status; an open line's `title`, `ref`, `entitlementKey` |
 
 ### Orders, subscriptions, entitlements
 

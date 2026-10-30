@@ -73,7 +73,12 @@ describe('CatalogService.getStorefront', () => {
 
     expect(prisma.service.findMany.mock.calls[0][0].where).toEqual({ isActive: true });
     const productQuery = prisma.product.findMany.mock.calls[0][0];
-    expect(productQuery.where).toEqual({ isActive: true, serviceId: { not: null } });
+    // An open product has no price to show and is left out.
+    expect(productQuery.where).toEqual({
+      isActive: true,
+      serviceId: { not: null },
+      type: { not: 'open' },
+    });
     expect(productQuery.include.prices.where).toEqual({ isActive: true });
   });
 });

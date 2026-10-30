@@ -144,6 +144,25 @@ describe('LavaAdapter', () => {
       expect(sentBody()).toMatchObject({ offerId: 'offer-dynamic', amount: 990 });
     });
 
+    it('sells an open product only through the dynamic offer, at the amount the order names', async () => {
+      // An open product's offer, if anyone set one, has a fixed price; the
+      // order's amount is the seller's, so only the dynamic offer can charge it.
+      const openPrice = price({
+        amount: '0',
+        metadata: { lavaOfferId: 'offer-own' },
+        product: { type: 'open', metadata: { lavaOfferId: 'offer-own' } },
+      });
+      await expect(
+        build({ price: openPrice }).adapter.createPaymentIntent(input({ amount: 2 })),
+      ).rejects.toThrow('dynamic-price default offer');
+      expect(fetchMock).not.toHaveBeenCalled();
+
+      fetchMock.mockReturnValue(answer(created, 201));
+      const { adapter } = build({ config: { defaultOfferId: 'offer-dynamic' }, price: openPrice });
+      await adapter.createPaymentIntent(input({ amount: 2, currency: 'USD' }));
+      expect(sentBody()).toMatchObject({ offerId: 'offer-dynamic', amount: 2 });
+    });
+
     it('says what is missing when there is no offer at all', async () => {
       const { adapter } = build({ price: price() });
       await expect(adapter.createPaymentIntent(input())).rejects.toThrow('lavaOfferId');

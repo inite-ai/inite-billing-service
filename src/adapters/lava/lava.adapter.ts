@@ -300,8 +300,11 @@ export class LavaAdapter implements Connector {
       input.metadata?.lavaOfferId || priceMeta.lavaOfferId || productMeta.lavaOfferId || null;
     const interval = price?.interval && price.interval !== 'none' ? price.interval : null;
     const discounted = !!price && Number(input.amount) < Number(price.amount) - 0.005;
+    // An open product's amount is named per order: a fixed-price offer would
+    // charge its own price instead, so it goes through the dynamic offer only.
+    const open = price?.product?.type === 'open';
 
-    if (own && !discounted) return { offerId: String(own), interval };
+    if (own && !discounted && !open) return { offerId: String(own), interval };
 
     if (input.mode === 'SUBSCRIPTION') {
       throw new BadRequestException(
@@ -312,9 +315,11 @@ export class LavaAdapter implements Connector {
     }
     if (!config.defaultOfferId) {
       throw new BadRequestException(
-        own
-          ? 'This order is discounted below the lava.top offer price; configure a dynamic-price default offer to sell it'
-          : 'No lava.top offer for this price: set Price.metadata.lavaOfferId, or a dynamic-price default offer in the LAVA provider settings',
+        open
+          ? 'An open product is sold on lava.top through a dynamic-price default offer; none is configured'
+          : own
+            ? 'This order is discounted below the lava.top offer price; configure a dynamic-price default offer to sell it'
+            : 'No lava.top offer for this price: set Price.metadata.lavaOfferId, or a dynamic-price default offer in the LAVA provider settings',
       );
     }
     return { offerId: config.defaultOfferId, amount: Number(input.amount), interval };

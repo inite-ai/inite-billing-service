@@ -3,6 +3,7 @@ import { CheckoutController } from './checkout.controller';
 import { CheckoutService } from './checkout.service';
 import { X402Controller } from './x402.controller';
 import { X402Service } from './x402.service';
+import { OpenSalePolicy } from './open-sale.policy';
 import { CatalogModule } from '../catalog/catalog.module';
 import { PaymentOrchestratorModule } from '../payment-orchestrator/payment-orchestrator.module';
 import { AffiliatesModule } from '../affiliates/affiliates.module';
@@ -26,6 +27,7 @@ import { CheckoutLinkOrJwtGuard, CheckoutLinkOrJwtOrServiceGuard } from './check
   providers: [
     CheckoutService,
     X402Service,
+    OpenSalePolicy,
     // The checkout link guards hand everything without a link to these.
     JwtAuthGuard,
     JwtOrServiceGuard,

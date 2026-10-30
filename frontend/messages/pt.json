@@ -1581,6 +1581,7 @@
     "intervalMonthly": "Mensal",
     "intervalYearly": "Anual",
     "typeOneTime": "Avulso",
+    "typeOpen": "Aberto (o serviço define o preço)",
     "typeSubscription": "Assinatura",
     "typeUsage": "Por uso",
     "createLevel": "Criar nível",

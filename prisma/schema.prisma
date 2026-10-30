@@ -19,6 +19,9 @@ enum ProductType {
   subscription
   one_time
   usage
+  /// Sold at an amount and title the owning service names per checkout,
+  /// within the bounds in metadata.open (src/checkout/open-product.ts).
+  open
 
   @@schema("billing")
 }
@@ -1468,5 +1471,34 @@ model TreasuryPayout {
 
   @@index([treasuryId, createdAt])
   @@map("treasury_payouts")
+  @@schema("billing")
+}
+
+/// One row per open-product sale a service asked for: opened, or refused and
+/// why. The order holds the money and its status; this is the trail of what a
+/// service priced and named itself, kept even when no order was made, so it
+/// holds ids rather than foreign keys.
+model OpenSaleAudit {
+  id             String   @id @default(uuid()) @db.Uuid
+  serviceId      String   @map("service_id") @db.Uuid
+  /// The INITE Auth client that asked.
+  clientId       String?  @map("client_id") @db.VarChar(255)
+  productCode    String   @map("product_code") @db.VarChar(100)
+  orderId        String?  @map("order_id") @db.Uuid
+  userId         String   @map("user_id") @db.VarChar(255)
+  /// opened | refused
+  outcome        String   @db.VarChar(20)
+  reason         String?  @db.VarChar(255)
+  amount         Decimal? @db.Decimal(19, 4)
+  currency       String?  @db.VarChar(10)
+  quantity       Int?
+  title          String?  @db.VarChar(120)
+  ref            String?  @db.VarChar(100)
+  entitlementKey String?  @map("entitlement_key") @db.VarChar(255)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([serviceId, createdAt(sort: Desc)])
+  @@index([orderId])
+  @@map("open_sale_audit")
   @@schema("billing")
 }
