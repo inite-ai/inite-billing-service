@@ -479,6 +479,7 @@
     "title": "Checkout",
     "orderSummary": "Order Summary",
     "product": "Product",
+    "cartTitle": "Your order",
     "price": "Price",
     "interval": "Billing",
     "oneTime": "One-time payment",

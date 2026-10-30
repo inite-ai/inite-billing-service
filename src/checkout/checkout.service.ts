@@ -26,7 +26,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import { Connector } from '../common/connectors/connector.interface';
 import { CreateIntentInput } from '../common/interfaces/payment-rail-adapter.interface';
-import { moneyToNumber, toMoney } from '../common/money';
+import { moneyToNumber, roundMoney, toMoney } from '../common/money';
 import { resolveFrontendUrl } from '../common/config/frontend-url';
 import { summarizeProviderError } from '../common/helpers/provider-error';
 import { checkoutLinkMatches, newCheckoutLink } from './checkout-link';
@@ -380,6 +380,165 @@ export class CheckoutService {
   }
 
   /**
+   * A cart: several of a service's own catalogue prices, each with a
+   * quantity, paid as one order on any rail.
+   *
+   * Billing stays the price authority: the selling service names price codes
+   * and quantities, never an amount. The order carries the first line's price
+   * (for its product, its service and its routing), the summed amount, and the
+   * lines in its snapshot. A cart grants nothing: a product with entitlements,
+   * credits or per-item rules, or a subscription, cannot be put in one, so the
+   * orchestrator's grants (which read the order's one price) never under- or
+   * over-grant. Promo codes do not apply to a cart (paySession refuses).
+   */
+  async createCartSession(
+    userId: string,
+    input: CartSessionInput,
+    idempotencyKey: string,
+    callerServiceId: string,
+  ): Promise<CheckoutSessionResponseDto & { amount: string; currency: string }> {
+    const idemKey = `checkout:cart:${userId}:${idempotencyKey}`;
+    const claim = await this.idempotencyClaim(idemKey);
+    if (claim.kind === 'completed') {
+      return claim.value as CheckoutSessionResponseDto & { amount: string; currency: string };
+    }
+    if (claim.kind === 'in_flight') {
+      throw new ConflictException('A checkout with this idempotency key is already being created');
+    }
+    try {
+      const response = await this.buildCartSession(userId, input, callerServiceId);
+      await this.idempotencySet(idemKey, response);
+      return response;
+    } catch (error) {
+      await this.idempotencyRelease(idemKey);
+      throw error;
+    }
+  }
+
+  private async buildCartSession(
+    userId: string,
+    input: CartSessionInput,
+    callerServiceId: string,
+  ): Promise<CheckoutSessionResponseDto & { amount: string; currency: string }> {
+    const lines = input.lines ?? [];
+    if (lines.length === 0 || lines.length > CART_MAX_LINES) {
+      throw new BadRequestException(`A cart has 1 to ${CART_MAX_LINES} lines`);
+    }
+    const seen = new Set<string>();
+    const priced: Array<{
+      price: Awaited<ReturnType<CatalogService['getPriceByCode']>>;
+      quantity: number;
+    }> = [];
+    for (const line of lines) {
+      if (!Number.isInteger(line.quantity) || line.quantity < 1 || line.quantity > CART_MAX_QTY) {
+        throw new BadRequestException(`A cart line's quantity is 1 to ${CART_MAX_QTY}`);
+      }
+      if (seen.has(line.priceCode)) {
+        throw new BadRequestException(`Price ${line.priceCode} is in the cart twice`);
+      }
+      seen.add(line.priceCode);
+      const price = await this.catalogService.getPriceByCode(line.priceCode);
+      const product = price.product;
+      // Another service's price reads as unknown, as in createSession.
+      if (!product || product.serviceId !== callerServiceId) {
+        throw new NotFoundException(`Price not found: ${line.priceCode}`);
+      }
+      if (!product.isActive) {
+        throw new BadRequestException(`Product ${product.code} is not active`);
+      }
+      if (product.type === 'subscription' || price.interval) {
+        throw new BadRequestException(`Product ${product.code} cannot be sold in a cart`);
+      }
+      const meta = (product.metadata as Record<string, any>) || {};
+      if (
+        itemTemplate(product) ||
+        meta.entitlements ||
+        meta.entitlementKey ||
+        meta.credits ||
+        meta.creditsPerPeriod ||
+        meta.commitment
+      ) {
+        throw new BadRequestException(
+          `Product ${product.code} grants access and cannot be sold in a cart`,
+        );
+      }
+      priced.push({ price, quantity: line.quantity });
+    }
+    const currency = String(priced[0].price.currency).toUpperCase();
+    if (priced.some((p) => String(p.price.currency).toUpperCase() !== currency)) {
+      throw new BadRequestException('Every price in a cart has the same currency');
+    }
+    const amount = roundMoney(
+      priced.reduce((sum, p) => sum.plus(toMoney(p.price.amount).mul(p.quantity)), toMoney(0)),
+    );
+    if (amount.lte(0)) {
+      throw new BadRequestException('A cart must cost something');
+    }
+
+    const first = priced[0].price;
+    const items = priced.map((p) => ({
+      priceCode: p.price.code,
+      productCode: p.price.product.code,
+      productName: p.price.product.name,
+      quantity: p.quantity,
+      unitAmount: toMoney(p.price.amount).toFixed(2),
+      lineAmount: roundMoney(toMoney(p.price.amount).mul(p.quantity)).toFixed(2),
+    }));
+    const link = newCheckoutLink();
+    const order = await this.prisma.order.create({
+      data: {
+        userId,
+        priceId: first.id,
+        mode: 'PAYMENT',
+        status: 'created',
+        amount,
+        currency: first.currency,
+        externalId: `order_${randomUUID()}`,
+        snapshot: {
+          priceCode: first.code,
+          priceAmount: first.amount.toString(),
+          currency: first.currency,
+          interval: null,
+          trialDays: null,
+          productCode: first.product.code,
+          productName: first.product.name,
+          productType: first.product.type,
+          serviceId: first.product.serviceId ?? null,
+          cart: items,
+          capturedAt: new Date().toISOString(),
+        },
+        metadata: {
+          ...(input.metadata ?? {}),
+          cart: items,
+          successUrl: input.successUrl,
+          errorUrl: input.errorUrl,
+          linkTokenHash: link.hash,
+        },
+      },
+    });
+
+    this.funnelService.track({
+      userId,
+      eventType: 'checkout_started',
+      stage: 'checkout',
+      orderId: order.id,
+      productId: first.productId,
+      serviceId: first.product.serviceId ?? undefined,
+      amount: moneyToNumber(amount),
+      currency: order.currency,
+      properties: { priceCode: first.code, cartLines: items.length },
+    });
+
+    const frontendUrl = resolveFrontendUrl(this.configService);
+    return {
+      sessionId: order.id,
+      checkoutUrl: `${checkoutPageUrl(frontendUrl, order.id, input.locale)}#t=${link.token}`,
+      amount: amount.toFixed(2),
+      currency: String(order.currency),
+    };
+  }
+
+  /**
    * Get session details for the checkout page.
    * Returns order info, product, price, and available payment methods.
    */
@@ -528,6 +687,16 @@ export class CheckoutService {
       paymentMethods,
       payment,
       pending,
+      // A cart's lines, for the page to list (createCartSession).
+      ...(Array.isArray(metadata.cart)
+        ? {
+            items: metadata.cart.map((l: Record<string, unknown>) => ({
+              productName: String(l.productName ?? ''),
+              quantity: Number(l.quantity ?? 1),
+              lineAmount: String(l.lineAmount ?? ''),
+            })),
+          }
+        : {}),
     };
   }
 
@@ -652,6 +821,10 @@ export class CheckoutService {
     // customer for having used their one redemption on this very order.
     const promoAlreadyApplied =
       !!data.promoCode && !!metadata.promoCodeId && metadata.promoCode === data.promoCode;
+    // A promo code is checked against one price; a cart is several.
+    if (data.promoCode && Array.isArray(metadata.cart)) {
+      throw new BadRequestException('A promo code does not apply to a cart');
+    }
     if (data.promoCode && !promoAlreadyApplied) {
       promoValidation = await this.promoCodesService.validatePromoCode(
         data.promoCode,
@@ -1066,4 +1239,16 @@ export function isGuestUserId(userId: string | null | undefined): boolean {
   // service namespace (`mikefluff:<hex>`) marks a guest; without this every
   // unpaid order of a real user was claimable by whoever opened its link.
   return typeof userId === 'string' && userId.includes(':') && !userId.startsWith('did:');
+}
+
+/** The most lines and the most of one line a cart may hold. */
+export const CART_MAX_LINES = 20;
+export const CART_MAX_QTY = 99;
+
+export interface CartSessionInput {
+  lines: Array<{ priceCode: string; quantity: number }>;
+  successUrl: string;
+  errorUrl: string;
+  metadata?: Record<string, unknown>;
+  locale?: string;
 }

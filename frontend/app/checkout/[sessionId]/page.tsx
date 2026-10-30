@@ -1,156 +1,181 @@
-'use client'
+'use client';
 
-import { useCallback, useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
-import { useLocale, useTranslations } from 'next-intl'
-import { ArrowRight, Loader2, Tag, Check, X, CreditCard, Lock, Zap, Wallet } from 'lucide-react'
-import TokenUSDT from '@web3icons/react/icons/tokens/TokenUSDT'
-import TokenUSDC from '@web3icons/react/icons/tokens/TokenUSDC'
-import api from '@/lib/api'
-import { OAuthClient } from '@/lib/oauth-client'
-import { checkoutLinkHeaders, forgetCheckoutLinkInAddressBar, takeCheckoutLink } from '@/lib/checkout-link'
-import toast from 'react-hot-toast'
-import RecommendedOffers from '@/components/dashboard/RecommendedOffers'
-import { getErrorMessage, getErrorStatus } from '@/lib/api-error'
-import { CryptoInvoice, type CryptoPayment } from '@/components/checkout/CryptoInvoice'
-import { RedirectWaiting } from '@/components/checkout/RedirectWaiting'
-import { PixInvoice, showablePix, type PixPayment } from '@/components/checkout/PixInvoice'
-import { CryptoAssetIcon } from '@/components/checkout/CryptoAssetIcon'
-import { LedgerShell } from '@/components/ledger/LedgerShell'
-import { defaultPaymentMethod, orderPaymentMethods } from '@/lib/default-rail'
-import { localizeProduct } from '@/lib/product-i18n'
+import { useCallback, useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
+import { ArrowRight, Loader2, Tag, Check, X, CreditCard, Lock, Zap, Wallet } from 'lucide-react';
+import TokenUSDT from '@web3icons/react/icons/tokens/TokenUSDT';
+import TokenUSDC from '@web3icons/react/icons/tokens/TokenUSDC';
+import api from '@/lib/api';
+import { OAuthClient } from '@/lib/oauth-client';
+import {
+  checkoutLinkHeaders,
+  forgetCheckoutLinkInAddressBar,
+  takeCheckoutLink,
+} from '@/lib/checkout-link';
+import toast from 'react-hot-toast';
+import RecommendedOffers from '@/components/dashboard/RecommendedOffers';
+import { getErrorMessage, getErrorStatus } from '@/lib/api-error';
+import { CryptoInvoice, type CryptoPayment } from '@/components/checkout/CryptoInvoice';
+import { RedirectWaiting } from '@/components/checkout/RedirectWaiting';
+import { PixInvoice, showablePix, type PixPayment } from '@/components/checkout/PixInvoice';
+import { CryptoAssetIcon } from '@/components/checkout/CryptoAssetIcon';
+import { LedgerShell } from '@/components/ledger/LedgerShell';
+import { defaultPaymentMethod, orderPaymentMethods } from '@/lib/default-rail';
+import { localizeProduct } from '@/lib/product-i18n';
 
 interface SessionData {
-  sessionId: string
-  status: string
+  sessionId: string;
+  status: string;
   product: {
-    name: string
-    code: string
-    type: string
-    description: string | null
-    i18n?: Record<string, { name?: string; description?: string }>
-  }
+    name: string;
+    code: string;
+    type: string;
+    description: string | null;
+    i18n?: Record<string, { name?: string; description?: string }>;
+  };
   price: {
-    code: string
-    amount: string
-    currency: string
-    interval: string | null
-  }
-  mode: string
-  successUrl: string | null
-  errorUrl: string | null
-  paymentMethods: PaymentMethod[]
-  payment?: CryptoPayment | PixPayment | null
+    code: string;
+    amount: string;
+    currency: string;
+    interval: string | null;
+  };
+  mode: string;
+  successUrl: string | null;
+  errorUrl: string | null;
+  paymentMethods: PaymentMethod[];
+  payment?: CryptoPayment | PixPayment | null;
   /** A payment the customer is completing on the provider's own page. */
-  pending?: { rail: string; status: string; checkoutUrl: string } | null
+  pending?: { rail: string; status: string; checkoutUrl: string } | null;
+  /** A cart: several of the store's products in one order, each with a quantity. */
+  items?: Array<{ productName: string; quantity: number; lineAmount: string }> | null;
 }
 
 /** The window the provider's payment page opens in, so this page stays put. */
-const PAYMENT_WINDOW = 'billing-payment'
-const PAYMENT_WINDOW_FEATURES = 'popup,width=520,height=780'
-const RETURNED_MESSAGE = 'billing:payment-returned'
+const PAYMENT_WINDOW = 'billing-payment';
+const PAYMENT_WINDOW_FEATURES = 'popup,width=520,height=780';
+const RETURNED_MESSAGE = 'billing:payment-returned';
 /** Rails paid on this page itself (crypto invoice, PIX code): no provider window to open. */
-const INLINE_RAILS = new Set(['CRYPTO', 'HODLE'])
+const INLINE_RAILS = new Set(['CRYPTO', 'HODLE']);
 
 interface PaymentOption {
-  id: string
-  name: string
+  id: string;
+  name: string;
   /** A crypto network/token, or a way to pay within a rail (lava.top: CARD, SBP, PAYPAL). */
-  metadata: { chain?: string; token?: string; chainName?: string; network?: string; method?: string; chargedIn?: string }
+  metadata: {
+    chain?: string;
+    token?: string;
+    chainName?: string;
+    network?: string;
+    method?: string;
+    chargedIn?: string;
+  };
 }
 
 interface PaymentMethod {
-  code: string
-  name: string
-  supportedModes: string[]
-  currencies: string[]
+  code: string;
+  name: string;
+  supportedModes: string[];
+  currencies: string[];
   /** For a rail where the customer picks first — crypto networks. */
-  options?: PaymentOption[]
+  options?: PaymentOption[];
 }
 
 /** A crypto invoice worth showing again: one that can still be paid, or that was. */
-function showableCrypto(payment: CryptoPayment | PixPayment | null | undefined): payment is CryptoPayment {
-  return !!payment && payment.type === 'crypto' && !['cancelled', 'expired'].includes(payment.invoiceStatus)
+function showableCrypto(
+  payment: CryptoPayment | PixPayment | null | undefined,
+): payment is CryptoPayment {
+  return (
+    !!payment &&
+    payment.type === 'crypto' &&
+    !['cancelled', 'expired'].includes(payment.invoiceStatus)
+  );
 }
 
 function isSafeRedirect(url: string): boolean {
-  if (url.startsWith('/')) return true
+  if (url.startsWith('/')) return true;
   try {
-    const parsed = new URL(url)
-    return parsed.origin === window.location.origin
+    const parsed = new URL(url);
+    return parsed.origin === window.location.origin;
   } catch {
-    return false
+    return false;
   }
 }
 
 interface PromoResult {
-  isValid: boolean
-  error?: string
-  originalAmount: number
-  discountAmount: number
-  finalAmount: number
-  promoCodeName?: string
+  isValid: boolean;
+  error?: string;
+  originalAmount: number;
+  discountAmount: number;
+  finalAmount: number;
+  promoCodeName?: string;
 }
 
 function formatPrice(amount: string | number): string {
-  const num = typeof amount === 'string' ? parseFloat(amount) : amount
-  if (isNaN(num)) return String(amount)
-  if (num === Math.floor(num)) return num.toString()
-  return num.toFixed(2)
+  const num = typeof amount === 'string' ? parseFloat(amount) : amount;
+  if (isNaN(num)) return String(amount);
+  if (num === Math.floor(num)) return num.toString();
+  return num.toFixed(2);
 }
 
 export default function CheckoutPage() {
-  const params = useParams()
-  const sessionId = params.sessionId as string
-  const t = useTranslations('checkout')
-  const locale = useLocale()
+  const params = useParams();
+  const sessionId = params.sessionId as string;
+  const t = useTranslations('checkout');
+  const locale = useLocale();
   const methodLabel = (option: PaymentOption) => {
-    const key = option.metadata.method
-    return key === 'CARD' ? t('methods.card') : key === 'SBP' ? t('methods.sbp') : key === 'PAYPAL' ? t('methods.paypal') : option.name
-  }
+    const key = option.metadata.method;
+    return key === 'CARD'
+      ? t('methods.card')
+      : key === 'SBP'
+        ? t('methods.sbp')
+        : key === 'PAYPAL'
+          ? t('methods.paypal')
+          : option.name;
+  };
 
   // The store's link opens this order without a billing sign-in.
-  const [linkToken] = useState(() => takeCheckoutLink(sessionId))
-  const link = checkoutLinkHeaders(linkToken)
-  useEffect(() => forgetCheckoutLinkInAddressBar(), [])
+  const [linkToken] = useState(() => takeCheckoutLink(sessionId));
+  const link = checkoutLinkHeaders(linkToken);
+  useEffect(() => forgetCheckoutLinkInAddressBar(), []);
 
-  const [session, setSession] = useState<SessionData | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [session, setSession] = useState<SessionData | null>(null);
+  const [loading, setLoading] = useState(true);
   // The three states this page can end in, each one a translation key. It was
   // `string`, cast to `any` at the call site — so a typo would have rendered
   // the key itself and nothing would have complained.
   const [error, setError] = useState<'alreadyPaid' | 'sessionExpired' | 'sessionNotFound' | null>(
     null,
-  )
+  );
 
   // Promo
-  const [promoCode, setPromoCode] = useState('')
-  const [promoLoading, setPromoLoading] = useState(false)
-  const [promoResult, setPromoResult] = useState<PromoResult | null>(null)
+  const [promoCode, setPromoCode] = useState('');
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [promoResult, setPromoResult] = useState<PromoResult | null>(null);
 
   // Payment
-  const [selectedRail, setSelectedRail] = useState('')
-  const [selectedOption, setSelectedOption] = useState('')
-  const [payLoading, setPayLoading] = useState(false)
+  const [selectedRail, setSelectedRail] = useState('');
+  const [selectedOption, setSelectedOption] = useState('');
+  const [payLoading, setPayLoading] = useState(false);
   // An open crypto invoice replaces the form: there is no page to redirect to.
-  const [payment, setPayment] = useState<CryptoPayment | null>(null)
+  const [payment, setPayment] = useState<CryptoPayment | null>(null);
   // An open PIX code replaces the form the same way.
-  const [pix, setPix] = useState<PixPayment | null>(null)
+  const [pix, setPix] = useState<PixPayment | null>(null);
   // A payment on the provider's page (lava.top, Stripe, …): this page waits
   // behind it and checks with the provider until it settles.
-  const [redirect, setRedirect] = useState<{ url: string; windowOpened: boolean } | null>(null)
-  const [redirectOutcome, setRedirectOutcome] = useState<'paid' | 'failed' | null>(null)
-  const [checking, setChecking] = useState(false)
+  const [redirect, setRedirect] = useState<{ url: string; windowOpened: boolean } | null>(null);
+  const [redirectOutcome, setRedirectOutcome] = useState<'paid' | 'failed' | null>(null);
+  const [checking, setChecking] = useState(false);
 
   useEffect(() => {
-    const returned = new URLSearchParams(window.location.search).get('returned') === '1'
+    const returned = new URLSearchParams(window.location.search).get('returned') === '1';
     // Back from the provider inside the payment window: tell the checkout page
     // that opened it, and close. If there is no such page (a full redirect),
     // carry on and show the result here.
     if (returned && window.opener && window.name === PAYMENT_WINDOW) {
       try {
-        window.opener.postMessage({ type: RETURNED_MESSAGE, sessionId }, window.location.origin)
-        window.close()
+        window.opener.postMessage({ type: RETURNED_MESSAGE, sessionId }, window.location.origin);
+        window.close();
       } catch {
         // The opener is gone or elsewhere; this page handles it instead.
       }
@@ -160,49 +185,55 @@ export default function CheckoutPage() {
       try {
         const res = returned
           ? await api.post(`/v1/checkout/sessions/${sessionId}/refresh`, undefined, link)
-          : await api.get(`/v1/checkout/sessions/${sessionId}`, link)
-        const data: SessionData = res.data
-        setSession(data)
+          : await api.get(`/v1/checkout/sessions/${sessionId}`, link);
+        const data: SessionData = res.data;
+        setSession(data);
 
         if (returned && data.status === 'paid') {
-          setRedirect({ url: '', windowOpened: false })
-          setRedirectOutcome('paid')
-          return
+          setRedirect({ url: '', windowOpened: false });
+          setRedirectOutcome('paid');
+          return;
         }
         if (data.pending && ['created', 'open'].includes(data.status)) {
-          setRedirect({ url: data.pending.checkoutUrl, windowOpened: false })
-          return
+          setRedirect({ url: data.pending.checkoutUrl, windowOpened: false });
+          return;
         }
 
         // A crypto invoice under way — or just paid — is shown again after a
         // reload instead of the form, whatever the order status says.
         if (showableCrypto(data.payment) && ['created', 'open', 'paid'].includes(data.status)) {
-          setPayment({ ...data.payment, intentStatus: data.status === 'paid' ? 'paid' : data.payment.intentStatus })
-          const crypto = data.paymentMethods.find((m) => m.code === 'CRYPTO')
-          if (crypto) setSelectedRail('CRYPTO')
-          setSelectedOption(`${data.payment.chain}_${data.payment.token}`)
-          return
+          setPayment({
+            ...data.payment,
+            intentStatus: data.status === 'paid' ? 'paid' : data.payment.intentStatus,
+          });
+          const crypto = data.paymentMethods.find((m) => m.code === 'CRYPTO');
+          if (crypto) setSelectedRail('CRYPTO');
+          setSelectedOption(`${data.payment.chain}_${data.payment.token}`);
+          return;
         }
 
         if (showablePix(data.payment) && ['created', 'open', 'paid'].includes(data.status)) {
-          setPix({ ...data.payment, intentStatus: data.status === 'paid' ? 'paid' : data.payment.intentStatus })
-          setSelectedRail('HODLE')
-          return
+          setPix({
+            ...data.payment,
+            intentStatus: data.status === 'paid' ? 'paid' : data.payment.intentStatus,
+          });
+          setSelectedRail('HODLE');
+          return;
         }
 
         if (data.status === 'paid') {
-          setError('alreadyPaid')
-          return
+          setError('alreadyPaid');
+          return;
         }
         if (data.status !== 'created') {
-          setError('sessionExpired')
-          return
+          setError('sessionExpired');
+          return;
         }
 
         if (data.paymentMethods.length > 0) {
-          const first = defaultPaymentMethod(data.paymentMethods, data.price.currency)!
-          setSelectedRail(first.code)
-          if (first.options?.length) setSelectedOption(first.options[0].id)
+          const first = defaultPaymentMethod(data.paymentMethods, data.price.currency)!;
+          setSelectedRail(first.code);
+          if (first.options?.length) setSelectedOption(first.options[0].id);
         }
       } catch (e) {
         // Through the link the server never answers 401 or 403: a token that
@@ -211,8 +242,8 @@ export default function CheckoutPage() {
           // Not authenticated — auto-trigger OAuth silently
           // Back to this very checkout, ?locale= and all, whichever tab the
           // sign-in finishes in.
-          OAuthClient.login({ returnTo: `/checkout/${sessionId}${window.location.search}` })
-          return
+          OAuthClient.login({ returnTo: `/checkout/${sessionId}${window.location.search}` });
+          return;
         }
         // Anything else — missing, forbidden, or a server error — reads the
         // same to someone holding a checkout link: this session is not usable.
@@ -220,140 +251,150 @@ export default function CheckoutPage() {
         // different INITE account than the one the store opened the order for
         // (an old billing session outliving a new sign-in on the store). Sign
         // in again once, silently: the provider's current session decides.
-        const reauthKey = `checkout-reauth:${sessionId}`
+        const reauthKey = `checkout-reauth:${sessionId}`;
         if (getErrorStatus(e) === 403 && !sessionStorage.getItem(reauthKey)) {
-          sessionStorage.setItem(reauthKey, '1')
-          OAuthClient.login({ returnTo: `/checkout/${sessionId}${window.location.search}` })
-          return
+          sessionStorage.setItem(reauthKey, '1');
+          OAuthClient.login({ returnTo: `/checkout/${sessionId}${window.location.search}` });
+          return;
         }
-        setError('sessionNotFound')
+        setError('sessionNotFound');
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
     }
-    fetchSession()
+    fetchSession();
     // `link` follows `linkToken`, which is fixed for the page's life.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, linkToken])
+  }, [sessionId, linkToken]);
 
   // While a crypto invoice is open, watch it: the chain is checked on the
   // server every half minute, and this picks the result up.
-  const waitingForChain = !!payment && payment.invoiceStatus !== 'paid' && payment.intentStatus !== 'paid'
+  const waitingForChain =
+    !!payment && payment.invoiceStatus !== 'paid' && payment.intentStatus !== 'paid';
   useEffect(() => {
-    if (!waitingForChain) return
+    if (!waitingForChain) return;
     const id = setInterval(async () => {
       try {
-        const res = await api.get(`/v1/checkout/sessions/${sessionId}`, link)
-        const data: SessionData = res.data
+        const res = await api.get(`/v1/checkout/sessions/${sessionId}`, link);
+        const data: SessionData = res.data;
         if (showableCrypto(data.payment)) {
-          setPayment({ ...data.payment, intentStatus: data.status === 'paid' ? 'paid' : data.payment.intentStatus })
+          setPayment({
+            ...data.payment,
+            intentStatus: data.status === 'paid' ? 'paid' : data.payment.intentStatus,
+          });
         }
       } catch {
         // A missed poll is retried on the next tick.
       }
-    }, 8000)
-    return () => clearInterval(id)
+    }, 8000);
+    return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [waitingForChain, sessionId, linkToken])
+  }, [waitingForChain, sessionId, linkToken]);
 
   // While a PIX code is open, ask Hodle (through the server) whether it was paid;
   // the webhook usually gets there first, and this picks either up.
-  const waitingForPix = !!pix && pix.intentStatus !== 'paid' && !['EXPIRED', 'FAILED'].includes(pix.depositStatus)
+  const waitingForPix =
+    !!pix && pix.intentStatus !== 'paid' && !['EXPIRED', 'FAILED'].includes(pix.depositStatus);
   useEffect(() => {
-    if (!waitingForPix) return
+    if (!waitingForPix) return;
     const id = setInterval(async () => {
       try {
-        const res = await api.post(`/v1/checkout/sessions/${sessionId}/refresh`, undefined, link)
-        const data: SessionData = res.data
+        const res = await api.post(`/v1/checkout/sessions/${sessionId}/refresh`, undefined, link);
+        const data: SessionData = res.data;
         if (data.payment?.type === 'pix') {
-          setPix({ ...data.payment, intentStatus: data.status === 'paid' ? 'paid' : data.payment.intentStatus })
+          setPix({
+            ...data.payment,
+            intentStatus: data.status === 'paid' ? 'paid' : data.payment.intentStatus,
+          });
         } else if (data.status === 'paid') {
-          setPix((p) => (p ? { ...p, intentStatus: 'paid' } : p))
+          setPix((p) => (p ? { ...p, intentStatus: 'paid' } : p));
         } else if (['expired', 'failed'].includes(data.status) || !data.payment) {
-          setPix((p) => (p ? { ...p, depositStatus: 'EXPIRED' } : p))
+          setPix((p) => (p ? { ...p, depositStatus: 'EXPIRED' } : p));
         }
       } catch {
         // A missed poll is retried on the next tick.
       }
-    }, 5000)
-    return () => clearInterval(id)
+    }, 5000);
+    return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [waitingForPix, sessionId, linkToken])
+  }, [waitingForPix, sessionId, linkToken]);
 
   // Ask the provider (through the server) whether the payment went through.
   const checkRedirect = useCallback(async () => {
-    setChecking(true)
+    setChecking(true);
     try {
-      const res = await api.post(`/v1/checkout/sessions/${sessionId}/refresh`, undefined, link)
-      const data: SessionData = res.data
-      if (data.status === 'paid') setRedirectOutcome('paid')
-      else if (['failed', 'expired'].includes(data.status)) setRedirectOutcome('failed')
+      const res = await api.post(`/v1/checkout/sessions/${sessionId}/refresh`, undefined, link);
+      const data: SessionData = res.data;
+      if (data.status === 'paid') setRedirectOutcome('paid');
+      else if (['failed', 'expired'].includes(data.status)) setRedirectOutcome('failed');
     } catch {
       // Asked again on the next tick.
     } finally {
-      setChecking(false)
+      setChecking(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, linkToken])
+  }, [sessionId, linkToken]);
 
-  const waitingForProvider = !!redirect && !redirectOutcome
+  const waitingForProvider = !!redirect && !redirectOutcome;
   useEffect(() => {
-    if (!waitingForProvider) return
+    if (!waitingForProvider) return;
     const id = setInterval(() => {
-      if (document.visibilityState === 'visible') void checkRedirect()
-    }, 5000)
+      if (document.visibilityState === 'visible') void checkRedirect();
+    }, 5000);
     // The payment window reports back the moment the customer returns to it;
     // a customer who paid in another tab is caught when they come back here.
     const onMessage = (event: MessageEvent) => {
-      if (event.origin === window.location.origin && event.data?.type === RETURNED_MESSAGE) void checkRedirect()
-    }
+      if (event.origin === window.location.origin && event.data?.type === RETURNED_MESSAGE)
+        void checkRedirect();
+    };
     const onVisible = () => {
-      if (document.visibilityState === 'visible') void checkRedirect()
-    }
-    window.addEventListener('message', onMessage)
-    document.addEventListener('visibilitychange', onVisible)
+      if (document.visibilityState === 'visible') void checkRedirect();
+    };
+    window.addEventListener('message', onMessage);
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
-      clearInterval(id)
-      window.removeEventListener('message', onMessage)
-      document.removeEventListener('visibilitychange', onVisible)
-    }
-  }, [waitingForProvider, checkRedirect])
+      clearInterval(id);
+      window.removeEventListener('message', onMessage);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [waitingForProvider, checkRedirect]);
 
   const reopenPaymentWindow = () => {
-    if (!redirect?.url) return
-    const opened = window.open(redirect.url, PAYMENT_WINDOW, PAYMENT_WINDOW_FEATURES)
-    if (opened) setRedirect({ ...redirect, windowOpened: true })
-    else window.location.assign(redirect.url)
-  }
+    if (!redirect?.url) return;
+    const opened = window.open(redirect.url, PAYMENT_WINDOW, PAYMENT_WINDOW_FEATURES);
+    if (opened) setRedirect({ ...redirect, windowOpened: true });
+    else window.location.assign(redirect.url);
+  };
 
   // Paid: show the confirmation for a moment, then go where the merchant asked.
   const paidNow =
     (!!payment && (payment.invoiceStatus === 'paid' || payment.intentStatus === 'paid')) ||
     (!!pix && pix.intentStatus === 'paid') ||
-    redirectOutcome === 'paid'
+    redirectOutcome === 'paid';
   useEffect(() => {
-    if (!paidNow || !session) return
-    const target = session.successUrl && isSafeRedirect(session.successUrl) ? session.successUrl : '/orders'
+    if (!paidNow || !session) return;
+    const target =
+      session.successUrl && isSafeRedirect(session.successUrl) ? session.successUrl : '/orders';
     const id = setTimeout(() => {
-      window.location.href = target
-    }, 2500)
-    return () => clearTimeout(id)
-  }, [paidNow, session])
+      window.location.href = target;
+    }, 2500);
+    return () => clearTimeout(id);
+  }, [paidNow, session]);
 
   const handleApplyPromo = async () => {
-    if (!promoCode.trim() || !session) return
-    setPromoLoading(true)
+    if (!promoCode.trim() || !session) return;
+    setPromoLoading(true);
     try {
       const res = await api.post(
         `/v1/checkout/sessions/${sessionId}/validate-promo`,
         { promoCode: promoCode.trim() },
         link,
-      )
+      );
       if (res.data.isValid) {
-        setPromoResult(res.data)
-        toast.success(t('promoApplied'))
+        setPromoResult(res.data);
+        toast.success(t('promoApplied'));
       } else {
-        const errorCode = res.data.errorCode || res.data.error
+        const errorCode = res.data.errorCode || res.data.error;
         const errorMessages: Record<string, string> = {
           not_found: t('promoNotFound'),
           inactive: t('promoInactive'),
@@ -363,105 +404,108 @@ export default function CheckoutPage() {
           per_user_limit_reached: t('promoPerUserLimitReached'),
           wrong_service: t('promoWrongService'),
           min_purchase_not_met: t('promoMinPurchase'),
-        }
-        toast.error(errorMessages[errorCode] || t('promoInvalid'))
-        setPromoResult(null)
+        };
+        toast.error(errorMessages[errorCode] || t('promoInvalid'));
+        setPromoResult(null);
       }
     } catch (e) {
-      toast.error(getErrorMessage(e, t('promoInvalid')))
-      setPromoResult(null)
+      toast.error(getErrorMessage(e, t('promoInvalid')));
+      setPromoResult(null);
     } finally {
-      setPromoLoading(false)
+      setPromoLoading(false);
     }
-  }
+  };
 
   const clearPromo = () => {
-    setPromoCode('')
-    setPromoResult(null)
-  }
+    setPromoCode('');
+    setPromoResult(null);
+  };
 
   const finalAmount = promoResult
     ? promoResult.finalAmount
-    : parseFloat(session?.price.amount || '0')
-  const isFree = finalAmount === 0
+    : parseFloat(session?.price.amount || '0');
+  const isFree = finalAmount === 0;
 
-  const selectedMethod = session?.paymentMethods.find((m) => m.code === selectedRail)
-  const needsOption = !isFree && !!selectedMethod?.options?.length
-  const chosenOption = selectedMethod?.options?.find((o) => o.id === selectedOption)
+  const selectedMethod = session?.paymentMethods.find((m) => m.code === selectedRail);
+  const needsOption = !isFree && !!selectedMethod?.options?.length;
+  const chosenOption = selectedMethod?.options?.find((o) => o.id === selectedOption);
 
   const handlePay = async () => {
-    if (!session) return
-    if (!isFree && !selectedRail) return
-    if (needsOption && !chosenOption) return
+    if (!session) return;
+    if (!isFree && !selectedRail) return;
+    if (needsOption && !chosenOption) return;
 
-    setPayLoading(true)
+    setPayLoading(true);
     // Opened now, inside the click, or the browser blocks it; pointed at the
     // provider once the server has made the payment. Not for crypto, which
     // has no page to go to, nor for a free order.
     const paymentWindow =
-      !isFree && !INLINE_RAILS.has(selectedRail) ? window.open('', PAYMENT_WINDOW, PAYMENT_WINDOW_FEATURES) : null
+      !isFree && !INLINE_RAILS.has(selectedRail)
+        ? window.open('', PAYMENT_WINDOW, PAYMENT_WINDOW_FEATURES)
+        : null;
     try {
-      const payload: Record<string, unknown> = {}
+      const payload: Record<string, unknown> = {};
       if (!isFree && selectedRail) {
-        payload.rail = selectedRail
+        payload.rail = selectedRail;
       }
       if (needsOption && chosenOption) {
         if (chosenOption.metadata.chain) {
-          payload.cryptoChain = chosenOption.metadata.chain
-          payload.cryptoToken = chosenOption.metadata.token
+          payload.cryptoChain = chosenOption.metadata.chain;
+          payload.cryptoToken = chosenOption.metadata.token;
         } else if (chosenOption.metadata.method) {
-          payload.method = chosenOption.metadata.method
+          payload.method = chosenOption.metadata.method;
         }
       }
       if (promoResult?.isValid && promoCode.trim()) {
-        payload.promoCode = promoCode.trim()
+        payload.promoCode = promoCode.trim();
       }
 
-      const res = await api.post(`/v1/checkout/sessions/${sessionId}/pay`, payload, link)
+      const res = await api.post(`/v1/checkout/sessions/${sessionId}/pay`, payload, link);
 
       if (res.data.payment?.type === 'crypto') {
-        paymentWindow?.close()
-        setPayment(res.data.payment)
-        setPayLoading(false)
-        return
+        paymentWindow?.close();
+        setPayment(res.data.payment);
+        setPayLoading(false);
+        return;
       }
       if (res.data.payment?.type === 'pix') {
-        paymentWindow?.close()
-        setPix(res.data.payment)
-        setPayLoading(false)
-        return
+        paymentWindow?.close();
+        setPix(res.data.payment);
+        setPayLoading(false);
+        return;
       }
 
       if (res.data.checkoutUrl) {
         if (paymentWindow && !paymentWindow.closed) {
-          paymentWindow.location.replace(res.data.checkoutUrl)
-          setRedirect({ url: res.data.checkoutUrl, windowOpened: true })
-          setPayLoading(false)
+          paymentWindow.location.replace(res.data.checkoutUrl);
+          setRedirect({ url: res.data.checkoutUrl, windowOpened: true });
+          setPayLoading(false);
         } else {
           // Popup blocked: the ordinary redirect, and the provider sends the
           // customer back here to finish.
-          window.location.assign(res.data.checkoutUrl)
+          window.location.assign(res.data.checkoutUrl);
         }
       } else {
-        paymentWindow?.close()
+        paymentWindow?.close();
         // Free order fulfilled — go to orders
-        toast.success(t('promoApplied'))
-        const successTarget = session.successUrl && isSafeRedirect(session.successUrl) ? session.successUrl : '/orders'
-        window.location.assign(successTarget)
+        toast.success(t('promoApplied'));
+        const successTarget =
+          session.successUrl && isSafeRedirect(session.successUrl) ? session.successUrl : '/orders';
+        window.location.assign(successTarget);
       }
     } catch (e) {
-      paymentWindow?.close()
-      toast.error(getErrorMessage(e, 'Payment failed'))
-      setPayLoading(false)
+      paymentWindow?.close();
+      toast.error(getErrorMessage(e, 'Payment failed'));
+      setPayLoading(false);
     }
-  }
+  };
 
   const getIntervalLabel = (interval: string | null) => {
-    if (!interval) return t('oneTime')
-    if (interval === 'month') return t('monthly')
-    if (interval === 'year') return t('yearly')
-    return interval
-  }
+    if (!interval) return t('oneTime');
+    if (interval === 'month') return t('monthly');
+    if (interval === 'year') return t('yearly');
+    return interval;
+  };
 
   // --- Render ---
 
@@ -470,17 +514,20 @@ export default function CheckoutPage() {
       <Lock className="h-3 w-3" aria-hidden />
       {t('securePayment')}
     </>
-  )
+  );
 
   if (loading) {
     return (
       <LedgerShell>
-        <p className="mono flex items-center gap-2.5 text-[13px] text-[color:var(--dim)]" role="status">
+        <p
+          className="mono flex items-center gap-2.5 text-[13px] text-[color:var(--dim)]"
+          role="status"
+        >
           <Loader2 className="h-4 w-4 animate-spin text-[color:var(--accent)]" />
           {t('processing')}
         </p>
       </LedgerShell>
-    )
+    );
   }
 
   if (error) {
@@ -505,14 +552,16 @@ export default function CheckoutPage() {
           )}
         </div>
       </LedgerShell>
-    )
+    );
   }
 
-  if (!session) return null
-  const productText = localizeProduct(session.product, locale)
+  if (!session) return null;
+  const productText = localizeProduct(session.product, locale);
 
-  const currency = session.price.currency
-  const formStage = !redirect && !payment
+  const currency = session.price.currency;
+  // A promo code is checked against one price, so a cart takes none.
+  const cart = session.items?.length ? session.items : null;
+  const formStage = !redirect && !payment;
 
   return (
     <LedgerShell footer={secureFooter}>
@@ -534,22 +583,42 @@ export default function CheckoutPage() {
             <p className="eyebrow mb-3">
               <span className="dot">●</span> {t('product')}
             </p>
-            <h1 className="text-[30px] sm:text-[36px]">{productText.name}</h1>
-            {productText.description && (
-              <p className="mt-3 text-sm leading-relaxed text-[color:var(--dim)]">{productText.description}</p>
+            <h1 className="text-[30px] sm:text-[36px]">
+              {cart ? t('cartTitle') : productText.name}
+            </h1>
+            {!cart && productText.description && (
+              <p className="mt-3 text-sm leading-relaxed text-[color:var(--dim)]">
+                {productText.description}
+              </p>
             )}
           </div>
           <div className="rc-body sm:!px-5">
-            <div className="rc-line">
-              <span className="k">{t('interval')}</span>
-              <span className="v">{getIntervalLabel(session.price.interval)}</span>
-            </div>
-            <div className="rc-line">
-              <span className="k">{promoResult?.isValid ? t('originalPrice') : t('price')}</span>
-              <span className="v">
-                {formatPrice(session.price.amount)} {currency}
-              </span>
-            </div>
+            {cart?.map((item, i) => (
+              <div className="rc-line" key={i}>
+                <span className="k">
+                  {item.productName} × {item.quantity}
+                </span>
+                <span className="v">
+                  {formatPrice(item.lineAmount)} {currency}
+                </span>
+              </div>
+            ))}
+            {!cart && (
+              <>
+                <div className="rc-line">
+                  <span className="k">{t('interval')}</span>
+                  <span className="v">{getIntervalLabel(session.price.interval)}</span>
+                </div>
+                <div className="rc-line">
+                  <span className="k">
+                    {promoResult?.isValid ? t('originalPrice') : t('price')}
+                  </span>
+                  <span className="v">
+                    {formatPrice(session.price.amount)} {currency}
+                  </span>
+                </div>
+              </>
+            )}
             {promoResult?.isValid && (
               <div className="rc-line">
                 <span className="k">
@@ -571,13 +640,15 @@ export default function CheckoutPage() {
                 ) : (
                   <>
                     {formatPrice(finalAmount)}{' '}
-                    <span className="mono text-base font-medium text-[color:var(--dim)]">{currency}</span>
+                    <span className="mono text-base font-medium text-[color:var(--dim)]">
+                      {currency}
+                    </span>
                   </>
                 )}
               </span>
             </div>
 
-            {formStage && (
+            {formStage && !cart && (
               <div className="mt-5 border-t border-dashed border-[color:var(--line)] pt-4">
                 <label htmlFor="promo" className="eyebrow mb-2 flex items-center gap-1.5">
                   <Tag className="h-3 w-3" aria-hidden />
@@ -590,11 +661,11 @@ export default function CheckoutPage() {
                       type="text"
                       value={promoCode}
                       onChange={(e) => {
-                        setPromoCode(e.target.value.toUpperCase())
-                        if (promoResult) setPromoResult(null)
+                        setPromoCode(e.target.value.toUpperCase());
+                        if (promoResult) setPromoResult(null);
                       }}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter') void handleApplyPromo()
+                        if (e.key === 'Enter') void handleApplyPromo();
                       }}
                       placeholder="PROMO2026"
                       disabled={!!promoResult?.isValid}
@@ -640,13 +711,19 @@ export default function CheckoutPage() {
         <section className="panel rise d2 p-5 sm:p-7">
           {redirect ? (
             <RedirectWaiting
-              provider={session.paymentMethods.find((m) => m.code === (session.pending?.rail ?? selectedRail))?.name ?? ''}
+              provider={
+                session.paymentMethods.find(
+                  (m) => m.code === (session.pending?.rail ?? selectedRail),
+                )?.name ?? ''
+              }
               outcome={redirectOutcome}
               checking={checking}
               windowOpened={redirect.windowOpened}
               onReopen={reopenPaymentWindow}
               onCheck={() => void checkRedirect()}
-              errorUrl={session.errorUrl && isSafeRedirect(session.errorUrl) ? session.errorUrl : null}
+              errorUrl={
+                session.errorUrl && isSafeRedirect(session.errorUrl) ? session.errorUrl : null
+              }
             />
           ) : pix ? (
             <PixInvoice payment={pix} renewing={payLoading} onRenew={handlePay} />
@@ -668,36 +745,42 @@ export default function CheckoutPage() {
                     <p className="note err">{t('noPaymentMethods')}</p>
                   ) : (
                     <div className="space-y-2">
-                      {orderPaymentMethods(session.paymentMethods, session.price.currency).map((method) => (
-                        <button
-                          key={method.code}
-                          type="button"
-                          aria-pressed={selectedRail === method.code}
-                          onClick={() => {
-                            setSelectedRail(method.code)
-                            // Land on a choice that belongs to this rail, not the last one's.
-                            if (!method.options?.some((o) => o.id === selectedOption)) {
-                              setSelectedOption(method.options?.[0]?.id ?? '')
-                            }
-                          }}
-                          className="opt"
-                        >
-                          <span className="radio" aria-hidden />
-                          <MethodGlyph code={method.code} />
-                          <span className="ui min-w-0 flex-1 truncate text-[15px]">{method.name}</span>
-                          <span className="mono shrink-0 text-[11.5px] text-[color:var(--dim)]">
-                            {method.options?.length
-                              ? method.options[0].metadata.chain
-                                ? t('crypto.networks', { count: method.options.length })
-                                : method.options.map((o) => methodLabel(o)).join(' · ')
-                              : method.currencies.join(', ')}
-                          </span>
-                        </button>
-                      ))}
+                      {orderPaymentMethods(session.paymentMethods, session.price.currency).map(
+                        (method) => (
+                          <button
+                            key={method.code}
+                            type="button"
+                            aria-pressed={selectedRail === method.code}
+                            onClick={() => {
+                              setSelectedRail(method.code);
+                              // Land on a choice that belongs to this rail, not the last one's.
+                              if (!method.options?.some((o) => o.id === selectedOption)) {
+                                setSelectedOption(method.options?.[0]?.id ?? '');
+                              }
+                            }}
+                            className="opt"
+                          >
+                            <span className="radio" aria-hidden />
+                            <MethodGlyph code={method.code} />
+                            <span className="ui min-w-0 flex-1 truncate text-[15px]">
+                              {method.name}
+                            </span>
+                            <span className="mono shrink-0 text-[11.5px] text-[color:var(--dim)]">
+                              {method.options?.length
+                                ? method.options[0].metadata.chain
+                                  ? t('crypto.networks', { count: method.options.length })
+                                  : method.options.map((o) => methodLabel(o)).join(' · ')
+                                : method.currencies.join(', ')}
+                            </span>
+                          </button>
+                        ),
+                      )}
                       {needsOption && selectedMethod?.options && (
                         <fieldset className="pt-3">
                           <legend className="eyebrow mb-3">
-                            {selectedMethod.options[0]?.metadata.chain ? t('crypto.chooseNetwork') : t('methods.choose')}
+                            {selectedMethod.options[0]?.metadata.chain
+                              ? t('crypto.chooseNetwork')
+                              : t('methods.choose')}
                           </legend>
                           <div className="grid gap-2 sm:grid-cols-2">
                             {selectedMethod.options.map((option) => (
@@ -710,9 +793,15 @@ export default function CheckoutPage() {
                               >
                                 {option.metadata.chain ? (
                                   <>
-                                    <CryptoAssetIcon token={option.metadata.token} chain={option.metadata.chain} size={32} />
+                                    <CryptoAssetIcon
+                                      token={option.metadata.token}
+                                      chain={option.metadata.chain}
+                                      size={32}
+                                    />
                                     <span className="min-w-0">
-                                      <span className="ui block text-sm">{option.metadata.token}</span>
+                                      <span className="ui block text-sm">
+                                        {option.metadata.token}
+                                      </span>
                                       <span className="block truncate text-xs text-[color:var(--dim)]">
                                         {option.metadata.chainName === option.metadata.network
                                           ? option.metadata.chainName
@@ -739,7 +828,9 @@ export default function CheckoutPage() {
                               is charged in its own currency at today's rate. */}
                           {chosenOption?.metadata.chargedIn && (
                             <p className="note mt-3 text-xs">
-                              {t('methods.chargedInHint', { currency: chosenOption.metadata.chargedIn })}
+                              {t('methods.chargedInHint', {
+                                currency: chosenOption.metadata.chargedIn,
+                              })}
                             </p>
                           )}
                         </fieldset>
@@ -777,13 +868,15 @@ export default function CheckoutPage() {
 
               {/* Never distract mid-payment */}
               {/* Offers are bought under a billing account; a buyer here through the store's link has none open. */}
-              {!payLoading && !linkToken && <RecommendedOffers sessionId={String(sessionId)} compact />}
+              {!payLoading && !linkToken && (
+                <RecommendedOffers sessionId={String(sessionId)} compact />
+              )}
             </>
           )}
         </section>
       </div>
     </LedgerShell>
-  )
+  );
 }
 
 /**
@@ -797,12 +890,15 @@ function MethodGlyph({ code, method }: { code?: string; method?: string }) {
         <TokenUSDT variant="background" size={22} className="rounded-full ring-2 ring-[#141416]" />
         <TokenUSDC variant="background" size={22} className="rounded-full ring-2 ring-[#141416]" />
       </span>
-    )
+    );
   }
-  const Icon = method === 'SBP' ? Zap : method === 'PAYPAL' ? Wallet : CreditCard
+  const Icon = method === 'SBP' ? Zap : method === 'PAYPAL' ? Wallet : CreditCard;
   return (
-    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-[color:var(--line)] bg-white/[0.04] text-[color:var(--ink)]" aria-hidden>
+    <span
+      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-[color:var(--line)] bg-white/[0.04] text-[color:var(--ink)]"
+      aria-hidden
+    >
       <Icon className="h-4 w-4" />
     </span>
-  )
+  );
 }

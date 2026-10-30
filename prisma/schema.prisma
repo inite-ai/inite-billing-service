@@ -113,6 +113,10 @@ model Service {
   isActive            Boolean  @default(true) @map("is_active")
   webhookUrl          String?  @map("webhook_url") @db.VarChar(500)
   minWithdrawalAmount Decimal? @map("min_withdrawal_amount") @db.Decimal(19, 4)
+  /// The INITE Auth OAuth client (client_credentials) that acts as this
+  /// service on the token-authenticated service API (/v1/service-checkout).
+  /// Null: the service has no token identity.
+  authClientId        String?  @unique @map("auth_client_id") @db.VarChar(255)
   metadata            Json?    @default("{}")
   createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)

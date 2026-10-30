@@ -479,6 +479,7 @@
     "title": "Оформление заказа",
     "orderSummary": "Ваш заказ",
     "product": "Продукт",
+    "cartTitle": "Ваш заказ",
     "price": "Цена",
     "interval": "Оплата",
     "oneTime": "Разовый платёж",

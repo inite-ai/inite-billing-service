@@ -479,6 +479,7 @@
     "title": "Pago",
     "orderSummary": "Resumen del pedido",
     "product": "Producto",
+    "cartTitle": "Tu pedido",
     "price": "Precio",
     "interval": "Facturación",
     "oneTime": "Pago único",
