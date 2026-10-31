@@ -88,6 +88,8 @@ export class X402Service {
     if (!order || !linkToken || !checkoutLinkMatches(order.metadata, linkToken)) {
       return json(404, { error: 'Checkout session not found' });
     }
+    // x402 settles into INITE's own wallet rail; a merchant is paid on its own accounts.
+    if (order.merchantId) return json(404, { error: 'Checkout session not found' });
     if (PAID_STATUSES.includes(order.status)) {
       return json(200, { status: 'paid', orderId: order.id });
     }

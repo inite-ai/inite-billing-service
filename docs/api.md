@@ -67,7 +67,9 @@ Admin endpoints additionally require the `admin` role in the JWT.
 | `GET /v1/checkout/sessions/:id` | JWT or service | Session details incl. payment methods |
 | `POST /v1/checkout/sessions/:id/pay` | JWT or service | Pay (promo applied inside this transaction) |
 | `POST /v1/checkout/validate-promo` | JWT or service | Dry-run promo validation |
-| `POST /v1/service-checkout/sessions` | service token (`billing:checkout`) | One price, a cart of `{priceCode, quantity}` lines, or one open line `{productCode, amount, currency, title, ref, quantity}` — see [open-product.md](open-product.md) |
+| `POST /v1/service-checkout/sessions` | service token (`billing:checkout`) | One price, a cart of `{priceCode, quantity}` lines, or one open line `{productCode, amount, currency, title, ref, quantity}` — see [open-product.md](open-product.md); with `merchantId`, sold on that merchant's own account — see [connected-accounts.md](connected-accounts.md) |
+| `POST /v1/merchants`, `GET /v1/merchants/:id`, `GET /v1/merchants/by-org/:orgId`, `PUT`/`DELETE /v1/merchants/:id/connections/:rail`, `POST …/connections/:rail/verify`, `POST /v1/merchants/:id/orders/:orderId/refund` | service token (`billing:merchants`) | A service's merchants and their own provider accounts — see [connected-accounts.md](connected-accounts.md) |
+| `POST /v1/webhooks/merchant/:connectionId` | the connection's own provider secret | A merchant's own provider account notifying billing |
 | `GET /v1/service-checkout/sessions/:id` | service token | Status; an open line's `title`, `ref`, `entitlementKey` |
 
 ### Orders, subscriptions, entitlements

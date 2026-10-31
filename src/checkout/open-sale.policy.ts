@@ -4,7 +4,7 @@ import { PrismaService } from '../common/services/prisma.service';
 import { PaymentOrchestratorService } from '../payment-orchestrator/payment-orchestrator.service';
 import { Connector } from '../common/connectors/connector.interface';
 import { toMoney } from '../common/money';
-import { openDailyCap } from './open-product';
+import { merchantSalesInOpenCap, openDailyCap } from './open-product';
 import { meetsRailMinimum } from './rail-minimums';
 
 /** Open orders that count against the day's cap: with a provider, or paid. */
@@ -90,13 +90,20 @@ export class OpenSalePolicy {
    * up a service's day. Checked when the session is opened and again when a
    * payment starts; two payments starting in the same instant can pass
    * together, so the cap bounds the volume to within one sale of it.
+   *
+   * A merchant's sale (`merchant: true`) goes to the merchant's own account.
+   * Unless `MERCHANT_SALES_IN_OPEN_CAP` is on it is not held to the cap, and
+   * merchants' orders are left out of what the cap counts.
    */
   async assertWithinCap(
     service: { id: string; metadata: unknown },
     currency: string,
     amount: Decimal,
     excludeOrderId?: string,
+    opts: { merchant?: boolean } = {},
   ): Promise<void> {
+    const merchantsCount = merchantSalesInOpenCap();
+    if (opts.merchant && !merchantsCount) return;
     const cap = openDailyCap(service.metadata, currency);
     if (!cap) {
       throw new BadRequestException(
@@ -111,6 +118,7 @@ export class OpenSalePolicy {
         createdAt: { gte: new Date(Date.now() - DAY_MS) },
         ...(excludeOrderId ? { id: { not: excludeOrderId } } : {}),
         price: { product: { serviceId: service.id, type: 'open' } },
+        ...(merchantsCount ? {} : { merchantId: null }),
       },
     });
     const used = toMoney(sum._sum.amount ?? 0);

@@ -7,6 +7,7 @@ import { StripeAdapter } from './stripe/stripe.adapter';
 import { AppleIAPAdapter } from './apple-iap/apple-iap.adapter';
 import { GooglePlayAdapter } from './google-play/google-play.adapter';
 import { HodleAdapter } from './hodle/hodle.adapter';
+import { YooKassaAdapter } from './yookassa/yookassa.adapter';
 
 @Module({
   providers: [
@@ -18,6 +19,7 @@ import { HodleAdapter } from './hodle/hodle.adapter';
     AppleIAPAdapter,
     GooglePlayAdapter,
     HodleAdapter,
+    YooKassaAdapter,
   ],
   exports: [
     OneAdapter,
@@ -27,6 +29,7 @@ import { HodleAdapter } from './hodle/hodle.adapter';
     AppleIAPAdapter,
     GooglePlayAdapter,
     HodleAdapter,
+    YooKassaAdapter,
   ],
 })
 export class AdaptersModule {}

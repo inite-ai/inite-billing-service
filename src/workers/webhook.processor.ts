@@ -9,6 +9,10 @@ import { isSubscriptionEvent } from '../payment-orchestrator/payment-orchestrato
 import { UNMATCHED_TRANSFER_EVENT } from '../adapters/crypto/crypto.adapter';
 import { LAVA_UNMATCHED_EVENT } from '../adapters/lava/lava.adapter';
 import { HODLE_UNMATCHED_EVENT } from '../adapters/hodle/hodle.adapter';
+import { RAILS } from '../common/connectors/rail';
+import { PaymentRailAdapter } from '../common/interfaces/payment-rail-adapter.interface';
+import { MerchantRailsService } from '../merchants/merchant-rails.service';
+import { connectionIdOfWebhookRail } from '../merchants/merchant-credentials';
 
 /**
  * Events a rail records for an admin rather than settles: money or a refund
@@ -44,6 +48,7 @@ export class WebhookProcessor extends WorkerHost {
     private readonly prisma: PrismaService,
     private readonly paymentOrchestrator: PaymentOrchestratorService,
     @Optional() private readonly riskService?: RiskService,
+    @Optional() private readonly merchantRails?: MerchantRailsService,
   ) {
     super();
   }
@@ -108,12 +113,37 @@ export class WebhookProcessor extends WorkerHost {
     }
 
     try {
-      // Get adapter
-      const adapter = this.paymentOrchestrator.getAdapter(rail);
+      // A merchant's own account (stored under its connection): read with the
+      // merchant's credentials, matched only to that merchant's orders. Any
+      // other rail is INITE's own, and never settles a merchant's order —
+      // except crypto, whose evidence is the chain, not an account.
+      const connectionId = connectionIdOfWebhookRail(rail);
+      let adapter: PaymentRailAdapter;
+      let providerRail = rail;
+      let orderScope: Record<string, unknown> | undefined;
+      if (connectionId) {
+        const connection = await this.prisma.merchantConnection.findUnique({
+          where: { id: connectionId },
+        });
+        if (!connection || !this.merchantRails) {
+          throw new Error(`Merchant connection not found: ${connectionId}`);
+        }
+        adapter = this.merchantRails.bind(connection);
+        providerRail = connection.rail;
+        orderScope = { merchantId: connection.merchantId };
+      } else {
+        adapter = this.paymentOrchestrator.getAdapter(rail);
+        orderScope = rail === RAILS.CRYPTO ? undefined : { merchantId: null };
+      }
 
       // A crypto transfer no invoice claims (kept as a CryptoTransfer for an
       // admin), or a lava.top refund that matches no sale: recorded, not settled.
-      if (RECORD_ONLY_EVENTS.has(webhookEvent.eventType)) {
+      // A merchant's account sells one-time payments only: its subscription
+      // events have nothing here to settle.
+      if (
+        RECORD_ONLY_EVENTS.has(webhookEvent.eventType) ||
+        (connectionId && isSubscriptionEvent(webhookEvent.eventType))
+      ) {
         await this.prisma.webhookEvent.update({
           where: { id: webhookEvent.id },
           data: { status: 'processed', processedAt: new Date() },
@@ -159,7 +189,8 @@ export class WebhookProcessor extends WorkerHost {
       const paymentIntent = await this.prisma.paymentIntent.findFirst({
         where: {
           providerIntentId: webhookEvent.entityId,
-          rail,
+          rail: providerRail,
+          ...(orderScope ? { order: orderScope } : {}),
         },
         include: { order: true },
       });

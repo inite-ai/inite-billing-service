@@ -374,6 +374,8 @@ export class WalletMerchantsService {
     if (!order || order.price.product.serviceId !== serviceId || order.userId !== ownerDid) {
       throw new NotFoundException('Checkout session not found');
     }
+    // The INITE wallet pays INITE; a merchant's sale is paid on the merchant's own accounts.
+    if (order.merchantId) throw new NotFoundException('Checkout session not found');
     return order;
   }
 }

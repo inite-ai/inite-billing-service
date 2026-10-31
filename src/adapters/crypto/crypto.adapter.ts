@@ -1,8 +1,10 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 import {
+  bindConnector,
   Connector,
   ConnectorCapabilities,
+  MerchantScope,
   RegisterConnector,
   WebhookVerifyInput,
 } from '../../common/connectors/connector.interface';
@@ -24,6 +26,7 @@ import {
   CHAIN_IDS,
   ChainId,
   isChainId,
+  isValidAddress,
   paymentUri,
   receiverKey,
   txExplorerUrl,
@@ -80,8 +83,52 @@ export class CryptoAdapter implements Connector {
     };
   }
 
+  /** The rail's settings as stored; a merchant's copy puts its own addresses in. */
+  private async loadSettings(): Promise<CryptoSettings | null> {
+    return loadCryptoSettings(this.prisma);
+  }
+
+  /** Set only on a copy bound to a merchant's own addresses. */
+  private readonly merchantScope?: MerchantScope;
+
+  /**
+   * Invoices paid straight to a merchant's own addresses. No key is ever
+   * held: billing only watches the chain, with the rail's own watchers and
+   * exchange rates, so the rail must be enabled. No markup is added to a
+   * merchant's price.
+   */
+  withCredentials(credentials: Record<string, any>, scope: MerchantScope): Connector {
+    const wallets: Partial<Record<ChainId, string>> = {};
+    for (const [chain, address] of Object.entries(credentials.addresses ?? {})) {
+      if (isChainId(chain) && typeof address === 'string' && isValidAddress(chain, address)) {
+        wallets[chain] = address.trim();
+      }
+    }
+    const prisma = this.prisma;
+    return bindConnector<CryptoAdapter>(this, {
+      merchantScope: scope,
+      loadSettings: async () => {
+        const settings = await loadCryptoSettings(prisma);
+        return settings ? { ...settings, wallets, fxMarkupPercent: 0 } : null;
+      },
+      // An indexer's shared secret is INITE's; a merchant's payments are
+      // seen by the watcher only.
+      verifyWebhook: () => false,
+    });
+  }
+
+  /** Addresses cannot be proven by a call; each is checked to be one on its chain. */
+  async verifyAccount(): Promise<{ hints: Record<string, unknown> }> {
+    if (!this.merchantScope) throw new Error('Only a merchant connection is verified');
+    const settings = await this.loadSettings();
+    if (!settings?.isActive) throw new Error('Crypto payments are not enabled in billing');
+    const chains = Object.keys(settings.wallets);
+    if (chains.length === 0) throw new Error('No valid address on a supported network');
+    return { hints: { chains } };
+  }
+
   private async settings(): Promise<CryptoSettings> {
-    const settings = await loadCryptoSettings(this.prisma);
+    const settings = await this.loadSettings();
     if (!settings || !settings.isActive) {
       throw new BadRequestException('Crypto payments are not enabled');
     }
@@ -107,7 +154,7 @@ export class CryptoAdapter implements Connector {
    * price in a currency there is no usable exchange rate for.
    */
   async listMethods(context: { currency?: string } = {}): Promise<PaymentMethod[]> {
-    const settings = await loadCryptoSettings(this.prisma);
+    const settings = await this.loadSettings();
     if (!settings?.isActive) return [];
     if (context.currency && !(await this.fx.quote(context.currency, settings))) return [];
 

@@ -51,9 +51,11 @@ export class SessionLinksService {
       where: { id: orderId },
       data: { metadata: { ...((order.metadata as object) ?? {}), linkTokenHash: link.hash } },
     });
-    return this.withX402({
+    const session = {
       sessionId: order.id,
       checkoutUrl: `${checkoutPageUrl(resolveFrontendUrl(this.config), order.id, locale)}#t=${link.token}`,
-    });
+    };
+    // x402 pays INITE's wallet rail; a merchant is paid on its own accounts only.
+    return order.merchantId ? session : this.withX402(session);
   }
 }

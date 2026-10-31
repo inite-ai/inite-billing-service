@@ -16,6 +16,8 @@ export const RAILS = {
   GOOGLE_PLAY: 'GOOGLE_PLAY',
   /** PIX in reais through Hodle (hodle.com.br). */
   HODLE: 'HODLE',
+  /** YooKassa (yookassa.ru), roubles; today only on a merchant's own shop. */
+  YOOKASSA: 'YOOKASSA',
   /** Virtual rail: a 100%-off promo has no provider/adapter and goes straight
    * to fulfilment. It must never be looked up as a live adapter. */
   PROMO: 'PROMO',

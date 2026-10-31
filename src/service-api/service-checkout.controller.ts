@@ -26,6 +26,7 @@ import {
   IsOptional,
   IsString,
   IsUrl,
+  IsUUID,
   Matches,
   Max,
   MaxLength,
@@ -84,6 +85,11 @@ class ServiceSessionDto {
   @IsUrl({ require_tld: false }) errorUrl!: string;
   @IsOptional() @IsObject() metadata?: Record<string, unknown>;
   @IsOptional() @IsString() @MaxLength(16) locale?: string;
+  /**
+   * Sell for this merchant of the service, paid straight to the merchant's own
+   * provider account (docs/connected-accounts.md): one open line only.
+   */
+  @IsOptional() @IsUUID() merchantId?: string;
 }
 
 class ServicePayFromWalletDto {
@@ -133,6 +139,23 @@ export class ServiceCheckoutController {
       }
     }
     const open = dto.lines?.some((l) => l.productCode);
+    let merchantMetadata: Record<string, unknown> | undefined;
+    if (dto.merchantId) {
+      // A merchant's sale is one open line, the merchant's own order.
+      if (!open || dto.lines!.length !== 1) {
+        throw new BadRequestException("A merchant's sale is one open line");
+      }
+      const merchant = await this.prisma.merchant.findUnique({ where: { id: dto.merchantId } });
+      if (!merchant || merchant.serviceId !== user.serviceId) {
+        throw new NotFoundException('Merchant not found');
+      }
+      const ref = dto.lines![0].ref;
+      const reference = metadata?.clientReference;
+      if (reference !== undefined && reference !== ref) {
+        throw new BadRequestException('metadata.clientReference is the line ref (the order id)');
+      }
+      merchantMetadata = { ...(metadata ?? {}), clientReference: ref };
+    }
     if (dto.lines && open) {
       // One open line is the whole order: its grant is the order's.
       const [line] = dto.lines;
@@ -154,7 +177,11 @@ export class ServiceCheckoutController {
           },
           successUrl: dto.successUrl,
           errorUrl: dto.errorUrl,
-          ...(metadata ? { metadata } : {}),
+          ...(merchantMetadata
+            ? { metadata: merchantMetadata, merchantId: dto.merchantId }
+            : metadata
+              ? { metadata }
+              : {}),
           ...(dto.locale ? { locale: dto.locale } : {}),
         },
         key.trim(),
@@ -164,7 +191,10 @@ export class ServiceCheckoutController {
           clientId: (user as RequestUser & { clientId?: string }).clientId,
         },
       );
-      const links = await this.links.withX402(session);
+      // x402 pays into INITE's wallet rail: never for a merchant's sale.
+      const links = dto.merchantId
+        ? { sessionId: session.sessionId, checkoutUrl: session.checkoutUrl }
+        : await this.links.withX402(session);
       return {
         ...links,
         amount: session.amount,
@@ -227,6 +257,7 @@ export class ServiceCheckoutController {
       currency: order.currency,
       priceCode: order.price.code,
       userId: order.userId,
+      ...(order.merchantId ? { merchantId: order.merchantId } : {}),
       // An open line: what the service asked to sell, as billing kept it.
       ...(open
         ? {

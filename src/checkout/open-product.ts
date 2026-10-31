@@ -176,6 +176,21 @@ export function openDailyCap(serviceMetadata: unknown, currency: string): Decima
   return cap && cap.gt(0) ? cap : null;
 }
 
+/**
+ * Whether a merchant's sale (paid to the merchant's own account, never
+ * INITE's) counts toward, and is held to, the service's open daily cap.
+ * Not decided by the owner yet: off unless `MERCHANT_SALES_IN_OPEN_CAP` is
+ * "true". Off, a merchant's sale is neither checked against the cap nor
+ * counted in what INITE's own open sales have used.
+ */
+export function merchantSalesInOpenCap(env: NodeJS.ProcessEnv = process.env): boolean {
+  return (
+    String(env.MERCHANT_SALES_IN_OPEN_CAP ?? '')
+      .trim()
+      .toLowerCase() === 'true'
+  );
+}
+
 /** The internal price an open order hangs on, one per product and currency. */
 export function openPriceCode(productCode: string, currency: string): string {
   return `${productCode}-open-${currency.toLowerCase()}`;
