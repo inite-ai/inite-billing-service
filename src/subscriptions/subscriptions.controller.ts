@@ -19,6 +19,8 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { JwtOrServiceGuard } from '../auth/guards/jwt-or-service.guard';
 import { User, RequestUser } from '../auth/decorators/user.decorator';
 import { SubscriptionsService } from './subscriptions.service';
+import { ORG_MANAGERS_ONLY, mayManage } from './subscribers';
+import { isOrgSubscriber } from '../common/validators/is-user-id';
 import { publicApiValidation } from '../common/pipes/public-api-validation.pipe';
 import { StartTrialDto } from './dto/start-trial.dto';
 import { SubscriptionResponseDto } from '../common/dto/subscription.dto';
@@ -39,7 +41,7 @@ export class SubscriptionsController {
     // malformed id used to reach Prisma instead of returning a 400.
     @Body('subscriptionId', new ParseUUIDPipe()) subscriptionId: string,
   ): Promise<void> {
-    return this.subscriptionsService.cancelSubscription(user.userId, subscriptionId);
+    return this.subscriptionsService.cancelSubscription(user, subscriptionId);
   }
 
   @Post('resume')
@@ -51,23 +53,25 @@ export class SubscriptionsController {
     @User() user: RequestUser,
     @Body('subscriptionId', new ParseUUIDPipe()) subscriptionId: string,
   ): Promise<void> {
-    return this.subscriptionsService.resumeSubscription(user.userId, subscriptionId);
+    return this.subscriptionsService.resumeSubscription(user, subscriptionId);
   }
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Get current user subscriptions' })
+  @ApiOperation({
+    summary: "The signed-in person's subscriptions and their organisation's (token org_id)",
+  })
   @ApiResponse({ status: 200, type: [SubscriptionResponseDto] })
   async getMySubscriptions(
     @User() user: RequestUser,
     // The customer page for one service (`/subscriptions?service=<code>`).
     @Query('service') service?: string,
   ): Promise<SubscriptionResponseDto[]> {
-    if (typeof service === 'string' && service) {
-      return this.subscriptionsService.getUserSubscriptionsForServiceCode(user.userId, service);
-    }
-    return this.subscriptionsService.getUserSubscriptions(user.userId);
+    return this.subscriptionsService.getSubscriptionsFor(
+      user,
+      typeof service === 'string' && service ? service : undefined,
+    );
   }
 
   @Post('trial')
@@ -83,7 +87,19 @@ export class SubscriptionsController {
     if (!body.priceCode) {
       throw new BadRequestException('priceCode is required');
     }
-    const userId = req.user?.isService ? body.userId : req.user?.userId;
+    // A person starts a trial for themselves, or for their organisation
+    // (`org:<org_id>` of their token) when they are its owner or admin.
+    let userId: string | undefined;
+    if (req.user?.isService) {
+      userId = body.userId;
+    } else if (body.userId && body.userId !== req.user?.userId) {
+      if (!isOrgSubscriber(body.userId) || !mayManage(req.user, body.userId)) {
+        throw new ForbiddenException(ORG_MANAGERS_ONLY);
+      }
+      userId = body.userId.toLowerCase();
+    } else {
+      userId = req.user?.userId;
+    }
     if (!userId) {
       throw new BadRequestException('userId is required (pass in body for service API key calls)');
     }

@@ -34,7 +34,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { RequestUser, User } from '../auth/decorators/user.decorator';
-import { IsUserId } from '../common/validators/is-user-id';
+import { IsPersonId } from '../common/validators/is-user-id';
 import { PrismaService } from '../common/services/prisma.service';
 import { CART_MAX_LINES, CART_MAX_QTY, CheckoutService } from '../checkout/checkout.service';
 import { CheckoutMode } from '../common/dto/checkout.dto';
@@ -66,7 +66,7 @@ class ServiceSessionDto {
   @IsString()
   @MaxLength(255)
   @Matches(SERVICE_BUYER_PATTERN, {
-    message: "userId must be a DID, a UUID or this service's guest id",
+    message: "userId must be a DID, a UUID, org:<uuid> or this service's guest id",
   })
   userId!: string;
   /** One price, bought once. Either this or `lines`. */
@@ -92,7 +92,8 @@ class ServiceSessionDto {
 }
 
 class ServicePayFromWalletDto {
-  @IsUserId() userId!: string;
+  /** The person whose wallet pays: an organisation has no wallet. */
+  @IsPersonId() userId!: string;
   @IsOptional() @IsString() @MaxLength(2000) returnTo?: string;
 }
 

@@ -379,7 +379,9 @@
     "backToService": "Volver a {service}",
     "serviceTitle": "Tus planes en {service}",
     "scheduledChange": "Pasa a {plan} el {date}",
-    "renewsByLink": "Se renueva con un enlace de pago enviado antes del {date}"
+    "renewsByLink": "Se renueva con un enlace de pago enviado antes del {date}",
+    "heldByOrganization": "Tu organización",
+    "orgManagersOnly": "Solo un propietario o administrador de tu organización puede cambiar o cancelar este plan."
   },
   "catalog": {
     "title": "Precios",

@@ -221,6 +221,11 @@ export default function SubscriptionsPage() {
                             {sub.serviceDisplayName || sub.serviceName}
                           </span>
                         )}
+                        {sub.heldBy === 'organization' && (
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium">
+                            {t('heldByOrganization')}
+                          </span>
+                        )}
                       </div>
                     </div>
                     <StatusBadge status={sub.cancelAtPeriodEnd && sub.status !== 'canceled' ? 'canceling' : sub.status} />
@@ -412,14 +417,19 @@ export default function SubscriptionsPage() {
               </div>
             </div>
 
-            {(selectedSub.status === 'active' || selectedSub.status === 'trialing') && !selectedSub.cancelAtPeriodEnd && (
+            {/* An organisation's plan is moved by its owner or admin only; the
+                API refuses anyone else, and the page says so instead of a button. */}
+            {selectedSub.canManage === false && (
+              <p className="text-sm text-slate-500 dark:text-slate-400">{t('orgManagersOnly')}</p>
+            )}
+            {selectedSub.canManage !== false && (selectedSub.status === 'active' || selectedSub.status === 'trialing') && !selectedSub.cancelAtPeriodEnd && (
               <Button variant="danger" onClick={() => handleCancel(selectedSub)} className="w-full">
                 {t('cancelSubscription')}
               </Button>
             )}
             {/* Cancelled but still inside the paid period: the change of mind
                 the API has always allowed and the page never offered. */}
-            {selectedSub.cancelAtPeriodEnd && ['active', 'trialing', 'past_due'].includes(selectedSub.status) && (
+            {selectedSub.canManage !== false && selectedSub.cancelAtPeriodEnd && ['active', 'trialing', 'past_due'].includes(selectedSub.status) && (
               <Button
                 onClick={() => void handleResume(selectedSub.id)}
                 loading={resuming === selectedSub.id}

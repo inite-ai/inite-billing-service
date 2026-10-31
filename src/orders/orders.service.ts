@@ -149,6 +149,7 @@ export class OrdersService {
       WHERE lower(trim(o.metadata->>'email')) = ${address}
         AND position(':' in o.user_id) > 0
         AND o.user_id NOT LIKE 'did:%'
+        AND o.user_id NOT LIKE 'org:%'
         ${serviceId ? Prisma.sql`AND p.service_id = ${serviceId}::uuid` : Prisma.empty}
     `);
 

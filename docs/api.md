@@ -77,10 +77,22 @@ Admin endpoints additionally require the `admin` role in the JWT.
 | `GET /v1/orders/me`, `GET /v1/orders/:id` | JWT |
 | `GET /v1/subscriptions/me` (`?service=<code>` for one service's plans), `POST /v1/subscriptions/cancel`, `POST /v1/subscriptions/resume`, `POST /v1/subscriptions/trial` | JWT |
 | `GET /v1/subscriptions/user/:userId` | service |
-| `POST /v1/subscriptions/:id/change` `{ priceCode }` | JWT (own plan) or service key (own service) |
+| `POST /v1/subscriptions/:id/change` `{ priceCode }` | JWT (own plan, or the organisation's as its owner/admin) or service key (own service) |
 | `GET /v1/subscriptions/portal?service=<code>&return_to=<url>` | JWT |
 | `POST /v1/service-checkout/sessions` with `mode: "SUBSCRIPTION"` | service token (`billing:checkout`) |
 | `POST /v1/service-subscriptions/trial`, `GET /v1/service-subscriptions?userId=`, `POST /v1/service-subscriptions/:id/change` | service token (`billing:checkout`) |
+
+**Who holds a plan.** A subscriber is a person (their DID, or a legacy UUID)
+or an organisation at INITE Auth, `org:<org_id>`: a company's plan in the
+family is held by its organisation, and the number of people is a limit of
+the plan. A service names `org:<org_id>` as `userId` on the service-token
+lane (checkout, trial, list); it is never one of the service's guest ids, so
+no one claims its checkout by opening it. On billing's own page,
+`GET /v1/subscriptions/me` returns the person's plans and those of the
+organisation in their verified token (`org_id`), each with `heldBy`
+(`self` | `organization`) and `canManage`. Cancel, resume, a change of plan,
+and a trial for the organisation are allowed only to its `owner` or `admin`
+(`org_role`); a member gets 403.
 
 **Change of plan** (one service, one currency):
 

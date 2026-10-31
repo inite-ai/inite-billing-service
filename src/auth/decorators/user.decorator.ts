@@ -19,6 +19,10 @@ export interface RequestUser {
   scopes?: string[];
   /** RFC 9396 authorization_details carried by the token. */
   authorizationDetails?: Array<Record<string, unknown>>;
+  /** The organisation the token acts for (its `org_id`), lower-case. */
+  orgId?: string;
+  /** The person's role in `orgId` (its `org_role`), lower-case. */
+  orgRole?: string;
   isService?: boolean;
   serviceId?: string;
   serviceCode?: string;

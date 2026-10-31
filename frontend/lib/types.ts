@@ -110,6 +110,10 @@ export interface Subscription {
   pendingProductName?: string | null
   /** No provider renews it: billing sends a pay link before it ends (PIX, crypto, wallet). */
   renewsByLink?: boolean
+  /** Whose plan: the signed-in person's own, or their organisation's (`org:<org_id>`). */
+  heldBy?: 'self' | 'organization'
+  /** Whether this person may change or cancel it: an organisation's only by its owner or admin. */
+  canManage?: boolean
 }
 
 export interface Entitlement {

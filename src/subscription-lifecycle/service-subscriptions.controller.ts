@@ -29,7 +29,7 @@ class ServiceTrialDto {
   @IsString()
   @MaxLength(255)
   @Matches(SERVICE_BUYER_PATTERN, {
-    message: "userId must be a DID, a UUID or this service's guest id",
+    message: "userId must be a DID, a UUID, org:<uuid> or this service's guest id",
   })
   userId!: string;
   @IsString() @MaxLength(100) priceCode!: string;

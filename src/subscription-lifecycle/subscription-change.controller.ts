@@ -50,7 +50,11 @@ export class SubscriptionChangeController {
   ) {
     const caller = req.user?.isService
       ? { serviceId: String(req.user.serviceId) }
-      : { userId: String(req.user?.userId) };
+      : {
+          userId: String(req.user?.userId),
+          orgId: req.user?.orgId as string | undefined,
+          orgRole: req.user?.orgRole as string | undefined,
+        };
     return this.planChange.change(caller, { subscriptionId: id, ...body });
   }
 

@@ -18,6 +18,30 @@ export interface JwtPayload {
   aud?: string | string[];
   scope?: string;
   authorization_details?: Array<Record<string, unknown>>;
+  /**
+   * The organisation the person acts for (INITE Auth Organization.id), with
+   * RBAC token claims on. One org per token: the client's tenant, else the
+   * person's first membership.
+   */
+  org_id?: string;
+  /** The person's role in that organisation (Membership.role). */
+  org_role?: string;
+}
+
+const ORG_ID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+/** The token's organisation and role, only when `org_id` is a well-formed id. */
+export function orgOf(payload: Pick<JwtPayload, 'org_id' | 'org_role'>): {
+  orgId?: string;
+  orgRole?: string;
+} {
+  if (typeof payload.org_id !== 'string' || !ORG_ID.test(payload.org_id)) return {};
+  return {
+    orgId: payload.org_id.toLowerCase(),
+    ...(typeof payload.org_role === 'string' && payload.org_role
+      ? { orgRole: payload.org_role.toLowerCase() }
+      : {}),
+  };
 }
 
 /** Extract JWT from Authorization header OR access_token cookie */
@@ -144,6 +168,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       ...(Array.isArray(payload.authorization_details)
         ? { authorizationDetails: payload.authorization_details }
         : {}),
+      ...orgOf(payload),
     };
   }
 }

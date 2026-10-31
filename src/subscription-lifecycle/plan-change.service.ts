@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -16,9 +17,16 @@ import { PaymentOrchestratorService } from '../payment-orchestrator/payment-orch
 import { PLAN_CHANGE_KEY } from '../payment-orchestrator/subscription-changes';
 import { SessionLinksService } from '../service-api/session-links';
 import { decidePlanChange } from './proration';
+import {
+  ORG_MANAGERS_ONLY,
+  SubscriberCaller,
+  mayManage,
+  visibleSubscribers,
+} from '../subscriptions/subscribers';
 
 /** Who asks: the subscriber themselves, or the service that sold the plan. */
-export type ChangeCaller = { userId: string } | { serviceId: string };
+/** The subscriber's person (with their token's organisation), or the selling service. */
+export type ChangeCaller = SubscriberCaller | { serviceId: string };
 
 export interface ChangePlanInput {
   subscriptionId: string;
@@ -72,9 +80,16 @@ export class PlanChangeService {
     });
     const serviceId = sub?.price?.product?.serviceId ?? null;
     const mine =
-      !!sub && ('userId' in caller ? sub.userId === caller.userId : serviceId === caller.serviceId);
+      !!sub &&
+      ('userId' in caller
+        ? visibleSubscribers(caller).includes(sub.userId)
+        : serviceId === caller.serviceId);
     // The same answer for "not yours" and "not there": no probing other ids.
     if (!sub || !mine) throw new NotFoundException('Subscription not found');
+    // The organisation's plan, seen by a member: only its owner or admin moves it.
+    if ('userId' in caller && !mayManage(caller, sub.userId)) {
+      throw new ForbiddenException(ORG_MANAGERS_ONLY);
+    }
 
     if (sub.status === 'past_due') {
       throw new ConflictException('This subscription has an unpaid renewal: pay it first');

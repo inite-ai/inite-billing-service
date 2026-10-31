@@ -1,5 +1,6 @@
 import {
   Injectable,
+  ForbiddenException,
   NotFoundException,
   BadRequestException,
   ConflictException,
@@ -12,6 +13,14 @@ import { OutboxService } from '../outbox/outbox.service';
 import { CreditsService } from '../credits/credits.service';
 import { FunnelService } from '../funnel/funnel.service';
 import { PaymentOrchestratorService } from '../payment-orchestrator/payment-orchestrator.service';
+import { ORG_MANAGERS_ONLY, SubscriberCaller, mayManage, visibleSubscribers } from './subscribers';
+
+/** A person by their id alone (an agent's action), or with their token's organisation. */
+export type SubscriptionCaller = string | SubscriberCaller;
+
+function asCaller(caller: SubscriptionCaller): SubscriberCaller {
+  return typeof caller === 'string' ? { userId: caller } : caller;
+}
 
 /** Trial setup now grants credits inside the same transaction; give it the same
  * headroom as the payment-fulfilment chain instead of Prisma's 5s default. */
@@ -30,18 +39,28 @@ export class SubscriptionsService {
     private readonly orchestrator: PaymentOrchestratorService,
   ) {}
 
-  async cancelSubscription(userId: string, subscriptionId: string): Promise<void> {
+  /**
+   * A subscription the caller may move: their own, or their organisation's
+   * when they are its owner or admin. One the caller cannot see is "not
+   * found"; their organisation's, seen as a member, is forbidden.
+   */
+  private async manageable(caller: SubscriptionCaller, subscriptionId: string) {
+    const who = asCaller(caller);
     const subscription = await this.prisma.subscription.findFirst({
-      where: {
-        id: subscriptionId,
-        userId,
-      },
+      where: { id: subscriptionId, userId: { in: visibleSubscribers(who) } },
       include: { price: { include: { product: true } } },
     });
-
     if (!subscription) {
       throw new NotFoundException(`Subscription not found: ${subscriptionId}`);
     }
+    if (!mayManage(who, subscription.userId)) {
+      throw new ForbiddenException(ORG_MANAGERS_ONLY);
+    }
+    return subscription;
+  }
+
+  async cancelSubscription(caller: SubscriptionCaller, subscriptionId: string): Promise<void> {
+    const subscription = await this.manageable(caller, subscriptionId);
 
     // Tell the provider to stop renewing BEFORE we flag it in our DB — otherwise
     // a DB-only "cancel" leaves the provider billing the customer next cycle.
@@ -73,18 +92,8 @@ export class SubscriptionsService {
     });
   }
 
-  async resumeSubscription(userId: string, subscriptionId: string): Promise<void> {
-    const subscription = await this.prisma.subscription.findFirst({
-      where: {
-        id: subscriptionId,
-        userId,
-      },
-      include: { price: { include: { product: true } } },
-    });
-
-    if (!subscription) {
-      throw new NotFoundException(`Subscription not found: ${subscriptionId}`);
-    }
+  async resumeSubscription(caller: SubscriptionCaller, subscriptionId: string): Promise<void> {
+    const subscription = await this.manageable(caller, subscriptionId);
 
     await this.prisma.$transaction(async (tx) => {
       await tx.subscription.update({
@@ -109,10 +118,10 @@ export class SubscriptionsService {
   }
 
   async getUserSubscriptions(
-    userId: string,
+    userId: string | string[],
     serviceId?: string,
   ): Promise<SubscriptionResponseDto[]> {
-    const where: any = { userId };
+    const where: any = { userId: Array.isArray(userId) ? { in: userId } : userId };
     if (serviceId) {
       where.price = { product: { serviceId } };
     }
@@ -192,6 +201,30 @@ export class SubscriptionsService {
         renewsByLink: !!s.rail && !s.providerSubscriptionId && s.rail !== 'PROMO',
       };
     });
+  }
+
+  /**
+   * The signed-in person's page: their own plans and their organisation's
+   * (`org:<org_id>` from the verified token), each marked with whose it is and
+   * whether this person may change or cancel it.
+   */
+  async getSubscriptionsFor(
+    caller: SubscriberCaller,
+    serviceCode?: string,
+  ): Promise<SubscriptionResponseDto[]> {
+    let serviceId: string | undefined;
+    if (serviceCode !== undefined) {
+      if (typeof serviceCode !== 'string' || serviceCode.length > 100) return [];
+      const service = await this.prisma.service.findUnique({ where: { code: serviceCode } });
+      if (!service) return [];
+      serviceId = service.id;
+    }
+    const subs = await this.getUserSubscriptions(visibleSubscribers(caller), serviceId);
+    return subs.map((s) => ({
+      ...s,
+      heldBy: s.userId === caller.userId ? 'self' : 'organization',
+      canManage: mayManage(caller, s.userId),
+    }));
   }
 
   /** A person's plans with one service, named by its code; none for an unknown code. */

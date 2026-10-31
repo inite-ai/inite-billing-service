@@ -39,4 +39,16 @@ export class SubscriptionResponseDto {
 
   @ApiPropertyOptional({ description: 'Renewed by a pay link billing sends (PIX, crypto, wallet)' })
   renewsByLink?: boolean;
+
+  @ApiPropertyOptional({
+    enum: ['self', 'organization'],
+    description: "Whose plan it is: the signed-in person's own, or their organisation's",
+  })
+  heldBy?: 'self' | 'organization';
+
+  @ApiPropertyOptional({
+    description:
+      'Whether the signed-in person may change or cancel it (an organisation’s: owner or admin)',
+  })
+  canManage?: boolean;
 }
