@@ -31,6 +31,7 @@ export async function cleanupTestData(prisma: PrismaService): Promise<void> {
     await prisma.paymentIntent.deleteMany({});
     await prisma.subscription.deleteMany({});
     await prisma.order.deleteMany({});
+    await prisma.merchant.deleteMany({});
     await prisma.price.deleteMany({});
     await prisma.product.deleteMany({});
     await prisma.referralLevel.deleteMany({});

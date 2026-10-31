@@ -132,6 +132,7 @@ model Service {
   creditBalances  CreditBalance[]
   meteredFeatures MeteredFeature[]
   mcpServers      McpServer[]
+  merchants       Merchant[]
 
   @@map("services")
   @@schema("billing")
@@ -227,10 +228,18 @@ model Order {
   /// order's description of itself — a receipt that changes after the fact.
   snapshot Json? @default("{}")
 
+  /// Sold for a merchant on the merchant's own provider account
+  /// (docs/connected-accounts.md). Null: an INITE sale.
+  merchantId           String? @map("merchant_id") @db.Uuid
+  /// The merchant connection the latest payment was started on.
+  merchantConnectionId String? @map("merchant_connection_id") @db.Uuid
+
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   price                Price                 @relation(fields: [priceId], references: [id])
+  merchant             Merchant?             @relation(fields: [merchantId], references: [id], onDelete: Restrict)
+  merchantConnection   MerchantConnection?   @relation(fields: [merchantConnectionId], references: [id], onDelete: Restrict)
   paymentIntents       PaymentIntent[]
   invoices             Invoice[]
   riskAssessment       RiskAssessment?
@@ -240,6 +249,7 @@ model Order {
   @@index([userId, status, createdAt(sort: Desc)])
   @@index([externalId])
   @@index([status, createdAt])
+  @@index([merchantId, createdAt(sort: Desc)])
   @@map("orders")
   @@schema("billing")
 }
@@ -1430,18 +1440,18 @@ model WalletMerchant {
 /// setup; the only key billing holds is a signer whose Turnkey policy lets it
 /// sign USDC transfers on Base of at most `per_transfer`, nothing else.
 model Treasury {
-  id                String    @id @default(uuid()) @db.Uuid
-  subOrganizationId String    @unique @map("sub_organization_id") @db.VarChar(64)
-  address           String    @unique @db.VarChar(42)
-  turnkeyUserId     String    @map("turnkey_user_id") @db.VarChar(64)
-  signerPublicKey   String    @map("signer_public_key") @db.VarChar(130)
-  signerPrivateKey  String    @map("signer_private_key") @db.VarChar(64)
+  id                String           @id @default(uuid()) @db.Uuid
+  subOrganizationId String           @unique @map("sub_organization_id") @db.VarChar(64)
+  address           String           @unique @db.VarChar(42)
+  turnkeyUserId     String           @map("turnkey_user_id") @db.VarChar(64)
+  signerPublicKey   String           @map("signer_public_key") @db.VarChar(130)
+  signerPrivateKey  String           @map("signer_private_key") @db.VarChar(64)
   /// USDC, decimal string; enforced by Turnkey per transfer.
-  perTransfer       String    @map("per_transfer") @db.VarChar(20)
+  perTransfer       String           @map("per_transfer") @db.VarChar(20)
   /// USDC per rolling 24 h; enforced by billing.
-  dailyLimit        String    @map("daily_limit") @db.VarChar(20)
-  retiredAt         DateTime? @map("retired_at") @db.Timestamptz(6)
-  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  dailyLimit        String           @map("daily_limit") @db.VarChar(20)
+  retiredAt         DateTime?        @map("retired_at") @db.Timestamptz(6)
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   payouts           TreasuryPayout[]
 
   @@map("treasury")
@@ -1450,24 +1460,24 @@ model Treasury {
 
 /// USDC sent from the treasury to an INITE wallet for a paid card top-up order.
 model TreasuryPayout {
-  id          String   @id @default(uuid()) @db.Uuid
-  treasuryId  String   @map("treasury_id") @db.Uuid
-  treasury    Treasury @relation(fields: [treasuryId], references: [id])
-  orderId     String   @unique @map("order_id") @db.Uuid
-  to          String   @db.VarChar(42)
-  valueRaw    String   @map("value_raw") @db.VarChar(78)
+  id          String    @id @default(uuid()) @db.Uuid
+  treasuryId  String    @map("treasury_id") @db.Uuid
+  treasury    Treasury  @relation(fields: [treasuryId], references: [id])
+  orderId     String    @unique @map("order_id") @db.Uuid
+  to          String    @db.VarChar(42)
+  valueRaw    String    @map("value_raw") @db.VarChar(78)
   /// signing | submitted | mined | failed | held. A failed or stuck payout is
   /// retried only once the chain says its nonce was never used and its
   /// authorization has expired, so it can't be paid twice.
-  status      String   @default("signing") @db.VarChar(20)
+  status      String    @default("signing") @db.VarChar(20)
   /// The EIP-3009 nonce of the current attempt, saved before it is signed.
-  nonce       String?  @unique @db.VarChar(66)
+  nonce       String?   @unique @db.VarChar(66)
   validBefore DateTime? @map("valid_before") @db.Timestamptz(6)
-  attempts    Int      @default(0)
-  txHash      String?  @map("tx_hash") @db.VarChar(66)
-  error       String?  @db.Text
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  attempts    Int       @default(0)
+  txHash      String?   @map("tx_hash") @db.VarChar(66)
+  error       String?   @db.Text
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@index([treasuryId, createdAt])
   @@map("treasury_payouts")
@@ -1500,5 +1510,83 @@ model OpenSaleAudit {
   @@index([serviceId, createdAt(sort: Desc)])
   @@index([orderId])
   @@map("open_sale_audit")
+  @@schema("billing")
+}
+
+/// A seller a service sells for, on the seller's own provider accounts:
+/// money goes straight to the merchant, INITE is not the merchant of record
+/// (docs/connected-accounts.md). Owned by one service, keyed by the
+/// merchant's tenant org in INITE Auth.
+model Merchant {
+  id             String   @id @default(uuid()) @db.Uuid
+  serviceId      String   @map("service_id") @db.Uuid
+  orgId          String   @map("org_id") @db.VarChar(255)
+  displayName    String   @map("display_name") @db.VarChar(255)
+  externalRef    String?  @map("external_ref") @db.VarChar(255)
+  /// INITE's fee in basis points; 0 unless a billing admin sets it. Only a
+  /// Stripe Connect connection could deduct it; no rail deducts it today.
+  platformFeeBps Int      @default(0) @map("platform_fee_bps")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  service     Service              @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  connections MerchantConnection[]
+  orders      Order[]
+  auditLog    MerchantAuditLog[]
+
+  @@unique([serviceId, orgId])
+  @@map("merchants")
+  @@schema("billing")
+}
+
+enum MerchantConnectionStatus {
+  pending
+  verified
+  failed
+  disconnected
+
+  @@schema("billing")
+}
+
+/// One merchant's own account on one rail. The credentials are sealed with
+/// KEY_SEAL_SECRET, bound to this row's id, and never leave billing.
+model MerchantConnection {
+  id                String                   @id @db.Uuid
+  merchantId        String                   @map("merchant_id") @db.Uuid
+  rail              String                   @db.VarChar(50)
+  status            MerchantConnectionStatus @default(pending)
+  /// `sealed:v1:…` of the credentials' JSON; null once disconnected.
+  sealedCredentials String?                  @map("sealed_credentials") @db.Text
+  /// What may be shown: last four, account id, addresses. Never a secret.
+  hints             Json                     @default("{}")
+  verifiedAt        DateTime?                @map("verified_at") @db.Timestamptz(6)
+  lastError         String?                  @map("last_error") @db.VarChar(500)
+  createdAt         DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  orders   Order[]
+
+  @@unique([merchantId, rail])
+  @@map("merchant_connections")
+  @@schema("billing")
+}
+
+/// Every change to a merchant and every refund billing made for one: who
+/// (service and auth client), what, when. Hints only, never a credential.
+model MerchantAuditLog {
+  id           String   @id @default(uuid()) @db.Uuid
+  merchantId   String   @map("merchant_id") @db.Uuid
+  connectionId String?  @map("connection_id") @db.Uuid
+  serviceId    String?  @map("service_id") @db.Uuid
+  actor        String   @db.VarChar(255)
+  action       String   @db.VarChar(50)
+  detail       Json     @default("{}")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId, createdAt(sort: Desc)])
+  @@map("merchant_audit_log")
   @@schema("billing")
 }

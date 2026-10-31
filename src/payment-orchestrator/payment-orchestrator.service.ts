@@ -25,6 +25,7 @@ import { OutboxService } from '../outbox/outbox.service';
 import { AffiliatesService } from '../affiliates/affiliates.service';
 import { FunnelService } from '../funnel/funnel.service';
 import { CreditsService } from '../credits/credits.service';
+import { MerchantRailsService } from '../merchants/merchant-rails.service';
 
 /**
  * Interactive-transaction budget for the deep payment-fulfilment chain
@@ -79,6 +80,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
     @Inject(forwardRef(() => CreditsService))
     private readonly creditsService: CreditsService,
     @Optional() private readonly connectorRegistry?: ConnectorRegistry,
+    @Optional() private readonly merchantRails?: MerchantRailsService,
   ) {}
 
   /**
@@ -108,6 +110,33 @@ export class PaymentOrchestratorService implements OnModuleInit {
       throw new NotFoundException(`Payment rail adapter not found: ${rail}`);
     }
     return adapter;
+  }
+
+  /**
+   * The connector a payment of this order is read or refunded through: the
+   * merchant's own account for a merchant's order (never INITE's, and an
+   * error when the merchant's account is not verified), the rail's own
+   * otherwise.
+   */
+  async adapterForOrder(
+    order: { merchantId?: string | null },
+    rail: string,
+  ): Promise<PaymentRailAdapter> {
+    if (order.merchantId) {
+      if (!this.merchantRails) throw new NotFoundException('Merchant accounts are not available');
+      return (await this.merchantRails.connectorForOrder(order, rail))!;
+    }
+    return this.getAdapter(rail);
+  }
+
+  /** What a service's events about a merchant's order also carry. */
+  private merchantFields(order: any): Record<string, unknown> {
+    if (!order?.merchantId) return {};
+    return {
+      merchant_id: order.merchantId,
+      session_id: order.id,
+      client_reference: (order.metadata as Record<string, any> | null)?.clientReference ?? null,
+    };
   }
 
   /**
@@ -170,7 +199,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
       return { status: current, changed: false };
     }
 
-    const adapter = this.getAdapter(intent.rail);
+    const adapter = await this.adapterForOrder(intent.order, intent.rail);
     const result = await adapter.getIntentStatus(intent.providerIntentId);
     let next = result.status as IntentStatus;
     if (next === 'paid') {
@@ -339,8 +368,9 @@ export class PaymentOrchestratorService implements OnModuleInit {
       await this.handleSubscriptionPayment(order, tx);
     }
 
-    // Handle affiliate commission (only for first payment)
-    await this.handleAffiliateCommission(order, tx);
+    // Handle affiliate commission (only for first payment). Not on a
+    // merchant's sale: that money is the merchant's, never INITE's to share.
+    if (!order.merchantId) await this.handleAffiliateCommission(order, tx);
 
     // Grant credits if product defines them
     await this.handleCreditsGrant(order, tx);
@@ -353,14 +383,17 @@ export class PaymentOrchestratorService implements OnModuleInit {
         user_id: order.userId,
         amount: order.amount.toString(),
         currency: order.currency,
+        ...this.merchantFields(order),
       },
       { serviceId: order.price?.product?.serviceId ?? null, tx: tx },
     );
   }
 
   private async handleOrderRefunded(orderId: string, tx: any): Promise<void> {
+    // `price.product` addresses the events below; without it they had no owner.
     const order = await tx.order.findUnique({
       where: { id: orderId },
+      include: { price: { include: { product: true } } },
     });
 
     if (!order) return;
@@ -417,6 +450,8 @@ export class PaymentOrchestratorService implements OnModuleInit {
       {
         order_id: order.id,
         user_id: order.userId,
+        ...(order.merchantId ? { amount: order.amount.toString(), currency: order.currency } : {}),
+        ...this.merchantFields(order),
       },
       { serviceId: order.price?.product?.serviceId ?? null, tx: tx },
     );
@@ -457,6 +492,8 @@ export class PaymentOrchestratorService implements OnModuleInit {
       {
         order_id: order.id,
         user_id: order.userId,
+        ...(order.merchantId ? { amount: order.amount.toString(), currency: order.currency } : {}),
+        ...this.merchantFields(order),
       },
       { serviceId: order.price?.product?.serviceId ?? null, tx: tx },
     );

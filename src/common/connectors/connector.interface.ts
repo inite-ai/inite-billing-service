@@ -61,7 +61,13 @@ export interface Connector extends PaymentRailAdapter {
   capabilities?(): ConnectorCapabilities;
 
   /** Issue a provider-side refund for a paid intent. Only when `supportsRefund`. */
-  refund?(input: { providerIntentId: string; amount?: number; currency?: string }): Promise<{
+  refund?(input: {
+    providerIntentId: string;
+    amount?: number;
+    currency?: string;
+    /** Sent to providers that take one, so a retried refund is not a second refund. */
+    idempotencyKey?: string;
+  }): Promise<{
     refunded: boolean;
     providerRefundId?: string;
   }>;
@@ -128,6 +134,36 @@ export interface Connector extends PaymentRailAdapter {
    * the raw body when a connector doesn't override it.
    */
   webhookStoragePayload?(rawPayload: any): any;
+
+  /**
+   * This connector acting on a merchant's own provider account instead of
+   * INITE's: every provider call is made with `credentials`, and nothing is
+   * read from `PaymentProvider`. A rail without it cannot carry a merchant's
+   * own account (src/merchants/, docs/connected-accounts.md).
+   */
+  withCredentials?(credentials: Record<string, any>, scope: MerchantScope): Connector;
+
+  /**
+   * Prove the credentials this connector is bound to belong to a live account
+   * on the provider, by calling it. Throws with the provider's reason when
+   * they do not. Only meaningful on a connector from {@link withCredentials}.
+   */
+  verifyAccount?(): Promise<{ hints: Record<string, unknown> }>;
+}
+
+/** Whose account a bound connector acts on. */
+export interface MerchantScope {
+  merchantId: string;
+  connectionId: string;
+}
+
+/**
+ * A copy of `base` whose own properties are `overrides`: the adapter's methods
+ * run unchanged and reach the overrides through `this`. How an adapter is
+ * bound to a merchant's credentials without a second implementation of it.
+ */
+export function bindConnector<T extends object>(base: T, overrides: Record<string, unknown>): T {
+  return Object.assign(Object.create(base) as T, overrides);
 }
 
 /** Everything a connector needs to authenticate an inbound webhook. */

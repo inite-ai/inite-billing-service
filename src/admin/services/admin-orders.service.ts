@@ -183,7 +183,12 @@ export class AdminOrdersService {
   private async issueProviderRefund(paidIntent: any, order: any): Promise<void> {
     let connector: Connector | undefined;
     try {
-      connector = this.paymentOrchestrator.getAdapter(paidIntent.rail) as Connector;
+      // A merchant's order is refunded on the merchant's own account, never INITE's.
+      connector = (
+        order.merchantId
+          ? await this.paymentOrchestrator.adapterForOrder(order, paidIntent.rail)
+          : this.paymentOrchestrator.getAdapter(paidIntent.rail)
+      ) as Connector;
     } catch {
       this.logger.warn(
         `No connector for rail ${paidIntent.rail} — marking order ${order.id} refunded in DB only (refund the provider manually)`,

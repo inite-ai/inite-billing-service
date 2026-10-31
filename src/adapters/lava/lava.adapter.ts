@@ -1,7 +1,9 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import {
+  bindConnector,
   Connector,
   ConnectorCapabilities,
+  MerchantScope,
   RegisterConnector,
   WebhookVerifyInput,
 } from '../../common/connectors/connector.interface';
@@ -156,6 +158,52 @@ export class LavaAdapter implements Connector {
       fxMarkupPercent:
         Number.isFinite(markup) && markup >= 0 && markup <= MAX_FX_MARKUP_PERCENT ? markup : 0,
     };
+  }
+
+  /** Set only on a copy bound to a merchant's own lava.top account. */
+  private readonly merchantScope?: MerchantScope;
+
+  /**
+   * This adapter selling through a creator's own lava.top account: their API
+   * key, their dynamic-price offer, their webhook key. No conversion and no
+   * markup: the creator's account takes what it takes.
+   */
+  withCredentials(credentials: Record<string, any>, scope: MerchantScope): Connector {
+    const config: LavaProviderConfig = {
+      apiBaseUrl: 'https://gate.lava.top',
+      apiKey: String(credentials.apiKey ?? ''),
+      defaultOfferId: String(credentials.defaultOfferId ?? '').trim() || undefined,
+      convertFrom: [],
+      fxMarkupPercent: 0,
+    };
+    const webhookKey = String(credentials.webhookSecret ?? '');
+    const verify = this.verifyWebhook.bind(this);
+    return bindConnector<LavaAdapter>(this, {
+      getConfig: async () => config,
+      merchantScope: scope,
+      // Only the creator's own webhook key; never the API key, never INITE's.
+      verifyWebhook: (input: WebhookVerifyInput) => verify({ ...input, config: { webhookKey } }),
+    });
+  }
+
+  /**
+   * The key opens the creator's account and the dynamic offer is one of its
+   * own: the offer is looked for among the account's products.
+   */
+  async verifyAccount(): Promise<{ hints: Record<string, unknown> }> {
+    if (!this.merchantScope) throw new Error('Only a merchant connection is verified');
+    const config = await this.getConfig();
+    const products = await this.call(config, '/api/v2/products');
+    const items: any[] = Array.isArray(products)
+      ? products
+      : Array.isArray(products?.items)
+        ? products.items
+        : [];
+    const offers = items.flatMap((p) => (Array.isArray(p?.offers) ? p.offers : []));
+    if (!offers.some((o) => o?.id === config.defaultOfferId)) {
+      throw new Error('The default offer is not among the offers of this lava.top account');
+    }
+    return { hints: { products: items.length } };
   }
 
   private async call(
@@ -636,9 +684,15 @@ export class LavaAdapter implements Connector {
     const offerId = data.product?.tier_id;
     const amount = Number(data.amount);
 
+    // Only this account's sales: INITE's own, or one merchant's. A refund on
+    // one creator's account must never match another's sale.
     const candidates = email
       ? await this.prisma.paymentIntent.findMany({
-          where: { rail: RAILS.LAVA, status: 'paid' },
+          where: {
+            rail: RAILS.LAVA,
+            status: 'paid',
+            order: { merchantId: this.merchantScope?.merchantId ?? null },
+          },
           orderBy: { createdAt: 'desc' },
           take: 200,
         })

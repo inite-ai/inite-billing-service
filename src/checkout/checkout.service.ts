@@ -43,6 +43,8 @@ import {
   SAFE_REF,
 } from './open-product';
 import { OpenSalePolicy } from './open-sale.policy';
+import { MerchantRailsService } from '../merchants/merchant-rails.service';
+import { Decimal } from '@prisma/client/runtime/library';
 
 @Injectable()
 export class CheckoutService {
@@ -67,6 +69,7 @@ export class CheckoutService {
     private readonly configService: ConfigService,
     @Optional() private readonly riskService?: RiskService,
     @Optional() private readonly openPolicy?: OpenSalePolicy,
+    @Optional() private readonly merchantRails?: MerchantRailsService,
   ) {}
 
   /**
@@ -629,7 +632,18 @@ export class CheckoutService {
     const amount = roundMoney(unit.mul(quantity));
 
     await this.openPolicy!.assertWithinCap(product.service, currency, amount);
-    const rails = await this.openPolicy!.eligibleRails(currency, amount);
+    if (input.merchantId && !this.merchantRails) {
+      throw new UnprocessableEntityException('Merchant accounts are not available');
+    }
+    // A merchant's sale is offered its own verified accounts only, never INITE's.
+    const rails = input.merchantId
+      ? await this.merchantRails!.eligibleRails(input.merchantId, currency, amount)
+      : await this.openPolicy!.eligibleRails(currency, amount);
+    if (rails.length === 0 && input.merchantId) {
+      throw new UnprocessableEntityException(
+        `The merchant has no verified payment account that takes ${amount.toFixed(2)} ${currency}`,
+      );
+    }
     if (rails.length === 0) {
       throw new UnprocessableEntityException(
         `No payment method takes ${amount.toFixed(2)} ${currency}: it is below every provider's minimum`,
@@ -678,6 +692,7 @@ export class CheckoutService {
           amount,
           currency,
           externalId: `order_${randomUUID()}`,
+          ...(input.merchantId ? { merchantId: input.merchantId } : {}),
           snapshot: {
             priceCode,
             priceAmount: amount.toString(),
@@ -787,16 +802,34 @@ export class CheckoutService {
       throw new NotFoundException('Checkout session not found');
     }
 
-    // Get available payment methods
-    const providers = await this.prisma.paymentProvider.findMany({
-      where: { isActive: true },
-      select: {
-        code: true,
-        name: true,
-        supportedModes: true,
-        currencies: true,
-      },
-    });
+    // Get available payment methods: a merchant's order is offered the
+    // merchant's own verified accounts, and nothing of INITE's.
+    const merchantRails =
+      order.merchantId && this.merchantRails
+        ? await this.merchantRails.eligibleRails(
+            order.merchantId,
+            order.currency,
+            toMoney(order.amount),
+          )
+        : null;
+    const providers = merchantRails
+      ? merchantRails.map((code) => ({
+          code,
+          name: MERCHANT_RAIL_NAMES[code] ?? code,
+          supportedModes: ['PAYMENT'],
+          currencies: [] as string[],
+        }))
+      : order.merchantId
+        ? []
+        : await this.prisma.paymentProvider.findMany({
+            where: { isActive: true },
+            select: {
+              code: true,
+              name: true,
+              supportedModes: true,
+              currencies: true,
+            },
+          });
 
     // A rail that declares which currencies it can take is not offered for a
     // price in any other — crypto sells dollar prices only. A rail whose
@@ -806,7 +839,11 @@ export class CheckoutService {
     for (const provider of providers) {
       let connector: Connector | null = null;
       try {
-        connector = this.paymentOrchestrator.getAdapter(provider.code) as Connector;
+        connector = (
+          order.merchantId
+            ? await this.paymentOrchestrator.adapterForOrder(order, provider.code)
+            : this.paymentOrchestrator.getAdapter(provider.code)
+        ) as Connector;
       } catch {
         connector = null;
       }
@@ -836,7 +873,7 @@ export class CheckoutService {
     }
     // An open product's amount is the seller's: a rail whose provider minimum
     // it does not meet is not offered (fixed prices are left as they were).
-    if (order.price.product.type === 'open' && this.openPolicy) {
+    if (order.price.product.type === 'open' && this.openPolicy && !order.merchantId) {
       const eligible = new Set(
         await this.openPolicy.eligibleRails(order.currency, toMoney(order.amount)),
       );
@@ -868,7 +905,11 @@ export class CheckoutService {
         : null;
     if (latestIntent) {
       try {
-        const connector = this.paymentOrchestrator.getAdapter(latestIntent.rail) as Connector;
+        const connector = (
+          order.merchantId
+            ? await this.paymentOrchestrator.adapterForOrder(order, latestIntent.rail)
+            : this.paymentOrchestrator.getAdapter(latestIntent.rail)
+        ) as Connector;
         const described = connector.describeIntent
           ? await connector.describeIntent(latestIntent)
           : null;
@@ -1039,6 +1080,10 @@ export class CheckoutService {
     // customer for having used their one redemption on this very order.
     const promoAlreadyApplied =
       !!data.promoCode && !!metadata.promoCodeId && metadata.promoCode === data.promoCode;
+    // A merchant prices its own goods; INITE's promo codes are not its to apply.
+    if (data.promoCode && order.merchantId) {
+      throw new BadRequestException("A promo code does not apply to a merchant's order");
+    }
     // A promo code is checked against one price; a cart is several.
     if (data.promoCode && Array.isArray(metadata.cart)) {
       throw new BadRequestException('A promo code does not apply to a cart');
@@ -1147,8 +1192,20 @@ export class CheckoutService {
     if (open && !this.openPolicy) {
       throw new BadRequestException('Open products are not sold here');
     }
+    // A merchant's own verified accounts, and only those.
+    const merchantRails = order.merchantId
+      ? await this.merchantRailsFor(order.merchantId, order.currency, orderAmountDecimal)
+      : null;
+    if (merchantRails && data.rail && !merchantRails.includes(data.rail)) {
+      throw new UnprocessableEntityException(`The merchant takes no payment by ${data.rail}`);
+    }
     if (data.rail) {
       rail = data.rail;
+    } else if (merchantRails) {
+      if (!merchantRails[0]) {
+        throw new UnprocessableEntityException('The merchant has no verified payment account');
+      }
+      rail = merchantRails[0];
     } else if (open) {
       const [first] = await this.openPolicy!.eligibleRails(order.currency, orderAmountDecimal);
       if (!first) {
@@ -1168,7 +1225,10 @@ export class CheckoutService {
     if (open) {
       // The minimum the checkout page applied, enforced: a rail named directly
       // is held to it too. Then the service's day, counting this order once.
-      if (!(await this.openPolicy!.railTakes(rail, order.currency, orderAmountDecimal))) {
+      if (
+        !merchantRails &&
+        !(await this.openPolicy!.railTakes(rail, order.currency, orderAmountDecimal))
+      ) {
         throw new BadRequestException(
           `${rail} does not take ${orderAmountDecimal.toFixed(2)} ${order.currency}; choose another payment method`,
         );
@@ -1181,10 +1241,22 @@ export class CheckoutService {
     }
 
     let adapter: Connector | null;
-    try {
-      adapter = (this.paymentOrchestrator.getAdapter(rail) as Connector) ?? null;
-    } catch {
-      adapter = null;
+    if (merchantRails) {
+      // Never INITE's connector: the merchant's own account, or an error.
+      const bound = await this.merchantRails!.connectorFor(order.merchantId!, rail);
+      adapter = bound.connector;
+      if (order.merchantConnectionId !== bound.connection.id) {
+        await this.prisma.order.update({
+          where: { id: order.id },
+          data: { merchantConnectionId: bound.connection.id },
+        });
+      }
+    } else {
+      try {
+        adapter = (this.paymentOrchestrator.getAdapter(rail) as Connector) ?? null;
+      } catch {
+        adapter = null;
+      }
     }
 
     const intentInput: CreateIntentInput = {
@@ -1326,6 +1398,18 @@ export class CheckoutService {
       paymentIntentId: paymentIntent.id,
       ...(await this.describe(adapter, paymentIntent)),
     };
+  }
+
+  /** The merchant's verified rails for this amount; 422 when merchant accounts are off. */
+  private async merchantRailsFor(
+    merchantId: string,
+    currency: string,
+    amount: Decimal,
+  ): Promise<string[]> {
+    if (!this.merchantRails) {
+      throw new UnprocessableEntityException('Merchant accounts are not available');
+    }
+    return this.merchantRails.eligibleRails(merchantId, currency, amount);
   }
 
   /**
@@ -1498,8 +1582,21 @@ export interface OpenLineInput {
   quantity?: number;
 }
 
+/** How a merchant's rail is named on the checkout page. */
+const MERCHANT_RAIL_NAMES: Record<string, string> = {
+  STRIPE: 'Card (Stripe)',
+  LAVA: 'Card (lava.top)',
+  YOOKASSA: 'YooKassa',
+  CRYPTO: 'Crypto',
+};
+
 export interface OpenSessionInput {
   line: OpenLineInput;
+  /**
+   * Sold for this merchant, on its own accounts only (the caller has checked
+   * the merchant is its own). Absent: INITE's own sale.
+   */
+  merchantId?: string;
   successUrl: string;
   errorUrl: string;
   metadata?: Record<string, unknown>;

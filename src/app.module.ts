@@ -37,6 +37,7 @@ import { RecommendationsModule } from './recommendations/recommendations.module'
 import { RiskModule } from './risk/risk.module';
 import { InsightsModule } from './insights/insights.module';
 import { ServiceApiModule } from './service-api/service-api.module';
+import { MerchantsModule } from './merchants/merchants.module';
 
 @Module({
   imports: [
@@ -81,6 +82,7 @@ import { ServiceApiModule } from './service-api/service-api.module';
     RiskModule,
     InsightsModule,
     ServiceApiModule,
+    MerchantsModule,
   ],
   providers: [
     {

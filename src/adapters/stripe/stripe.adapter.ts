@@ -1,7 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
+  bindConnector,
   Connector,
   ConnectorCapabilities,
+  MerchantScope,
   RegisterConnector,
   WebhookVerifyInput,
 } from '../../common/connectors/connector.interface';
@@ -21,6 +23,8 @@ interface StripeProviderConfig {
   webhookSecret: string;
   apiVersion: string;
 }
+
+const DEFAULT_API_VERSION = '2024-12-18.acacia';
 
 /**
  * Stripe payment adapter
@@ -58,7 +62,44 @@ export class StripeAdapter implements Connector {
     return {
       secretKey: config.secretKey || '',
       webhookSecret: config.webhookSecret || '',
-      apiVersion: config.apiVersion || '2024-12-18.acacia',
+      apiVersion: config.apiVersion || DEFAULT_API_VERSION,
+    };
+  }
+
+  /** Set only on a copy bound to a merchant's own Stripe account. */
+  private readonly merchantScope?: MerchantScope;
+
+  /**
+   * This adapter charging, reading and refunding on a merchant's own Stripe
+   * account with the merchant's key: the money lands on their balance, and
+   * INITE's key is never read for it.
+   */
+  withCredentials(credentials: Record<string, any>, scope: MerchantScope): Connector {
+    const config: StripeProviderConfig = {
+      secretKey: String(credentials.secretKey ?? ''),
+      webhookSecret: String(credentials.webhookSecret ?? ''),
+      apiVersion: DEFAULT_API_VERSION,
+    };
+    return bindConnector<StripeAdapter>(this, {
+      getConfig: async () => config,
+      merchantScope: scope,
+    });
+  }
+
+  /**
+   * The key opens an account: `GET /v1/account` answers with that account's
+   * id. A restricted key needs "Account: read" for this.
+   */
+  async verifyAccount(): Promise<{ hints: Record<string, unknown> }> {
+    if (!this.merchantScope) throw new Error('Only a merchant connection is verified');
+    const account = await this.stripeRequest('GET', '/v1/account');
+    if (!account?.id) throw new Error('Stripe did not name the account for this key');
+    return {
+      hints: {
+        accountId: account.id,
+        chargesEnabled: account.charges_enabled ?? null,
+        country: account.country ?? null,
+      },
     };
   }
 
@@ -146,7 +187,12 @@ export class StripeAdapter implements Connector {
 
     if (!response.ok) {
       const errorBody = await response.json().catch(() => ({}));
-      const errorMsg = errorBody?.error?.message || response.statusText;
+      // A key echoed back by the provider is never logged or passed on: on a
+      // merchant's connection it is the merchant's secret.
+      const errorMsg = String(errorBody?.error?.message || response.statusText).replace(
+        /\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]+/g,
+        '[redacted]',
+      );
       this.logger.error(`Stripe API error: ${response.status} ${errorMsg}`);
       throw new Error(`Stripe API error: ${response.status} — ${errorMsg}`);
     }
