@@ -1,7 +1,9 @@
 import { createHmac, timingSafeEqual } from 'crypto';
+import { openKey, sealKey } from '../common/key-seal';
 
 /**
- * Outbox delivery signing (shared secret = the consuming Service's apiKey).
+ * Outbox delivery signing (shared secret = the consuming Service's webhook
+ * secret when it has one, else its apiKey).
  *
  * Each `billing.*` webhook POST carries:
  *   x-billing-timestamp: <unix seconds>
@@ -38,4 +40,29 @@ export function verifyOutboxDelivery(params: {
   const provided = Buffer.from(params.signature);
   if (expected.length !== provided.length) return false;
   return timingSafeEqual(expected, provided);
+}
+
+/** What a sealed webhook secret is bound to, so it opens only on its own service. */
+function secretBinding(serviceId: string): string {
+  return `service-webhook:${serviceId}`;
+}
+
+export function sealWebhookSecret(secret: string, serviceId: string): string {
+  return sealKey(secret, secretBinding(serviceId));
+}
+
+/**
+ * The secret this service's webhooks are signed with: its own webhook secret
+ * when it has one (a service that signs in only with an INITE Auth token
+ * holds no static key), its apiKey otherwise, as before. Throws when the
+ * secret cannot be opened: an unsigned or wrongly signed delivery is worse
+ * than a late one.
+ */
+export function webhookSigningSecret(service: {
+  id: string;
+  apiKey: string;
+  webhookSecret?: string | null;
+}): string {
+  if (service.webhookSecret) return openKey(service.webhookSecret, secretBinding(service.id));
+  return service.apiKey;
 }

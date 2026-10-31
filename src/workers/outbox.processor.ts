@@ -5,7 +5,7 @@ import { OutboxService } from '../outbox/outbox.service';
 import { PrismaService } from '../common/services/prisma.service';
 import { assertPublicUrl } from './ssrf-guard';
 import { postToPinnedAddress } from './pinned-post';
-import { signOutboxDelivery } from './outbox-signature';
+import { signOutboxDelivery, webhookSigningSecret } from './outbox-signature';
 
 /**
  * Outbox publisher. Consumes `drain-outbox` jobs from `OutboxScheduler`, loads
@@ -83,7 +83,17 @@ export class OutboxProcessor extends WorkerHost {
 
         // Sign the exact body so consumers can authenticate the event (and reject
         // forged/replayed ones): HMAC-SHA256 over `${timestamp}.${body}` keyed on
-        // the service's apiKey — a secret the consumer already holds.
+        // the service's webhook secret, or its apiKey — a secret it already holds.
+        let secret: string;
+        try {
+          secret = webhookSigningSecret(service);
+        } catch (error: any) {
+          this.logger.error(
+            `Webhook secret of service ${service.code} cannot be opened: ${error.message}`,
+          );
+          await this.outboxService.markFailed(event.id, 'Webhook secret cannot be opened');
+          continue;
+        }
         const timestamp = Math.floor(Date.now() / 1000).toString();
         const body = JSON.stringify({
           type: event.eventType,
@@ -92,7 +102,7 @@ export class OutboxProcessor extends WorkerHost {
           eventId: event.id,
           timestamp: event.createdAt,
         });
-        const signature = signOutboxDelivery((service as any).apiKey, timestamp, body);
+        const signature = signOutboxDelivery(secret, timestamp, body);
 
         try {
           // Deliver to the address the guard just vetted rather than to the

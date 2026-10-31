@@ -1,0 +1,1202 @@
+{
+  "status": "PROPOSAL, final per the owner's decisions of 31.10.2026. Not applied by any migration or seed: scripts/catalog/apply-family-subscriptions.sh applies it by hand after billing is deployed.",
+  "decided": "Owner, 30.10.2026 (inite-shared .planning/family-subscriptions-2026-10.md §4), amended 31.10.2026: no trials, training and travel priced, the subscriber is the organisation",
+  "rules": {
+    "yearly": "10 x monthly (two months free), every currency",
+    "trialDays": 0,
+    "trialNote": "No trials anywhere (owner, 31.10.2026): every plan price is set to trialDays 0.",
+    "graceDays": 3,
+    "subscriber": "The organisation (INITE Auth `org_id`), never the person who clicked. The number of people is a plan limit (`metadata.limits.users`); there is no per-seat billing.",
+    "newEntitlementKey": "<service>:plan:<tier>, added beside the legacy keys, which stay until every reader moved; an add-on is <service>:<tier>",
+    "metadata": "Each product: tier, rank (1 = lowest plan; add-ons 10 and isAddon), limits (null = unlimited) where the product's code names its numbers",
+    "healthEurRows": "Health's EUR prices are not rewritten in place: orders and subscriptions point at them, a renewal bills the price row as it reads then, and a plan change refuses another currency. New USD codes are created and the EUR rows deactivated (a live EUR subscription then ends with its grace instead of renewing in another currency)."
+  },
+  "changes": [
+    {
+      "service": "studio",
+      "product": "studio-starter",
+      "kind": "company",
+      "action": "create",
+      "trialDays": 0,
+      "graceDays": 3,
+      "prices": [
+        {
+          "code": "studio-starter-monthly",
+          "currency": "USD",
+          "interval": "month",
+          "amount": 15,
+          "action": "create"
+        },
+        {
+          "code": "studio-starter-yearly",
+          "currency": "USD",
+          "interval": "year",
+          "amount": 150,
+          "action": "create"
+        }
+      ],
+      "name": "Studio Starter",
+      "addEntitlements": [
+        "studio:plan:starter"
+      ],
+      "note": "New service `studio`. The apply script creates the `studio-*` codes; initeaudit's legacy `ideaudit_*` codes, if production holds them, are left untouched. Subscriber is now the organisation (owner, 31.10): the product's code still keys this plan by the person's DID and must move to org_id.",
+      "tier": "starter",
+      "rank": 1,
+      "limits": {
+        "users": 1,
+        "auditsPerMonth": 50,
+        "rawDataCallsPerMonth": 1000,
+        "mathCallsPerMonth": 10000,
+        "investorLists": 5,
+        "ideaCollections": 10
+      }
+    },
+    {
+      "service": "studio",
+      "product": "studio-pro",
+      "kind": "company",
+      "action": "create",
+      "trialDays": 0,
+      "graceDays": 3,
+      "prices": [
+        {
+          "code": "studio-pro-monthly",
+          "currency": "USD",
+          "interval": "month",
+          "amount": 39,
+          "action": "create"
+        },
+        {
+          "code": "studio-pro-yearly",
+          "currency": "USD",
+          "interval": "year",
+          "amount": 390,
+          "action": "create"
+        }
+      ],
+      "name": "Studio Pro",
+      "addEntitlements": [
+        "studio:plan:pro"
+      ],
+      "note": "New service `studio`. The apply script creates the `studio-*` codes; initeaudit's legacy `ideaudit_*` codes, if production holds them, are left untouched. Subscriber is now the organisation (owner, 31.10): the product's code still keys this plan by the person's DID and must move to org_id.",
+      "tier": "pro",
+      "rank": 2,
+      "limits": {
+        "users": 1,
+        "auditsPerMonth": 200,
+        "rawDataCallsPerMonth": 5000,
+        "mathCallsPerMonth": 50000,
+        "investorLists": 20,
+        "ideaCollections": 50
+      }
+    },
+    {
+      "service": "studio",
+      "product": "studio-team",
+      "kind": "company",
+      "action": "create",
+      "trialDays": 0,
+      "graceDays": 3,
+      "prices": [
+        {
+          "code": "studio-team-monthly",
+          "currency": "USD",
+          "interval": "month",
+          "amount": 99,
+          "action": "create"
+        },
+        {
+          "code": "studio-team-yearly",
+          "currency": "USD",
+          "interval": "year",
+          "amount": 990,
+          "action": "create"
+        }
+      ],
+      "name": "Studio Team",
+      "addEntitlements": [
+        "studio:plan:team"
+      ],
+      "note": "New service `studio`. The apply script creates the `studio-*` codes; initeaudit's legacy `ideaudit_*` codes, if production holds them, are left untouched. Team is a team plan, so 14 days. Subscriber is now the organisation (owner, 31.10): the product's code still keys this plan by the person's DID and must move to org_id.",
+      "tier": "team",
+      "rank": 3,
+      "limits": {
+        "users": 5,
+        "auditsPerMonth": 1000,
+        "rawDataCallsPerMonth": 25000,
+        "mathCallsPerMonth": null,
+        "investorLists": null,
+        "ideaCollections": null
+      }
+    },
+    {
+      "service": "inite-health",
+      "product": "inite-health-starter",
+      "kind": "company",
+      "action": "update",
+      "trialDays": 0,
+      "graceDays": 3,
+      "prices": [
+        {
+          "code": "inite-health-starter-monthly",
+          "currency": "EUR",
+          "interval": "month",
+          "amount": 2900,
+          "action": "deactivate"
+        },
+        {
+          "code": "inite-health-starter-annual",
+          "currency": "EUR",
+          "interval": "year",
+          "amount": 29000,
+          "action": "deactivate"
+        },
+        {
+          "code": "inite-health-starter-monthly-usd",
+          "currency": "USD",
+          "interval": "month",
+          "amount": 49,
+          "action": "create"
+        },
+        {
+          "code": "inite-health-starter-yearly-usd",
+          "currency": "USD",
+          "interval": "year",
+          "amount": 490,
+          "action": "create"
+        }
+      ],
+      "addEntitlements": [
+        "health:plan:starter"
+      ],
+      "note": "Fix: the EUR amounts were cents typed as units. New USD prices beside them; the EUR rows are deactivated, never rewritten (see rules.healthEurRows).",
+      "tier": "starter",
+      "rank": 1,
+      "limits": {
+        "users": 3,
+        "seats": 3,
+        "clinics": 1,
+        "patients": 500
+      }
+    },
+    {
+      "service": "inite-health",
+      "product": "inite-health-professional",
+      "kind": "company",
+      "action": "update",
+      "trialDays": 0,
+      "graceDays": 3,
+      "prices": [
+        {
+          "code": "inite-health-professional-monthly",
+          "currency": "EUR",
+          "interval": "month",
+          "amount": 7900,
+          "action": "deactivate"
+        },
+        {
+          "code": "inite-health-professional-annual",
+          "currency": "EUR",
+          "interval": "year",
+          "amount": 79000,
+          "action": "deactivate"
+        },
+        {
+          "code": "inite-health-professional-monthly-usd",
+          "currency": "USD",
+          "interval": "month",
+          "amount": 129,
+          "action": "create"
+        },
+        {
+          "code": "inite-health-professional-yearly-usd",
+          "currency": "USD",
+          "interval": "year",
+          "amount": 1290,
+          "action": "create"
+        }
+      ],
+      "addEntitlements": [
+        "health:plan:professional"
+      ],
+      "note": "Fix: the EUR amounts were cents typed as units. New USD prices beside them; the EUR rows are deactivated, never rewritten (see rules.healthEurRows).",
+      "tier": "professional",
+      "rank": 2,
+      "limits": {
+        "users": 15,
+        "seats": 15,
+        "clinics": 3,
+        "patients": null
+      }
+    },
+    {
+      "service": "inite-health",
+      "product": "inite-health-enterprise",
+      "kind": "company",
+      "action": "off_sale",
+      "prices": [
+        {
+          "code": "inite-health-enterprise-monthly",
+          "currency": "EUR",
+          "interval": "month",
+          "amount": 19900,
+          "action": "deactivate"
+        },
+        {
+          "code": "inite-health-enterprise-annual",
+          "currency": "EUR",
+          "interval": "year",
+          "amount": 199000,
+          "action": "deactivate"
+        }
+      ],
+      "note": "Enterprise is 'custom' on health's page: sold by contact, not checkout."
+    },
+    {
+      "service": "content",
+      "product": "content-starter",
+      "kind": "company",
+      "action": "update",
+      "trialDays": 0,
+      "graceDays": 3,
+      "prices": [
+        {
+          "code": "content-starter-monthly",
+          "currency": "USD",
+          "interval": "month",
+          "amount": 29,
+          "action": "keep"
+        },
+        {
+          "code": "content-starter-yearly",
+          "currency": "USD",
+          "interval": "year",
+          "amount": 290,
+          "action": "keep"
+        },
+        {
+          "code": "content-starter-monthly-brl",
+          "currency": "BRL",
+          "interval": "month",
+          "amount": 145,
+          "action": "keep"
+        },
+        {
+          "code": "content-starter-yearly-brl",
+          "currency": "BRL",
+          "interval": "year",
+          "amount": 1450,
+          "action": "keep"
+        }
+      ],
+      "addEntitlements": [
+        "content:plan:starter"
+      ],
+      "note": "Prices unchanged (owner: billing's set is the true one). Trial 7 → 14 days as a workspace (company) plan.",
+      "tier": "starter",
+      "rank": 1
+    },
+    {
+      "service": "content",
+      "product": "content-growth",
+      "kind": "company",
+      "action": "update",
+      "trialDays": 0,
+      "graceDays": 3,
+      "prices": [
+        {
+          "code": "content-growth-monthly",
+          "currency": "USD",
+          "interval": "month",
+          "amount": 79,
+          "action": "keep"
+        },
+        {
+          "code": "content-growth-yearly",
+          "currency": "USD",
+          "interval": "year",
+          "amount": 790,
+          "action": "keep"
+        },
+        {
+          "code": "content-growth-monthly-brl",
+          "currency": "BRL",
+          "interval": "month",
+          "amount": 395,
+          "action": "keep"
+        },
+        {
+          "code": "content-growth-yearly-brl",
+          "currency": "BRL",
+          "interval": "year",
+          "amount": 3950,
+          "action": "keep"
+        }
+      ],
+      "addEntitlements": [
+        "content:plan:growth"
+      ],
+      "note": "Prices unchanged (owner: billing's set is the true one). Trial 7 → 14 days as a workspace (company) plan.",
+      "tier": "growth",
+      "rank": 2
+    },
+    {
+      "service": "content",
+      "product": "content-business",
+      "kind": "company",
+      "action": "update",
+      "trialDays": 0,
+      "graceDays": 3,
+      "prices": [
+        {
+          "code": "content-business-monthly",
+          "currency": "USD",
+          "interval": "month",
+          "amount": 149,
+          "action": "keep"
+        },
+        {
+          "code": "content-business-yearly",
+          "currency": "USD",
+          "interval": "year",
+          "amount": 1490,
+          "action": "keep"
+        },
+        {
+          "code": "content-business-monthly-brl",
+          "currency": "BRL",
+          "interval": "month",
+          "amount": 745,
+          "action": "keep"
+        },
+        {
+          "code": "content-business-yearly-brl",
+          "currency": "BRL",
+          "interval": "year",
+          "amount": 7450,
+          "action": "keep"
+        }
+      ],
+      "addEntitlements": [
+        "content:plan:business"
+      ],
+      "note": "Prices and trial unchanged.",
+      "tier": "business",
+      "rank": 3
+    },
+    {
+      "service": "analitics",
+      "product": "inite-visibility-starter",
+      "kind": "company",
+      "action": "update",
+      "trialDays": 0,
+      "graceDays": 3,
+      "prices": [
+        {
+          "code": "inite-visibility-starter-monthly",
+          "currency": "USD",
+          "interval": "month",
+          "amount": 29,
+          "action": "keep"
+        },
+        {
+          "code": "inite-visibility-starter-yearly",
+          "currency": "USD",
+          "interval": "year",
+          "amount": 290,
+          "action": "keep"
+        },
+        {
+          "code": "inite-visibility-starter-monthly-brl",
+          "currency": "BRL",
+          "interval": "month",
+          "amount": 145,
+          "action": "keep"
+        },
+        {
+          "code": "inite-visibility-starter-yearly-brl",
+          "currency": "BRL",
+          "interval": "year",
+          "amount": 1450,
+          "action": "keep"
+        }
+      ],
+      "addEntitlements": [
+        "inite:plan:starter"
+      ],
+      "note": "Prices unchanged. Trial 7 days set on the plan's prices (personal plan); grace 3 (was unset). Subscriber is now the organisation (owner, 31.10): the product's code still keys this plan by the person's DID and must move to org_id.",
+      "tier": "starter",
+      "rank": 1,
+      "limits": {
+        "dailyAnalyses": 10,
+        "maxSavedReports": 5,
+        "dfyRequestsPerMonth": 0
+      }
+    },
+    {
+      "service": "analitics",
+      "product": "inite-visibility-growth",
+      "kind": "company",
+      "action": "update",
+      "trialDays": 0,
+      "graceDays": 3,
+      "prices": [
+        {
+          "code": "inite-visibility-growth-monthly",
+          "currency": "USD",
+          "interval": "month",
+          "amount": 79,
+          "action": "keep"
+        },
+        {
+          "code": "inite-visibility-growth-yearly",
+          "currency": "USD",
+          "interval": "year",
+          "amount": 790,
+          "action": "keep"
+        },
+        {
+          "code": "inite-visibility-growth-monthly-brl",
+          "currency": "BRL",
+          "interval": "month",
+          "amount": 395,
+          "action": "keep"
+        },
+        {
+          "code": "inite-visibility-growth-yearly-brl",
+          "currency": "BRL",
+          "interval": "year",
+          "amount": 3950,
+          "action": "keep"
+        }
+      ],
+      "addEntitlements": [
+        "inite:plan:growth"
+      ],
+      "note": "Prices unchanged. Trial 7 days set on the plan's prices (personal plan); grace 3 (was unset). Subscriber is now the organisation (owner, 31.10): the product's code still keys this plan by the person's DID and must move to org_id.",
+      "tier": "growth",
+      "rank": 2,
+      "limits": {
+        "dailyAnalyses": 25,
+        "maxSavedReports": null,
+        "dfyRequestsPerMonth": 0
+      }
+    },
+    {
+      "service": "analitics",
+      "product": "inite-visibility-autopilot",
+      "kind": "company",
+      "action": "update",
+      "trialDays": 0,
+      "graceDays": 3,
+      "prices": [
+        {
+          "code": "inite-visibility-autopilot-monthly",
+          "currency": "USD",
+          "interval": "month",
+          "amount": 149,
+          "action": "keep"
+        },
+        {
+          "code": "inite-visibility-autopilot-yearly",
+          "currency": "USD",
+          "interval": "year",
+          "amount": 1490,
+          "action": "keep"
+        },
+        {
+          "code": "inite-visibility-autopilot-monthly-brl",
+          "currency": "BRL",
+          "interval": "month",
+          "amount": 745,
+          "action": "keep"
+        },
+        {
+          "code": "inite-visibility-autopilot-yearly-brl",
+          "currency": "BRL",
+          "interval": "year",
+          "amount": 7450,
+          "action": "keep"
+        }
+      ],
+      "addEntitlements": [
+        "inite:plan:autopilot"
+      ],
+      "note": "Prices unchanged. Trial 7 days set on the plan's prices (personal plan); grace 3 (was unset). Subscriber is now the organisation (owner, 31.10): the product's code still keys this plan by the person's DID and must move to org_id.",
+      "tier": "autopilot",
+      "rank": 3,
+      "limits": {
+        "dailyAnalyses": 50,
+        "maxSavedReports": null,
+        "dfyRequestsPerMonth": 5
+      }
+    },
+    {
+      "service": "analitics",
+      "product": "inite-atlas-premium",
+      "kind": "company",
+      "action": "update",
+      "trialDays": 0,
+      "graceDays": 3,
+      "prices": [
+        {
+          "code": "inite-atlas-premium-monthly",
+          "currency": "USD",
+          "interval": "month",
+          "amount": 29,
+          "action": "keep"
+        },
+        {
+          "code": "inite-atlas-premium-yearly",
+          "currency": "USD",
+          "interval": "year",
+          "amount": 290,
+          "action": "keep"
+        },
+        {
+          "code": "inite-atlas-premium-monthly-brl",
+          "currency": "BRL",
+          "interval": "month",
+          "amount": 145,
+          "action": "keep"
+        },
+        {
+          "code": "inite-atlas-premium-yearly-brl",
+          "currency": "BRL",
+          "interval": "year",
+          "amount": 1450,
+          "action": "keep"
+        }
+      ],
+      "addEntitlements": [
+        "inite:atlas-premium"
+      ],
+      "note": "Prices unchanged. Trial 7 days set on the plan's prices (personal plan); grace 3 (was unset). Subscriber is now the organisation (owner, 31.10): the product's code still keys this plan by the person's DID and must move to org_id.",
+      "tier": "atlas-premium",
+      "rank": 10,
+      "isAddon": true,
+      "limits": {
+        "domains": 1,
+        "branches": 5
+      }
+    },
+    {
+      "service": "inite-rent",
+      "product": "inite-rent-starter",
+      "kind": "company",
+      "action": "update",
+      "trialDays": 0,
+      "graceDays": 3,
+      "prices": [
+        {
+          "code": "inite-rent-starter-monthly",
+          "currency": "USD",
+          "interval": "month",
+          "amount": 49,
+          "action": "keep"
+        },
+        {
+          "code": "inite-rent-starter-annual",
+          "currency": "USD",
+          "interval": "year",
+          "amount": 490,
+          "action": "update",
+          "was": 470
+        },
+        {
+          "code": "inite-rent-starter-monthly-brl",
+          "currency": "BRL",
+          "interval": "month",
+          "amount": 249,
+          "action": "keep"
+        },
+        {
+          "code": "inite-rent-starter-annual-brl",
+          "currency": "BRL",
+          "interval": "year",
+          "amount": 2490,
+          "action": "update",
+          "was": 2390
+        },
+        {
+          "code": "inite-rent-starter-monthly-rub",
+          "currency": "RUB",
+          "interval": "month",
+          "amount": 4490,
+          "action": "keep"
+        },
+        {
+          "code": "inite-rent-starter-annual-rub",
+          "currency": "RUB",
+          "interval": "year",
+          "amount": 44900,
+          "action": "update",
+          "was": 42990
+        }
+      ],
+      "addEntitlements": [
+        "rent:plan:starter"
+      ],
+      "note": "Yearly moves from 20% off to the family's 10x monthly (two months free): a price rise for new annual buyers. Live lava.top annual subscriptions keep the amount the provider holds.",
+      "tier": "starter",
+      "rank": 1,
+      "limits": {
+        "users": 5,
+        "vehicles": 25
+      }
+    },
+    {
+      "service": "inite-rent",
+      "product": "inite-rent-pro",
+      "kind": "company",
+      "action": "update",
+      "trialDays": 0,
+      "graceDays": 3,
+      "prices": [
+        {
+          "code": "inite-rent-pro-monthly",
+          "currency": "USD",
+          "interval": "month",
+          "amount": 99,
+          "action": "keep"
+        },
+        {
+          "code": "inite-rent-pro-annual",
+          "currency": "USD",
+          "interval": "year",
+          "amount": 990,
+          "action": "update",
+          "was": 950
+        },
+        {
+          "code": "inite-rent-pro-monthly-brl",
+          "currency": "BRL",
+          "interval": "month",
+          "amount": 499,
+          "action": "keep"
+        },
+        {
+          "code": "inite-rent-pro-annual-brl",
+          "currency": "BRL",
+          "interval": "year",
+          "amount": 4990,
+          "action": "update",
+          "was": 4790
+        },
+        {
+          "code": "inite-rent-pro-monthly-rub",
+          "currency": "RUB",
+          "interval": "month",
+          "amount": 8990,
+          "action": "keep"
+        },
+        {
+          "code": "inite-rent-pro-annual-rub",
+          "currency": "RUB",
+          "interval": "year",
+          "amount": 89900,
+          "action": "update",
+          "was": 85990
+        }
+      ],
+      "addEntitlements": [
+        "rent:plan:pro"
+      ],
+      "note": "Yearly moves from 20% off to the family's 10x monthly (two months free): a price rise for new annual buyers. Live lava.top annual subscriptions keep the amount the provider holds.",
+      "tier": "pro",
+      "rank": 2,
+      "limits": {
+        "users": 15,
+        "vehicles": 75
+      }
+    },
+    {
+      "service": "inite-rent",
+      "product": "inite-rent-business",
+      "kind": "company",
+      "action": "update",
+      "trialDays": 0,
+      "graceDays": 3,
+      "prices": [
+        {
+          "code": "inite-rent-business-monthly",
+          "currency": "USD",
+          "interval": "month",
+          "amount": 199,
+          "action": "keep"
+        },
+        {
+          "code": "inite-rent-business-annual",
+          "currency": "USD",
+          "interval": "year",
+          "amount": 1990,
+          "action": "update",
+          "was": 1910
+        },
+        {
+          "code": "inite-rent-business-monthly-brl",
+          "currency": "BRL",
+          "interval": "month",
+          "amount": 999,
+          "action": "keep"
+        },
+        {
+          "code": "inite-rent-business-annual-brl",
+          "currency": "BRL",
+          "interval": "year",
+          "amount": 9990,
+          "action": "update",
+          "was": 9590
+        },
+        {
+          "code": "inite-rent-business-monthly-rub",
+          "currency": "RUB",
+          "interval": "month",
+          "amount": 17990,
+          "action": "keep"
+        },
+        {
+          "code": "inite-rent-business-annual-rub",
+          "currency": "RUB",
+          "interval": "year",
+          "amount": 179900,
+          "action": "update",
+          "was": 172990
+        }
+      ],
+      "addEntitlements": [
+        "rent:plan:business"
+      ],
+      "note": "Yearly moves from 20% off to the family's 10x monthly (two months free): a price rise for new annual buyers. Live lava.top annual subscriptions keep the amount the provider holds.",
+      "tier": "business",
+      "rank": 3,
+      "limits": {
+        "users": 30,
+        "vehicles": 200
+      }
+    },
+    {
+      "service": "inite-rent",
+      "product": "inite-rent-enterprise",
+      "kind": "company",
+      "action": "update",
+      "trialDays": 0,
+      "graceDays": 3,
+      "prices": [
+        {
+          "code": "inite-rent-enterprise-monthly",
+          "currency": "USD",
+          "interval": "month",
+          "amount": 399,
+          "action": "keep"
+        },
+        {
+          "code": "inite-rent-enterprise-annual",
+          "currency": "USD",
+          "interval": "year",
+          "amount": 3990,
+          "action": "update",
+          "was": 3830
+        },
+        {
+          "code": "inite-rent-enterprise-monthly-brl",
+          "currency": "BRL",
+          "interval": "month",
+          "amount": 1999,
+          "action": "keep"
+        },
+        {
+          "code": "inite-rent-enterprise-annual-brl",
+          "currency": "BRL",
+          "interval": "year",
+          "amount": 19990,
+          "action": "update",
+          "was": 19190
+        },
+        {
+          "code": "inite-rent-enterprise-monthly-rub",
+          "currency": "RUB",
+          "interval": "month",
+          "amount": 35990,
+          "action": "keep"
+        },
+        {
+          "code": "inite-rent-enterprise-annual-rub",
+          "currency": "RUB",
+          "interval": "year",
+          "amount": 359900,
+          "action": "update",
+          "was": 345990
+        }
+      ],
+      "addEntitlements": [
+        "rent:plan:enterprise"
+      ],
+      "note": "Yearly moves from 20% off to the family's 10x monthly (two months free): a price rise for new annual buyers. Live lava.top annual subscriptions keep the amount the provider holds.",
+      "tier": "enterprise",
+      "rank": 4,
+      "limits": {
+        "users": null,
+        "vehicles": null
+      }
+    },
+    {
+      "service": "inite-rent",
+      "product": "inite-rent-ai-agents",
+      "kind": "company",
+      "action": "update",
+      "trialDays": 0,
+      "graceDays": 3,
+      "prices": [
+        {
+          "code": "inite-rent-ai-agents-monthly",
+          "currency": "USD",
+          "interval": "month",
+          "amount": 39,
+          "action": "keep"
+        },
+        {
+          "code": "inite-rent-ai-agents-annual",
+          "currency": "USD",
+          "interval": "year",
+          "amount": 390,
+          "action": "update",
+          "was": 374
+        },
+        {
+          "code": "inite-rent-ai-agents-monthly-brl",
+          "currency": "BRL",
+          "interval": "month",
+          "amount": 199,
+          "action": "keep"
+        },
+        {
+          "code": "inite-rent-ai-agents-annual-brl",
+          "currency": "BRL",
+          "interval": "year",
+          "amount": 1990,
+          "action": "update",
+          "was": 1910
+        },
+        {
+          "code": "inite-rent-ai-agents-monthly-rub",
+          "currency": "RUB",
+          "interval": "month",
+          "amount": 3490,
+          "action": "keep"
+        },
+        {
+          "code": "inite-rent-ai-agents-annual-rub",
+          "currency": "RUB",
+          "interval": "year",
+          "amount": 34900,
+          "action": "update",
+          "was": 33490
+        }
+      ],
+      "note": "Yearly moves from 20% off to the family's 10x monthly (two months free): a price rise for new annual buyers. Live lava.top annual subscriptions keep the amount the provider holds.",
+      "tier": "ai-agents",
+      "rank": 10,
+      "isAddon": true,
+      "addEntitlements": [
+        "rent:ai-agents"
+      ]
+    },
+    {
+      "service": "training",
+      "product": "training-starter",
+      "name": "Training Starter",
+      "kind": "company",
+      "action": "create",
+      "trialDays": 0,
+      "graceDays": 3,
+      "tier": "starter",
+      "rank": 1,
+      "prices": [
+        {
+          "code": "training-starter-monthly",
+          "currency": "USD",
+          "interval": "month",
+          "amount": 49,
+          "action": "create"
+        },
+        {
+          "code": "training-starter-yearly",
+          "currency": "USD",
+          "interval": "year",
+          "amount": 490,
+          "action": "create"
+        }
+      ],
+      "addEntitlements": [
+        "training:plan:starter"
+      ],
+      "limits": {
+        "users": 3,
+        "seats": 3,
+        "clubs": 1,
+        "members": 500,
+        "aiQueriesPerDay": 30
+      },
+      "note": "New service `training`: its billing Service row must exist (Ops: register consumer service) before the apply script runs. Limits from initesport's pricing page (src/components/marketing/data.ts)."
+    },
+    {
+      "service": "training",
+      "product": "training-professional",
+      "name": "Training Professional",
+      "kind": "company",
+      "action": "create",
+      "trialDays": 0,
+      "graceDays": 3,
+      "tier": "professional",
+      "rank": 2,
+      "prices": [
+        {
+          "code": "training-professional-monthly",
+          "currency": "USD",
+          "interval": "month",
+          "amount": 129,
+          "action": "create"
+        },
+        {
+          "code": "training-professional-yearly",
+          "currency": "USD",
+          "interval": "year",
+          "amount": 1290,
+          "action": "create"
+        }
+      ],
+      "addEntitlements": [
+        "training:plan:professional"
+      ],
+      "limits": {
+        "users": 15,
+        "seats": 15,
+        "clubs": 3,
+        "members": null,
+        "aiQueriesPerDay": null
+      },
+      "note": "Enterprise stays custom (contact), not sold by checkout."
+    },
+    {
+      "service": "training",
+      "product": "training-ai-pack",
+      "name": "Training AI Power Pack",
+      "kind": "company",
+      "action": "create",
+      "trialDays": 0,
+      "graceDays": 3,
+      "tier": "ai-pack",
+      "rank": 10,
+      "prices": [
+        {
+          "code": "training-ai-pack-monthly",
+          "currency": "USD",
+          "interval": "month",
+          "amount": 39,
+          "action": "create"
+        },
+        {
+          "code": "training-ai-pack-yearly",
+          "currency": "USD",
+          "interval": "year",
+          "amount": 390,
+          "action": "create"
+        }
+      ],
+      "addEntitlements": [
+        "training:ai-pack"
+      ],
+      "isAddon": true
+    },
+    {
+      "service": "travel",
+      "product": "travel-starter",
+      "name": "Travel Starter",
+      "kind": "company",
+      "action": "create",
+      "trialDays": 0,
+      "graceDays": 3,
+      "tier": "starter",
+      "rank": 1,
+      "prices": [
+        {
+          "code": "travel-starter-monthly",
+          "currency": "USD",
+          "interval": "month",
+          "amount": 49,
+          "action": "create"
+        },
+        {
+          "code": "travel-starter-yearly",
+          "currency": "USD",
+          "interval": "year",
+          "amount": 490,
+          "action": "create"
+        }
+      ],
+      "addEntitlements": [
+        "travel:plan:starter"
+      ],
+      "limits": {
+        "users": 3,
+        "tours": null
+      },
+      "note": "New service `travel`: its billing Service row must exist (Ops: register consumer service) before the apply script runs. Priced per agency, not per seat (owner, 31.10): the page's 1-3 / 3-15 / 15+ people become limits.users; no tour cap is named anywhere in initetravel."
+    },
+    {
+      "service": "travel",
+      "product": "travel-pro",
+      "name": "Travel Pro",
+      "kind": "company",
+      "action": "create",
+      "trialDays": 0,
+      "graceDays": 3,
+      "tier": "pro",
+      "rank": 2,
+      "prices": [
+        {
+          "code": "travel-pro-monthly",
+          "currency": "USD",
+          "interval": "month",
+          "amount": 99,
+          "action": "create"
+        },
+        {
+          "code": "travel-pro-yearly",
+          "currency": "USD",
+          "interval": "year",
+          "amount": 990,
+          "action": "create"
+        }
+      ],
+      "addEntitlements": [
+        "travel:plan:pro"
+      ],
+      "limits": {
+        "users": 15,
+        "tours": null
+      }
+    },
+    {
+      "service": "travel",
+      "product": "travel-enterprise",
+      "name": "Travel Enterprise",
+      "kind": "company",
+      "action": "create",
+      "trialDays": 0,
+      "graceDays": 3,
+      "tier": "enterprise",
+      "rank": 3,
+      "prices": [
+        {
+          "code": "travel-enterprise-monthly",
+          "currency": "USD",
+          "interval": "month",
+          "amount": 199,
+          "action": "create"
+        },
+        {
+          "code": "travel-enterprise-yearly",
+          "currency": "USD",
+          "interval": "year",
+          "amount": 1990,
+          "action": "create"
+        }
+      ],
+      "addEntitlements": [
+        "travel:plan:enterprise"
+      ],
+      "limits": {
+        "users": null,
+        "tours": null
+      }
+    },
+    {
+      "service": "travel",
+      "product": "travel-concierge",
+      "name": "Travel AI Concierge",
+      "kind": "company",
+      "action": "create",
+      "trialDays": 0,
+      "graceDays": 3,
+      "tier": "concierge",
+      "rank": 10,
+      "prices": [
+        {
+          "code": "travel-concierge-monthly",
+          "currency": "USD",
+          "interval": "month",
+          "amount": 29,
+          "action": "create"
+        },
+        {
+          "code": "travel-concierge-yearly",
+          "currency": "USD",
+          "interval": "year",
+          "amount": 290,
+          "action": "create"
+        }
+      ],
+      "addEntitlements": [
+        "travel:concierge"
+      ],
+      "isAddon": true
+    }
+  ],
+  "offSale": [
+    {
+      "service": "services",
+      "reason": "no price set; stays off sale"
+    },
+    {
+      "service": "club",
+      "reason": "no price set; membership by application"
+    },
+    {
+      "service": "fund",
+      "reason": "no price set; invite-only"
+    },
+    {
+      "service": "brain",
+      "reason": "no plan price; domain packs stay one-time, priced by admin"
+    }
+  ],
+  "notInThisList": [
+    "estate, shop, food, events: prices on their pages not yet confirmed in billing (plan §4.5)",
+    "health AI Power Pack: no price decided for health",
+    "education all-access, solutions Voice/Social AI, bloom florist plan, Break3 plans: no price decided"
+  ],
+  "allowedOrigins": {
+    "studio": [
+      "https://app.inite.studio",
+      "https://inite.studio",
+      "https://www.inite.studio"
+    ],
+    "inite-health": [
+      "https://www.inite.health",
+      "https://inite.health"
+    ],
+    "content": [
+      "https://inite.digital",
+      "https://www.inite.digital"
+    ],
+    "analitics": [
+      "https://inite.ai",
+      "https://www.inite.ai"
+    ],
+    "inite-rent": [
+      "https://inite.rent",
+      "https://www.inite.rent"
+    ],
+    "training": [
+      "https://inite.training",
+      "https://www.inite.training"
+    ],
+    "travel": [
+      "https://inite.travel",
+      "https://www.inite.travel"
+    ]
+  },
+  "allowedOriginsNote": "Service.metadata.allowedOrigins: where billing's /subscriptions page may send a person back. From each product's deploy workflow (DOMAIN, Traefik Host rules) and NEXT_PUBLIC_APP_URL/SITE_URL. Merged into the existing list, never replacing it."
+}

@@ -43,6 +43,7 @@ import {
   SAFE_REF,
 } from './open-product';
 import { OpenSalePolicy } from './open-sale.policy';
+import { isOrgSubscriber } from '../common/validators/is-user-id';
 
 @Injectable()
 export class CheckoutService {
@@ -1481,7 +1482,14 @@ export function isGuestUserId(userId: string | null | undefined): boolean {
   // INITE accounts are DIDs (`did:key:...`), which contain colons too. Only a
   // service namespace (`mikefluff:<hex>`) marks a guest; without this every
   // unpaid order of a real user was claimable by whoever opened its link.
-  return typeof userId === 'string' && userId.includes(':') && !userId.startsWith('did:');
+  // An organisation (`org:<uuid>`) is no guest either: its plan would move to
+  // the person who opened the page.
+  return (
+    typeof userId === 'string' &&
+    userId.includes(':') &&
+    !userId.startsWith('did:') &&
+    !isOrgSubscriber(userId)
+  );
 }
 
 /** The most lines and the most of one line a cart may hold. */

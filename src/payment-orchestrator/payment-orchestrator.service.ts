@@ -25,6 +25,12 @@ import { OutboxService } from '../outbox/outbox.service';
 import { AffiliatesService } from '../affiliates/affiliates.service';
 import { FunnelService } from '../funnel/funnel.service';
 import { CreditsService } from '../credits/credits.service';
+import {
+  applyPlanChangeNow,
+  applyPlanChangePayment,
+  applyRenewalPayment,
+  subscriptionOrderKind,
+} from './subscription-changes';
 
 /**
  * Interactive-transaction budget for the deep payment-fulfilment chain
@@ -331,7 +337,14 @@ export class PaymentOrchestratorService implements OnModuleInit {
       },
     });
 
-    if (order.mode === 'PAYMENT') {
+    // A renewal or a plan change billing opened is a one-off payment to the
+    // rail but a subscription to us (subscription-changes.ts).
+    const subscriptionKind = subscriptionOrderKind(order);
+    if (subscriptionKind?.kind === 'renewal') {
+      await applyRenewalPayment(this.changeDeps(), tx, order, subscriptionKind.meta);
+    } else if (subscriptionKind?.kind === 'plan_change') {
+      await applyPlanChangePayment(this.changeDeps(), tx, order, subscriptionKind.meta);
+    } else if (order.mode === 'PAYMENT') {
       // Grant entitlements for one-time payment
       await this.grantEntitlementsForOrder(order, tx);
     } else if (order.mode === 'SUBSCRIPTION') {
@@ -382,7 +395,9 @@ export class PaymentOrchestratorService implements OnModuleInit {
     // revoked below, and subscription access is granted with
     // `source: 'subscription'`. The customer kept the product after getting
     // their money back, and the next period would have billed them again.
-    if (order.mode === 'SUBSCRIPTION') {
+    // A refunded renewal ends the period it paid for the same way. A refunded
+    // upgrade difference does not undo the upgrade: that is an admin's call.
+    if (order.mode === 'SUBSCRIPTION' || subscriptionOrderKind(order)?.kind === 'renewal') {
       await this.endSubscriptionForRefundedOrder(order, tx);
     }
 
@@ -583,6 +598,9 @@ export class PaymentOrchestratorService implements OnModuleInit {
     });
 
     const isRenewal = !!subscription;
+    // A no-card trial (startTrial) has no rail; its first payment is the
+    // plan's first payment.
+    const wasUnpaidTrial = subscription?.status === 'trialing' && !subscription?.rail;
 
     if (subscription) {
       // Update existing subscription. Only overwrite provider linkage if it
@@ -682,6 +700,25 @@ export class PaymentOrchestratorService implements OnModuleInit {
       );
     }
 
+    // The first payment of a plan is its own event: `updated` fires on every
+    // renewal too, and a service could not tell a new customer from a
+    // returning period. `updated` still fires, for services that read it.
+    if (!isRenewal || wasUnpaidTrial) {
+      await this.outboxService.emit(
+        'billing.subscription.created',
+        {
+          subscription_id: subscription.id,
+          user_id: order.userId,
+          status: subscription.status,
+          price_code: price.code,
+          rail: subscription.rail ?? null,
+          current_period_end: periodEnd.toISOString(),
+          order_id: order.id,
+        },
+        { serviceId: product.serviceId ?? null, tx: tx },
+      );
+    }
+
     await this.outboxService.emit(
       'billing.subscription.updated',
       {
@@ -691,6 +728,22 @@ export class PaymentOrchestratorService implements OnModuleInit {
         current_period_end: periodEnd.toISOString(),
       },
       { serviceId: product.serviceId ?? null, tx: tx },
+    );
+  }
+
+  private changeDeps() {
+    return { outbox: this.outboxService, logger: this.logger };
+  }
+
+  /**
+   * Move a live subscription onto another price now, with no payment: a plan
+   * change during a no-card trial, or one whose prorated difference is zero.
+   * Entitlements move with it; a paid change comes through handleOrderPaid.
+   */
+  async changePlanWithoutPayment(subscriptionId: string, toPrice: any): Promise<boolean> {
+    return this.prisma.$transaction(
+      (tx) => applyPlanChangeNow(this.changeDeps(), tx, { subscriptionId, toPrice }),
+      FULFILMENT_TX_OPTIONS,
     );
   }
 
@@ -1078,7 +1131,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
     // separate one. A failure here must roll the whole fulfilment back (the
     // webhook then retries) rather than be swallowed, otherwise a paid order can
     // silently grant nothing, and a later rollback would leave phantom credits.
-    if (order.mode === 'SUBSCRIPTION') {
+    if (order.mode === 'SUBSCRIPTION' || subscriptionOrderKind(order)) {
       // For subscriptions, find the subscription to get period end
       const subscription = await tx.subscription.findFirst({
         where: {

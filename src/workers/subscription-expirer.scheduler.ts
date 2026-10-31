@@ -1,8 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../common/services/prisma.service';
 import { PaymentOrchestratorService } from '../payment-orchestrator/payment-orchestrator.service';
 import { DistributedLockService } from '../common/locks/distributed-lock.service';
+import { OutboxService } from '../outbox/outbox.service';
+import { renewedByBilling } from '../payment-orchestrator/subscription-changes';
+import { renewalsEnabled } from '../subscription-lifecycle/renewals-config';
 
 /**
  * Closes the loop on subscriptions whose currentPeriodEnd has passed.
@@ -12,6 +15,10 @@ import { DistributedLockService } from '../common/locks/distributed-lock.service
  *   1. PROMO / seeded subs that have no provider — must end after one period.
  *   2. cancelAtPeriodEnd subs — must transition to canceled at period boundary.
  *   3. past_due subs whose grace window has run out — must end + revoke.
+ *   5. With SUBSCRIPTION_RENEWALS_ENABLED, subs billing renews itself (PIX,
+ *      crypto, the wallet) whose renewal is unpaid — past_due, so the pay
+ *      link keeps working through the grace window instead of the plan
+ *      ending on the day.
  *   4. Provider-backed subs whose renewal webhook never arrived — flagged as
  *      past_due so they enter the grace window instead of silently lingering
  *      with an expired period.
@@ -24,6 +31,7 @@ export class SubscriptionExpirerScheduler {
     private readonly prisma: PrismaService,
     private readonly orchestrator: PaymentOrchestratorService,
     private readonly lock: DistributedLockService,
+    @Optional() private readonly outbox?: OutboxService,
   ) {}
 
   @Cron(CronExpression.EVERY_HOUR)
@@ -40,7 +48,7 @@ export class SubscriptionExpirerScheduler {
         status: { in: ['active', 'trialing', 'past_due'] },
         currentPeriodEnd: { lte: now },
       },
-      include: { price: true },
+      include: { price: { include: { product: true } } },
     });
 
     if (expired.length === 0) return;
@@ -71,6 +79,25 @@ export class SubscriptionExpirerScheduler {
     if (sub.cancelAtPeriodEnd) {
       await this.orchestrator.endSubscription(sub.id, 'cancelled_at_period_end');
       this.logger.log(`Sub ${sub.id} canceled at period end`);
+      return;
+    }
+
+    if (renewalsEnabled() && renewedByBilling(sub)) {
+      await this.prisma.subscription.update({
+        where: { id: sub.id },
+        data: { status: 'past_due', updatedAt: now },
+      });
+      await this.outbox?.emit(
+        'billing.subscription.payment_failed',
+        {
+          subscription_id: sub.id,
+          user_id: sub.userId,
+          current_period_end: sub.currentPeriodEnd.toISOString(),
+          provider_error: 'renewal_unpaid',
+        },
+        { serviceId: sub.price?.product?.serviceId ?? null },
+      );
+      this.logger.log(`Sub ${sub.id} past_due (rail=${sub.rail}): renewal link unpaid`);
       return;
     }
 

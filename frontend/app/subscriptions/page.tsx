@@ -14,7 +14,7 @@ import { Modal } from '@/components/ui/Modal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Tabs } from '@/components/ui/Tabs'
 import { useAuth } from '@/contexts/AuthContext'
-import { CreditCard, Calendar, Clock, DollarSign, AlertTriangle, Loader2, Package, Zap, Check, RotateCcw } from 'lucide-react'
+import { CreditCard, Calendar, Clock, DollarSign, AlertTriangle, Loader2, Package, Zap, Check, RotateCcw, ArrowLeft, ArrowRightLeft, Link2 } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import type { Subscription } from '@/lib/types'
@@ -42,6 +42,10 @@ export default function SubscriptionsPage() {
   const [statusFilter, setStatusFilter] = useState('')
   const [selectedSub, setSelectedSub] = useState<Subscription | null>(null)
   const [loading, setLoading] = useState(true)
+  // A service's own link to this page (`?service=<code>&return_to=<url>`):
+  // only that service's plans, and a way back that billing has checked
+  // against the service's allowed origins.
+  const [portal, setPortal] = useState<{ service: { code: string; name: string }; returnTo: string | null } | null>(null)
   // Every hook before the early returns below, so the order never changes.
   const now = useNow(60 * 60 * 1000)
   const [confirmState, setConfirmState] = useState<{
@@ -54,11 +58,31 @@ export default function SubscriptionsPage() {
 
   useEffect(() => {
     if (authLoading) return
-    if (!user) { router.push('/login'); return }
+    if (!user) {
+      // Back here after signing in, with the service's parameters intact.
+      const here = `${window.location.pathname}${window.location.search}`
+      router.push(`/login?returnTo=${encodeURIComponent(here)}`)
+      return
+    }
 
     async function load() {
+      const params = new URLSearchParams(window.location.search)
+      const service = params.get('service')
+      let scoped: string | null = null
+      if (service) {
+        try {
+          const res = await api.get('/v1/subscriptions/portal', {
+            params: { service, return_to: params.get('return_to') ?? undefined },
+          })
+          setPortal(res.data)
+          scoped = res.data.service.code
+        } catch {
+          // An unknown service shows every plan, as the page always did.
+          setPortal(null)
+        }
+      }
       try {
-        const res = await api.get('/v1/subscriptions/me')
+        const res = await api.get('/v1/subscriptions/me', { params: scoped ? { service: scoped } : undefined })
         setSubscriptions(res.data)
       } catch (e: unknown) {
         const err = e as { response?: { data?: { message?: string } } }
@@ -132,8 +156,19 @@ export default function SubscriptionsPage() {
 
   return (
     <ClientLayout>
+      {portal?.returnTo && (
+        <a
+          href={portal.returnTo}
+          className="inline-flex items-center gap-1.5 text-sm text-violet-600 dark:text-violet-400 hover:underline mb-3"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          {t('backToService', { service: portal.service.name })}
+        </a>
+      )}
       <div className="mb-2">
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">{t('title')}</h1>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
+          {portal ? t('serviceTitle', { service: portal.service.name }) : t('title')}
+        </h1>
         <p className="text-sm text-slate-500 mt-1">
           {t('activeCount', { count: activeSubs.length })}
         </p>
@@ -184,6 +219,11 @@ export default function SubscriptionsPage() {
                         {sub.serviceName && (
                           <span className="text-xs px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 font-medium">
                             {sub.serviceDisplayName || sub.serviceName}
+                          </span>
+                        )}
+                        {sub.heldBy === 'organization' && (
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium">
+                            {t('heldByOrganization')}
                           </span>
                         )}
                       </div>
@@ -254,6 +294,20 @@ export default function SubscriptionsPage() {
                       </div>
                     )}
                   </div>
+
+                  {sub.pendingProductName && !sub.cancelAtPeriodEnd && (
+                    <div className="mt-3 flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+                      <ArrowRightLeft className="w-3.5 h-3.5 shrink-0 text-violet-500" />
+                      <span>{t('scheduledChange', { plan: sub.pendingProductName, date: f.date(sub.currentPeriodEnd) })}</span>
+                    </div>
+                  )}
+
+                  {sub.renewsByLink && !sub.cancelAtPeriodEnd && (sub.status === 'active' || sub.status === 'trialing' || sub.status === 'past_due') && (
+                    <div className="mt-2 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                      <Link2 className="w-3.5 h-3.5 shrink-0" />
+                      <span>{t('renewsByLink', { date: f.date(sub.currentPeriodEnd) })}</span>
+                    </div>
+                  )}
 
                   {sub.cancelAtPeriodEnd && (
                     <div className="mt-3 p-2.5 bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800/50 rounded-xl">
@@ -363,14 +417,19 @@ export default function SubscriptionsPage() {
               </div>
             </div>
 
-            {(selectedSub.status === 'active' || selectedSub.status === 'trialing') && !selectedSub.cancelAtPeriodEnd && (
+            {/* An organisation's plan is moved by its owner or admin only; the
+                API refuses anyone else, and the page says so instead of a button. */}
+            {selectedSub.canManage === false && (
+              <p className="text-sm text-slate-500 dark:text-slate-400">{t('orgManagersOnly')}</p>
+            )}
+            {selectedSub.canManage !== false && (selectedSub.status === 'active' || selectedSub.status === 'trialing') && !selectedSub.cancelAtPeriodEnd && (
               <Button variant="danger" onClick={() => handleCancel(selectedSub)} className="w-full">
                 {t('cancelSubscription')}
               </Button>
             )}
             {/* Cancelled but still inside the paid period: the change of mind
                 the API has always allowed and the page never offered. */}
-            {selectedSub.cancelAtPeriodEnd && ['active', 'trialing', 'past_due'].includes(selectedSub.status) && (
+            {selectedSub.canManage !== false && selectedSub.cancelAtPeriodEnd && ['active', 'trialing', 'past_due'].includes(selectedSub.status) && (
               <Button
                 onClick={() => void handleResume(selectedSub.id)}
                 loading={resuming === selectedSub.id}

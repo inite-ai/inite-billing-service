@@ -36,6 +36,7 @@ import { RagModule } from './rag/rag.module';
 import { RecommendationsModule } from './recommendations/recommendations.module';
 import { RiskModule } from './risk/risk.module';
 import { InsightsModule } from './insights/insights.module';
+import { SubscriptionLifecycleModule } from './subscription-lifecycle/subscription-lifecycle.module';
 import { ServiceApiModule } from './service-api/service-api.module';
 
 @Module({
@@ -81,6 +82,7 @@ import { ServiceApiModule } from './service-api/service-api.module';
     RiskModule,
     InsightsModule,
     ServiceApiModule,
+    SubscriptionLifecycleModule,
   ],
   providers: [
     {

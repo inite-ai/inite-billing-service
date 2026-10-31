@@ -1,5 +1,6 @@
 import {
   Injectable,
+  ForbiddenException,
   NotFoundException,
   BadRequestException,
   ConflictException,
@@ -12,6 +13,14 @@ import { OutboxService } from '../outbox/outbox.service';
 import { CreditsService } from '../credits/credits.service';
 import { FunnelService } from '../funnel/funnel.service';
 import { PaymentOrchestratorService } from '../payment-orchestrator/payment-orchestrator.service';
+import { ORG_MANAGERS_ONLY, SubscriberCaller, mayManage, visibleSubscribers } from './subscribers';
+
+/** A person by their id alone (an agent's action), or with their token's organisation. */
+export type SubscriptionCaller = string | SubscriberCaller;
+
+function asCaller(caller: SubscriptionCaller): SubscriberCaller {
+  return typeof caller === 'string' ? { userId: caller } : caller;
+}
 
 /** Trial setup now grants credits inside the same transaction; give it the same
  * headroom as the payment-fulfilment chain instead of Prisma's 5s default. */
@@ -30,17 +39,28 @@ export class SubscriptionsService {
     private readonly orchestrator: PaymentOrchestratorService,
   ) {}
 
-  async cancelSubscription(userId: string, subscriptionId: string): Promise<void> {
+  /**
+   * A subscription the caller may move: their own, or their organisation's
+   * when they are its owner or admin. One the caller cannot see is "not
+   * found"; their organisation's, seen as a member, is forbidden.
+   */
+  private async manageable(caller: SubscriptionCaller, subscriptionId: string) {
+    const who = asCaller(caller);
     const subscription = await this.prisma.subscription.findFirst({
-      where: {
-        id: subscriptionId,
-        userId,
-      },
+      where: { id: subscriptionId, userId: { in: visibleSubscribers(who) } },
+      include: { price: { include: { product: true } } },
     });
-
     if (!subscription) {
       throw new NotFoundException(`Subscription not found: ${subscriptionId}`);
     }
+    if (!mayManage(who, subscription.userId)) {
+      throw new ForbiddenException(ORG_MANAGERS_ONLY);
+    }
+    return subscription;
+  }
+
+  async cancelSubscription(caller: SubscriptionCaller, subscriptionId: string): Promise<void> {
+    const subscription = await this.manageable(caller, subscriptionId);
 
     // Tell the provider to stop renewing BEFORE we flag it in our DB — otherwise
     // a DB-only "cancel" leaves the provider billing the customer next cycle.
@@ -48,41 +68,60 @@ export class SubscriptionsService {
     // cancel (e.g. IAP, where the user cancels in the store).
     await this.orchestrator.cancelProviderSubscription(subscription, true);
 
-    await this.prisma.subscription.update({
-      where: { id: subscriptionId },
-      data: {
-        cancelAtPeriodEnd: true,
-        updatedAt: new Date(),
-      },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.subscription.update({
+        where: { id: subscriptionId },
+        data: {
+          cancelAtPeriodEnd: true,
+          updatedAt: new Date(),
+        },
+      });
+      // A person cancelling on billing's page used to tell the selling service
+      // nothing until the period ended.
+      if (!subscription.cancelAtPeriodEnd) {
+        await this.outboxService.emit(
+          'billing.subscription.cancel_scheduled',
+          {
+            subscription_id: subscription.id,
+            user_id: subscription.userId,
+            current_period_end: subscription.currentPeriodEnd.toISOString(),
+          },
+          { serviceId: subscription.price?.product?.serviceId ?? null, tx },
+        );
+      }
     });
   }
 
-  async resumeSubscription(userId: string, subscriptionId: string): Promise<void> {
-    const subscription = await this.prisma.subscription.findFirst({
-      where: {
-        id: subscriptionId,
-        userId,
-      },
-    });
+  async resumeSubscription(caller: SubscriptionCaller, subscriptionId: string): Promise<void> {
+    const subscription = await this.manageable(caller, subscriptionId);
 
-    if (!subscription) {
-      throw new NotFoundException(`Subscription not found: ${subscriptionId}`);
-    }
-
-    await this.prisma.subscription.update({
-      where: { id: subscriptionId },
-      data: {
-        cancelAtPeriodEnd: false,
-        updatedAt: new Date(),
-      },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.subscription.update({
+        where: { id: subscriptionId },
+        data: {
+          cancelAtPeriodEnd: false,
+          updatedAt: new Date(),
+        },
+      });
+      if (subscription.cancelAtPeriodEnd) {
+        await this.outboxService.emit(
+          'billing.subscription.resumed',
+          {
+            subscription_id: subscription.id,
+            user_id: subscription.userId,
+            current_period_end: subscription.currentPeriodEnd.toISOString(),
+          },
+          { serviceId: subscription.price?.product?.serviceId ?? null, tx },
+        );
+      }
     });
   }
 
   async getUserSubscriptions(
-    userId: string,
+    userId: string | string[],
     serviceId?: string,
   ): Promise<SubscriptionResponseDto[]> {
-    const where: any = { userId };
+    const where: any = { userId: Array.isArray(userId) ? { in: userId } : userId };
     if (serviceId) {
       where.price = { product: { serviceId } };
     }
@@ -100,6 +139,20 @@ export class SubscriptionsService {
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    // A plan change waiting for the end of the period, by its price.
+    const pendingIds = [
+      ...new Set(subscriptions.map((s) => s.pendingPriceId).filter(Boolean)),
+    ] as string[];
+    const pending = new Map(
+      (pendingIds.length
+        ? await this.prisma.price.findMany({
+            where: { id: { in: pendingIds } },
+            include: { product: true },
+          })
+        : []
+      ).map((p: any) => [p.id, p]),
+    );
 
     return subscriptions.map((s) => {
       const price = s.price as any;
@@ -139,8 +192,50 @@ export class SubscriptionsService {
         currency: price?.currency || null,
         interval: price?.interval || null,
         trialDays: price?.trialDays || null,
+        priceCode: price?.code || null,
+        pendingPriceCode: s.pendingPriceId ? pending.get(s.pendingPriceId)?.code || null : null,
+        pendingProductName: s.pendingPriceId
+          ? pending.get(s.pendingPriceId)?.product?.name || null
+          : null,
+        // No provider renews it: billing sends a pay link before it ends.
+        renewsByLink: !!s.rail && !s.providerSubscriptionId && s.rail !== 'PROMO',
       };
     });
+  }
+
+  /**
+   * The signed-in person's page: their own plans and their organisation's
+   * (`org:<org_id>` from the verified token), each marked with whose it is and
+   * whether this person may change or cancel it.
+   */
+  async getSubscriptionsFor(
+    caller: SubscriberCaller,
+    serviceCode?: string,
+  ): Promise<SubscriptionResponseDto[]> {
+    let serviceId: string | undefined;
+    if (serviceCode !== undefined) {
+      if (typeof serviceCode !== 'string' || serviceCode.length > 100) return [];
+      const service = await this.prisma.service.findUnique({ where: { code: serviceCode } });
+      if (!service) return [];
+      serviceId = service.id;
+    }
+    const subs = await this.getUserSubscriptions(visibleSubscribers(caller), serviceId);
+    return subs.map((s) => ({
+      ...s,
+      heldBy: s.userId === caller.userId ? 'self' : 'organization',
+      canManage: mayManage(caller, s.userId),
+    }));
+  }
+
+  /** A person's plans with one service, named by its code; none for an unknown code. */
+  async getUserSubscriptionsForServiceCode(
+    userId: string,
+    serviceCode: string,
+  ): Promise<SubscriptionResponseDto[]> {
+    if (typeof serviceCode !== 'string' || serviceCode.length > 100) return [];
+    const service = await this.prisma.service.findUnique({ where: { code: serviceCode } });
+    if (!service) return [];
+    return this.getUserSubscriptions(userId, service.id);
   }
 
   async startTrial(

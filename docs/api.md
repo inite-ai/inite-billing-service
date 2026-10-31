@@ -75,8 +75,49 @@ Admin endpoints additionally require the `admin` role in the JWT.
 | Endpoint | Auth |
 |---|---|
 | `GET /v1/orders/me`, `GET /v1/orders/:id` | JWT |
-| `GET /v1/subscriptions/me`, `POST /v1/subscriptions/cancel`, `POST /v1/subscriptions/resume`, `POST /v1/subscriptions/trial` | JWT |
+| `GET /v1/subscriptions/me` (`?service=<code>` for one service's plans), `POST /v1/subscriptions/cancel`, `POST /v1/subscriptions/resume`, `POST /v1/subscriptions/trial` | JWT |
 | `GET /v1/subscriptions/user/:userId` | service |
+| `POST /v1/subscriptions/:id/change` `{ priceCode }` | JWT (own plan, or the organisation's as its owner/admin) or service key (own service) |
+| `GET /v1/subscriptions/portal?service=<code>&return_to=<url>` | JWT |
+| `POST /v1/service-checkout/sessions` with `mode: "SUBSCRIPTION"` | service token (`billing:checkout`) |
+| `POST /v1/service-subscriptions/trial`, `GET /v1/service-subscriptions?userId=`, `POST /v1/service-subscriptions/:id/change` | service token (`billing:checkout`) |
+
+**Who holds a plan.** A subscriber is a person (their DID, or a legacy UUID)
+or an organisation at INITE Auth, `org:<org_id>`: a company's plan in the
+family is held by its organisation, and the number of people is a limit of
+the plan. A service names `org:<org_id>` as `userId` on the service-token
+lane (checkout, trial, list); it is never one of the service's guest ids, so
+no one claims its checkout by opening it. On billing's own page,
+`GET /v1/subscriptions/me` returns the person's plans and those of the
+organisation in their verified token (`org_id`), each with `heldBy`
+(`self` | `organization`) and `canManage`. Cancel, resume, a change of plan,
+and a trial for the organisation are allowed only to its `owner` or `admin`
+(`org_role`); a member gets 403.
+
+**Change of plan** (one service, one currency):
+
+- upgrade (dearer price, same interval): answers `payment_required` with a
+  checkout session for the prorated difference (the share of the period still
+  ahead, to the cent). Paid, the plan moves at once; the period does not.
+- downgrade (cheaper price) or another interval: answers `scheduled`; the
+  next period is billed at the new price (`billing.subscription.plan_change_scheduled`,
+  then `plan_changed` when it lands). Asking for the current price calls a
+  scheduled change off.
+- a no-card trial: answers `changed`, free and at once.
+- refused (409) for a subscription a provider renews (lava.top, Stripe, the
+  stores): cancel it at period end and buy the new plan.
+
+**Renewal where the rail cannot recur** (PIX, crypto, the INITE wallet; ships
+dark behind `SUBSCRIPTION_RENEWALS_ENABLED`): `SUBSCRIPTION_RENEWAL_LEAD_DAYS`
+(default 3) before a period ends, billing opens the next period's order. A
+person who allowed the service on their INITE wallet is charged at period end
+within their limits; everyone else, or a refused wallet, is emailed the pay
+link. Unpaid at period end: `past_due`, the link keeps working through the
+price's `graceDays`, then the subscription ends.
+
+**Customer page**: `https://billing.inite.ai/subscriptions?service=<code>&return_to=<url>`
+shows that service's plans and a link back. `return_to` is honoured only on an
+https origin listed in the service's `metadata.allowedOrigins`.
 | `GET /v1/entitlements/me` | JWT |
 | `GET /v1/entitlements/:userId` | service |
 
@@ -146,13 +187,19 @@ providers, promo codes, funnel analytics
 
 ## Outbox events (billing → your service)
 
-Every active `Service` with a `webhookUrl` receives all `billing.*` events as
-HTTP POST (headers `x-service-code`, `x-event-type`, `x-event-id`):
+Every active `Service` with a `webhookUrl` receives its own `billing.*` events
+as HTTP POST (headers `x-service-code`, `x-event-type`, `x-event-id`,
+`x-billing-timestamp`, `x-billing-signature: sha256=HMAC(secret, "<timestamp>.<body>")`).
+The secret is the service's webhook secret when an admin made one
+(`POST /v1/admin/services/:id/webhook-secret`, shown once; for services that
+sign in only with a token), its API key otherwise:
 
 ```
 billing.payment.{status_changed,succeeded,failed,refunded}
 billing.entitlement.{granted,revoked}
-billing.subscription.{updated,payment_failed,cancelled,ended,trial_started}
+billing.subscription.{created,updated,payment_failed,cancelled,ended,trial_started}
+billing.subscription.{cancel_scheduled,resumed}
+billing.subscription.{plan_changed,plan_change_scheduled,plan_change_cancelled,plan_change_failed}
 billing.affiliate.payout.created
 billing.quota.warning
 billing.risk.flagged
