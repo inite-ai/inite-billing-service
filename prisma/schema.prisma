@@ -1561,6 +1561,9 @@ model MerchantConnection {
   hints             Json                     @default("{}")
   verifiedAt        DateTime?                @map("verified_at") @db.Timestamptz(6)
   lastError         String?                  @map("last_error") @db.VarChar(500)
+  /// INITE's fee on this account in basis points; null = the merchant's own
+  /// (0 by default). Recorded only: no rail deducts it today.
+  platformFeeBps    Int?                     @map("platform_fee_bps")
   createdAt         DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
 

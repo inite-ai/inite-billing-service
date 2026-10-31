@@ -34,6 +34,7 @@ CREATE TABLE "billing"."merchant_connections" (
     "hints" JSONB NOT NULL DEFAULT '{}',
     "verified_at" TIMESTAMPTZ(6),
     "last_error" VARCHAR(500),
+    "platform_fee_bps" INTEGER,
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ(6) NOT NULL,
 

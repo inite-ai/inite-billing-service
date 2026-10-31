@@ -631,7 +631,9 @@ export class CheckoutService {
     }
     const amount = roundMoney(unit.mul(quantity));
 
-    await this.openPolicy!.assertWithinCap(product.service, currency, amount);
+    await this.openPolicy!.assertWithinCap(product.service, currency, amount, undefined, {
+      merchant: !!input.merchantId,
+    });
     if (input.merchantId && !this.merchantRails) {
       throw new UnprocessableEntityException('Merchant accounts are not available');
     }
@@ -1237,7 +1239,15 @@ export class CheckoutService {
         ? await this.prisma.service.findUnique({ where: { id: product.serviceId } })
         : null;
       if (!service) throw new BadRequestException('This open product has no service');
-      await this.openPolicy!.assertWithinCap(service, order.currency, orderAmountDecimal, order.id);
+      await this.openPolicy!.assertWithinCap(
+        service,
+        order.currency,
+        orderAmountDecimal,
+        order.id,
+        {
+          merchant: !!order.merchantId,
+        },
+      );
     }
 
     let adapter: Connector | null;

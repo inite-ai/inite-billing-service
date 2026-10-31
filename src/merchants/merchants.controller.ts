@@ -16,7 +16,16 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import { IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
+import {
+  IsInt,
+  IsOptional,
+  IsString,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+  ValidateIf,
+} from 'class-validator';
 import { RequestUser, User } from '../auth/decorators/user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -45,6 +54,11 @@ class RefundDto {
 
 class PlatformFeeDto {
   @IsInt() @Min(0) @Max(5000) platformFeeBps!: number;
+}
+
+class ConnectionFeeDto {
+  /** null: the merchant's own fee applies. */
+  @ValidateIf((_o, v) => v !== null) @IsInt() @Min(0) @Max(5000) platformFeeBps!: number | null;
 }
 
 function rail(value: string): MerchantRail {
@@ -158,6 +172,21 @@ export class MerchantsAdminController {
       { serviceId: null, actor: `admin:${user?.userId ?? ''}` },
       merchantId,
       dto.platformFeeBps,
+    );
+  }
+
+  @Patch(':merchantId/connections/:rail/platform-fee')
+  setConnectionFee(
+    @User() user: RequestUser,
+    @Param('merchantId', new ParseUUIDPipe()) merchantId: string,
+    @Param('rail') railParam: string,
+    @Body() dto: ConnectionFeeDto,
+  ) {
+    return this.merchants.setConnectionPlatformFee(
+      { serviceId: null, actor: `admin:${user?.userId ?? ''}` },
+      merchantId,
+      rail(railParam),
+      dto.platformFeeBps ?? null,
     );
   }
 }

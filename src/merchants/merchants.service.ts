@@ -34,6 +34,13 @@ export interface MerchantActor {
 const AMOUNT_RE = /^\d{1,15}(?:\.\d{1,4})?$/;
 
 /**
+ * Rails with no refund API: lava.top refunds only from its dashboard, and a
+ * crypto refund is the merchant sending coins back from its own wallet.
+ * Billing records such a refund when the service says it was made.
+ */
+export const RECORD_ONLY_REFUNDS: ReadonlySet<string> = new Set([RAILS.LAVA, RAILS.CRYPTO]);
+
+/**
  * Merchants a service sells for and their own provider accounts. Every read
  * and write is scoped to the calling service: another service's merchant does
  * not exist (404). Credentials go in sealed and never come out: responses,
@@ -66,6 +73,11 @@ export class MerchantsService {
       webhookUrl: this.webhookUrl(c),
       verifiedAt: c.verifiedAt ?? null,
       lastError: c.lastError ?? null,
+      // null: the merchant's own fee applies. Recorded, never deducted.
+      platformFeeBps: c.platformFeeBps ?? null,
+      // No refund API on the rail: a refund is made in the provider's own
+      // dashboard (lava.top) or wallet (crypto) and only recorded here.
+      refunds: RECORD_ONLY_REFUNDS.has(c.rail) ? 'record-only' : 'provider',
     };
   }
 
@@ -76,6 +88,8 @@ export class MerchantsService {
       displayName: m.displayName,
       ...(m.externalRef ? { externalRef: m.externalRef } : {}),
       platformFeeBps: m.platformFeeBps,
+      // Not decided by the owner: no fee is taken from any sale today.
+      platformFeeApplied: false,
       connections: (m.connections ?? []).map((c: any) => this.connectionView(c)),
     };
   }
@@ -261,6 +275,31 @@ export class MerchantsService {
     return this.view(updated);
   }
 
+  /** INITE's fee on one account (null: the merchant's own). A billing admin only; never deducted. */
+  async setConnectionPlatformFee(
+    who: MerchantActor,
+    merchantId: string,
+    rail: MerchantRail,
+    platformFeeBps: number | null,
+  ) {
+    const connection = await this.prisma.merchantConnection.findUnique({
+      where: { merchantId_rail: { merchantId, rail } },
+    });
+    if (!connection) throw new NotFoundException(`No ${rail} account is connected`);
+    const updated = await this.prisma.merchantConnection.update({
+      where: { id: connection.id },
+      data: { platformFeeBps },
+    });
+    await this.audit(
+      merchantId,
+      who,
+      'connection.fee_set',
+      { rail, from: connection.platformFeeBps ?? null, to: platformFeeBps },
+      connection.id,
+    );
+    return this.connectionView(updated);
+  }
+
   /**
    * Refund a merchant's order through the merchant's own account, the one it
    * was paid on. A full refund settles the order as refunded through the
@@ -321,19 +360,40 @@ export class MerchantsService {
       throw new BadRequestException(`A refund is more than 0 and at most ${left.toFixed(2)}`);
     }
 
-    const { connector } = await this.rails.connectorFor(merchantId, intent.rail);
-    if (!connector.capabilities?.().supportsRefund || !connector.refund) {
-      throw new UnprocessableEntityException(
-        `${intent.rail} refunds are made in the provider's own dashboard; billing records them from its webhook`,
-      );
+    const connectionId = order.merchantConnectionId ?? undefined;
+    const recordOnly = RECORD_ONLY_REFUNDS.has(intent.rail);
+    let refund: { refunded: boolean; providerRefundId?: string | null } = { refunded: true };
+    if (!recordOnly) {
+      const { connector, connection } = await this.rails.connectorFor(merchantId, intent.rail);
+      if (!connector.capabilities?.().supportsRefund || !connector.refund) {
+        throw new UnprocessableEntityException(`${intent.rail} accounts cannot refund`);
+      }
+      try {
+        refund = await connector.refund({
+          providerIntentId: intent.providerIntentId,
+          amount: moneyToNumber(amount),
+          currency: order.currency,
+          idempotencyKey: `refund:${order.id}:${already.toFixed(4)}`,
+        });
+      } catch (error: any) {
+        refund = { refunded: false };
+        const secrets = connection.sealedCredentials
+          ? secretsOf(openCredentials(connection.id, connection.sealedCredentials))
+          : [];
+        const why = redact(String(error?.message ?? 'error'), secrets);
+        this.logger.warn(`Merchant refund of ${orderId} on ${intent.rail} failed: ${why}`);
+      }
+      if (!refund.refunded) {
+        await this.audit(
+          merchantId,
+          who,
+          'order.refund_failed',
+          { orderId, amount: amount.toFixed(4), currency: order.currency, rail: intent.rail },
+          connectionId,
+        );
+        throw new BadRequestException('The provider did not accept the refund');
+      }
     }
-    const refund = await connector.refund({
-      providerIntentId: intent.providerIntentId,
-      amount: moneyToNumber(amount),
-      currency: order.currency,
-      idempotencyKey: `refund:${order.id}:${already.toFixed(4)}`,
-    });
-    if (!refund.refunded) throw new BadRequestException('The provider did not accept the refund');
 
     const full = amount.eq(left);
     await this.audit(
@@ -347,8 +407,11 @@ export class MerchantsService {
         full,
         providerRefundId: refund.providerRefundId ?? null,
         reason: input.reason?.slice(0, 255) ?? null,
+        rail: intent.rail,
+        // Made by the merchant in the provider's dashboard or wallet; recorded only.
+        recordedOnly: recordOnly,
       },
-      order.merchantConnectionId ?? undefined,
+      connectionId,
     );
     if (full) await this.orchestrator.applyStateTransition(intent.id, 'refunded');
     return {
@@ -358,6 +421,12 @@ export class MerchantsService {
       refundedTotal: already.plus(amount).toFixed(2),
       currency: order.currency,
       providerRefundId: refund.providerRefundId ?? null,
+      recordedOnly: recordOnly,
+      ...(recordOnly
+        ? {
+            note: `${intent.rail} has no refund API: billing recorded the refund; the money is returned by the merchant in ${intent.rail === RAILS.LAVA ? 'the lava.top dashboard' : 'its own wallet'}`,
+          }
+        : {}),
     };
   }
 }

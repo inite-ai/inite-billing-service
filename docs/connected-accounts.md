@@ -30,10 +30,10 @@ the merchant of record and never holds merchant funds.** This is option (a) of
 
 | Rail | What the merchant brings | Ownership check (`verify`) | Webhook | Refund |
 |---|---|---|---|---|
-| lava.top | its own creator API key, webhook key, dynamic-price offer | `GET /api/v2/products`: the offer must be the account's | `X-Api-Key` = the merchant's webhook key (not the API key) | in the lava.top dashboard; billing records the `refund.success`/`chargeback` webhook |
+| lava.top | its own creator API key, webhook key, dynamic-price offer | `GET /api/v2/products`: the offer must be the account's | `X-Api-Key` = the merchant's webhook key (not the API key) | no refund API: the merchant refunds in the lava.top dashboard; billing **records** it (refund call answers `recordedOnly: true`) and also takes the `refund.success`/`chargeback` webhook |
 | YooKassa | `shopId` + secret key (new adapter, `src/adapters/yookassa/`) | `GET /v3/me`: `account_id` must equal `shopId` | unsigned, so billing reads the payment back from the API with the merchant's credentials, and the status is the API's | `POST /v3/refunds` |
 | Stripe | its own secret or restricted key (+ `whsec_` signing secret) | `GET /v1/account` | `Stripe-Signature` with the merchant's `whsec_` | `POST /v1/refunds` |
-| Crypto | its own receiving addresses, no keys | each address must parse on its network | none; billing's watcher sees the chain | not possible (on-chain) |
+| Crypto | its own receiving addresses, no keys | each address must parse on its network | none; billing's watcher sees the chain | no refund API: the merchant sends the coins back from its own wallet; billing **records** it (`recordedOnly: true`) |
 
 Follow-ups:
 - **Stripe Connect Standard** (OAuth, `connectAccountId`): the field is
@@ -57,8 +57,15 @@ the provider's minimum. There is no currency conversion and no markup on a
 merchant's account. If no connection qualifies, the answer is 422. **Nothing
 ever falls back to INITE's own provider accounts.** On payment, the rail's
 adapter is bound to the merchant's credentials (`Connector.withCredentials`).
-It reads no `PaymentProvider` row. The open product's daily cap for the
-service still applies, and promo codes do not.
+It reads no `PaymentProvider` row. Promo codes do not apply.
+
+**The open daily cap.** Whether a merchant's sale counts toward the
+service's open daily cap is not decided by the owner. It is a flag,
+`MERCHANT_SALES_IN_OPEN_CAP`, off by default. Off, a merchant's sale is not
+checked against the cap (a service selling only for merchants needs no
+`openDailyCap`), and merchants' orders are left out of what INITE's own
+open sales have used. `"true"` holds merchants' sales to the cap and counts
+them.
 
 Every later read of a merchant's payment uses the merchant's connection,
 never INITE's. That covers webhooks, the checkout page's "has it gone
@@ -82,14 +89,27 @@ through", refunds and admin refunds.
 merchant's own connection only, and is serialised per order. The amount is
 optional; leaving it out refunds the rest of the order. A full refund moves
 the order to `refunded` through the orchestrator. A partial one leaves it
-`paid` and is logged. Chargebacks happen on the merchant's account.
+`paid` and is logged.
+
+On a rail with no refund API (lava.top, crypto) billing calls no provider:
+the service says the merchant refunded in the provider's dashboard or its
+own wallet, and billing records it the same way (audit row with
+`recordedOnly: true`, full refund moves the order to `refunded`). The answer
+carries `recordedOnly: true` and a `note`, and each connection's GET view
+says `refunds: "record-only" | "provider"`, so the service can tell the
+merchant before they press the button. A provider refund that fails is
+audited as `order.refund_failed`. Chargebacks happen on the merchant's account.
 Billing records them when the provider reports them.
 
 ## Platform fee
 
-`Merchant.platformFeeBps` defaults to 0. Only a billing admin can set it
-(`PATCH /v1/admin/merchants/:id/platform-fee`), and it is shown in GET. No
-rail deducts it today; only Stripe Connect could. Before a non-zero fee
+Not decided by the owner, so it is a setting that is **never applied**.
+`Merchant.platformFeeBps` defaults to 0, and each connection may override it
+(`MerchantConnection.platformFeeBps`, null = the merchant's). Only a billing
+admin can set either (`PATCH /v1/admin/merchants/:id/platform-fee`,
+`PATCH /v1/admin/merchants/:id/connections/:rail/platform-fee`), each change
+is audited, and both are shown in GET with `platformFeeApplied: false`. No
+code path deducts or charges it; only Stripe Connect could. Before a non-zero fee
 means anything, the merchant must be told and a way to collect it must be
 decided.
 
