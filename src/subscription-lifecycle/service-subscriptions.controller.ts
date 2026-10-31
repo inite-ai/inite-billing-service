@@ -65,7 +65,8 @@ export class ServiceSubscriptionsController {
   @Get()
   @ApiOperation({ summary: 'A subscriber’s plans with this service' })
   async list(@User() user: RequestUser, @Query('userId') userId?: string) {
-    if (!userId || userId.length > 255 || !SERVICE_BUYER_PATTERN.test(userId)) {
+    // `?userId=a&userId=b` arrives as an array: only a single string is an id.
+    if (typeof userId !== 'string' || userId.length > 255 || !SERVICE_BUYER_PATTERN.test(userId)) {
       throw new BadRequestException('userId is required');
     }
     return this.subscriptions.getUserSubscriptions(userId, user.serviceId!);

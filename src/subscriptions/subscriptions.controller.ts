@@ -64,7 +64,7 @@ export class SubscriptionsController {
     // The customer page for one service (`/subscriptions?service=<code>`).
     @Query('service') service?: string,
   ): Promise<SubscriptionResponseDto[]> {
-    if (service) {
+    if (typeof service === 'string' && service) {
       return this.subscriptionsService.getUserSubscriptionsForServiceCode(user.userId, service);
     }
     return this.subscriptionsService.getUserSubscriptions(user.userId);

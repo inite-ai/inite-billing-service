@@ -199,7 +199,7 @@ export class SubscriptionsService {
     userId: string,
     serviceCode: string,
   ): Promise<SubscriptionResponseDto[]> {
-    if (serviceCode.length > 100) return [];
+    if (typeof serviceCode !== 'string' || serviceCode.length > 100) return [];
     const service = await this.prisma.service.findUnique({ where: { code: serviceCode } });
     if (!service) return [];
     return this.getUserSubscriptions(userId, service.id);

@@ -67,7 +67,10 @@ export class SubscriptionChangeController {
     @Query('service') code?: string,
     @Query('return_to') returnTo?: string,
   ) {
-    if (!code || code.length > 100) throw new NotFoundException('Service not found');
+    // A repeated query parameter arrives as an array: only one string names a service.
+    if (typeof code !== 'string' || !code || code.length > 100) {
+      throw new NotFoundException('Service not found');
+    }
     const service = await this.prisma.service.findUnique({ where: { code } });
     if (!service || !service.isActive) throw new NotFoundException('Service not found');
     const metadata = (service.metadata as Record<string, unknown> | null) ?? {};
