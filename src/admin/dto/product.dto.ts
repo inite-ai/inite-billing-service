@@ -10,7 +10,7 @@ import {
 } from 'class-validator';
 
 /** Product types the schema's ProductType enum accepts. */
-export const PRODUCT_TYPES = ['subscription', 'one_time', 'usage'] as const;
+export const PRODUCT_TYPES = ['subscription', 'one_time', 'usage', 'open'] as const;
 
 export type ProductTypeValue = (typeof PRODUCT_TYPES)[number];
 

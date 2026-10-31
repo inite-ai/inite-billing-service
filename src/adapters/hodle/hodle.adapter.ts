@@ -147,6 +147,8 @@ export class HodleAdapter implements Connector {
       statusPolling: true,
       currencies: HODLE_CURRENCIES,
       countries: ['BR'],
+      // createPaymentIntent refuses under this, as Hodle does.
+      minAmounts: { BRL: '1.00' },
     };
   }
 

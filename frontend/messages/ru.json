@@ -1581,6 +1581,7 @@
     "intervalMonthly": "Ежемесячно",
     "intervalYearly": "Ежегодно",
     "typeOneTime": "Разовый",
+    "typeOpen": "Открытый (цену называет сервис)",
     "typeSubscription": "Подписка",
     "typeUsage": "По использованию",
     "createLevel": "Создать уровень",

@@ -15,7 +15,7 @@ export interface Product {
   name: string
   serviceId?: string
   moduleScope: string
-  type: 'subscription' | 'one_time' | 'usage'
+  type: 'subscription' | 'one_time' | 'usage' | 'open'
   isActive: boolean
   metadata?: Record<string, unknown>
   prices?: Price[]

@@ -42,6 +42,12 @@ export interface ConnectorCapabilities {
    */
   convertsTo?: string[];
   countries?: string[];
+  /**
+   * The smallest amount the provider takes, per currency, as a decimal string
+   * (`{ BRL: '1.00' }`). An open-product order below it is not offered this
+   * rail (src/checkout/rail-minimums.ts). Undeclared means none is documented.
+   */
+  minAmounts?: Record<string, string>;
 }
 
 /**

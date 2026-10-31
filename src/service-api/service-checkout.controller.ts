@@ -41,10 +41,24 @@ import { WalletMerchantsService } from '../wallet/wallet-merchants.service';
 import { SCOPE_CHECKOUT, ServiceScope, ServiceTokenGuard } from './service-token.guard';
 import { SessionLinksService } from './session-links';
 
+/**
+ * A line of the service's catalogue (`priceCode`), or an open line: an item
+ * the service prices and names itself through one of its open products
+ * (`productCode`, `amount`, `currency`, `title`, `ref`). Billing checks an
+ * open line against the product's bounds (src/checkout/open-product.ts).
+ */
 class CartLineDto {
-  @IsString() @MaxLength(100) priceCode!: string;
+  @IsOptional() @IsString() @MaxLength(100) priceCode?: string;
   @IsInt() @Min(1) @Max(CART_MAX_QTY) quantity!: number;
+  @IsOptional() @IsString() @MaxLength(100) productCode?: string;
+  /** A decimal string, e.g. "2.00"; never a float. */
+  @IsOptional() @IsString() @MaxLength(20) amount?: string;
+  @IsOptional() @IsString() @MaxLength(10) currency?: string;
+  @IsOptional() @IsString() @MaxLength(500) title?: string;
+  @IsOptional() @IsString() @MaxLength(100) ref?: string;
 }
+
+const OPEN_FIELDS = ['amount', 'currency', 'title', 'ref'] as const;
 
 /** A person's DID (or legacy UUID), or the calling service's own guest id. */
 const BUYER_PATTERN = /^(?:[a-z0-9][a-z0-9_-]{0,99}:[A-Za-z0-9_-]{8,128})$/;
@@ -118,11 +132,56 @@ export class ServiceCheckoutController {
         throw new BadRequestException(`A guest id is ${user.serviceCode}:<id>`);
       }
     }
+    const open = dto.lines?.some((l) => l.productCode);
+    if (dto.lines && open) {
+      // One open line is the whole order: its grant is the order's.
+      const [line] = dto.lines;
+      if (dto.lines.length !== 1 || line.priceCode) {
+        throw new BadRequestException('An open line is sold on its own, in an order of one line');
+      }
+      if (!user.serviceId || !user.serviceCode)
+        throw new ForbiddenException('A service is required');
+      const session = await this.checkout.createOpenSession(
+        dto.userId,
+        {
+          line: {
+            productCode: line.productCode!,
+            amount: line.amount!,
+            currency: line.currency!,
+            title: line.title!,
+            ref: line.ref!,
+            quantity: line.quantity,
+          },
+          successUrl: dto.successUrl,
+          errorUrl: dto.errorUrl,
+          ...(metadata ? { metadata } : {}),
+          ...(dto.locale ? { locale: dto.locale } : {}),
+        },
+        key.trim(),
+        {
+          serviceId: user.serviceId,
+          serviceCode: user.serviceCode,
+          clientId: (user as RequestUser & { clientId?: string }).clientId,
+        },
+      );
+      const links = await this.links.withX402(session);
+      return {
+        ...links,
+        amount: session.amount,
+        currency: session.currency,
+        rails: session.rails,
+        ...(session.entitlementKey ? { entitlementKey: session.entitlementKey } : {}),
+      };
+    }
+    if (dto.lines?.some((l) => !l.priceCode || OPEN_FIELDS.some((f) => l[f] !== undefined))) {
+      // An amount is never the caller's to name on a catalogue line.
+      throw new BadRequestException('A catalogue line names a priceCode and a quantity only');
+    }
     if (dto.lines) {
       const cart = await this.checkout.createCartSession(
         dto.userId,
         {
-          lines: dto.lines.map((l) => ({ priceCode: l.priceCode, quantity: l.quantity })),
+          lines: dto.lines.map((l) => ({ priceCode: l.priceCode!, quantity: l.quantity })),
           successUrl: dto.successUrl,
           errorUrl: dto.errorUrl,
           ...(metadata ? { metadata } : {}),
@@ -160,6 +219,7 @@ export class ServiceCheckoutController {
     if (!order || order.price?.product?.serviceId !== user.serviceId) {
       throw new NotFoundException('Checkout session not found');
     }
+    const open = (order.metadata as Record<string, any> | null)?.open;
     return {
       sessionId: order.id,
       status: order.status,
@@ -167,6 +227,16 @@ export class ServiceCheckoutController {
       currency: order.currency,
       priceCode: order.price.code,
       userId: order.userId,
+      // An open line: what the service asked to sell, as billing kept it.
+      ...(open
+        ? {
+            productCode: open.productCode,
+            title: open.title,
+            ref: open.ref,
+            quantity: open.quantity,
+            ...(open.entitlementKey ? { entitlementKey: open.entitlementKey } : {}),
+          }
+        : {}),
     };
   }
 
