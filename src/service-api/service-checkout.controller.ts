@@ -21,6 +21,7 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsIn,
   IsInt,
   IsObject,
   IsOptional,
@@ -33,13 +34,14 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { RequestUser, User } from '../auth/decorators/user.decorator';
-import { IsUserId, USER_ID_PATTERN } from '../common/validators/is-user-id';
+import { IsUserId } from '../common/validators/is-user-id';
 import { PrismaService } from '../common/services/prisma.service';
 import { CART_MAX_LINES, CART_MAX_QTY, CheckoutService } from '../checkout/checkout.service';
 import { CheckoutMode } from '../common/dto/checkout.dto';
 import { WalletMerchantsService } from '../wallet/wallet-merchants.service';
 import { SCOPE_CHECKOUT, ServiceScope, ServiceTokenGuard } from './service-token.guard';
 import { SessionLinksService } from './session-links';
+import { SERVICE_BUYER_PATTERN, assertOwnGuestId } from './buyer';
 
 /**
  * A line of the service's catalogue (`priceCode`), or an open line: an item
@@ -60,13 +62,10 @@ class CartLineDto {
 
 const OPEN_FIELDS = ['amount', 'currency', 'title', 'ref'] as const;
 
-/** A person's DID (or legacy UUID), or the calling service's own guest id. */
-const BUYER_PATTERN = /^(?:[a-z0-9][a-z0-9_-]{0,99}:[A-Za-z0-9_-]{8,128})$/;
-
 class ServiceSessionDto {
   @IsString()
   @MaxLength(255)
-  @Matches(new RegExp(`${USER_ID_PATTERN.source}|${BUYER_PATTERN.source}`), {
+  @Matches(SERVICE_BUYER_PATTERN, {
     message: "userId must be a DID, a UUID or this service's guest id",
   })
   userId!: string;
@@ -84,6 +83,12 @@ class ServiceSessionDto {
   @IsUrl({ require_tld: false }) errorUrl!: string;
   @IsOptional() @IsObject() metadata?: Record<string, unknown>;
   @IsOptional() @IsString() @MaxLength(16) locale?: string;
+  /**
+   * `SUBSCRIPTION` sells a plan (one `priceCode` of a subscription product):
+   * renewed by the rail when it can recur, by billing otherwise. Default
+   * `PAYMENT`, as before.
+   */
+  @IsOptional() @IsIn([CheckoutMode.PAYMENT, CheckoutMode.SUBSCRIPTION]) mode?: CheckoutMode;
 }
 
 class ServicePayFromWalletDto {
@@ -92,7 +97,7 @@ class ServicePayFromWalletDto {
 }
 
 /**
- * An ordinary purchase opened by a service with an INITE Auth service token
+ * A purchase or a subscription opened by a service with an INITE Auth service token
  * (`billing:checkout`) — the same checkout as POST /v1/checkout/sessions, the
  * mikefluff-site "Path B", without a shared static key. A service sells only
  * its own catalogue and reads only its own sessions.
@@ -126,11 +131,10 @@ export class ServiceCheckoutController {
     if (!!dto.priceCode === !!dto.lines) {
       throw new BadRequestException('Send either priceCode or lines');
     }
-    // A guest id is namespaced by the service that made it up, never another's.
-    if (!dto.userId.startsWith('did:') && dto.userId.includes(':')) {
-      if (!user.serviceCode || !dto.userId.startsWith(`${user.serviceCode}:`)) {
-        throw new BadRequestException(`A guest id is ${user.serviceCode}:<id>`);
-      }
+    assertOwnGuestId(dto.userId, user.serviceCode);
+    const mode = dto.mode ?? CheckoutMode.PAYMENT;
+    if (mode === CheckoutMode.SUBSCRIPTION && dto.lines) {
+      throw new BadRequestException('A subscription is one priceCode, not a cart');
     }
     const open = dto.lines?.some((l) => l.productCode);
     if (dto.lines && open) {
@@ -197,7 +201,7 @@ export class ServiceCheckoutController {
       dto.userId,
       {
         priceCode: dto.priceCode,
-        mode: CheckoutMode.PAYMENT,
+        mode,
         successUrl: dto.successUrl,
         errorUrl: dto.errorUrl,
         ...(metadata ? { metadata } : {}),

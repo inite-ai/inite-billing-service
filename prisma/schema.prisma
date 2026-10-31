@@ -120,6 +120,11 @@ model Service {
   /// service on the token-authenticated service API (/v1/service-checkout).
   /// Null: the service has no token identity.
   authClientId        String?  @unique @map("auth_client_id") @db.VarChar(255)
+  /// The secret billing signs its webhooks to this service with, sealed at
+  /// rest (`sealed:v1:…`, bound to the service id). A service that signs in
+  /// only with a token holds no static key; it verifies with this instead.
+  /// Null: webhooks are signed with `apiKey`, as before.
+  webhookSecret       String?  @map("webhook_secret") @db.VarChar(512)
   metadata            Json?    @default("{}")
   createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -287,6 +292,12 @@ model Subscription {
   cancelAtPeriodEnd      Boolean            @default(false) @map("cancel_at_period_end")
   providerSubscriptionId String?            @map("provider_subscription_id") @db.VarChar(255)
   rail                   String?            @db.VarChar(50)
+  /// A plan change that takes effect at the end of this period (a downgrade,
+  /// or a switch of interval): the price the next period is billed at.
+  pendingPriceId         String?            @map("pending_price_id") @db.Uuid
+  /// The renewal order billing opened for the period that ends next, on a
+  /// rail that cannot recur by itself (PIX, crypto, the INITE wallet).
+  renewalOrderId         String?            @map("renewal_order_id") @db.Uuid
   createdAt              DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt              DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
 

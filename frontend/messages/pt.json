@@ -375,7 +375,11 @@
     "creditsPerPeriodCount": "{count} créditos por período",
     "detailIncludes": "O que está incluído",
     "detailService": "Serviço",
-    "detailProduct": "Produto"
+    "detailProduct": "Produto",
+    "backToService": "Voltar para {service}",
+    "serviceTitle": "Seus planos em {service}",
+    "scheduledChange": "Muda para {plan} em {date}",
+    "renewsByLink": "Renova por um link de pagamento enviado antes de {date}"
   },
   "catalog": {
     "title": "Preços",

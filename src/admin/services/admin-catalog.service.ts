@@ -37,10 +37,7 @@ export class AdminCatalogService {
     const services = await this.prisma.service.findMany({
       orderBy: { createdAt: 'desc' },
     });
-    return services.map((s) => ({
-      ...s,
-      apiKey: this.maskApiKey(s.apiKey),
-    }));
+    return services.map((s) => this.withoutSecret({ ...s, apiKey: this.maskApiKey(s.apiKey) }));
   }
 
   async createService(data: { code: string; name: string; metadata?: any }) {
@@ -55,7 +52,7 @@ export class AdminCatalogService {
   async updateService(id: string, data: { name?: string; isActive?: boolean; metadata?: any }) {
     const service = await this.prisma.service.findUnique({ where: { id } });
     if (!service) throw new NotFoundException(`Service not found: ${id}`);
-    return this.prisma.service.update({ where: { id }, data });
+    return this.withoutSecret(await this.prisma.service.update({ where: { id }, data }));
   }
 
   async revealServiceApiKey(id: string) {
@@ -67,10 +64,18 @@ export class AdminCatalogService {
   async regenerateServiceApiKey(id: string) {
     const service = await this.prisma.service.findUnique({ where: { id } });
     if (!service) throw new NotFoundException(`Service not found: ${id}`);
-    return this.prisma.service.update({
-      where: { id },
-      data: { apiKey: this.generateApiKey() },
-    });
+    return this.withoutSecret(
+      await this.prisma.service.update({
+        where: { id },
+        data: { apiKey: this.generateApiKey() },
+      }),
+    );
+  }
+
+  /** The sealed webhook secret never leaves billing; only whether there is one. */
+  private withoutSecret<T extends { webhookSecret?: string | null }>(service: T) {
+    const { webhookSecret, ...rest } = service;
+    return { ...rest, hasWebhookSecret: !!webhookSecret };
   }
 
   async deleteService(id: string) {

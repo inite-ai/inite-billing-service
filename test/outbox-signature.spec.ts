@@ -1,4 +1,9 @@
-import { signOutboxDelivery, verifyOutboxDelivery } from '../src/workers/outbox-signature';
+import {
+  sealWebhookSecret,
+  signOutboxDelivery,
+  verifyOutboxDelivery,
+  webhookSigningSecret,
+} from '../src/workers/outbox-signature';
 
 /**
  * Outbox deliveries are HMAC-signed so consumers can authenticate billing events
@@ -54,5 +59,25 @@ describe('outbox HMAC signing', () => {
         nowSeconds: Number(timestamp) + 10_000,
       }),
     ).toBe(false);
+  });
+});
+
+describe('per-service webhook secret', () => {
+  it('signs with the service’s own secret when it has one, its API key otherwise', () => {
+    const sealed = sealWebhookSecret('whsec_test_not_a_secret', 'svc-1');
+    expect(sealed).not.toContain('whsec_test_not_a_secret');
+    expect(
+      webhookSigningSecret({ id: 'svc-1', apiKey: 'key_not_a_secret', webhookSecret: sealed }),
+    ).toBe('whsec_test_not_a_secret');
+    expect(
+      webhookSigningSecret({ id: 'svc-1', apiKey: 'key_not_a_secret', webhookSecret: null }),
+    ).toBe('key_not_a_secret');
+  });
+
+  it('does not open a secret copied onto another service', () => {
+    const sealed = sealWebhookSecret('whsec_test_not_a_secret', 'svc-1');
+    expect(() =>
+      webhookSigningSecret({ id: 'svc-2', apiKey: 'key_not_a_secret', webhookSecret: sealed }),
+    ).toThrow();
   });
 });

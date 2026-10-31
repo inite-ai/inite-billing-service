@@ -375,7 +375,11 @@
     "creditsPerPeriodCount": "{count} кредитов за период",
     "detailIncludes": "Что включено",
     "detailService": "Сервис",
-    "detailProduct": "Продукт"
+    "detailProduct": "Продукт",
+    "backToService": "Вернуться в {service}",
+    "serviceTitle": "Ваши тарифы в {service}",
+    "scheduledChange": "Перейдёт на {plan} с {date}",
+    "renewsByLink": "Продлевается по ссылке на оплату, которую пришлём до {date}"
   },
   "catalog": {
     "title": "Тарифы",

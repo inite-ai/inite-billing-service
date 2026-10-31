@@ -99,6 +99,25 @@ const templates: Record<string, TemplateFn> = {
           ctaLabel: 'Manage subscription',
         },
 
+  // A subscription on a rail that cannot recur (PIX, crypto): billing sends
+  // the link for the next period before this one ends.
+  renewal_due: (locale, p) =>
+    locale === 'ru'
+      ? {
+          subject: `Продлите подписку «${product(p, locale)}»`,
+          body: `Оплаченный период подписки «${product(p, locale)}» заканчивается${
+            p.periodEnd ? ` ${p.periodEnd}` : ' в ближайшие дни'
+          }.${p.amount ? `\n\nСледующий период: ${p.amount} ${p.currency ?? ''}.` : ''}\n\nОплатите по ссылке — PIX, криптовалютой или картой. Если не успеете, доступ сохранится ещё несколько дней, пока ссылка действует.`,
+          ctaLabel: 'Оплатить продление',
+        }
+      : {
+          subject: `Renew your "${product(p, locale)}" subscription`,
+          body: `The period you paid for on "${product(p, locale)}" ends${
+            p.periodEnd ? ` on ${p.periodEnd}` : ' in the next few days'
+          }.${p.amount ? `\n\nNext period: ${p.amount} ${p.currency ?? ''}.` : ''}\n\nPay through the link: PIX, crypto or card. If you miss the date, your access stays on for a few more days while the link is open.`,
+          ctaLabel: 'Pay for the renewal',
+        },
+
   quota_warning: (locale, p) =>
     locale === 'ru'
       ? {
@@ -116,6 +135,17 @@ const templates: Record<string, TemplateFn> = {
           ctaLabel: 'View usage',
         },
 };
+
+/** A template's words alone, for a notification the email worker lays out itself. */
+export function templateCopy(
+  type: string,
+  locale: TemplateLocale,
+  params: TemplateParams,
+): { subject: string; body: string; ctaLabel: string } {
+  const fn = templates[type];
+  if (!fn) throw new Error(`Unknown notification template: ${type}`);
+  return fn(locale, params);
+}
 
 export function isKnownTemplate(type: string): boolean {
   return type in templates;

@@ -105,6 +105,11 @@ export interface Subscription {
   currency: string | null
   interval: string | null
   trialDays: number | null
+  /** A plan change waiting for the end of the period. */
+  pendingPriceCode?: string | null
+  pendingProductName?: string | null
+  /** No provider renews it: billing sends a pay link before it ends (PIX, crypto, wallet). */
+  renewsByLink?: boolean
 }
 
 export interface Entitlement {
