@@ -36,7 +36,9 @@ export const BRAND = {
   docs: 'https://github.com/inite-ai/inite-billing-service/blob/main/docs/api.md',
   contactEmail: 'support@inite.ai',
   // Ordered by SERP authority, shared with the parent org.
-  sameAs: [...ORG.sameAs, 'https://github.com/inite-ai/inite-billing-service'],
+  // Pages about this product only. ORG.sameAs are inite.ai's profiles: they
+  // identify the parent (parentOrganization in lib/seo.ts), not this product.
+  sameAs: ['https://github.com/inite-ai/inite-billing-service'],
   // Verifiable product facts (kept true to the codebase).
   facts: {
     paymentMethods: 6, // ONE, crypto (ETH/SOL/TON/TRON), Lava, Stripe, Apple IAP, Google Play

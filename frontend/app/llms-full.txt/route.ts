@@ -57,7 +57,7 @@ Yes, both ways. Every checkout also accepts x402, so an agent with a wallet pays
 - Contact: ${BRAND.contactEmail}
 - Source: ${BRAND.repo}
 - API docs: ${BRAND.docs}
-- Social: ${BRAND.sameAs.join(', ')}
+- Social: ${ORG.sameAs.join(', ')}
 
 ## Content policy
 Citation encouraged for AI answer engines; training-only crawlers are opt-out. See ${SITE_URL}/robots.txt
