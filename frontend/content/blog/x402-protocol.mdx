@@ -1,0 +1,210 @@
+---
+title: "x402 protocol: how HTTP 402 payments work, step by step"
+description: "What the x402 protocol is, the headers and fields it defines, what facilitators charge, and where refunds and disputes still fall short."
+date: "2026-11-03"
+author: "INITE Billing"
+category: "SaaS billing"
+tags: ["agentic commerce", "x402", "stablecoins", "http 402"]
+directAnswer: "The x402 protocol is an open standard that lets a server charge for an HTTP request. The server answers with status 402 and a PAYMENT-REQUIRED header listing what it accepts, the client retries with a signed payment in a PAYMENT-SIGNATURE header, and a facilitator verifies and settles the payment on chain, usually in USDC. Coinbase created it and contributed it to the x402 Foundation at the Linux Foundation."
+faqs:
+  - question: "What is the x402 payment protocol?"
+    answer: "x402 is an open payment standard built on the HTTP 402 Payment Required status code. A server that wants to be paid returns 402 with a base64-encoded list of acceptable payments, the client signs one and retries the same request, and the server returns the resource once a facilitator has verified and settled the payment. It works for people and for software agents, and no account or API key is needed on the paying side."
+  - question: "Who invented x402?"
+    answer: "x402 was created at Coinbase. The Linux Foundation announced the x402 Foundation and said Coinbase was contributing the protocol to it, so the standard is now governed there as a vendor-neutral project, and the canonical repository lives under the x402-foundation organisation on GitHub."
+  - question: "Does x402 have a token?"
+    answer: "No. The specification defines message formats, headers and payment schemes, and payments are made in existing assets such as USDC. Neither the spec, x402.org nor the Coinbase developer docs define or issue an x402 coin."
+  - question: "Can I buy x402 on Coinbase?"
+    answer: "There is nothing to buy. x402 is a protocol, in the same sense that HTTP is a protocol. What changes hands in an x402 payment is a stablecoin such as USDC, which you hold in a wallet. A coin sold under an x402-sounding name is not part of the standard."
+---
+
+The x402 protocol is an open standard for charging money inside an ordinary HTTP request. A server that wants payment answers with status 402 and a machine-readable price, the client signs a payment and sends the same request again, and a third party called a facilitator moves the funds on chain.
+
+## HTTP 402 was reserved and never defined
+
+HTTP has carried a status code for payment since its early drafts, and nobody standardised what to do with it. The current HTTP semantics document, [RFC 9110, section 15.5.3](https://www.rfc-editor.org/rfc/rfc9110.html#name-402-payment-required), still says in full: "The 402 (Payment Required) status code is reserved for future use."
+
+x402 is one attempt to fill that reservation. Its [HTTP transport spec](https://github.com/x402-foundation/x402/blob/main/specs/transports-v2/http.md) keeps the status code and adds three headers and a small set of JSON objects carried in them, and the core spec gives the facilitator two core endpoints (`/verify`, `/settle`). Everything else (which chain, which token, how the money is pulled) is pushed down into pluggable "schemes" and "networks".
+
+## Who maintains x402, and which repository is canonical
+
+The [Linux Foundation announced the x402 Foundation on April 2, 2026](https://www.linuxfoundation.org/press/linux-foundation-is-launching-the-x402-foundation-and-welcoming-the-contribution-of-the-x402-protocol), describing x402 as "created by Coinbase" and contributed by it. The same release lists 22 organisations that expressed initial intent and support, among them Visa, Mastercard, American Express, Stripe, Cloudflare, Google, Microsoft, Amazon Web Services, Shopify, Circle and the Solana Foundation.
+
+For code and spec, read [github.com/x402-foundation/x402](https://github.com/x402-foundation/x402), licensed Apache-2.0. The older [coinbase/x402](https://github.com/coinbase/x402) repository now carries a notice that the project moved under the foundation, and calls itself a development fork. The current protocol document is [`specs/x402-specification-v2.md`](https://github.com/x402-foundation/x402/blob/main/specs/x402-specification-v2.md); its version table dates v2.0 to 2025-12-9 and lists CAIP-2 network identifiers and a restructured payload as the main changes from v1. The public site is [x402.org](https://www.x402.org/).
+
+The v2 spec names three roles. The resource server sells something, the client (a browser, a script or an AI agent) wants it, and the facilitator "handles payment verification and blockchain settlement". A resource server may also settle on its own and skip the facilitator.
+
+## How an x402 payment flows
+
+The default flow in the v2 spec is called `authorization`: the payment is checked before the server does the work and settled after it. Here it is with the field names exactly as the [HTTP transport spec](https://github.com/x402-foundation/x402/blob/main/specs/transports-v2/http.md) writes them.
+
+### 1. The client asks for the resource
+
+The first request is ordinary HTTP with no payment attached.
+
+### 2. The server answers 402 with a PAYMENT-REQUIRED header
+
+The header holds a base64-encoded `PaymentRequired` object. Its `accepts` array lists every payment the server will take, so a client can choose between chains or schemes. Each entry carries `scheme`, `network` (a CAIP-2 identifier such as `eip155:8453` for Base mainnet), `amount` in atomic token units, `asset` (a token contract address or an ISO 4217 code for fiat), `payTo`, `maxTimeoutSeconds` and an optional `extra`.
+
+```http
+HTTP/1.1 402 Payment Required
+Content-Type: application/json
+PAYMENT-REQUIRED: eyJ4NDAyVmVyc2lvbiI6MiwiZXJyb3IiOiJQQVlNRU5ULVNJR05BVFVSRSBoZWFkZXIgaXMgcmVxdWlyZWQi...
+
+{}
+```
+
+Decoded, the header reads as follows (this is the spec's own example, on the Base Sepolia testnet, so the asset is test USDC):
+
+```json
+{
+  "x402Version": 2,
+  "error": "PAYMENT-SIGNATURE header is required",
+  "resource": {
+    "url": "https://api.example.com/premium-data",
+    "description": "Access to premium market data",
+    "mimeType": "application/json"
+  },
+  "accepts": [
+    {
+      "scheme": "exact",
+      "network": "eip155:84532",
+      "amount": "10000",
+      "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+      "payTo": "0x209693Bc6afc0C5328bA36FaF03C514EF312287C",
+      "maxTimeoutSeconds": 60,
+      "extra": { "name": "USDC", "version": "2" }
+    }
+  ]
+}
+```
+
+USDC has six decimals ([network and token support](https://docs.x402.org/core-concepts/network-and-token-support)), so an `amount` of 10000 is one US cent.
+
+### 3. The client signs a payment payload
+
+The client picks one entry from `accepts` and builds a `PaymentPayload`. That object echoes the choice in `accepted` and adds a scheme-specific `payload`. For `exact` on an EVM chain with USDC, the payload is an EIP-3009 `transferWithAuthorization` signature plus its parameters: `from`, `to`, `value`, `validAfter`, `validBefore` and a 32-byte `nonce` ([exact EVM scheme](https://github.com/x402-foundation/x402/blob/main/specs/schemes/exact/scheme_exact_evm.md)).
+
+### 4. The client retries with a PAYMENT-SIGNATURE header
+
+```http
+POST /premium-data HTTP/1.1
+Host: api.example.com
+Content-Type: application/json
+PAYMENT-SIGNATURE: eyJ4NDAyVmVyc2lvbiI6MiwicmVzb3VyY2UiOnsidXJsIjoiaHR0cHM6Ly9hcGkuZXhhbXBsZS5jb20v...
+
+{ "query": "latest market data" }
+```
+
+```json
+{
+  "x402Version": 2,
+  "resource": { "url": "https://api.example.com/premium-data" },
+  "accepted": {
+    "scheme": "exact",
+    "network": "eip155:84532",
+    "amount": "10000",
+    "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    "payTo": "0x209693Bc6afc0C5328bA36FaF03C514EF312287C",
+    "maxTimeoutSeconds": 60,
+    "extra": { "name": "USDC", "version": "2" }
+  },
+  "payload": {
+    "signature": "0x2d6a...571c",
+    "authorization": {
+      "from": "0x857b06519E91e3A54538791bDbb0E22373e36b66",
+      "to": "0x209693Bc6afc0C5328bA36FaF03C514EF312287C",
+      "value": "10000",
+      "validAfter": "1740672089",
+      "validBefore": "1740672154",
+      "nonce": "0xf3746613c2d920b5fdabc0856f2aeb2d4f88ee6037b8cc5d04a71a4462f13480"
+    }
+  }
+}
+```
+
+The `resource` object is shortened here; the spec's example repeats its `description` and `mimeType`. Version 1 of the protocol used `X-PAYMENT` and `X-PAYMENT-RESPONSE` for these headers, and the transport spec asks servers that still serve v1 clients to accept both spellings.
+
+### 5. The facilitator verifies
+
+The server posts the payload and the requirements it issued to the facilitator's `POST /verify`. The spec defines verify as read-only, so it "MUST NOT commit payment state or write onchain state". If the signature, amount, recipient or time window is wrong, the server answers 402 again.
+
+### 6. The server does the work, then settles
+
+After the handler succeeds, the server calls `POST /settle` with the same body. For `exact` on EVM the facilitator broadcasts the signed transfer and pays the gas. Per the [exact EVM scheme](https://github.com/x402-foundation/x402/blob/main/specs/schemes/exact/scheme_exact_evm.md), "the Facilitator cannot modify the amount or destination". A third endpoint, `GET /supported`, tells a server which scheme and network pairs a facilitator handles.
+
+### 7. The client gets the resource and a PAYMENT-RESPONSE header
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+PAYMENT-RESPONSE: eyJzdWNjZXNzIjp0cnVlLCJ0cmFuc2FjdGlvbiI6IjB4MTIzNDU2Nzg5MGFiY2RlZjEyMzQ1Njc4OTBh...
+
+{ "data": "premium market data response" }
+```
+
+The decoded `SettlementResponse` carries `success`, `transaction` (the chain transaction hash), `network` and `payer`, plus `errorReason` on failure. The code `settlement_pending` means the transaction was broadcast but its confirmation could not be established, and the spec marks it non-terminal, so reconcile on chain before you retry, because the payment may still land.
+
+## Schemes and payment flows
+
+A scheme defines how money moves for one kind of payment. The [v2 spec](https://github.com/x402-foundation/x402/blob/main/specs/x402-specification-v2.md) defines four schemes, listed below.
+
+| Scheme | What the client authorises | Can it be undone |
+|---|---|---|
+| `exact` | A fixed amount, transferred once | No |
+| `upto` | A maximum; the seller settles the actual cost up to it | No |
+| `batch-settlement` | EVM only: escrow plus off-chain vouchers, redeemed on chain in batches | Scheme-specific |
+| `auth-capture` | A maximum held and later captured, voided or refunded | Yes |
+
+Schemes also choose a payment flow. Besides `authorization` (verify, run, settle), the spec defines `upfront`, which settles before the resource runs for networks that have no way to pull funds later, and `escrow`, which settles a deposit, runs the resource and then settles the final charge. The spec's invariant is that at least one check runs before the resource executes.
+
+For most APIs that sell a fixed-price call, `exact` is the right start. If your cost is only known after the work (an LLM call priced per output token, a long crawl), `upto` saves you from overcharging every request to cover the worst case.
+
+## Networks and assets
+
+Networks are written as CAIP-2 identifiers, and the spec encourages non-blockchain rails to follow the same format, with `ach:us` and `sepa:eu` as its examples. The [network and token support page](https://docs.x402.org/core-concepts/network-and-token-support) lists EVM chains (`eip155:` plus a chain ID), Solana, TON, Algorand, Stellar, Aptos, Hedera, Keeta, NEAR, Canton, Concordium, XRPL, Cardano and Sui.
+
+On EVM, any ERC-20 can be used. Tokens with EIP-3009 `transferWithAuthorization`, such as USDC, are the preferred path, and Permit2 is the fallback that needs a one-time on-chain approval. On Solana, any SPL or Token-2022 token works. USDC is the default asset on Base, Ethereum, Polygon and Solana mainnet, among others.
+
+A network listed in the spec is not necessarily one your facilitator settles on, because clients and facilitators support specific scheme and network pairs, which `GET /supported` reports.
+
+## What a facilitator does, and what it costs
+
+The facilitator holds no funds for you in the `exact` flow. It checks the signature, broadcasts the transaction, pays gas and reports the hash. That makes it a hard operational dependency, because if it is down your paid endpoint returns errors.
+
+The x402 site says the protocol charges [zero protocol fees](https://www.x402.org/), with network fees still applying. Facilitators set their own prices. The [Coinbase Developer Platform facilitator](https://docs.cdp.coinbase.com/x402/core-concepts/facilitator) publishes these terms: "The first 1,000 onchain Facilitator transactions each month are free, then each additional onchain transaction costs $0.001." Verification is always free, and fees count on-chain transactions, not payment requests. Per the [CDP facilitator docs](https://docs.cdp.coinbase.com/x402/core-concepts/facilitator), an `exact` or EVM `upto` payment is one on-chain transaction, while Solana `upto` uses two. The CDP facilitator lists Base, Polygon, Arbitrum, Monad, World and Solana mainnets.
+
+The [CDP FAQ](https://docs.cdp.coinbase.com/x402/support/faq) adds that every payment is screened against OFAC sanctions lists and Know Your Transaction risk signals before settlement, and a declined payment fails with `kyt_risk_detected`. The [README](https://github.com/x402-foundation/x402) is explicit that the public x402.org facilitator is for testnets and quickstarts. In production you use a facilitator provider, run your own or settle directly.
+
+## Stripe's x402 integration
+
+[Stripe's x402 guide](https://docs.stripe.com/payments/machine/x402) keeps the protocol unchanged and puts Stripe at the end of the flow. You create a crypto deposit address through `POST /v1/crypto/deposit_addresses` and use it as the static `payTo`. Mainnet payments settle through the CDP facilitator. Once settlement succeeds, your server creates a PaymentIntent in `transaction_verification` mode with the transaction hash, and the payment appears in the Stripe Dashboard like any other.
+
+The constraints are on that page. The feature needs the `2026-05-27.preview` API version, stablecoin payments are open to businesses in every US state except New York, and [outside the US, access is by request](https://docs.stripe.com/payments/machine/x402) (email Stripe) in more than 30 countries. Transaction verification accepts USDC on Tempo, Base and Solana. Stripe also points to its Machine Payments Protocol for accepting cards next to stablecoins. The practical benefit is accounting, since your x402 revenue lands in the same ledger, reports and payouts as your card revenue, at the cost of a second integration and a preview API.
+
+## Limits and open problems
+
+### Refunds
+
+Under `exact` and `upto`, money does not come back on its own. The CDP FAQ calls these payments "irreversible once settled" and says a refund is a separate transfer back to the payer address from the settlement record. That means your support process needs a wallet with funds and someone allowed to sign. The [`auth-capture` scheme](https://github.com/x402-foundation/x402/blob/main/specs/schemes/auth-capture/scheme_auth_capture.md) adds `void`, `refund` and a client-side `reclaim` after a capture deadline, though its own open questions include who supplies refund liquidity. Facilitator support for it varies.
+
+### Disputes
+
+Card networks give buyers a chargeback. x402 on `exact` gives them none, and the CDP FAQ states plainly that there are no chargebacks. For a seller, that removes a cost and a fraud vector. For a buyer, and especially for an agent spending someone else's money, the protection has to move to the paying side as spend limits and allow-lists. The spec lists budget management as "implementation-specific".
+
+### Price discovery
+
+A 402 tells a client the price of one URL, at the moment it asks. Comparing sellers requires a catalogue. The spec defines a discovery API (`GET /discovery/resources`) and a "Bazaar" concept for marketplaces, but discovery depends on a facilitator or marketplace choosing to run it, and nothing in the spec guarantees that a listed price matches the next 402.
+
+### Browsers and CORS
+
+The HTTP transport spec spends a full section on this. None of the three headers is CORS-safelisted, so a browser client cannot read `PAYMENT-REQUIRED` unless the server names it in `Access-Control-Expose-Headers`, and cannot send `PAYMENT-SIGNATURE` unless the preflight allows it. The failure looks like an empty challenge or a status-less network error, and a `curl` test passes regardless, so test from a real browser origin before launch.
+
+### Accounting and tax
+
+x402 confirms that a transfer happened. Invoices, VAT, revenue recognition and mapping a wallet address to a customer record are outside the protocol. The Stripe route handles part of this. On a bare facilitator you write it yourself.
+
+## Where x402 fits next to a billing system
+
+Treat x402 as one payment rail among several. Subscriptions, credit balances and entitlements still need a ledger that knows which customer holds which right. In INITE Billing, for example, every checkout session also returns an `x402Url`, so an AI agent with a wallet can pay the same order in USDC on Base that a person would pay by card ([wallet docs](/docs/wallet)). The order and the entitlement stay the same whichever way the money arrives.
+
+Start on Base Sepolia with the test facilitator and `exact`. Move to a production facilitator and check `GET /supported`; the [CDP facilitator](https://docs.cdp.coinbase.com/x402/core-concepts/facilitator) covers the first 1,000 on-chain transactions a month for free. Write the refund path down before the first real payment, and decide whether `settlement_pending` triggers a reconciliation job. Add `upto` or `auth-capture` only when your pricing actually needs a ceiling or reversibility.

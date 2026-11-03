@@ -1,0 +1,109 @@
+---
+title: "Agentic payments: how AI agents pay today and what a merchant must support"
+description: "Agent tokens from Visa and Mastercard, Stripe's shared payment tokens, ACP, AP2 and x402, with the fields and checks a merchant has to implement."
+date: "2026-11-03"
+author: "INITE Billing"
+category: "SaaS billing"
+tags: ["agentic commerce", "x402", "card networks", "payment security"]
+directAnswer: "Agentic payments are purchases an AI agent completes for a person using a credential that person scoped in advance: a network token limited by merchant, amount and time, a single-use token passed through a checkout protocol, or a stablecoin payment under the x402 standard. A merchant accepts them by verifying the agent's signed identity, accepting the scoped token, making checkout idempotent and keeping enough context to answer a dispute."
+faqs:
+  - question: "How do AI agents pay?"
+    answer: "Agents pay through three mechanisms today. Card networks give the agent a tokenized card credential that is limited to a merchant, an amount or a time window. Checkout protocols such as the Agentic Commerce Protocol pass a single-use token from the agent platform to the merchant, which charges it through its payment processor. Under x402 the agent receives an HTTP 402 response with payment terms, signs a stablecoin transfer from its wallet and retries the request."
+  - question: "What are agentic payments?"
+    answer: "Payments that an AI agent initiates and completes on behalf of a person or a business, using credentials and limits that the person approved beforehand. The person sets the boundaries once, and the agent pays inside them without a human filling in a card form for each purchase."
+  - question: "Are agentic payments safe?"
+    answer: "Their safety depends on the limits set around them. The card network programs never hand the agent the real card number, bind each purchase to a consumer-approved instruction and require signed agent identity. Wallet-based payments rely on spending caps enforced before signing. The weak points are merchants that skip signature checks and disputes where the buyer says the agent misunderstood them, so merchants should store the evidence of what was authorized."
+  - question: "What do merchants need for agentic payments?"
+    answer: "Verification of the agent's signed requests at the edge or in the backend, acceptance of tokenized credentials through the existing processor, an idempotent checkout API, machine-readable order status and receipts, refunds back to the original token, and a stored record of agent identity, consumer identity and intent for every agent order."
+---
+
+Agentic payments are purchases where an AI agent, not a person at a keyboard, presents the payment credential. The phrase covers several distinct mechanisms that do not share a wire format: card-network tokens, checkout protocols run by agent platforms, and HTTP-native stablecoin payments. Below, each one is described at the level of fields and endpoints, followed by what a merchant has to build to accept them.
+
+## Scoped credentials and signed agents
+
+An agent should never hold a reusable card number. A merchant, for its part, needs a better reason to trust a bot than the bot saying so. All five mechanisms below handle this with two moves. The person approves a scoped credential once (a token limited by merchant, amount, time or count), and the agent proves who it is with a signature the merchant can check against a published key. The differences lie in who issues the credential, where the limits live and how the money settles.
+
+## Card networks: agentic tokens and signed agents
+
+### Visa Intelligent Commerce
+
+Visa's developer documentation for [Visa Intelligent Commerce](https://developer.visa.com/capabilities/visa-intelligent-commerce) describes a chain of objects that an agent platform builds before any purchase. The card is enrolled once through the Visa Token Service (`POST /vts/panEnrollments`), then a token is provisioned against that enrollment. The agent keeps the provisioned token ID and never the PAN.
+
+The consumer then approves a purchase instruction, created through `POST /vacp/v2/credentials-for-instruction` and authenticated with a Visa Payment Passkey. Spending rules sit in mandates attached to the instruction (fields such as `declineThreshold` and `effectiveUntilTime`), and an instruction can hold at most [10 mandates](https://developer.visa.com/capabilities/visa-intelligent-commerce). When the agent is ready to pay, it retrieves a credential against one mandate: a network token, a cryptogram and an ECI. The cryptogram is one-time use and lives for [72 hours](https://developer.visa.com/capabilities/visa-intelligent-commerce). If the transaction fails, the platform reports the outcome through Visa's confirmation API before it may ask for a new credential.
+
+Almost all of that work falls on the agent platform. The merchant sees a tokenized card authorization with a cryptogram, which most processors already accept for wallet payments.
+
+On the merchant side the work is identity: Visa's [Trusted Agent Protocol](https://developer.visa.com/capabilities/trusted-agent-protocol) has an approved agent sign its HTTP requests under [RFC 9421](https://www.rfc-editor.org/rfc/rfc9421), and the merchant rebuilds the signature base and checks it against the agent's public key from Visa's registry.
+
+### Mastercard Agent Pay
+
+The details here come from Mastercard's developer guides for merchants. The [Level 1 agentic commerce guide](https://developer.mastercard.com/merchant-cloud/documentation/tutorials-and-guides/agentic-commerce-guide/21/index.md) is blunt about payment logic: agentic tokens use the same format as card numbers, existing checkout forms keep working, and "you do not need to modify your payment processing logic to accept tokenized credentials." The token's scope (single-use, merchant-specific or time-limited) is set at provisioning, not by the merchant.
+
+The merchant changes bot handling instead, and the same guide asks merchants to verify Web Bot Auth signatures, ideally in the CDN's bot management, and spells out the checks:
+
+- the `Signature-Input` header carries a `tag` of `agent-browser-auth` or `agent-payer-auth` (Visa's tags), `Agent-pay-auth` (Mastercard's), or the generic `web-bot-auth` used by agents such as ChatGPT;
+- the required parameters are `@authority`, `@path`, `created`, `expires`, `keyid`, `alg`, `nonce` and `tag`;
+- the window between `created` and `expires` must not exceed [8 minutes](https://developer.mastercard.com/merchant-cloud/documentation/tutorials-and-guides/agentic-commerce-guide/21/index.md), and nonces seen inside that window are rejected as replays;
+- the public key is fetched from the directory named in the `Signature-Agent` header.
+
+The guide also warns against blocking consumer-owned agents only because they lack scheme registration. Those fall back to normal card-not-present risk checks.
+
+The [Level 2 guide](https://developer.mastercard.com/merchant-cloud/documentation/tutorials-and-guides/agentic-commerce-guide/22/index.md) adds consumer identity. A certified agent can send an identity object (Mastercard's Agent User Identity, Visa's `agenticConsumer`) containing a signed JWT. The merchant checks that its `nonce` matches the message signature, verifies it with the key named in `kid`, and validates `exp`, `iss` and `aud` before treating the agent as a known customer. The same guide describes a signed payment container whose `nonce`, `kid`, `alg` and `signature` must all be present and must verify, or the payment data is rejected.
+
+## Checkout protocols: the agent platform in the middle
+
+### Agentic Commerce Protocol and Stripe shared payment tokens
+
+The [Agentic Commerce Protocol](https://www.agenticcommerce.dev/) was developed by Stripe and OpenAI and is published under Apache 2.0. Its [checkout spec](https://developers.openai.com/commerce/specs/checkout) asks the merchant to expose five endpoints: `POST /checkout_sessions`, `POST /checkout_sessions/{id}` to update, `POST /checkout_sessions/{id}/complete`, `POST /checkout_sessions/{id}/cancel` and `GET /checkout_sessions/{id}`. Every request carries `Authorization`, `Idempotency-Key`, a base64 `Signature` over the body, a `Timestamp` and an `API-Version`. Sessions move through `not_ready_for_payment`, `ready_for_payment`, `completed` and `canceled`, and a session that cannot be canceled answers with [HTTP 405](https://developers.openai.com/commerce/specs/checkout). The merchant reports orders back through `order_created` and `order_updated` webhooks, signed with an HMAC, and refunds appear inside order events as `store_credit` or `original_payment`.
+
+Payment happens in a separate step. Under the [delegated payment spec](https://developers.openai.com/commerce/specs/payment), the agent platform sends the buyer's card to the merchant's payment provider at `POST /agentic_commerce/delegate_payment` with an allowance whose `reason` must be `one_time` and which carries `max_amount`, `currency`, `expires_at`, `checkout_session_id` and `merchant_id`, along with risk signals that each carry a type, a score and an action. The provider returns a vault token that starts with `vt_`. Reusing an `Idempotency-Key` with different parameters returns an `idempotency_conflict` with [HTTP 409](https://developers.openai.com/commerce/specs/payment).
+
+On Stripe, the token a seller receives is a [shared payment token](https://docs.stripe.com/agentic-commerce/concepts/shared-payment-tokens.md?agent-seller=seller) (SPT). The seller confirms a PaymentIntent with `payment_method_data[shared_payment_granted_token]=spt_...`; Stripe clones the customer's payment method onto the payment, so refunds and reporting behave as they do for any card payment. The token carries `usage_limits` (`currency`, `max_amount`, `expires_at`, and `recurring_interval` for repeat charges). Stripe rejects `setup_future_usage` on SPT payments, so a seller cannot quietly turn an agent grant into a saved card. A seller on another processor can call the Resolve API once and receive an `fpan`, a `dpan` or an `agentic_token` with a cryptogram; Stripe's page notes it may use tokens from Mastercard Agent Pay, Visa Intelligent Commerce and the American Express ACE Kit for this. The event `shared_payment.granted_token.deactivated` tells the seller a token was consumed, resolved, expired or revoked. The examples on that page pin the `Stripe-Version` header to a preview release, so expect changes.
+
+### AP2
+
+Google's [Agent Payments Protocol](https://ap2-protocol.org/) works at a different layer. It is an extension for A2A and the Universal Commerce Protocol, and its core objects are signed mandates. A Checkout Mandate records the negotiated items and is shared with the merchant; a Payment Mandate authorizes a charge against a specific instrument and goes to the credential provider, network and processor. Each mandate has an open stage (constraints such as a budget before the cart exists) and a closed stage (a specific amount for a specific checkout). The mandates are verifiable digital credentials chained into an audit trail. The AP2 site ships samples for human-present card payments and for a human-not-present flow paid over x402.
+
+## x402: payment inside the HTTP request
+
+[x402](https://www.x402.org/) skips cards entirely. A server that wants payment answers a request with status 402 and a base64 `PAYMENT-REQUIRED` header, as defined in the [v2 specification](https://raw.githubusercontent.com/x402-foundation/x402/main/specs/x402-specification-v2.md). The header decodes to an `accepts` list; each entry names a `scheme` (for example `exact`), a `network` in CAIP-2 form, an `amount` in the asset's smallest unit, the `asset` contract, a `payTo` address and `maxTimeoutSeconds`. The client signs a transfer and retries with a `PAYMENT-SIGNATURE` header. On EVM chains the `exact` scheme uses an [EIP-3009](https://raw.githubusercontent.com/x402-foundation/x402/main/specs/x402-specification-v2.md) authorization with `validBefore` and a 32-byte `nonce`, which makes a replayed payment useless. The server either settles on-chain itself or posts the payload to a facilitator's `/verify` and `/settle` endpoints, and it returns a `PAYMENT-RESPONSE` header once the payment settles. The [x402 repository](https://github.com/coinbase/x402) also lists an `upto` scheme that authorizes a maximum per request and settles actual usage, which fits metered APIs.
+
+x402 carries the payment and nothing about who the agent works for. The spec has no refund or chargeback mechanism, so a refund is a new transfer the merchant sends back, and dispute rights are whatever the merchant's terms promise. For small API calls that trade-off is usually acceptable, while for a physical order it shifts all buyer protection onto the merchant's policy.
+
+## Wallets with spending limits
+
+Card programs put limits in mandates and token scope. Crypto wallets for agents enforce them before signing. Coinbase's [Agentic Wallet docs](https://docs.cdp.coinbase.com/agentic-wallet/cli/welcome.md) list configurable caps per session and per transaction, enforced before any transaction leaves, with KYT screening and x402 support.
+
+INITE Billing ([/docs/wallet](/docs/wallet)) covers both sides. Every checkout session also returns an x402Url, so an agent with a wallet can pay the order in USDC on Base without a card form. A person's INITE wallet is controlled by their passkey, and their agents pay x402 sites through the wallet MCP server within per-payment, daily and monthly limits the person approved (the defaults are [$10 a payment, $20 a day and $50 a month](/docs/wallet)). An agent can also sign up and hold its own wallet. INITE Billing does not issue card-network agentic tokens and does not act as merchant of record.
+
+## How the mechanisms compare
+
+| | Visa Intelligent Commerce | Mastercard Agent Pay | ACP with Stripe SPT | AP2 | x402 |
+|---|---|---|---|---|---|
+| Credential the merchant sees | Network token and cryptogram | Agentic token in card format | Shared payment token or vault token | Depends on the payment rail | Signed stablecoin transfer |
+| Where limits live | Mandates on a purchase instruction | Token scope set at provisioning | `usage_limits` or allowance | Open Payment Mandate | The payer's wallet |
+| Agent identity | Trusted Agent Protocol signatures | Web Bot Auth signatures | Signed requests from the platform | Signed mandates | None in the protocol |
+| Merchant code change | Edge verification, little payment work | Edge verification, little payment work | Five endpoints, webhooks | Agent integration via A2A or UCP | Middleware returning 402 |
+| Refunds and disputes | Card network rules | Card network rules | Card network rules via the processor | Depends on the rail | Merchant sends funds back |
+
+## What a merchant must support
+
+The checklist below follows from the specs above. Each item below is something an agent or a network will test.
+
+**Verify agent signatures before checkout.** Turn on Web Bot Auth in the CDN if it supports it; otherwise verify `Signature-Input` in the backend, with the time window and nonce cache from the Mastercard guide. Without it, a checkout bot and a fraud bot look the same, and the stricter bot rules that follow will block real agents.
+
+**Accept tokens through the existing processor.** Network agentic tokens arrive in card fields. Stripe sellers confirm SPTs on a PaymentIntent. Sellers on another processor need the Resolve API and a PCI configuration with Stripe, and each SPT can be resolved only once.
+
+**Make every write idempotent.** Agents retry on timeouts, which is why ACP requires `Idempotency-Key` on every request; a completion endpoint that charges twice for one key creates a duplicate order the user never approved.
+
+**Return machine-readable order state and receipts.** An email receipt alone leaves the agent unable to tell its user what happened. ACP expects `order_created` and `order_updated` events with statuses such as `confirmed`, `shipped` and `fulfilled`.
+
+**Refund to the original credential.** Mastercard's Level 2 guide says refunds should go back through the original tokenized payment method and that merchants may not require consumers to waive dispute rights for agent purchases. Existing chargeback rules apply to agent transactions today.
+
+**Store the evidence at purchase time.** The same guide lists the patterns already showing up in disputes: "I don't remember buying this", "that's not what I meant", rogue agents and agent error. It recommends storing the agent's `keyid`, the consumer ID token, the signature nonce, the intent captured during checkout and the cart state at each step. If the network supports Mastercard's Verifiable Intent credential, store that too, because it records the limits the consumer delegated.
+
+**Decide on x402 separately.** If you sell API calls, credits or digital goods to agents, an x402 endpoint is the least code and needs no card rules. Publish a refund policy for it, because the protocol will not give the buyer one.
+
+## Where to start
+
+For a SaaS or API business, the cheapest first step is Web Bot Auth verification plus idempotent checkout, since both pay off whichever scheme your buyers' agents use. Add SPT acceptance if you are already on Stripe and agent platforms send you traffic, and add an x402 price on endpoints that agents call directly. Leave AP2 for later unless you already build on A2A. Log the agent identity and the approved limits with every order; in a dispute it is the merchant's only evidence of what was authorized.

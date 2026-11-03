@@ -1,0 +1,122 @@
+---
+title: "Stablecoin payments: how USDC and USDT checkout works for a business"
+description: "How stablecoin payments settle, which chains each provider supports, what refunds and compliance look like, and how to book them."
+date: "2026-11-03"
+author: "INITE Billing"
+category: "SaaS billing"
+tags: ["pricing", "stablecoins", "crypto payments", "payments compliance"]
+directAnswer: "Stablecoin payments are transfers of a dollar-pegged token such as USDC or USDT from the customer's wallet to an address you or your processor control. Once the transaction is confirmed on chain it cannot be pulled back, so there are no chargebacks and a refund means sending tokens back. A processor like Stripe can convert the tokens into fiat in your balance, or you can hold them."
+faqs:
+  - question: "How do stablecoin payments work?"
+    answer: "The customer picks a token and a network, connects a wallet and signs a transfer to an address tied to your order. Your processor watches the chain, marks the payment paid once the transaction is confirmed, and then either converts the tokens to fiat in your balance or leaves them in a wallet you control."
+  - question: "Does Stripe accept stablecoins?"
+    answer: "Yes. Stripe accepts USDC on several networks through its Crypto payment method, and completed payments settle in your Stripe balance in your local currency. Businesses in the US can use it, and businesses in the EU, Hong Kong, Mexico and Switzerland can use it in private preview."
+  - question: "What are the fees for stablecoin payments?"
+    answer: "You pay the processor's percentage on each payment, and someone pays the network fee for the on-chain transfer, usually the customer who signs it. Converting tokens to fiat can carry its own fee. Read each figure on the provider's own pricing page for your country before you model margins."
+  - question: "Are stablecoin payments reversible?"
+    answer: "No. A confirmed on-chain transfer cannot be reversed by the customer or by a bank, so there are no chargebacks. If you owe a refund, you send the tokens back yourself, usually to the wallet that paid."
+---
+
+Stablecoin payments let a customer pay you in a token pegged to the US dollar, most often USDC or USDT, straight from a crypto wallet. For a SaaS or AI company the appeal is practical, because customers in countries where cards often decline can still pay and the money arrives without a card network in the middle. This guide covers how settlement works, which chains each provider supports, what the fees look like on each provider's own pages, what the US and EU rules require of the token you accept, and how refunds and bookkeeping change.
+
+## How stablecoin payments work, from checkout to confirmation
+
+A stablecoin payment is an ordinary token transfer on a public blockchain. The sequence is the same whichever processor you use.
+
+1. Your checkout creates an order with an amount in dollars and a destination address. A processor usually generates a fresh address or a payment request per order, so it can match the incoming transfer to the right invoice.
+2. The customer chooses a token and a network, connects a wallet and signs the transfer. The customer's wallet pays the network fee for that transaction.
+3. The processor watches the chain. When the transaction is included in a block, and then confirmed deeply enough that the processor trusts it, the order moves to paid and your webhook fires.
+4. The funds either convert to fiat in your processor balance or stay as tokens in a wallet you control.
+
+Stripe's flow is a good reference. When the customer selects the crypto option, Stripe redirects them to crypto.stripe.com, where they pick a currency and a network, connect a wallet and complete the transfer, then optionally return to your site ([Stripe docs](https://docs.stripe.com/payments/stablecoin-payments)).
+
+### What "confirmed" means on each chain
+
+Confirmation depth is where chains differ most. On Ethereum, time is divided into slots of 12 seconds and epochs of 32 slots, and a block becomes finalized only after validators holding at least two thirds of staked ETH vote for the checkpoints around it ([ethereum.org](https://ethereum.org/en/developers/docs/consensus-mechanisms/pos/)). A processor can accept a payment before finality and carry a small reorganization risk, or wait and make the customer sit on a spinner. Base, Solana, Polygon and Tron each have their own rules, and a hosted processor picks the threshold for you. If you run your own crypto checkout, you pick it, and you should write the number down per chain instead of using one global setting.
+
+## Settlement: convert to fiat or hold the tokens
+
+**Convert to fiat.** Stripe takes this route by default. Completed stablecoin payments "settle in your Stripe balance in your local currency," and payout frequency "varies by network" ([Stripe docs](https://docs.stripe.com/payments/stablecoin-payments)). Your books see dollars or euros, your revenue figure never moves with a token price, and you never hold a private key. What you lose is the option to pay suppliers or contractors in stablecoins from that same balance.
+
+**Hold the tokens.** A self-custodied wallet or a crypto-native processor leaves USDC or USDT in an address you control. You can pay contractors abroad in the same token, move funds on weekends and keep a treasury that does not depend on one bank. You also take on key management, an extra ledger to reconcile, and exposure to the issuer of the token you hold. For most SaaS companies with fiat costs, converting most receipts and holding a small working float is the sensible split.
+
+## Which stablecoins and chains each provider supports
+
+Support is a matrix of token times network, and the same token on two networks is two different contracts. A customer who sends USDC on Polygon to an address that only watches Ethereum has not paid you, and recovering those funds is manual work at best.
+
+| Provider or issuer | Tokens and networks, per its own page |
+|---|---|
+| Stripe | USDC on Tempo, Ethereum, Solana, Polygon and Base; USDP on Ethereum and Solana (US only); USDG on Ethereum (US only) ([Stripe docs](https://docs.stripe.com/payments/stablecoin-payments)) |
+| Circle (USDC issuer) | Publishes a list of USDC mainnets, including Ethereum, Base, Solana, Polygon PoS, Arbitrum and Stellar; Tron is not on the list ([Circle developer docs](https://developers.circle.com/stablecoins/usdc-contract-addresses)) |
+| Tether (USDT issuer) | USDT as ERC20 on Ethereum and other chains, TRC20 on Tron, and tokens on Solana, TON, Aptos, Near, Tezos and others ([Tether](https://tether.to/en/supported-protocols/)) |
+
+If your customers pay with USDT on Tron, Stripe's stablecoin method does not cover them, because it accepts USDC, USDP and USDG on the listed networks only, and Circle does not list USDC on Tron at all. Ask your customers which token and network they already hold before you choose a provider.
+
+Stripe also limits who can sell this way. Customers can pay from anywhere outside sanctioned countries, but only businesses in the US can accept stablecoin payments generally, while businesses in the EU, Hong Kong, Mexico and Switzerland have access in private preview ([Stripe docs](https://docs.stripe.com/payments/stablecoin-payments)). The UK is not on that list.
+
+## Stripe stablecoin payments in practice
+
+For a company already on Stripe, this is the shortest path. You enable the Crypto payment method in the Dashboard, and Checkout, Elements, Payment Links and Invoicing can show it without a separate integration ([Stripe docs](https://docs.stripe.com/payments/stablecoin-payments)). Stripe Billing supports stablecoins for invoices and for subscriptions ([Stripe subscriptions guide](https://docs.stripe.com/billing/subscriptions/stablecoins)), which matters for SaaS because a token transfer has no card on file to charge again. Connect platforms can request the `crypto_payments` capability for connected accounts.
+
+The limits worth knowing before launch:
+
+- A single customer transaction is capped at 10,000 USD ([Stripe docs](https://docs.stripe.com/payments/stablecoin-payments)). Enterprise invoices above that need a split or another rail.
+- Presentment is in USD, with other currencies in private preview.
+- Manual capture is not supported, so you cannot authorize now and capture later the way you can with a card.
+
+Stripe's stablecoin docs page does not state a fee, and Stripe's pricing pages are country-specific. Neither the [UK](https://stripe.com/gb/pricing) nor the [Irish](https://stripe.com/ie/pricing/local-payment-methods) page lists a stablecoin fee. Read the rate in your own Dashboard or on your country's pricing page, and compare it with your card blend before you push customers toward it.
+
+## Other providers: Coinbase, Circle and BVNK
+
+Coinbase offers merchant payments through Coinbase Commerce and Coinbase Business. Coinbase's fee pages could not be verified for this article, so no figure is given. Ask for the processing fee and the USDC-to-fiat conversion fee in writing, because a crypto-native processor often bills them as separate lines.
+
+Circle is the issuer of USDC, and its developer platform gives you wallets and transfers under your own control, which makes it a build project more than a checkout button. BVNK serves merchants that want stablecoin collection with payouts, and we found no public price list on its site, so its pricing is a sales conversation.
+
+A crypto-native provider usually gives you more tokens and networks and lets you keep the tokens, while Stripe gives you fewer networks and fiat in the same balance as your card revenue, so the right choice depends on where your customers' money already sits.
+
+## Fees: what you actually pay
+
+A stablecoin payment carries up to three costs, and they land on different people.
+
+1. **The processor's percentage.** Charged to you on each payment. Get the exact figure from the provider's pricing page for your country.
+2. **The network fee (gas).** Paid in the chain's native token by whoever signs the transaction, which at checkout is the customer. It varies with network load. Check the current fee on each network you enable, because a fee that is trivial on a large invoice can put off a customer paying for a small plan. On a refund you sign the transfer, so you pay the gas.
+3. **Conversion.** If you hold tokens and later sell them for fiat, an exchange or processor charges for that step. Stripe folds conversion into its settlement.
+
+There is no interchange, since no card network is involved. Compare the processor's stablecoin rate with your real card cost, including disputes and declined renewals, and decide from that, not from headline rates.
+
+## Compliance basics: what the rules require of the token
+
+Whether accepting stablecoins for your own product needs a license depends on where you operate, so confirm it with local counsel. The token you accept is regulated in any case, and those rules decide which tokens are safe to hold.
+
+**United States.** The GENIUS Act (Public Law 119-27) was enacted on July 18, 2025 ([govinfo](https://www.govinfo.gov/content/pkg/PLAW-119publ27/html/PLAW-119publ27.htm)). Only a permitted payment stablecoin issuer may issue a payment stablecoin in the US. Issuers must hold identifiable reserves on "an at least 1 to 1 basis" in assets such as cash, insured deposits and Treasury bills with a remaining maturity of 93 days or less, publish the monthly composition of their reserves, and have that report examined each month by a registered public accounting firm ([govinfo](https://www.govinfo.gov/content/pkg/PLAW-119publ27/html/PLAW-119publ27.htm)). Issuers may not pay holders interest or yield for simply holding the token. The Act takes effect on the earlier of 18 months after enactment or 120 days after the regulators issue final rules ([govinfo](https://www.govinfo.gov/content/pkg/PLAW-119publ27/html/PLAW-119publ27.htm)). In an issuer insolvency, holders' claims on the required reserves rank ahead of other claims, which is a meaningful protection for a merchant holding a float.
+
+**European Union.** MiCA, Regulation (EU) 2023/1114, entered into force in June 2023 and applied in full from December 2024 ([ESMA](https://www.esma.europa.eu/esmas-activities/digital-finance-and-innovation/markets-crypto-assets-regulation-mica)). Dollar stablecoins like USDC fall under its rules for e-money tokens, and ESMA keeps an interim register of e-money token issuers and authorised crypto-asset service providers. The grandfathering that let existing crypto firms operate without a MiCA authorisation ran until 1 July 2026 at the latest ([ESMA](https://www.esma.europa.eu/esmas-activities/digital-finance-and-innovation/markets-crypto-assets-regulation-mica)). If you sell into the EU, check that both your processor and the token issuer appear on that register.
+
+**Reserves you can check.** Circle publishes USDC reserve holdings weekly and gets monthly third-party assurance from a Big Four accounting firm, with most of the reserve held in the Circle Reserve Fund ([Circle transparency](https://www.circle.com/transparency)). Treat that page as part of your treasury due diligence, and look for the equivalent from any issuer whose token you hold for more than a few days.
+
+Sanctions screening still applies. A hosted processor screens wallets for you; a self-run checkout has to do it itself, or it will eventually take money from an address it should not touch.
+
+## Refunds: there are no chargebacks, so you send funds back
+
+Stripe's docs say you "won't have disputes that turn into chargebacks," and that refunds "are always returned as stablecoins to the customer's original wallet" ([Stripe docs](https://docs.stripe.com/payments/stablecoin-payments)). Full and partial refunds both work through the normal refund flow.
+
+Without a processor, a refund is an outgoing transaction you sign and pay gas for. Four rules save trouble:
+
+- Refund to the paying address only, on the same network, in the same token. A customer who asks for a refund to a different address may not be the payer.
+- Refund the dollar amount from your terms of service, not "whatever the tokens are worth now". For a dollar stablecoin the two are close, but write it down.
+- Record the refund transaction hash against the original order, so your ledger links both legs.
+- Your refund policy is the main protection the customer has at checkout, so publish it next to the pay button.
+
+## Accounting: book the fiat value at receipt
+
+Record revenue at the fiat value on the date the payment is confirmed, and keep the transaction hash, network and token as the payment reference. If your processor converts to fiat, the processor report already does this and the token side never touches your general ledger.
+
+If you hold tokens, you need a second ledger per wallet: every inflow with its fiat value at receipt, every outflow (payouts, refunds, gas) and the balance at period end. Gas paid on refunds and transfers is an expense, and it is paid in ETH, SOL or TRX, so you also hold a small balance of a volatile asset just to move your stablecoins. US GAAP has not settled how a stablecoin balance is classified: the FASB has a project on its technical agenda titled "Cash Equivalents—Disclosure Enhancement and Classification of Certain Digital Assets" ([FASB technical plan](https://storage.fasb.org/July%202026%20Technical%20Plan.pdf)). Until it finishes, ask your accountant whether your holdings sit in cash equivalents or in another asset line, and do not assume.
+
+## How to add stablecoin payments to a SaaS checkout
+
+Treat stablecoins as one more payment method behind the same order and subscription logic you already have. The order should not care whether it was paid by card or by USDC; the payment record should carry the rail, the network and the transaction hash. Webhook handling should be idempotent, because a chain watcher can report the same confirmation twice.
+
+That is how [INITE Billing](/docs/wallet) is built: one payment state machine (created, open, paid, then failed, refunded or expired) sits behind adapters for Stripe and for native crypto checkout, which accepts [USDT and USDC on the networks its crypto doc lists](/docs/crypto) (USDT only on Tron and TON), and every checkout session also returns an x402 link an AI agent with a wallet can pay in USDC on Base. It is self-hosted and open source, and it takes no cut; you pay your payment provider's own fees.
+
+Whichever stack you pick, launch with one token on two networks your customers already use, set a confirmation threshold per network, publish a refund policy, and reconcile by transaction hash from the first payment.
