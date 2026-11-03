@@ -1,0 +1,125 @@
+---
+title: "Gateway de pagamento no Brasil: Pix, boleto, cartão e as taxas de cada provedor"
+description: "O que é gateway de pagamento, subadquirente e adquirente no Brasil, e quanto Mercado Pago, PagBank, Asaas, Efí, Stripe e outros cobram hoje."
+date: "2026-11-03"
+author: "INITE Billing"
+lang: "pt"
+category: "SaaS billing"
+tags: ["preços", "pix", "boleto", "assinaturas"]
+directAnswer: "Gateway de pagamento é a camada técnica que recebe os dados do pagamento no seu site ou app e os leva até quem processa a transação. No Brasil, quase todo provedor que uma startup contrata também atua como subadquirente, ou seja, recebe o dinheiro em nome dela e repassa depois. A escolha depende menos da taxa anunciada e mais do prazo de recebimento, do custo de antecipar, do suporte a Pix Automático e assinaturas e da qualidade da API."
+faqs:
+  - question: "Qual o melhor gateway de pagamento?"
+    answer: "Para um SaaS que cobra assinatura em reais, compare o custo efetivo por método na sua composição de vendas real (Pix, boleto, cartão à vista e parcelado), o prazo de recebimento, o suporte a Pix Automático e a qualidade da API e dos webhooks. Quem vende para fora do Brasil costuma pesar mais a cobertura internacional; quem vende só aqui costuma ganhar mais com Pix barato e boa recorrência."
+  - question: "Qual o método de pagamento mais usado no Brasil?"
+    answer: "O Pix. Segundo o Banco Central, foram mais de 7,8 bilhões de transações Pix só em setembro de 2026, e o BC registra quase 80 bilhões de transações Pix no ano de 2025. Em lojas online, o cartão de crédito continua importante por causa do parcelamento."
+  - question: "Quanto custa criar um gateway de pagamento?"
+    answer: "Escrever o software é a parte menor. Quem quer liquidar pagamentos em nome de terceiros vira instituição de pagamento e, pela regra que o Banco Central propôs em 2025, credenciadores passariam a precisar de autorização para funcionar, com pedido aberto entre 1 e 31 de maio de 2026 para quem já operava. Para a maioria dos SaaS, contratar um gateway subadquirente e integrar por API sai muito mais barato."
+  - question: "Como funciona o pagamento das plataformas digitais?"
+    answer: "O cliente paga no checkout, o gateway envia a transação ao adquirente ou ao Pix, o provedor confirma por webhook e o dinheiro cai na conta do provedor. Depois de descontar a taxa, ele repassa o saldo para a sua conta no prazo contratado, do mesmo dia até cerca de 30 dias no cartão. Antecipar esse repasse tem custo próprio."
+---
+
+Quem pesquisa **gateway de pagamento** no Brasil encontra guias de fornecedores que explicam o conceito e terminam no formulário de vendas. Aqui separamos gateway, subadquirente, adquirente e intermediador, mostra como Pix, boleto e cartão chegam até a sua conta e compara as taxas que sete provedores publicam nas próprias páginas, lidas em 3 de novembro de 2026. Onde a página não mostra preço, dizemos isso.
+
+## Gateway, subadquirente, adquirente e intermediador
+
+Esses termos aparecem misturados no mercado, e a confusão custa dinheiro na hora de assinar contrato.
+
+**Gateway** é software. Ele captura os dados do pagamento (cartão tokenizado, pedido de Pix, emissão de boleto), envia para quem processa e devolve o resultado para o seu sistema. Um gateway puro não toca no dinheiro: você precisa de contrato próprio com um adquirente e recebe direto dele.
+
+**Adquirente** (o Banco Central chama de credenciador) é a instituição que habilita o lojista a aceitar cartões das bandeiras e liquida as vendas. Cielo, Rede, Getnet e Stone são exemplos conhecidos. Negociar direto com adquirente exige volume, CNPJ com histórico e, em geral, um gateway separado.
+
+**Subadquirente** (ou subcredenciador) fica entre você e o adquirente. Ele tem contrato direto com o adquirente e aceita lojistas pequenos debaixo dele. O dinheiro da venda cai primeiro na conta do subadquirente, que desconta a taxa e repassa o saldo no prazo combinado. Mercado Pago, PagBank, Asaas, Pagar.me, Efí e iugu funcionam assim para a maioria dos clientes, e por isso vendem "gateway" e "conta" no mesmo pacote.
+
+**Intermediador** ou facilitador é o nome comercial que muitos desses subadquirentes usam quando o produto inclui checkout pronto, link de pagamento e gestão de disputa. Na prática, para um SaaS pequeno, intermediador e subadquirente quase sempre são a mesma empresa.
+
+Com gateway puro e adquirente próprio, o repasse vem do adquirente e o risco de crédito do intermediário some. Com subadquirente, você depende do saldo e das regras de retenção dele, e o contrato precisa dizer em quantos dias o dinheiro chega e em que casos ele pode ficar bloqueado.
+
+## Como cada método chega até você
+
+### Pix
+
+O Pix é o sistema de pagamento instantâneo criado e operado pelo Banco Central. A [página oficial do Pix](https://www.bcb.gov.br/estabilidadefinanceira/pix) registra mais de 7,8 bilhões de transações e mais de R$ 3,8 trilhões movimentados em setembro de 2026, com recorde de 318,1 milhões de transações em um único dia, 4 de setembro de 2026. No ano de 2025, segundo o [Relatório de Gestão do Pix 2023-2025](https://www.bcb.gov.br/detalhenoticia/21227/noticia), foram quase 80 bilhões de transações e 12,8 milhões de empresas usuárias.
+
+Para quem vende online, o detalhe técnico é o QR Code dinâmico gerado pela API Pix, que permite baixa automática no sistema assim que o cliente paga. O BC [informa](https://www.bcb.gov.br/detalhenoticia/21252/noticia) que esse tipo de QR Code passou de 5% das transações em 2021 para 40% em 2025. Na [página Sobre o Pix](https://www.bcb.gov.br/estabilidadefinanceira/pix-sobre), o BC lembra que o Pix é gratuito para pessoa física e tem custo mais baixo para pessoa jurídica, e que o limite noturno padrão para pessoa física, após as 20h, é de R$ 1.000. Esse limite derruba compras de valor alto feitas à noite, então vale mostrar o boleto ou o cartão como alternativa no checkout.
+
+### Pix Automático
+
+O [Pix Automático](https://www.bcb.gov.br/estabilidadefinanceira/pix-automatico) é a resposta do BC para cobrança recorrente: o pagador autoriza uma vez, define um valor máximo e o banco dele paga cada cobrança na data. Ele entrou em funcionamento em [16 de junho de 2025](https://www.bcb.gov.br/detalhenoticia/20713/noticia). Para o pagador não há tarifa; para o recebedor, a página do BC diz que o custo depende do prestador de serviço de pagamento contratado.
+
+Para SaaS, isso muda a conta da assinatura. Cliente sem cartão de crédito, ou com limite apertado, passa a ter um débito recorrente sem precisar pagar boleto todo mês. O fluxo exige que o seu provedor ofereça a autorização e o envio da cobrança nos dias anteriores ao vencimento, e que o seu sistema trate a recusa ou o cancelamento feito pelo próprio pagador no app do banco.
+
+### Boleto
+
+O boleto ainda serve para B2B e para quem não quer usar cartão, mas a baixa leva dias. A própria página do BC compara: o Pix com QR Code liquida na hora, enquanto boletos levam dias para serem baixados. Em um SaaS, isso significa liberar o acesso só depois da compensação ou aceitar o risco de liberar antes.
+
+### Cartão e parcelamento
+
+O cartão de crédito sustenta o parcelamento, hábito forte no Brasil. Há dois modelos. No parcelado com juros, o comprador paga o acréscimo e você recebe o valor cheio em parcelas. No parcelado sem juros, você absorve o custo: ou recebe uma parcela por mês, ou paga para antecipar. É aqui que a taxa anunciada engana, porque a diferença entre receber em 30 dias e receber na hora pode valer mais que a própria taxa de processamento.
+
+## Quanto cobram: as páginas de preço lidas hoje
+
+As taxas abaixo são as que cada provedor publica como padrão na própria página. Todas dizem, de um jeito ou de outro, que o contrato real pode variar. Use a tabela como ponto de partida para negociar, não como preço final.
+
+| Provedor | Pix | Boleto | Cartão de crédito à vista | Prazo do cartão |
+|---|---|---|---|---|
+| [Mercado Pago (link de pagamento)](https://www.mercadopago.com.br/ferramentas-para-vender/link-de-pagamento) | 0,99% na hora | 3,99% em até 3 dias | 4,98% na hora, 4,48% em 14 dias, 3,99% em 30 dias | escolhido pelo vendedor |
+| [PagBank (vendas online)](https://pagbank.com.br/para-seu-negocio/online) | 1,89% na hora | não aparece no quadro | 4,99% + R$ 0,40 em 14 dias, 3,99% + R$ 0,40 em 30 dias | 14 ou 30 dias |
+| [Asaas](https://www.asaas.com/precos-e-taxas) | R$ 2,15 por transação | R$ 2,15 por transação | R$ 0,49 + 2,99% | antecipação em até 2 dias úteis |
+| [Efí](https://sejaefi.com.br/tarifas) | 1,19% | R$ 3,45 | 3,49% | até 31 dias |
+| [Stripe Brasil](https://stripe.com/br/pricing) | 1,19% (só por convite) | R$ 3,45 | 3,99% + R$ 0,39 | não informado |
+| [Pagar.me](https://pagar.me/precos/) | 0,99% | não informado | 4,19% | "dia seguinte", com asterisco sem nota visível |
+| [iugu](https://www.iugu.com/planos) | não publica | não publica | não publica | não publica |
+
+O que cada página acrescenta:
+
+- [Mercado Pago](https://www.mercadopago.com.br/ferramentas-para-vender/link-de-pagamento) cobra parcelamento sem acréscimo à parte, de 2,53% em 2x até 17,28% em 12x e 24,28% em 18x. A página avisa que alguns vendedores novos recebem em 7 dias até liberar o recebimento na hora, e que não há taxa mensal.
+- [PagBank](https://pagbank.com.br/para-seu-negocio/online) mostra débito a 2,39% com recebimento em 1 dia e cobra 2,99% ao mês para oferecer parcelamento sem acréscimo.
+- [Asaas](https://www.asaas.com/precos-e-taxas) tem preço promocional por 3 meses para novos clientes (Pix e boleto a R$ 1,08, cartão à vista a R$ 0,49 + 1,99%), sem mensalidade nem taxa de adesão. Parcelado vai de R$ 0,49 + 3,49% (2 a 6 parcelas) a R$ 0,49 + 4,29% (13 a 21 parcelas). Antecipar cartão custa 1,25% ao mês; antecipar boleto, 5,79% ao mês.
+- [Efí](https://sejaefi.com.br/tarifas) cobra 3,99% no parcelado de 2x a 6x e 4,39% de 7x a 12x, recebendo uma parcela a cada 31 dias, ou 3,49% + 1,29% por parcela antecipada para receber o total. O Pix Automático custa R$ 3,50 por Pix liquidado, e a página lista pagamento recorrente e integração por API como gratuitos.
+- [Stripe Brasil](https://stripe.com/br/pricing) soma 2% para cartões internacionais e cobra R$ 55,00 por disputa recebida, mais R$ 55,00 se você contestar manualmente, valor devolvido só se você ganhar.
+- O site da [Pagar.me](https://pagar.me/precos/) hoje leva à Stone, e a página de preços mostrava um banner de Black Friday com três números (Pix, crédito à vista, prazo). Boleto, parcelado e antecipação não aparecem.
+- [iugu](https://www.iugu.com/planos) não mostra taxa na página de planos. Ela informa que cobra assinatura mensal, pode somar taxa de configuração e tarifas variáveis, e que o split exige o plano "Essencial + Split". O preço sai do contato com consultores.
+
+Mercado Pago, Stone e PagBank também vendem maquininhas, e as taxas de venda presencial são outras. A tabela acima cobre só venda online.
+
+## Como escolher
+
+### Calcule o custo efetivo da sua composição de vendas, não a taxa anunciada
+
+Pegue o histórico recente de vendas, ou a sua projeção, e divida por método: quanto em Pix, em boleto, em cartão à vista e em cada faixa de parcelas. Aplique a tabela de cada provedor. Um SaaS que recebe a maior parte em Pix sente mais a diferença entre o Pix a 0,99% do [Mercado Pago](https://www.mercadopago.com.br/ferramentas-para-vender/link-de-pagamento) e a 1,89% do [PagBank](https://pagbank.com.br/para-seu-negocio/online) do que a diferença entre 3,99% e 4,99% no cartão do [PagBank](https://pagbank.com.br/para-seu-negocio/online). Taxa fixa por transação, como a do Asaas, favorece tíquetes altos e pesa em tíquetes pequenos.
+
+### Prazo de recebimento e antecipação
+
+Cartão em 30 dias é o padrão mais barato na maioria das tabelas. Receber antes tem custo. No [Mercado Pago](https://www.mercadopago.com.br/ferramentas-para-vender/link-de-pagamento), a diferença entre 30 dias e na hora é de quase um ponto percentual; no [Asaas](https://www.asaas.com/precos-e-taxas), a antecipação de cartão sai por 1,25% ao mês. Modele o fluxo de caixa com o prazo real, incluindo a retenção de 7 dias que o [Mercado Pago](https://www.mercadopago.com.br/ferramentas-para-vender/link-de-pagamento) aplica a alguns vendedores novos.
+
+### Assinaturas e recorrência
+
+Cobrança recorrente no cartão precisa de cofre de cartões (o provedor guarda o token), nova tentativa automática quando a cobrança falha e aviso ao cliente. Pergunte como o provedor trata cartão vencido ou trocado e se ele expõe eventos separados para "cobrança criada", "paga", "falhou" e "estornada". Para Pix Automático, confirme se o provedor já oferece a jornada de autorização e quanto cobra por Pix liquidado, como a Efí faz na própria página.
+
+### API, documentação e webhooks
+
+Leia a documentação antes de assinar. Procure três coisas: chave de idempotência na criação de cobrança, para que uma nova tentativa após falha de rede não gere cobrança duplicada; webhooks assinados, para validar que o evento veio do provedor; e um ambiente de testes que simule Pix pago, boleto vencido e disputa. A ordem de chegada dos webhooks não é garantida, então o seu sistema deve tratar "pago" antes de "criado" sem quebrar.
+
+### Split
+
+Marketplace e plataforma que repassa parte da venda a parceiros precisa de split nativo, em que o provedor divide o valor na liquidação. Fazer split na mão, recebendo tudo e transferindo depois, coloca o seu CNPJ no meio do fluxo de dinheiro de terceiros, com efeito fiscal e regulatório. A iugu, por exemplo, vende split em plano separado.
+
+### Chargeback e contestação
+
+No cartão, o cliente pode contestar a compra com o banco emissor. Veja quanto o provedor cobra por disputa (a [Stripe Brasil](https://stripe.com/br/pricing) publica R$ 55,00), quem monta a defesa e em quanto tempo o valor volta para a sua conta se você ganhar. No Pix, o BC criou o Mecanismo Especial de Devolução (MED), citado na [página do Pix](https://www.bcb.gov.br/estabilidadefinanceira/pix), para casos de fraude; o seu provedor precisa avisar quando um valor recebido entrar nesse fluxo.
+
+## Quanto custa ter o próprio gateway
+
+Construir a camada técnica de um gateway é viável para uma equipe de engenharia. A parte cara é regulatória. Pelo [Voto 111/2025 do Banco Central](https://normativos.bcb.gov.br/Votos/BCB/2025111/Voto_do_BC_111_2025.pdf), a Resolução BCB nº 80 dispensava de autorização o credenciador que não passasse de R$ 500 milhões de movimentação. O [voto](https://normativos.bcb.gov.br/Votos/BCB/2025111/Voto_do_BC_111_2025.pdf) propôs exigir autorização para todo credenciador e emissor de pós-pago, e quem já operava antes de 5 de setembro de 2025 sem autorização deveria pedir entre 1 e 31 de maio de 2026, sob pena de encerrar as atividades em até trinta dias. O [mesmo documento](https://normativos.bcb.gov.br/Votos/BCB/2025111/Voto_do_BC_111_2025.pdf) registra que, desde 2013, o BC analisou 408 pedidos de autorização de instituições de pagamento e autorizou 203.
+
+Para um SaaS, basta um ou dois provedores bons e um sistema de cobrança que não amarre o produto a nenhum deles.
+
+## Onde fica a sua lógica de cobrança
+
+O gateway resolve o recebimento. Ele não decide quantos usuários o plano Pro libera, quanto da cota mensal o cliente já consumiu ou quando a fatura vencida suspende o acesso. Se essa lógica fica espalhada nos webhooks de um provedor, trocar de provedor ou somar um segundo vira reescrita.
+
+Uma saída é manter assinaturas, créditos e direitos de acesso num serviço próprio, com o provedor de pagamento como um adaptador. É o modelo do [INITE Billing](/docs/entitlements), um serviço de cobrança open source (AGPL-3.0) e auto-hospedado em que um pedido pode ser pago por cartão, Pix ou cripto sem mudar o código da integração, e que não cobra percentual da receita: você paga só as taxas do seu provedor de pagamento. Ele fica acima do provedor de pagamento, sem fazer o papel de gateway ou de adquirente: recebimento e roteamento continuam com o provedor que você escolher na tabela acima.
+
+## Por onde começar
+
+Se você vende só no Brasil e a maior parte entra por Pix, priorize a taxa de Pix, o suporte a Pix Automático e a API Pix com QR Code dinâmico. Se o cartão parcelado é relevante, compare o custo de antecipação e o prazo, não só a taxa à vista. Se vende também para fora, um provedor com cobertura internacional, como a Stripe, entra na conta mesmo com Pix por convite. Em qualquer caso, leia a página de preço do provedor no dia em que for assinar, porque promoções para clientes novos e banners de Black Friday mudam o número que você vê.

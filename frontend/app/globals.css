@@ -261,6 +261,43 @@ body {
   letter-spacing: -0.01em;
 }
 
+/* The family research link under a blog post (@inite/landing/family-research). */
+.docs .family-research {
+  margin-top: 3.5rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--d-border);
+  border-left: 2px solid var(--d-accent);
+  border-radius: 0.75rem;
+  background: var(--d-elevated);
+}
+.docs .family-research-label {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--d-faint);
+}
+.docs .family-research-title {
+  margin-top: 0.375rem;
+  font-size: 15px;
+  font-weight: 600;
+}
+.docs .family-research-title a {
+  color: var(--d-text);
+  text-decoration: underline;
+  text-decoration-color: var(--d-accent);
+  text-underline-offset: 3px;
+}
+.docs .family-research-title a:hover {
+  color: var(--d-accent-hover);
+}
+.docs .family-research-lead {
+  margin-top: 0.25rem;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--d-muted);
+}
+
 /* ------------------------------------------------------------
    Mermaid diagrams (components/docs/Mermaid.tsx). Branded figure
    card, loading skeleton, hover zoom -> native <dialog>. Scoped

@@ -1,0 +1,108 @@
+---
+title: "Merchant of record: who sells, who owes the tax, and what it costs"
+description: "What a merchant of record is, what it takes off your hands, what Paddle, Lemon Squeezy, FastSpring and Stripe charge, and when the fee is worth it."
+date: "2026-11-03"
+author: "INITE Billing"
+category: "SaaS billing"
+tags: ["pricing", "merchant of record", "sales tax", "vat"]
+directAnswer: "A merchant of record is the company that legally sells your product to the customer: its name is on the card statement, it collects and remits sales tax and VAT, and it answers for refunds and chargebacks. You sell to the merchant of record and it resells to your buyers, which is why it charges more than a plain payment processor."
+faqs:
+  - question: "What is a merchant of record?"
+    answer: "A merchant of record is the legal entity that sells a product to the end customer. It appears on the customer's card statement, calculates, collects and remits indirect taxes such as VAT, GST and US sales tax, and is the party the cardholder disputes a charge with. A software company that uses one effectively sells through it, the way a publisher sells through a distributor."
+  - question: "What is the difference between a merchant of record and a seller of record?"
+    answer: "In everyday SaaS usage the two terms mean the same thing, the party that the customer legally buys from. Some marketplaces use seller of record for the business listing the product and merchant of record for the entity that processes the payment, so read the contract for whose name is on the invoice and who is registered for tax in the buyer's country."
+  - question: "Is Stripe a merchant of record?"
+    answer: "Not by default. With Stripe Payments, Billing and Tax your own business is the merchant of record and Stripe is your processor. Stripe becomes the merchant of record only when you turn on Managed Payments, its separate product for digital goods sold through Checkout or Payment Links, which costs an extra fee per transaction on top of normal processing."
+  - question: "Do I need a merchant of record?"
+    answer: "You need one when you sell digital products to consumers in many countries and would otherwise have to register, collect and file indirect tax in each of them yourself. You probably do not need one if you sell mostly to businesses, mostly in one country, or at a volume where a tax tool plus an accountant costs less than the extra percentage on every sale."
+---
+
+A merchant of record (MoR) is the company that legally sells your product to your customer. If you put Paddle or Lemon Squeezy in front of your SaaS, your buyer is their customer, the tax registrations are theirs, and the chargeback lands on them first. That convenience is what you pay for, and it is priced as a share of every sale.
+
+## What a merchant of record is
+
+Paddle's own explainer gives the plain definition: a merchant of record is ["a legal entity responsible for selling goods or services to an end customer"](https://www.paddle.com/blog/what-is-merchant-of-record). The MoR is the party whose name appears on the cardholder's statement, and that name tells the bank, the tax authority and the customer who made the sale.
+
+In practice the arrangement is a resale. You license or wholesale your product to the MoR, the MoR sells it to the buyer at your price plus local tax, and it pays you the net amount minus its fee. Your Stripe or Adyen account does not hold the buyer's money at any point. The MoR's acquiring account does.
+
+### Who is legally the seller
+
+With a merchant of record, the contract of sale is between the buyer and the MoR. The invoice is issued in the MoR's name, under its tax numbers, and the buyer's statement carries its descriptor. Stripe's Managed Payments docs show what this looks like on a statement: the customer's statement reads ["LINK.COM* [Your statement descriptor]"](https://docs.stripe.com/payments/managed-payments/how-it-works), and purchases are presented as "Sold through Link".
+
+Your terms of service still govern the product itself. The MoR's terms govern the purchase, which is why every MoR checkout shows its own payment terms in the footer.
+
+### Tax: VAT, GST and US sales tax
+
+This is the main reason companies sign up. When you sell digital services to consumers abroad, the tax is usually owed where the buyer lives, and somebody has to register there, charge the right rate, file and pay.
+
+In the EU, a business with no establishment in the Union can register once under the non-Union scheme of the One Stop Shop and declare B2C services to every member state through one return. The European Commission's OSS page says the scheme started on [1 July 2021](https://vat-one-stop-shop.ec.europa.eu/one-stop-shop_en), replacing the older MOSS, and that returns in the non-Union scheme are filed [quarterly](https://vat-one-stop-shop.ec.europa.eu/one-stop-shop_en). The same page describes a [EUR 10,000](https://vat-one-stop-shop.ec.europa.eu/one-stop-shop_en) threshold for cross-border electronic services, below which a supplier stays under its home rules, and it frames that threshold around suppliers established in a single member state. A US or Brazilian company selling software to EU consumers should assume it owes VAT from the first sale.
+
+In the US, every state with a sales tax sets its own economic nexus test. South Dakota, the state whose law the Supreme Court upheld in Wayfair, counts a remote seller once its [gross revenue from sales into South Dakota exceeds $100,000](https://dor.sd.gov/businesses/taxes/sales-use-tax/) in the previous or current calendar year. New York uses [gross receipts over $500,000 and more than 100 sales](https://www.streamlinedsalestax.org/state-details/new-york) over the preceding four sales tax quarters. Whether SaaS is taxable at all differs by state too, so the work is a matrix of thresholds, product codes and filing calendars.
+
+A merchant of record takes that matrix on as its own liability. Paddle's pricing page says it collects the right rate, tracks filing deadlines and submits the returns, under ["Global tax and regulatory compliance"](https://www.paddle.com/pricing). Stripe's Managed Payments calculates, collects, files and remits in [more than 80 countries](https://docs.stripe.com/payments/managed-payments), and its docs are frank that for any country outside that list "you remain responsible for compliance" ([how it works](https://docs.stripe.com/payments/managed-payments/how-it-works)).
+
+### Chargebacks and refunds
+
+The cardholder disputes a charge with the merchant whose name is on the statement, so the dispute process runs through the MoR. Paddle lists ["Fraud protection, chargebacks, and buyer support"](https://www.paddle.com/pricing) in its plan. Stripe's Managed Payments says Stripe reviews each dispute and submits evidence on your behalf, and that it may accept a dispute it expects to lose ([how it works](https://docs.stripe.com/payments/managed-payments/how-it-works)).
+
+Similar clauses exist elsewhere, so note two in Stripe's version. Received disputes still incur Stripe's dispute fee, which on the UK page is [£20.00 per dispute](https://stripe.com/gb/pricing). And if Stripe asks you for product input on a support case and you do not answer within [48 hours](https://docs.stripe.com/payments/managed-payments/how-it-works), it may refund the buyer without your approval, so the call on a disputed sale is no longer yours.
+
+Refunds follow the same logic. In some jurisdictions Stripe must keep and remit the original sales tax even after a full refund, so your balance is reduced by that tax amount ([how it works](https://docs.stripe.com/payments/managed-payments/how-it-works)).
+
+### Consumer law
+
+The seller owes the buyer the statutory consumer rights of the buyer's country. In the EU that includes the right to cancel an online purchase [within 14 days without giving a reason](https://europa.eu/youreurope/citizens/consumers/shopping/returns/index_en.htm), with an exception for digital content the buyer agreed to start downloading or streaming immediately while accepting the loss of that right. An MoR builds the consent step, the receipts and the renewal reminders into its checkout. Stripe's Managed Payments, for instance, sends a renewal email before the 6-month and 12-month anniversary of a subscription to customers in Australia and the United Kingdom even if you turned those emails off ([how it works](https://docs.stripe.com/payments/managed-payments/how-it-works)).
+
+## Who offers merchant of record services
+
+Fees below are taken from each vendor's own page as of 3 November 2026.
+
+**Paddle.** The pay-as-you-go plan is ["5% + 50¢"](https://www.paddle.com/pricing) per Checkout transaction, and the page states Paddle acts as your merchant of record. It mentions bespoke pricing for orders under [$10](https://www.paddle.com/pricing) and a custom plan for high-volume, low-value sales.
+
+**Lemon Squeezy.** Its pricing page lists ["5% + 50¢"](https://www.lemonsqueezy.com/pricing) per transaction and says "Lemon Squeezy is your merchant of record". It also warns that transactions outside the US "may encounter small additional fees" without stating them. Lemon Squeezy has processed payments through Stripe since its founding, and Stripe acquired it in a deal announced on [July 26, 2024](https://www.lemonsqueezy.com/blog/stripe-acquires-lemon-squeezy). In its [January 28, 2026 update](https://www.lemonsqueezy.com/blog/2026-update) the CEO wrote that the team is building on Stripe's merchant of record product and that the goal is "to provide Lemon Squeezy users an easy way to migrate to Stripe Managed Payments". If you are choosing today, treat Lemon Squeezy as the on-ramp to Stripe's product.
+
+**FastSpring.** Its pricing page says "We're your merchant of record" and describes a commission that varies with volume, but [publishes no rate](https://fastspring.com/pricing/). You get a number from sales.
+
+**Stripe Managed Payments.** Stripe's own docs table is unambiguous: with Managed Payments the merchant of record is Stripe, and with every other Stripe product it is ["Your business"](https://docs.stripe.com/payments/managed-payments). The fee is [3.5% per successful transaction](https://support.stripe.com/questions/managed-payments-pricing?locale=en-GB), calculated on the full amount including tax, and it is charged in addition to standard processing fees. For a UK merchant charging a standard UK card, that standard fee is [1.5% plus 20p](https://stripe.com/gb/pricing), and subscriptions add Stripe Billing's [0.7% of Billing volume](https://stripe.com/billing/pricing). Managed Payments covers digital products only, works only through Checkout or Payment Links, and does not support Connect, custom checkout domains or embedded Elements flows ([overview](https://docs.stripe.com/payments/managed-payments), [how it works](https://docs.stripe.com/payments/managed-payments/how-it-works)).
+
+## Merchant of record, payment processor, orchestrator, billing software
+
+These categories get mixed up. The table sorts them by who the buyer legally buys from, which decides tax and liability.
+
+| | Merchant of record | Payment processor | Payment orchestrator | Billing software |
+|---|---|---|---|---|
+| Legal seller | The MoR | You | You | You |
+| Name on card statement | The MoR's | Yours | Yours | Yours |
+| Registers and files VAT, GST, sales tax | The MoR | You (a tax add-on can calculate) | You | You |
+| First in line for chargebacks | The MoR | You | You | You |
+| Moves the money | Its own acquiring | Yes, into your account | Routes between your processor accounts | No, it drives your processor |
+| Examples | Paddle, Lemon Squeezy, FastSpring, Stripe Managed Payments | Stripe Payments, Adyen | Orchestration layers over several acquirers | Stripe Billing, Chargebee, INITE Billing |
+| Typical pricing | A bundled share of each sale | Per-transaction card fee | Platform or per-transaction fee | Share of billing volume, licence, or free |
+
+A processor gives you the rails and leaves you as the seller. An orchestrator sits above several processors and decides which one handles each payment, and you are still the seller on every one of them. Billing software manages plans, invoices, usage and entitlements and tells a processor what to charge. INITE Billing belongs in that last column: it is self-hosted billing software that runs on your own processor accounts, and you remain the seller, with the tax and the chargebacks that come with it. It is not a merchant of record.
+
+Stacking the last three can look like an MoR on a diagram, but it is not one. You can calculate tax with a tax API and still be the party that must register and file.
+
+## When a merchant of record is worth its fee
+
+The fee is high because the MoR carries risk and paperwork. Compare a UK seller on plain Stripe (a [1.5% plus 20p](https://stripe.com/gb/pricing) card fee plus [0.7%](https://stripe.com/billing/pricing) for subscriptions) with the same sale through Paddle at [5% plus 50¢](https://www.paddle.com/pricing). The gap is a few percent of revenue, every month, for as long as you stay.
+
+An MoR is the right call when most of these are true:
+
+- you sell to consumers or prosumers, where VAT and sales tax are charged on the sale and cannot be reverse-charged;
+- your buyers are spread across many countries and states, so you would cross thresholds in places where you have no accountant;
+- you are small enough that the time spent on tax returns in several countries is worth more than the percentage;
+- your product fits the MoR's acceptable-use and product rules (digital goods, software, content).
+
+It is usually the wrong call when:
+
+- you sell B2B, where EU VAT on services is generally reverse-charged by the business buyer and US exemptions are common;
+- most of your revenue comes from one country where you are already registered;
+- you need flows an MoR will not run, such as marketplace payouts (Stripe's product does not support Connect), custom checkout domains or invoices you issue yourself;
+- your volume is large enough that a tax tool plus an adviser costs less than the margin you hand over, and you want your own name on the statement and your own customer relationship.
+
+A sensible path for many SaaS companies is to start on an MoR, grow until the fee is a real line in the P&L, then move to your own processor plus a tax service once you know which countries matter. Plan that exit early: ask the MoR how you get your customers' payment methods and subscription records out, because with an MoR the customer relationship and the card tokens sit in its account, not yours.
+
+## What to check before you sign
+
+Read the coverage list of countries where the MoR files tax and compare it with your sales. Ask who issues refunds and on what timeline, and whether the MoR can refund without you. Find the dispute fee, the payout schedule, the reserve policy and the list of products it will not sell. Confirm which checkout surfaces you can use, since Stripe's version is limited to Checkout and Payment Links. And price the whole stack on your real numbers, card fee and billing fee included, against a realistic estimate of what doing tax yourself would cost.

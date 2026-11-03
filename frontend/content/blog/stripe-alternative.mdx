@@ -1,0 +1,116 @@
+---
+title: "Stripe alternative: how to choose by fees, countries, payouts and billing"
+description: "Compare Stripe alternatives by published fees, merchant of record vs processor, payout timing and subscription or usage billing, with sources."
+date: "2026-11-03"
+author: "INITE Billing"
+category: "SaaS billing"
+tags: ["pricing", "payments", "stripe", "merchant of record"]
+directAnswer: "The right Stripe alternative depends on what you want to change. Paddle and Lemon Squeezy take over tax and disputes as merchant of record at a higher fee; Adyen, Braintree, Mollie and regional providers such as Razorpay or Mercado Pago are processors with different prices, countries and payout speeds. If Stripe works but misses a market or method, adding a second rail behind one billing layer is usually cheaper than migrating."
+faqs:
+  - question: "Is there anything better than Stripe?"
+    answer: "For some businesses, yes. A company that wants someone else to file sales tax and VAT is better served by a merchant of record such as Paddle or Lemon Squeezy. A large business that wants interchange-plus pricing may get a lower effective rate from Adyen. A seller in India or Brazil often reaches more local buyers with Razorpay or Mercado Pago. For a software company that already runs well on Stripe, better usually means adding a provider for the gap, not replacing Stripe."
+  - question: "What is the cheapest alternative to Stripe?"
+    answer: "There is no single cheapest one, because the rate depends on where your buyers' cards are issued, the currency and the payment method. Compare each provider's published rate for your actual mix of cards, add currency conversion and cross-border surcharges, and remember that a merchant of record fee includes tax handling you would otherwise pay for separately."
+  - question: "Is Paddle a Stripe alternative?"
+    answer: "Paddle is an alternative for one specific job. It acts as merchant of record, so it sells to your customer, collects and remits the tax, and handles chargebacks and buyer support. Stripe as a processor leaves all of that with you unless you use its own merchant of record product. Paddle pays out monthly, which matters for cash flow."
+  - question: "Can I use two payment processors?"
+    answer: "Yes. Many businesses run Stripe for cards in most countries and a second provider for a region or a local method such as Pix or UPI. The work is in keeping one record of who paid for what: one customer, one subscription state and one entitlement check, whichever provider took the money. Put that record in your own billing layer rather than in either provider."
+---
+
+Most people searching for a Stripe alternative want one of four things: lower fees, a country or currency Stripe does not serve well, faster payouts, or someone else to carry sales tax and chargebacks. Those are different problems with different answers, and a listicle ranking gateways by star rating answers none of them. This guide compares the main options by the published numbers on each provider's own pages, read on 3 November 2026, and says when staying on Stripe and adding a second rail is the better move.
+
+## First decide what kind of provider you need
+
+Payment companies fall into two groups, and the two are often mixed up.
+
+A payment processor (Stripe in its default mode, Adyen, Braintree, Checkout.com, Mollie, Square, Razorpay, Mercado Pago) moves the money. You are the seller on the receipt. You register for VAT, sales tax and GST where you owe it, you file the returns, and you answer the chargebacks.
+
+A merchant of record (Paddle, Lemon Squeezy) buys your product and resells it to the customer. Its name is on the transaction, so it collects and remits the tax and handles disputes. Paddle's pricing page says that on pay-as-you-go it "acts as your Merchant of Record" and submits sales tax returns and payments on your behalf ([Paddle pricing](https://www.paddle.com/pricing)). Lemon Squeezy describes the same arrangement, including VAT ([Lemon Squeezy pricing](https://www.lemonsqueezy.com/pricing)).
+
+The distinction has blurred inside Stripe itself. Stripe acquired Lemon Squeezy, as Lemon Squeezy announced on [July 26, 2024](https://lemonsqueezy.com/blog/stripe-acquires-lemon-squeezy), and now sells its own merchant of record product, Managed Payments, which handles sales tax, VAT and GST "in more than 80 countries" for digital products ([Stripe docs, Managed Payments](https://docs.stripe.com/payments/managed-payments)). So if tax is the whole reason you are leaving Stripe, check that product first. It does not support Connect, embedded Elements flows, or subscriptions created outside Checkout or Payment Links (same page).
+
+## Fees: the published numbers
+
+Every rate below comes from the provider's own pricing page. Card fees depend on the country of your account and of the buyer's card, so the region is named each time. Stripe's main pricing page changes by visitor location, so the Stripe card figures here are for a UK account, with Brazil's added for comparison.
+
+| Provider | Model | Published card rate (region) | Extra charges named on the page |
+|---|---|---|---|
+| Stripe | Processor | 1.5% + 20p, standard UK cards ([UK](https://stripe.com/gb/pricing)) | 2.5% + 20p EEA cards, 3.15% + 20p international cards, plus 2% if conversion is needed |
+| Stripe | Processor | 3.99% + R$0.39, domestic cards ([Brazil](https://stripe.com/br/pricing)) | |
+| Adyen | Processor | $0.13 processing fee + interchange + 0.60%, Visa and Mastercard ([global](https://www.adyen.com/pricing)) | Minimum invoice by industry |
+| Braintree (PayPal) | Processor | 2.89% + 0.29 USD ([US](https://www.paypal.com/us/enterprise/paypal-braintree-fees)) | Additional 1% for non-USD, additional 1% for cards issued outside the US |
+| Checkout.com | Processor | Not published, quoted per business ([pricing](https://www.checkout.com/pricing)) | |
+| Square | Processor | 2.9% + 30¢ to 3.3% + 30¢ online, by plan ([US](https://squareup.com/us/en/payments/our-fees)) | 3.5% + 15¢ for card on file or keyed entry |
+| Mollie | Processor | 1.80% + €0.25, EEA consumer cards ([pricing](https://www.mollie.com/pricing)) | 3.25% + €0.25 non-EEA cards |
+| Razorpay | Processor | 2% domestic cards and UPI ([India](https://razorpay.com/pricing/)) | Up to 3% international cards, 18% GST on the fee |
+| Mercado Pago | Processor | 4.98% credit card paid out at once, 3.99% if paid out in 30 days, payment link ([Brazil](https://www.mercadopago.com.br/ferramentas-para-vender/link-de-pagamento)) | 0.99% Pix |
+| Paddle | Merchant of record | 5% + 50¢ per Checkout transaction ([pricing](https://www.paddle.com/pricing)) | Bespoke pricing for products under $10 |
+| Lemon Squeezy | Merchant of record | 5% + 50¢ per transaction ([pricing](https://www.lemonsqueezy.com/pricing)) | "Small additional fees" outside the US |
+
+If you sell subscriptions through Stripe, add Stripe Billing on top of the card fee. Pay as you go, it costs [0.7% of Billing volume](https://stripe.com/billing/pricing).
+
+The headline rate matters less than the lines below it.
+
+**Cross-border surcharges.** A UK Stripe account pays [1.5% on a UK card and 3.15% on an international one](https://stripe.com/gb/pricing), and Braintree [adds 1% for a foreign card and another 1% for a non-USD charge](https://www.paypal.com/us/enterprise/paypal-braintree-fees). A SaaS company with most of its buyers abroad should compare the international line, because that is the rate it actually pays.
+
+**Interchange-plus versus blended.** Adyen's rate passes interchange through and adds a fixed markup, so a debit card from the EEA costs much less than a premium US credit card. Blended rates (Stripe's standard pricing, Square, Braintree) average that out. Interchange-plus tends to win at volume, and Adyen's minimum invoice means it is rarely the cheap option for a small company.
+
+**Merchant of record fees include work.** Paddle's [5% + 50¢](https://www.paddle.com/pricing) looks expensive next to a [1.5% card rate](https://stripe.com/gb/pricing), but it covers registering, collecting and filing tax in places where you would otherwise need an accountant and possibly a local registration. If you sell to consumers in many tax jurisdictions, price that work before you compare percentages. If you sell to a few dozen businesses in two countries, a processor plus your own VAT filing is usually cheaper.
+
+## Countries and currencies
+
+Stripe lets you charge customers in [more than 135 currencies](https://docs.stripe.com/currencies), but where you can open an account is a separate question, and some of the payment methods a region expects are only available to accounts based there.
+
+- **Razorpay** is built around Indian methods. UPI sits on its pricing page with zero MDR and the 2% platform fee ([Razorpay pricing](https://razorpay.com/pricing/)).
+- **Mercado Pago** prices credit cards by how soon you want the money and charges 0.99% for Pix on its payment link product ([Mercado Pago](https://www.mercadopago.com.br/ferramentas-para-vender/link-de-pagamento)). A Brazilian buyer who expects Pix or instalments may leave a checkout that offers neither.
+- **Mollie** prices EEA consumer cards separately from non-EEA cards and lists iDEAL among its methods ([Mollie pricing](https://www.mollie.com/pricing)), which suits a business whose buyers are mostly in Europe.
+- **Paddle and Lemon Squeezy** sell into many countries as the legal seller, so the question for them is which countries they will let you sell from and which product types they accept. Read their acceptable-use rules before you build.
+
+Before you choose, list the five countries that bring most of your revenue and the payment method most people there use. Then check that the provider supports an account in your country and that method for buyers in theirs.
+
+## Payout timing
+
+| Provider | What its documentation says |
+|---|---|
+| Stripe | First payout typically 7 to 14 days after the first live payment. After that, card funds settle in 2 business days in the US; in the UK, 7 calendar days at first, then 3 business days; in Brazil, 30 calendar days for cards and 2 business days for Pix and boleto ([Stripe payouts docs](https://docs.stripe.com/payouts)) |
+| Adyen | Daily payout batches by default; most accounts have a 3 business day delay, 2 business days if at least 80% of volume is local in currencies such as EUR, GBP or USD; 7 business days if most payments are American Express ([Adyen docs](https://docs.adyen.com/account/sales-day-payout)) |
+| Mollie | Weekly on Wednesdays by default; daily, every business day, monthly or manual can be chosen ([Mollie docs](https://docs.mollie.com/docs/payouts)) |
+| Paddle | Monthly. Balances above the threshold, $100 by default, are paid between the 2nd and the 15th, and can take up to 3 working days to arrive ([Paddle help](https://www.paddle.com/help/manage/get-paid/when-and-how-do-i-get-paid)) |
+| Lemon Squeezy | Twice a month by bank or PayPal ([Lemon Squeezy pricing](https://www.lemonsqueezy.com/pricing)) |
+| Mercado Pago | Immediate, 14 days or 30 days for credit cards, each at a different rate ([Mercado Pago](https://www.mercadopago.com.br/ferramentas-para-vender/link-de-pagamento)) |
+
+A merchant of record holds your money for weeks by design, because it is the seller and settles with you afterwards. A processor settles in days. If you run on thin cash and pay contractors weekly, a monthly payout cycle is a real cost even when the fee looks fair. In Brazil even a processor pays cards in [30 days by default](https://docs.stripe.com/payouts), and faster settlement costs extra with both Stripe and [Mercado Pago](https://www.mercadopago.com.br/ferramentas-para-vender/link-de-pagamento).
+
+## Subscriptions and usage billing
+
+For a SaaS or AI product, the billing engine matters as much as the processor.
+
+Stripe's subscription engine is the most mature of the group. For usage, Stripe now points new integrations to Metronome, which it [finished acquiring in January 2026](https://stripe.com/newsroom/news/stripe-completes-metronome-acquisition). The older Meters API stays fully supported for existing integrations ([Stripe usage-based billing docs](https://docs.stripe.com/billing/subscriptions/usage-based)). That leaves two usage models in one vendor, and a new integration should pick one deliberately.
+
+Paddle runs subscriptions natively. Its usage-based billing is in "early access (beta)": you apply to join, Paddle tracks prepaid allowances through meters and usage balances, and during early access it "never blocks usage or bills for overage" ([Paddle developer docs](https://developer.paddle.com/build/usage-based-billing)). Your app has to listen for the `usage_balance.depleted` webhook and decide what to cut off. Unused allowance expires at renewal.
+
+Lemon Squeezy supports metered subscriptions: you report usage records through its API and it bills the previous period's usage at renewal, aggregated as a sum, the most recent value or the maximum ([Lemon Squeezy docs](https://docs.lemonsqueezy.com/help/products/usage-based-billing)).
+
+Processors without a strong billing product (Mollie, Square, Razorpay, Mercado Pago, Adyen for most SaaS cases) can charge a saved card or mandate on a schedule, but the plan logic, proration, credits and entitlements live in your code or in a separate billing system.
+
+If you bill AI usage by tokens or calls, check three things before you pick: whether the provider can stop usage at a hard cap or only report it, whether prepaid credits exist as a balance you can read, and whether a usage event can be sent more than once without being counted twice.
+
+## When to stay on Stripe and add a rail
+
+Switching processors is expensive in ways the fee table hides. Saved cards may have to be migrated through the old and new providers, subscriptions must be recreated with their billing dates and discounts, webhooks and reconciliation are rewritten, and for a period you run both systems anyway.
+
+So if Stripe works for most of your customers, the gap is usually narrower than "Stripe" as a whole. It tends to be a missing local method in Brazil or India, buyers who would rather pay in crypto, purchases inside an app store, or a tax burden in many countries. Each of those is a second rail, and a second rail is a smaller project than a migration if your own code does not assume one provider.
+
+The design that makes this work keeps these records on your side of the line:
+
+1. **One order or payment record per purchase**, with its own states, so a payment captured by Stripe and a Pix payment captured elsewhere look the same to the rest of your product.
+2. **Entitlements and balances computed from that record**, so access to a feature never depends on asking a particular provider's API.
+3. **Idempotent webhook handling per provider**, so a retried event fulfils the order once.
+
+[INITE Billing](/docs/entitlements) is one way to build this. It is a self-hosted, AGPL-3.0 billing backend that puts subscriptions, metered credits and entitlements behind one adapter interface, with Stripe, crypto, Apple IAP, Google Play and other rails behind it; adding a payment method does not change your integration code. It is not a merchant of record and does not route or fail over between processors, so the tax and processor decisions above are still yours.
+
+## How to choose, in practice
+
+Start from the problem you have. If it is tax and disputes for digital sales to consumers worldwide, compare Stripe Managed Payments, Paddle and Lemon Squeezy, and price the payout cycle along with the fee. If it is the card rate at high volume, get an interchange-plus quote from Adyen or Checkout.com and compare it with your real card mix on Stripe. If it is a region, add the regional processor for that region and keep Stripe for the rest. If it is usage billing, test the provider's metering against your hard-cap and retry cases before you commit.
+
+Whatever you pick, keep your customer, subscription and entitlement records in your own system. Then a later move costs a new adapter instead of recreated subscriptions and rewritten webhooks.

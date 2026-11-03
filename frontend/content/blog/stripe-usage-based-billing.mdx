@@ -1,0 +1,149 @@
+---
+title: "Stripe usage-based billing: how meters, prices and credits work for SaaS"
+description: "How Stripe usage-based billing works in late 2026: meters, metered prices, billing credits, invoice timing, limits, what Metronome changes, and where teams add a layer on top."
+date: "2026-11-03"
+author: "INITE Billing"
+category: "SaaS billing"
+tags: ["pricing", "stripe", "usage-based billing", "metering"]
+directAnswer: "Stripe usage-based billing has two tracks. The basic one uses Billing Meters: you create a meter, attach it to a metered price, send meter events as usage happens, and Stripe invoices the aggregated usage at the end of each period. For new integrations Stripe now recommends Metronome, which it acquired, for prepaid drawdown, commits and token pricing."
+faqs:
+  - question: "Does Stripe support usage-based billing?"
+    answer: "Yes. Stripe Billing supports metered prices tied to Billing Meters, which aggregate usage events by sum, count or last value and invoice them at the end of each billing period. For more complex models Stripe points new integrations to Metronome, which is now a Stripe product."
+  - question: "Should I use Stripe Billing Meters or Metronome?"
+    answer: "Stripe's own comparison says existing Meters integrations do not need to migrate, and recommends Metronome for new ones. Meters are enough for simple per-unit or tiered usage on a subscription. Metronome adds prepaid drawdown, commitments, ramps and dimensional pricing, but it does not work with every Stripe product, so check its compatibility table first."
+  - question: "Can Stripe stop usage when a customer's credits run out?"
+    answer: "Not with basic billing credits on their own. Stripe applies credit grants when an invoice is finalized, and its documentation says customers can exceed their balance during the cycle. To stop usage at zero you need a balance check in your own request path, or a layer that keeps a live balance."
+  - question: "What happened to Stripe usage records?"
+    answer: "The legacy usage records APIs were removed in Stripe API version 2025-03-31.basil. Integrations that still send usage records must stay on an earlier API version or move to meters."
+---
+
+Stripe usage-based billing looks different from the version most tutorials describe. Usage records are gone from current API versions, Billing Meters became the basic path, and Stripe now tells new integrations to start with Metronome, the usage billing company it bought. Below: how it works today, what each piece costs, the limits you will hit, and where SaaS and AI teams usually add their own layer on top. Every figure links to Stripe's documentation or pricing as read on 3 November 2026.
+
+## Two tracks: Billing Meters and Metronome
+
+Stripe's documentation now separates "basic usage-based billing" with Billing Meters from Metronome. The [comparison page](https://docs.stripe.com/billing/subscriptions/usage-based/compare-metronome) is direct about which it prefers: "Metronome is Stripe's primary usage-based billing platform and the recommended starting point for all new integrations. Metronome handles metering, rating, and billing, while Stripe handles payment collection, tax calculation, and revenue recognition."
+
+Existing Meters users are not pushed off. The same page says: "If you already bill customers with a basic usage-based billing integration, you don't need to migrate." The Meters [implementation guide](https://docs.stripe.com/billing/subscriptions/usage-based/implementation-guide) opens with a note that it covers basic usage-based billing, and that unless you maintain an existing Billing Meters integration you should use Metronome.
+
+Stripe [completed the Metronome acquisition](https://stripe.com/newsroom/news/stripe-completes-metronome-acquisition) on 14 January 2026, after Metronome [announced the agreement](https://metronome.com/blog/important-company-update) on 2 December 2025.
+
+In practice, if your pricing is a subscription with one or two metered line items, Meters still do the job and live inside the Stripe objects you already use. If you sell prepaid commitments, credit drawdown, or per-model token prices, Stripe is steering you to Metronome.
+
+## How the basic integration works
+
+The Meters model has four objects: a meter, a metered price, a subscription, and meter events.
+
+### 1. Create a meter
+
+A meter says how to aggregate events over a billing period. Stripe's [meter configuration page](https://docs.stripe.com/billing/subscriptions/usage-based/meters/configure) offers three formulas: sum ("the sum of all usage values for the billing period"), count, and last ("the most recent usage event's value for the billing period"). The older `max` formula is not supported, per the [legacy migration guide](https://docs.stripe.com/billing/subscriptions/usage-based-legacy/migration-guide).
+
+At design time, note that "you can only use an event name with a single meter," and "after you configure the meter, you can't make any changes aside from the display name" ([meter configuration](https://docs.stripe.com/billing/subscriptions/usage-based/meters/configure)). Pick event names and aggregation carefully, because fixing them later means a new meter and a new price.
+
+### 2. Attach the meter to a metered price
+
+A price becomes usage-based when it is recurring, metered, and points at the meter. The [implementation guide](https://docs.stripe.com/billing/subscriptions/usage-based/implementation-guide) shows it with `recurring[usage_type]=metered` and `recurring[meter]=<meter id>`, and notes that "you can associate a single metered price with one or more subscriptions."
+
+### 3. Subscribe the customer
+
+The customer gets a subscription containing the metered price, usually beside a flat base price.
+
+### 4. Send meter events
+
+Each event names the meter's event, the customer, a value and optionally a timestamp ([recording usage guide](https://docs.stripe.com/billing/subscriptions/usage-based/recording-usage-api)):
+
+```bash
+curl https://api.stripe.com/v1/billing/meter_events \
+  -u "sk_test_...:" \
+  -d event_name=api_requests \
+  -d "payload[stripe_customer_id]=cus_123" \
+  -d "payload[value]=25" \
+  -d identifier=req_7f3a9c
+```
+
+Set `identifier` from your own source record. Stripe "enforces uniqueness within a rolling period of at least 24 hours" ([API reference](https://docs.stripe.com/api/billing/meter-event/create)), so a retried send with the same identifier does not double-bill inside that window.
+
+## The limits you will meet
+
+| Limit | Stripe's figure | Source |
+|---|---|---|
+| Meter event rate (v1) | "1000 calls per second per Stripe account," and "one concurrent call per customer per meter" | [Recording usage](https://docs.stripe.com/billing/subscriptions/usage-based/recording-usage-api) |
+| Meter event streams (v2) | "up to 10,000 events per second," live mode only; "Contact sales if you need to send up to 200,000 events per second" | [Recording usage](https://docs.stripe.com/billing/subscriptions/usage-based/recording-usage-api) |
+| Stream auth tokens | "only valid for 15 minutes" | [Recording usage](https://docs.stripe.com/billing/subscriptions/usage-based/recording-usage-api) |
+| Event timestamp | "within the past 35 calendar days or up to 5 minutes in the future" | [API reference](https://docs.stripe.com/api/billing/meter-event/create) |
+| Dedupe window | "a rolling period of at least 24 hours" | [API reference](https://docs.stripe.com/api/billing/meter-event/create) |
+| Cancelling events | "within the last 24 hours" | [Meter configuration](https://docs.stripe.com/billing/subscriptions/usage-based/meters/configure) |
+| Dimensions | "up to 10,000 unique combinations for each hour" per meter | [Recording usage](https://docs.stripe.com/billing/subscriptions/usage-based/recording-usage-api) |
+| Usage alerts | "a maximum of 25 alerts for each combination of a specific meter and customer" | [Monitoring](https://docs.stripe.com/billing/subscriptions/usage-based/monitor) |
+
+The per-customer concurrency rule surprises teams that send events from many workers at once. If several workers report usage for one large customer, serialise per customer or batch at the edge. Under Connect the ceiling is lower: calls made with the `Stripe-Account` header fall under "regular Stripe rate limits, which is 100 operations per second" ([recording usage guide](https://docs.stripe.com/billing/subscriptions/usage-based/recording-usage-api)).
+
+Test two more behaviours before launch. Stripe "processes meter events asynchronously," so summaries and upcoming invoices "might not immediately reflect recently received meter events." And the [recording usage guide](https://docs.stripe.com/billing/subscriptions/usage-based/recording-usage-api) says the 35-day window "determines whether Stripe accepts a meter event. It doesn't guarantee that Stripe can include the usage on an invoice."
+
+## Pricing models on a metered price
+
+A metered price can be per unit, per package, or tiered. The implementation guide's package example is "0.04 USD per 100 units," set through `transform_quantity[divide_by]=100` ([implementation guide](https://docs.stripe.com/billing/subscriptions/usage-based/implementation-guide)).
+
+For tiers, choose the mode deliberately. "Volume tiers define the pricing for all units of usage, as opposed to graduated tiers, which define pricing for a specific amount of usage" ([thresholds page](https://docs.stripe.com/billing/subscriptions/usage-based/thresholds)). Volume tiers give a heavy customer a lower rate on everything once they cross a boundary; graduated tiers only discount the units above it. The same page has a worked example where volume tiers combined with thresholds produce a negative line item, so read it before you combine the two.
+
+## Billing credits
+
+Stripe sells prepaid or promotional credit through credit grants. "A Credit Grant tracks a set of prepaid or promotional billing credits allocated to a customer," and "credits won't expire unless you set" `expires_at` ([billing credits](https://docs.stripe.com/billing/subscriptions/usage-based/billing-credits)).
+
+The [billing credits page](https://docs.stripe.com/billing/subscriptions/usage-based/billing-credits) sets tighter rules than the word "credits" suggests:
+
+- Credit grants apply only "to subscription items that use metered prices and report usage through Meters."
+- "Credits apply to invoices only at the time of finalization," and they apply "after discounts, but before taxes."
+- "Customers can have up to 100 unused credit grants at a time."
+- "You can't offer billing credits as stored value to your customers."
+
+The comparison page adds the consequence for product design: "Credits are only reconciled at invoice time. Customers can exceed their balance during the cycle" ([compare Metronome](https://docs.stripe.com/billing/subscriptions/usage-based/compare-metronome)). A credit grant works as an invoice discount and does not stop usage at zero.
+
+## Invoicing and timing
+
+Usage is billed in arrears: you "invoice them at the end of each billing interval" ([implementation guide](https://docs.stripe.com/billing/subscriptions/usage-based/implementation-guide)).
+
+Late events land in a grace window. According to the [grace period docs](https://docs.stripe.com/billing/subscriptions/usage-based/configure-grace-period), "all invoices have a default finalization grace period of 1 hour," and "you can set a delay of up to 72 hours (3 days)." After that, Stripe can still show the usage in meter summaries, "but we don't add that usage to the finalized invoice or the next invoice" ([grace period](https://docs.stripe.com/billing/subscriptions/usage-based/configure-grace-period)). If your pipeline can lag by hours, extend the grace period, or decide who absorbs the lost usage.
+
+To limit exposure on large accounts, you can invoice early when usage reaches an amount. Stripe's thresholds page describes issuing "an invoice when a customer's accrued usage in a service period reaches a specific monetary threshold," set to "at least 50 currency units" ([thresholds](https://docs.stripe.com/billing/subscriptions/usage-based/thresholds)). Its [monitoring page](https://docs.stripe.com/billing/subscriptions/usage-based/monitor) lists the constraints: thresholds "aren't evaluated in the 24 hours before a subscription ends," and "subscriptions are only allowed a single monetary threshold." The basil [changelog](https://docs.stripe.com/changelog/basil/2025-03-31/deprecate-legacy-usage-based-billing) says it removed `billing_thresholds` from all API endpoints, while the thresholds page still documents them, so confirm the behaviour on the API version you are pinned to.
+
+## Legacy usage records
+
+If your integration still calls the usage records API, it cannot move past API version 2025-02-24.acacia without changes. "The legacy usage records APIs are removed in Stripe version 2025-03-31.basil. To continue to send usage records, you need to use an API version on or before 2025-02-24.acacia" ([migration guide](https://docs.stripe.com/billing/subscriptions/usage-based-legacy/migration-guide)). The changelog adds that you "can no longer create a price with a usage_type of `metered` without a specified meter" ([basil changelog](https://docs.stripe.com/changelog/basil/2025-03-31/deprecate-legacy-usage-based-billing)). Plan the move to meters before an SDK upgrade forces it.
+
+## What Metronome adds, and what it does not cover
+
+Stripe's [comparison page](https://docs.stripe.com/billing/subscriptions/usage-based/compare-metronome) lists prepaid drawdown, commitments, ramps and dimensional pricing for Metronome and not for basic billing. For AI products there is token billing: "Billing for LLM tokens is in public preview and available to all users with a Metronome account," and "Stripe syncs token prices for OpenAI, Anthropic, and Google models" ([token billing](https://docs.stripe.com/billing/token-billing)).
+
+The same comparison page shows where Metronome does not reach yet: Connect, Adaptive Pricing, Workflows and the Stripe Dashboard are marked unsupported, and Checkout support is limited. If you run a marketplace on Connect or rely on Checkout for sign-up, test that path before you commit.
+
+## What it costs
+
+Stripe Billing on pay-as-you-go is "0.7% of Billing volume," which "includes Billing transactions processed on and off Stripe" and excludes one-off invoices ([Billing pricing](https://stripe.com/billing/pricing)). Basic usage-based features include "up to 100M events per month" on the Meters API ([Billing pricing](https://stripe.com/ae/billing/pricing)).
+
+Metronome's Starter plan bills "Billing volume ... at 0.8%" and "Events volume ... at $0.04/1k ingest events" ([Metronome pricing](https://metronome.com/pricing)).
+
+Card processing is separate and depends on the country of your Stripe account. Stripe's UK page, for example, lists "1.5% + 20p for standard UK cards" and "3.15% + 20p for international cards" ([Stripe UK pricing](https://stripe.com/gb/pricing)). Check the pricing page for your own country, because the rates differ.
+
+## Where teams add a layer on top
+
+The gaps teams fill themselves tend to sit in the request path, where the product needs an answer in milliseconds.
+
+**A live balance.** Because credits reconcile at invoice time, a product that sells prepaid usage needs its own balance check before it serves an expensive request. Otherwise a customer with zero credits keeps consuming until the next invoice.
+
+**Limits and quotas.** Stripe alerts report that a customer passed a threshold; blocking the next call is up to your code.
+
+**Entitlements.** Which plan includes which feature, which model tier, how many seats. Many teams keep this in their own database and sync from Stripe webhooks.
+
+**A usage view.** Stripe's [implementation guide](https://docs.stripe.com/billing/subscriptions/usage-based/implementation-guide) lists real-time usage visibility as something Billing Meters lack (they update at invoice time), so customer dashboards with live usage usually read from the team's own event store.
+
+**Other payment rails.** App store purchases, regional methods, and crypto do not flow through Stripe Billing. If a customer can pay through Apple in-app purchase or a local wallet, usage and credits have to be granted the same way regardless of rail.
+
+INITE Billing covers that last gap. It is an open-source billing service that keeps the credit ledger, quotas and entitlements in one place and treats [Stripe as one of several rails](/docs/concepts) behind the same interface, so a credit bought through Stripe and one bought through an app store are debited by the same [consume call](/docs/metering-credits).
+
+## A short decision guide
+
+Use **Billing Meters** if you bill a subscription with a few metered line items, you are fine with usage reconciled at invoice time, and you want everything in standard Stripe objects.
+
+Use **Metronome** if you sell commitments, prepaid drawdown, or per-model token pricing and none of your critical flows depend on Connect or Checkout.
+
+Add **your own layer** for whatever must answer inside a request: balance checks, hard limits, entitlements, and live usage. Keep raw usage events in your own store with stable identifiers either way, so you can rebuild any invoice and move between systems without losing history.

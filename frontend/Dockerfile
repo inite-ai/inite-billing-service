@@ -14,8 +14,9 @@ ENV NEXT_PUBLIC_AUTH_SERVICE_URL=$NEXT_PUBLIC_AUTH_SERVICE_URL
 ENV NEXT_PUBLIC_OAUTH_CLIENT_ID=$NEXT_PUBLIC_OAUTH_CLIENT_ID
 ENV DEPLOYMENT_VERSION=$DEPLOYMENT_VERSION
 
-# Install dependencies
+# Install dependencies (vendor/ holds the @inite/landing tarball package.json points at)
 COPY package*.json ./
+COPY vendor ./vendor
 RUN npm ci
 
 # Copy source
