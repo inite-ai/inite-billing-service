@@ -1,0 +1,114 @@
+---
+title: "AI billing: how to charge for tokens, credits, prepaid wallets and overage"
+description: "AI billing for software products: why per-request costs break flat plans, the four pricing shapes AI companies use, and how to meter, cap and invoice usage without bill shock."
+date: "2026-11-03"
+author: "INITE Billing"
+category: "SaaS billing"
+tags: ["pricing", "ai", "credits", "usage-based billing"]
+directAnswer: "AI billing is the part of an AI product that turns model usage into revenue: it measures tokens, requests or generations per customer, converts them into a price or a credit charge, enforces limits before the expensive call runs, and invoices or debits a prepaid balance. It differs from SaaS billing because one request can cost many times more than another."
+faqs:
+  - question: "What is AI billing?"
+    answer: "In software, AI billing means charging customers for an AI product's usage: tokens, requests, generations or agent runs, usually through credits, prepaid balances, allowances with overage, or pass-through token prices. It is unrelated to AI tools for medical billing and coding, which share the name."
+  - question: "How do you charge customers for AI tokens?"
+    answer: "Either pass token usage through at a price per million tokens with a markup per model, or convert tokens into your own credit unit and sell credits in plans and top-ups. Credits are easier for customers to read; pass-through is easier to keep profitable when model prices change."
+  - question: "Are credits better than pay-as-you-go for AI products?"
+    answer: "Prepaid credits collect cash before you incur model costs and make a hard limit natural: when the balance is empty, usage stops or the customer tops up. Pay-as-you-go in arrears is easier to sell to companies with procurement, but you carry the cost and the collection risk for the whole period."
+  - question: "How do you prevent bill shock with usage-based AI pricing?"
+    answer: "Show the running balance or estimated invoice in the product, send alerts at thresholds the customer chooses, and let the customer set a spending cap that the product enforces before each call rather than after the invoice."
+---
+
+AI billing is what turns model usage into revenue: counting tokens, requests or generations per customer, pricing them, stopping usage at a limit, and collecting the money. (This article is about billing for AI software products. AI tools for medical billing and coding are a different field that happens to share the phrase.) The hard part is that AI costs are variable per request and can change with every model release, so the billing model that works for a seat-based SaaS product tends to lose money or confuse customers once an LLM sits behind each click. Below are the pricing shapes AI companies actually use, how the model providers bill their own customers, and what your billing system has to do in the request path.
+
+## Why AI billing differs from SaaS billing
+
+A SaaS seat costs you roughly the same whether the user logs in once or all day, while the cost of an AI request moves with the model and with the request itself.
+
+**The model.** On OpenAI's [API pricing page](https://developers.openai.com/api/docs/pricing), gpt-6-astra costs $10.00 per million input tokens and $50.00 per million output tokens, while gpt-6-luna costs $0.10 and $0.50. Anthropic's [pricing page](https://platform.claude.com/docs/en/about-claude/pricing) shows the same pattern: Claude Fable 5.1 output at $50 per million tokens and Claude Haiku 5.5 output at $0.50 for prompts up to 100,000 tokens. A request routed to the larger model costs a hundred times more for the same number of tokens.
+
+**The request itself.** Output length, context size, tool calls and agent loops all move the token count. A short classification and a long agent run can share an endpoint and differ in cost by more than the model gap above.
+
+Discounts move costs too. Anthropic's Batch API gives "a 50 percent discount on both input and output tokens," and a cache hit is billed at "0.1x base input price" on most models ([Anthropic pricing](https://platform.claude.com/docs/en/about-claude/pricing)). OpenAI's batch prices for gpt-6-astra are $5.00 input and $25.00 output, half of standard ([OpenAI pricing](https://developers.openai.com/api/docs/pricing)). AI billing therefore has two jobs a flat plan does not: keep revenue per customer above a cost that varies per request, and keep the customer's bill predictable enough that they do not churn after the first invoice.
+
+## The four pricing shapes AI products use
+
+### 1. Pass-through tokens with a markup
+
+The customer pays per million tokens per model, at your price, which is the provider's price plus a margin. It is honest and stays profitable when providers change prices, as long as your rate card updates with them. Stripe's [token billing](https://docs.stripe.com/billing/token-billing) (in public preview for Metronome accounts) says "Stripe syncs token prices for OpenAI, Anthropic, and Google models," and Metronome's [token billing guide](https://docs.metronome.com/guides/pricing-packaging/billing-model-guides/token-billing) describes updating "the price on your rate card while preserving the markup configured on the rate card."
+
+The weakness is on the customer side: developers understand tokens, but most business buyers do not, and a per-model token price list is hard to budget against.
+
+### 2. Credits
+
+You define your own unit and price each action in it. GitHub moved Copilot to this model: "1 AI credit = $0.01 USD," with Copilot Pro at $10 a month including 1,500 total monthly AI credits, and tokens priced per model and "converted into AI credits" ([GitHub Copilot billing](https://docs.github.com/en/copilot/concepts/billing-and-usage/individuals/billing)). Credits hide model churn from the customer. When a cheaper model ships, you change the conversion rate, not the price list.
+
+Credits need rules you will be asked about: what one credit buys per model, rounding, which credits burn first, when they expire, and whether unused ones roll over. Write them down before launch.
+
+### 3. Subscription with an allowance and overage
+
+A monthly plan includes usage, and usage above it is billed or sold as top-ups. Cursor works this way. Its [pricing page](https://cursor.com/pricing) says "If you reach your included usage, you can keep going with top-offs, or wait for your allowance to refresh," and "you can set spending caps to manage costs." Stripe's token billing page lists the same shape as "Subscription with metered overages | Charge a flat monthly fee that includes a usage allowance, then bill overages at a per-unit rate."
+
+This is the easiest model to sell, because the plan price is fixed. Set the allowance from real usage data for each segment rather than from your average user, because that is where the risk sits.
+
+### 4. Prepaid wallet with top-ups
+
+The customer deposits money or buys credits first, and usage draws the balance down. This is how the model providers bill developers. Anthropic's [support article](https://support.claude.com/en/articles/8977456-how-do-i-pay-for-my-claude-api-usage) says "Credits expire one year from the purchase date," "All credit purchases are non-refundable," and "Auto-reload purchases additional credits automatically when your balance falls below a threshold you set."
+
+A prepaid balance gives you cash before you pay the model provider, and it makes a hard limit natural: an empty balance means the request is refused or the customer tops up. It suits self-serve products and anonymous sign-ups, where billing in arrears invites unpaid invoices.
+
+## Copy what the model providers do for spend limits
+
+Anthropic's [rate limits page](https://platform.claude.com/docs/en/api/rate-limits) puts organisations on tiers with monthly spend caps: "Start | $500 USD", "Build | $1,000 USD", "Scale | $200,000 USD." When an organisation reaches the cap, "API usage pauses until 00:00 UTC on the first day of the next month, unless you request a higher limit sooner," and requests return HTTP 429 with the error code `enforced_spend_limit_reached` ([rate limits](https://platform.claude.com/docs/en/api/rate-limits)).
+
+For your own product, copy the defaults. The cap exists before the customer asks for one, the API enforces it so it cannot be overrun while an invoice is being prepared, and the refusal is machine-readable, so the customer's code can tell "out of budget" from "server error."
+
+## Metering AI usage correctly
+
+### Charge after the call, check before it
+
+You only know the token count after the model responds, but you need to refuse an unaffordable request before you pay for it. The usual pattern has three steps:
+
+1. **Check** the customer's balance and limits before the call, against a worst-case estimate (input tokens plus the `max_tokens` you allow).
+2. **Run** the model call.
+3. **Charge** the actual usage from the response, once.
+
+For long agent runs, reserve an amount at the start and settle at the end, or charge per step so a runaway loop stops when the balance does.
+
+### Make every charge idempotent
+
+Agents and SDKs retry. A charge request that times out on the network is often sent again, and without an idempotency key the customer pays twice. Derive the key from your own request or run ID so a retry maps to the same charge.
+
+### Keep the balance check fast and locked
+
+The balance check sits in your request path, so it has to answer in milliseconds and stay correct under concurrency. Two parallel requests that each see a balance of 10 credits and each spend 8 will overdraw the account unless the debit locks the balance row or uses an atomic decrement.
+
+### Price per model tier
+
+Store a rate per model tier instead of one global price and convert at charge time, so a new model is one new rate and a provider's price cut is one edited row.
+
+## Invoicing, accounting and the rules around credits
+
+Prepaid credits are a liability until they are used: you have taken cash for a service you have not delivered. Expiry and refund rules affect how finance books them, so agree them with your accountant before you sell the first pack.
+
+Some platforms restrict what credits can be. Stripe's [billing credits documentation](https://docs.stripe.com/billing/subscriptions/usage-based/billing-credits) says "You can't offer billing credits as stored value to your customers," and its credits apply "only at the time of finalization" of an invoice. Its [comparison page](https://docs.stripe.com/billing/subscriptions/usage-based/compare-metronome) is explicit about the consequence: "Credits are only reconciled at invoice time. Customers can exceed their balance during the cycle." If you sell prepaid credits through Stripe's basic credits, the live balance check in the request path is still your code.
+
+For customers billed in arrears, invoice early on large usage. Stripe supports a monetary threshold of "at least 50 currency units" that issues an invoice when accrued usage reaches it ([thresholds](https://docs.stripe.com/billing/subscriptions/usage-based/thresholds)).
+
+## Tooling for AI billing
+
+**Stripe Billing** handles payment collection, invoices and tax, with meters for usage and credit grants that apply at invoice time. Stripe now [recommends Metronome](https://docs.stripe.com/billing/subscriptions/usage-based/compare-metronome) for new usage integrations; Metronome is where token billing and prepaid drawdown live.
+
+**Dedicated platforms** such as [Orb](https://www.withorb.com/prepaid-credits), which advertises a "prepaid ledger" with "accurate realtime reporting and revenue recognition," and Metronome cover credits, commitments and rate cards for teams that want to buy the whole layer.
+
+**An in-house or self-hosted ledger** is common when the balance check has to live next to the model call, when you sell through several payment rails, or when you do not want a percentage of revenue going to billing software. INITE Billing is one open-source option here. Its [credits API](/docs/metering-credits) charges a metered feature at a per-model-tier rate (`ceil(units × rate)`), runs the debit in one transaction under a balance row lock, checks daily, weekly, monthly or per-period quotas inside that transaction, and returns `success: false` instead of an error when the balance or quota is exhausted.
+
+## A checklist before you launch AI pricing
+
+- Know your cost per request per model, including caching and batch, from your own logs.
+- Pick one customer-facing unit: tokens, credits or requests. Do not mix them on one invoice.
+- Write the credit rules: conversion per model, rounding, burn order, expiry, rollover, refunds.
+- Put a default spending cap on every account, enforced before the model call.
+- Return a distinct, machine-readable error when a customer is out of budget.
+- Make every charge idempotent with a key from your own request ID.
+- Show the running balance or estimated invoice inside the product, with alerts.
+- Decide how you will reprice when a provider changes prices, and test it on one model first.
+- Keep raw usage events with timestamps and model names, so you can explain any line on any invoice.

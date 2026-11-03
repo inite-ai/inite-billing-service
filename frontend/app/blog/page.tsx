@@ -40,7 +40,10 @@ export default function BlogIndex() {
               <span>·</span>
               <span>{p.readingMinutes} min read</span>
             </div>
-            <h2 className="mt-2 text-lg font-semibold text-[var(--d-text)] group-hover:text-white">
+            <h2
+              lang={p.frontmatter.lang === 'pt' ? 'pt-BR' : undefined}
+              className="mt-2 text-lg font-semibold text-[var(--d-text)] group-hover:text-white"
+            >
               {p.frontmatter.title}
             </h2>
             <p className="mt-1 text-[14px] leading-relaxed text-[var(--d-muted)] line-clamp-2">

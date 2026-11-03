@@ -18,6 +18,8 @@ export const FrontmatterSchema = z.object({
   dateModified: z.string().optional(),
   directAnswer: z.string().optional(),
   faqs: z.array(FaqSchema).optional(),
+  /** The post's language. One URL per post (no /<lang>/ paths), so a post is written in one. */
+  lang: z.enum(['en', 'pt']).default('en'),
 })
 export type Frontmatter = z.infer<typeof FrontmatterSchema>
 export interface Post {
@@ -77,7 +79,7 @@ export function getRelated(post: Post, limit = 2): Post[] {
 export function postOgUrl(post: Post): string {
   const fm = post.frontmatter
   const q = new URLSearchParams({
-    locale: 'en',
+    locale: fm.lang,
     title: fm.title,
     subtitle: fm.directAnswer ?? fm.description,
     kicker: fm.category,
@@ -97,7 +99,7 @@ export function postJsonLd(post: Post) {
       description: fm.directAnswer ?? fm.description,
       datePublished: fm.date,
       dateModified: fm.dateModified ?? fm.date,
-      inLanguage: 'en',
+      inLanguage: fm.lang === 'pt' ? 'pt-BR' : 'en',
       articleSection: fm.category,
       keywords: fm.tags.join(', '),
       wordCount: post.body.split(/\s+/).length,

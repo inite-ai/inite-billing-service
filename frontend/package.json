@@ -24,6 +24,7 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.16",
     "@ai-sdk/react": "^4.0.34",
+    "@inite/landing": "file:vendor/inite-landing-0.1.0-5e470ad.tgz",
     "@mdx-js/loader": "^3.1.1",
     "@mdx-js/react": "^3.1.1",
     "@next/mdx": "^16.2.12",

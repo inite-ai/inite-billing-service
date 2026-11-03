@@ -30,6 +30,9 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
             <Link href="/" className="hover:text-[var(--d-text)]">
               Home
             </Link>
+            <Link href="/blog" className="hover:text-[var(--d-text)]">
+              Blog
+            </Link>
             <a
               href="https://github.com/inite-ai/inite-billing-service"
               target="_blank"
