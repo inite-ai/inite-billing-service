@@ -1,0 +1,128 @@
+---
+title: "Referral program software for SaaS: tracking, commissions, payouts and prices compared"
+description: "How SaaS founders should compare referral program software: attribution, reward rules, multi-level limits, payouts, fraud controls and real prices."
+date: "2026-11-03"
+author: "INITE Billing"
+category: "SaaS billing"
+tags: ["pricing", "referrals", "affiliate marketing", "saas growth"]
+directAnswer: "The best referral program software for a SaaS company is the one whose attribution reads from your billing system, whose commissions wait out your refund window before they become payable, and whose price fits the revenue your referrers actually bring. For most Stripe-based SaaS teams that means a billing-integrated tool such as Rewardful, FirstPromoter or Tolt; for in-product user referrals, Cello or GrowSurf; for large partner programs, PartnerStack."
+faqs:
+  - question: "What is the best referral program software?"
+    answer: "There is no single winner. Pick by how your customers pay. If billing runs on Stripe, Paddle or Chargebee, a tool that attributes from billing events (Rewardful, FirstPromoter, Tolt) is the safest default. If you want users to invite users from inside the product, look at Cello or GrowSurf. If you run a large channel program with resellers and agencies, PartnerStack is built for that and is sold through a demo."
+  - question: "What is the difference between referral and affiliate software?"
+    answer: "Referral software is built for existing customers inviting people they know, usually with a two-sided reward such as credit for both. Affiliate software is built for outside promoters such as bloggers, agencies and creators who earn cash commissions, often recurring, and need a portal, payout methods and tax forms. Many SaaS tools now do both, so compare by reward type and payout handling rather than by the label."
+  - question: "How do referral programs track referrals?"
+    answer: "Referrals are tracked three ways: a first-party cookie set when someone clicks a referral link, a coupon or promotion code tied to one referrer, and billing-integrated attribution where the referrer is written onto the customer record in the billing system so every later invoice can be credited. Cookies break across devices and browsers; codes leak to coupon sites; billing attribution is the most durable because it follows the paying customer."
+  - question: "Are multi-level referral programs legal?"
+    answer: "Paying a referrer a share of what their own referrals bring in is not illegal by itself, but the US FTC treats a plan as a likely pyramid scheme when rewards come from recruiting rather than from sales of the product to real end users. Keep every commission tied to paid, non-refunded revenue from genuine customers, never charge people to join, and never require recruiting to qualify. Get a lawyer to review any plan that pays more than one level."
+---
+
+Referral program software is the layer that decides who brought a paying customer, how much that person earns, and when the money leaves your account. For a SaaS founder the hard part is attribution that survives a trial, commissions that skip refunded invoices, and a payout run that doesn't eat a day of your month. This guide compares the tools on those mechanics first and on price second, with every price taken from the vendor's own pricing page as of November 2026.
+
+One scoping note before the comparison. This article is about customer referrals and affiliate programs for software companies. Employee referral software for recruiting is a different category and is not covered here.
+
+## Referral software and affiliate software are converging
+
+The two labels used to mean different buyers. Referral tools served existing customers who invite a friend and both get a credit. Affiliate tools served outside promoters (newsletter writers, agencies, YouTubers) who earn cash, usually as a percentage of each invoice, and need a portal, payout methods and tax paperwork.
+
+Most SaaS products in this comparison now cover both. Rewardful lists [double-sided incentives on every plan](https://www.rewardful.com/pricing). Tolt offers [custom commissions and double-sided rewards](https://tolt.com/pricing). Cello splits its pricing into separate [User Referral and Partner Referral plans](https://cello.so/pricing). So the useful question is which reward you pay (credit, discount or cash) and who you pay it to, because that determines whether you need payout rails and tax forms at all.
+
+## How the software tracks a referral
+
+Attribution is where programs quietly lose money or overpay. There are three mechanisms, and many tools support more than one.
+
+### Cookies on a referral link
+
+The referrer shares a link with a token. A script on your marketing site reads the token and stores it in a first-party cookie, and when the visitor signs up the stored ID is passed to checkout. Rewardful's [default cookie length is 60 days](https://www.rewardful.com/customizable-cookie-and-commissions), adjustable to your sales cycle.
+
+Cookies fail in predictable places. The visitor clicks on a phone and buys on a laptop, or clears storage, or arrives months after the window closed. Rewardful's developer docs also note that client-side conversion tracking only works when the [Stripe customer was created within the last 24 hours](https://developers.rewardful.com/llms-full.txt), which matters if your signup and your first payment are far apart. If you have a long free tier before the first invoice, pass the referral ID server-side when you create the customer instead of relying on the browser at payment time.
+
+### Coupon and promotion codes
+
+A code tied to one referrer works without any cookie, which is why podcasters and offline partners prefer it. Codes tend to leak onto coupon aggregator sites and get credited to a referrer who did nothing for that sale.
+
+Conflicts need a rule. Rewardful documents its rule plainly: "the first affiliate to whom a Stripe customer is assigned will receive commissions for any subsequent purchases" ([Rewardful help](https://help.rewardful.com/en/articles/9336630-how-to-use-promotion-codes-for-referral-tracking)). If a customer arrives through affiliate A's link and later types affiliate B's code, the customer still gets B's discount but A keeps the commission. Decide whether you want first-touch or last-touch before launch, and write it into your program terms. Rewardful offers [first- or last-touch attribution](https://www.rewardful.com/pricing) as a setting.
+
+### Billing-integrated attribution
+
+The most durable method writes the referrer onto the customer record in the billing system. Rewardful, for example, reads and writes [referral data in the Stripe customer's metadata](https://help.rewardful.com/en/articles/2213091-how-does-rewardful-use-my-stripe-account). Once that link exists, every renewal, upgrade, partial refund and cancellation is an event the referral tool can see, which is what makes recurring commissions and clawbacks possible.
+
+Tolt connects natively to [Stripe, Paddle and Chargebee](https://tolt.com/pricing) and takes other platforms through webhooks or its API. If your billing provider is not on a tool's list, you will be posting conversion and refund events yourself, and refunds are the events teams forget.
+
+## What to compare in commissions and rewards
+
+### Reward type
+
+Account credit and discounts cost you margin, not cash, and need no payout rail. Cash commissions need a payout method, a schedule and, in the US, tax forms. ReferralCandy, which started in ecommerce, lists [cash and store credit payouts](https://www.referralcandy.com/pricing). For SaaS, one workable split is credit for customers who refer and cash for affiliates who promote.
+
+### One-time or recurring, and for how long
+
+A percentage of every invoice for the life of the customer is generous and expensive. Most tools let you cap it. Rewardful supports [fixed, percentage, one-time or recurring commissions](https://www.rewardful.com/customizable-cookie-and-commissions), and you can limit commissions to a set number of invoices. Pick a cap that matches your payback period. If a customer takes a year to repay acquisition cost, an uncapped lifetime share leaves you funding the referrer for years after the customer became profitable.
+
+### Single-level or multi-level
+
+Multi-level commissions pay a referrer a share of what their own recruits bring in. FirstPromoter supports [multi-level commissions up to 3 levels on every plan](https://firstpromoter.com/pricing). Tapfiliate includes [multi-level marketing (MLM) from its Scale plan](https://tapfiliate.com/pricing/). Tolt's pricing page lists custom and double-sided commissions and does not mention multiple levels.
+
+A second level is useful in a few honest cases: agencies that recruit sub-agencies, or a partner who brings in other partners and supports them. It is also the feature that draws regulators' attention, which is the next section.
+
+## Where multi-level referrals meet pyramid-scheme law
+
+The US Federal Trade Commission's [Business Guidance Concerning Multi-Level Marketing](https://www.ftc.gov/business-guidance/resources/business-guidance-concerning-multi-level-marketing) (April 2024) is the primary source to read before you turn on a second level. Its core test, taken from the *Koscot* case, is whether participants receive "rewards which are unrelated to the sale of the product to ultimate users." The guidance states that "there is no percentage-based test" and that "having retail customers or even many retail customers is not a safe harbor." Courts, it says, "look beyond a company's policies and procedures and examine how the company operates in practice."
+
+The guidance also names the mechanics that push a plan the wrong way. A plan that "requires a participant to recruit a certain number of participants" will likely incentivize recruiting even if sales also trigger rewards. It describes inventory loading as "purchases made so that a participant in the MLM can qualify for compensation," and notes that staff have seen participants buy "in the names of fake customers" to meet sales requirements.
+
+For a SaaS referral program, that means:
+
+- Pay every level only from paid, non-refunded subscription revenue from real customers.
+- Never charge a fee to join the program, and never make a referrer's own subscription a condition of earning.
+- Never require a recruit count to qualify for a level. Qualify on revenue from customers.
+- Treat a referrer who buys accounts for "customers" to hit a threshold as fraud, which the FTC's description of fake-customer purchases matches closely.
+
+If your plan pays more than one level, have counsel review it in the jurisdictions where your referrers live.
+
+## Payouts, schedules and tax forms
+
+Cash commissions create a monthly chore.
+
+**Methods.** Rewardful includes [PayPal and Wise bulk payouts](https://www.rewardful.com/pricing) on all plans, with one-click PayPal only on Enterprise and an optional Managed Payouts service carrying a 3% processing fee. Tolt pays out through [PayPal, Wise, bank transfer or wire](https://tolt.com/pricing) and charges no payout fee of its own. Cello pays rewards via [PayPal and Venmo](https://cello.so/pricing).
+
+**Schedule.** Tolt lets you set [payout terms of NET-15, NET-30 or NET-60](https://help.tolt.com/en/articles/9921217-how-to-set-or-update-payout-terms). Under NET-60, September commissions are paid "around November 29". A longer term is your cheapest protection against refunds, at the cost of patience from your affiliates.
+
+**Tax forms.** If you pay US affiliates in cash, someone has to collect W-9s and file 1099s. Tolt states it handles [W-9/W-8 forms with 1099 filing](https://tolt.com/pricing), and GrowSurf lists ["Tax Forms & 1099 Filing"](https://growsurf.com/pricing). FirstPromoter adds [EU self-billed invoicing](https://firstpromoter.com/pricing) from its Business plan. If a tool does not mention tax forms, assume the paperwork is yours.
+
+## Fraud and qualification rules
+
+Every referral program attracts people who refer themselves.
+
+**Self-referral detection.** Rewardful lists [self-referral fraud detection](https://www.rewardful.com/pricing) on all plans, and Cello says it ["automatically detects self-referral fraud"](https://cello.so/pricing). GrowSurf uses [browser fingerprinting on the web and device instance IDs on mobile](https://support.growsurf.com/article/195-what-does-the-growsurf-anti-fraud-system-entail), with a Loose mode that only marks suspects and a Strict mode that blocks high-risk participants from joining. Tolt's Radar fraud protection sits in its [Pro plan](https://tolt.com/pricing).
+
+**Holding periods.** A commission should not become payable until the refund window has passed. Rewardful holds commissions as "pending" before they turn "due", and its guidance is that with "a 90-day refund policy, the 'pending' period should also be 90 days" ([Rewardful](https://www.rewardful.com/automated-refund-handling)).
+
+**Refund clawbacks.** Check what happens after money has gone out. Rewardful recalculates an unpaid commission on a partial refund and deletes it on a full refund, but once a commission is paid, you "need to handle the overpayment manually" ([Rewardful](https://www.rewardful.com/automated-refund-handling)). This is why the holding period matters more than any clawback feature.
+
+**Qualification criteria.** Decide what counts as a referral before anyone earns: a paid invoice rather than a signup, a minimum plan, a customer who stays past the trial. Write the rule into the program terms and configure it in the tool so support is not arbitrating disputes by hand.
+
+## Referral program software prices compared
+
+All figures are the monthly list price shown on each vendor's pricing page on November 3, 2026, in the dollar amounts the page displays. Several pages show a "$" sign without naming a currency.
+
+| Tool | Entry price | Higher tiers | What the price scales on | Multi-level | Notes |
+|---|---|---|---|---|---|
+| [ReferralCandy](https://www.referralcandy.com/pricing) | $39/month with a 10.5% success fee | $79 (3.5%), $249 (1.5%), $799 (0.25%) | Success fee on net-new customers' first three orders | Not listed | Ecommerce roots; cash and store credit |
+| [Rewardful](https://www.rewardful.com/pricing) | $49/month, up to $7,500 affiliate revenue a month | $99 (up to $15,000), Enterprise from $149 | Affiliate-attributed revenue | Not listed | 0% transaction fee; 14-day trial |
+| [FirstPromoter](https://firstpromoter.com/pricing) | $49/month, up to $5,000 affiliate revenue a month | $99 (up to $15,000), $149 (above $15,000) | Affiliate-driven revenue | Up to 3 levels | 14-day trial, no card |
+| [Tolt](https://tolt.com/pricing) | $99/month, up to $20k partner revenue a month | $199 (up to $50k), Enterprise custom | Partner revenue | Not listed | No payout fee; W-9/1099 handling |
+| [Tapfiliate](https://tapfiliate.com/pricing/) | $89/month, 50 affiliates, 500 conversions | $179, Enterprise custom | Affiliates, clicks, conversions, with overage fees | MLM on Scale | 14-day trial |
+| [Cello](https://cello.so/pricing) | User Referral from $65/month (up to $10K referral ARR); Partner Referral free with a 5% fee | $200 and $750 user plans; $80 and $280 partner plans at 3.5% | Referral ARR or transacting partners | Not listed | In-product referral; PayPal and Venmo |
+| [GrowSurf](https://growsurf.com/pricing) | Business from $449/month for up to 10,000 participants | $649 (25,000), $879 (50,000) | Participants | Not listed | Startup plan price not shown on the page |
+| [PartnerStack](https://www.partnerstack.com/pricing) | Demo only | Demo only | Program size and features | Not listed | Marketplace, MDF, CRM integrations |
+
+Rewardful, FirstPromoter and Tolt all price on referred revenue, so the bill grows as the program works, and crossing a tier limit moves you up automatically. ReferralCandy and Cello's partner plans take a percentage, which is cheap at low volume and expensive at high volume, so model it at the revenue you hope to reach. GrowSurf and Tapfiliate price on people and events, which favors programs with a few high-value referrers.
+
+## How to choose
+
+Start from how your customers pay, because attribution follows billing. On Stripe with a self-serve product and a handful of affiliates, Rewardful or FirstPromoter cover tracking, recurring commissions and payouts at the lowest flat entry price among the Stripe-native tools here. Choose FirstPromoter if you need a second or third level, and Tolt if you want payouts and US tax forms handled and expect partner revenue above the cheaper tools' limits. If the growth loop is users inviting teammates from inside your app, Cello is built for that placement. PartnerStack fits when partners are agencies and resellers with deal registration and a marketplace, and you can accept a sales-led contract.
+
+Whatever you pick, configure three things on day one: a holding period at least as long as your refund window, a written attribution rule for link-against-code conflicts, and qualification on paid invoices rather than signups.
+
+If you would rather keep referrals inside the billing system than run a separate tool beside it, [INITE Billing](https://github.com/inite-ai/inite-billing-service), a self-hosted AGPL-3.0 billing service, ships referrals as part of the same backend as subscriptions and credits: configurable N-level commissions, qualification criteria per level, automatic monthly payouts and a real-time network tree. It is free to integrate and takes no cut of revenue, so the trade-off is that you host and operate it yourself. The same rules from the FTC section apply to any multi-level setup, whichever software computes it.

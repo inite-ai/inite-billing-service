@@ -47,6 +47,10 @@ describe('blog', () => {
     'payment-orchestration-platform',
     'merchant-of-record',
     'gateway-de-pagamento',
+    'agentic-payments',
+    'x402-protocol',
+    'stablecoin-payments',
+    'referral-program-software',
   ])(
     '%s carries its query and the family research link',
     (slug) => {
