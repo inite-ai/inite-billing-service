@@ -56,6 +56,7 @@ export class McpProxyService {
     caller: McpCaller,
     payload: any,
     rawBody: string,
+    mcpHeaders: Record<string, string> = {},
   ): Promise<ProxiedResponse> {
     if (!caller.userId) {
       // A service key carries no customer. Every call here is charged to, and
@@ -93,7 +94,7 @@ export class McpProxyService {
     const started = Date.now();
 
     if (this.isFree(method, server)) {
-      const response = await this.forward(server, rawBody);
+      const response = await this.forward(server, rawBody, mcpHeaders);
       await this.record(server.id, caller.userId, method, toolName, {
         outcome: response.status < 400 ? 'free' : 'upstream_error',
         latencyMs: Date.now() - started,
@@ -111,7 +112,7 @@ export class McpProxyService {
       return denial.response;
     }
 
-    const response = await this.forward(server, rawBody);
+    const response = await this.forward(server, rawBody, mcpHeaders);
     if (response.status >= 400) {
       await this.record(server.id, caller.userId, method, toolName, {
         outcome: 'upstream_error',
@@ -276,7 +277,11 @@ export class McpProxyService {
    * pinning the outbox publisher uses, so a hostname cannot resolve public for
    * the check and to the metadata service for the connection.
    */
-  private async forward(server: any, rawBody: string): Promise<ProxiedResponse> {
+  private async forward(
+    server: any,
+    rawBody: string,
+    mcpHeaders: Record<string, string>,
+  ): Promise<ProxiedResponse> {
     const guard = await assertPublicUrl(server.upstreamUrl);
     if (!guard.ok) {
       this.logger.error(
@@ -288,6 +293,10 @@ export class McpProxyService {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       Accept: 'application/json, text/event-stream',
+      // The client's MCP transport headers (MCP-Protocol-Version, and in
+      // 2026-07-28 Mcp-Method / Mcp-Name): without them a conformant
+      // upstream refuses every modern request (-32020).
+      ...mcpHeaders,
       ...this.operatorHeaders(server.upstreamHeaders),
     };
 
@@ -363,4 +372,23 @@ export class McpProxyService {
       this.logger.error(`Could not record MCP call for ${mcpServerId}: ${error.message}`);
     }
   }
+}
+
+/**
+ * The client's MCP transport headers, to carry to the upstream: every
+ * `mcp-*` request header (MCP-Protocol-Version, Mcp-Method, Mcp-Name,
+ * Mcp-Session-Id, and whatever a later revision adds under the prefix), and
+ * nothing else. The client's own credentials and cookies are for billing, not
+ * for the operator's server, so they never pass.
+ */
+export function mcpRequestHeaders(
+  headers: Record<string, string | string[] | undefined>,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers ?? {})) {
+    if (!/^mcp-[a-z0-9-]+$/i.test(key)) continue;
+    const v = Array.isArray(value) ? value.join(', ') : value;
+    if (typeof v === 'string' && !/[\r\n]/.test(v)) out[key.toLowerCase()] = v;
+  }
+  return out;
 }

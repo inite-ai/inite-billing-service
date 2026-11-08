@@ -3,7 +3,7 @@ import { Request, Response } from 'express';
 import { ApiTags, ApiExcludeEndpoint } from '@nestjs/swagger';
 import { JwtOrServiceGuard } from '../auth/guards/jwt-or-service.guard';
 import { User, RequestUser } from '../auth/decorators/user.decorator';
-import { McpProxyService } from './mcp-proxy.service';
+import { McpProxyService, mcpRequestHeaders } from './mcp-proxy.service';
 import { McpCaller } from './mcp-tools.service';
 import { McpGatewayChallengeFilter, McpGatewayResourceGuard } from './mcp-gateway-resource';
 
@@ -59,7 +59,13 @@ export class McpProxyController {
     // it is only carrying.
     const rawBody = JSON.stringify(req.body ?? {});
 
-    const answer = await this.proxy.handle(slug, caller, req.body, rawBody);
+    const answer = await this.proxy.handle(
+      slug,
+      caller,
+      req.body,
+      rawBody,
+      mcpRequestHeaders(req.headers),
+    );
     res.status(answer.status).type(answer.contentType).send(answer.body);
   }
 }
