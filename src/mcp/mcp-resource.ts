@@ -50,17 +50,19 @@ class InsufficientScopeException extends ForbiddenException {}
 
 /**
  * What a user token must carry to use this endpoint, on top of the guard
- * that already checked who signed it.
+ * that already checked who signed it. Both, always:
  *
- * - A token issued for this resource (`aud` is the MCP URL — what an OAuth
- *   client like Claude gets) must hold `billing:account`: the person agreed
- *   to that on the consent screen, and to nothing else here.
- * - A token issued for a different resource (`aud` another https URL, say
- *   brain's MCP endpoint) is refused. Billing never checked audience, so a
- *   token a person gave one connector could be replayed against their
- *   billing account; this closes that for the endpoint clients connect to.
- * - First-party tokens (audience a client id, or none) and service keys
- *   pass as before — the account page and product modules are unchanged.
+ * - `aud` is exactly this endpoint (RFC 8707). A token issued for anything
+ *   else is not a token for billing's MCP door: another resource URL (say
+ *   brain's MCP endpoint), a first-party client id, or a self-registered
+ *   client's own `dcr_` id (what INITE Auth stamps when a client names no
+ *   resource). Any of those, given by a person to one connector, used to be
+ *   replayable here against their billing account.
+ * - `billing:account` in its scopes: the person agreed to that on the
+ *   consent screen, and to nothing else here. The check does not depend on
+ *   the audience.
+ *
+ * Service keys (`x-api-key`) are not tokens and pass as before.
  */
 @Injectable()
 export class McpResourceGuard implements CanActivate {
@@ -70,18 +72,13 @@ export class McpResourceGuard implements CanActivate {
     const user = context.switchToHttp().getRequest<Request & { user?: RequestUser }>().user;
     if (!user || user.isService) return true;
     const audience = user.audience ?? [];
-    const resource = billingMcpResource(this.config);
-    if (audience.includes(resource)) {
-      const scopes = user.scopes ?? [];
-      if (!scopes.includes(BILLING_ACCOUNT_SCOPE)) {
-        throw new InsufficientScopeException(
-          `This token does not carry ${BILLING_ACCOUNT_SCOPE}: sign in again and allow access to your billing account`,
-        );
-      }
-      return true;
-    }
-    if (audience.some((a) => /^https?:\/\//.test(a))) {
+    if (!audience.includes(billingMcpResource(this.config))) {
       throw new UnauthorizedException('This token was not issued for INITE billing');
+    }
+    if (!(user.scopes ?? []).includes(BILLING_ACCOUNT_SCOPE)) {
+      throw new InsufficientScopeException(
+        `This token does not carry ${BILLING_ACCOUNT_SCOPE}: sign in again and allow access to your billing account`,
+      );
     }
     return true;
   }

@@ -143,6 +143,7 @@ jobs:
             -e REDIS_URL=redis://redis:6379 \
             -e JWT_SECRET=ci-smoke-jwt-secret-not-a-real-one \
             -e JWT_ISSUER=https://issuer.invalid \
+            -e JWT_AUDIENCE=inite-billing \
             -e AUTH_SERVICE_URL=https://auth.invalid \
             -e FRONTEND_URL=http://localhost:3001 \
             inite-billing-service:smoke
