@@ -33,6 +33,10 @@ describe('MCP gateway forwards the MCP request headers', () => {
       req.on('end', () => {
         seen.push(req.headers);
         const body = JSON.parse(raw || '{}');
+        if (body.method === 'probe/html') {
+          res.writeHead(200, { 'content-type': 'text/html' });
+          return void res.end('{"jsonrpc":"2.0","id":9,"result":{}}');
+        }
         const version = req.headers['mcp-protocol-version'];
         const reply = (payload: unknown, status = 200) => {
           res.writeHead(status, { 'content-type': 'application/json' });
@@ -105,10 +109,10 @@ describe('MCP gateway forwards the MCP request headers', () => {
   };
 
   async function post(body: any, headers: Record<string, string>) {
-    const out: { status?: number; body?: string } = {};
+    const out: { status?: number; body?: string; type?: string } = {};
     const res: any = {
       status: (s: number) => ((out.status = s), res),
-      type: () => res,
+      type: (t: string) => ((out.type = t), res),
       set: () => res,
       json: (b: unknown) => ((out.body = JSON.stringify(b)), res),
       send: (b: string) => ((out.body = b), res),
@@ -116,7 +120,7 @@ describe('MCP gateway forwards the MCP request headers', () => {
     const lower = Object.fromEntries(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v]));
     const req: any = { method: 'POST', body, headers: lower };
     await controller().handle('weather', { userId: 'user-1', roles: [] } as any, req, res);
-    return { status: out.status, json: JSON.parse(out.body ?? '{}') };
+    return { status: out.status, type: out.type, json: JSON.parse(out.body ?? '{}') };
   }
 
   const call = {
@@ -190,5 +194,12 @@ describe('MCP gateway forwards the MCP request headers', () => {
     expect(h['x-api-key']).toBeUndefined();
     expect(h['x-operator-key']).toBe('dummy-operator-key');
     expect(h['content-type']).toBe('application/json');
+  });
+
+  it('never serves what the upstream calls HTML as HTML', async () => {
+    const out = await post({ jsonrpc: '2.0', id: 9, method: 'probe/html' }, {});
+    expect(out.type).toBe('application/json');
+    const sse = await post({ jsonrpc: '2.0', id: 2, method: 'tools/list' }, {});
+    expect(sse.type).toBe('application/json');
   });
 });
