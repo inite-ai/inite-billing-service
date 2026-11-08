@@ -28,3 +28,19 @@ export class MockJwtAuthGuard extends AuthGuard('jwt') {
  */
 @Injectable()
 export class MockJwtOrServiceGuard extends MockJwtAuthGuard {}
+
+/**
+ * Stand-in for `JwtOrServiceGuard` that injects what an MCP connector holds: a
+ * token issued for billing's /mcp (RFC 8707) with `billing:account`. The
+ * endpoint's McpResourceGuard requires both on every user token.
+ */
+@Injectable()
+export class MockMcpConnectorGuard extends MockJwtAuthGuard {
+  canActivate(context: ExecutionContext): boolean {
+    super.canActivate(context);
+    const request = context.switchToHttp().getRequest();
+    const base = (process.env.FRONTEND_URL || 'https://billing.inite.ai').replace(/\/$/, '');
+    request.user = { ...request.user, audience: [`${base}/mcp`], scopes: ['billing:account'] };
+    return true;
+  }
+}
