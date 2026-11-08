@@ -81,25 +81,29 @@ export function buildJwtOptions(configService: ConfigService): StrategyOptionsWi
     );
   }
 
-  // Audience: pinned when JWT_AUDIENCE is set, and then billing's own OAuth
-  // resources (/mcp, /mcp/wallet, /v1/agent-wallet) are always part of the
-  // accepted set — they are what an RFC 8707 client is issued, so pinning the
-  // first-party client id alone would lock every MCP client and agent out.
+  // Audience: JWT_AUDIENCE lists the first-party client ids whose users' tokens
+  // billing honours (the billing frontend, and each product that forwards its
+  // signed-in person's token through @inite/billing). Billing's own OAuth
+  // resources (/mcp, /mcp/wallet, /v1/agent-wallet) are always added: they are
+  // what an RFC 8707 client is issued, so the pin never locks MCP clients and
+  // agents out.
   //
-  // INITE Auth stamps `aud` on every access token (the RFC 8707 resource when
-  // one was asked for, otherwise the client id), so pinning is safe. It stays
-  // opt-in for one minor so existing deployments are not broken on upgrade
-  // (Triad contract, backward-compat policy); unset in production is warned.
+  // Required in production, like JWT_ISSUER. Unset, every token INITE Auth
+  // signs is accepted whatever its `aud`: one issued for another service, or
+  // a self-registered client's own `dcr_` id, given to some other connector,
+  // acted as that person on billing's REST API. Fail closed: refuse to start.
   const audience = acceptedAudiences(configService);
-  if (issuer) logger.log(`Pinning JWT issuer: ${issuer.join(', ')}`);
-  if (audience) logger.log(`Pinning JWT audience: ${audience.join(', ')}`);
-  else if (isProduction) {
-    logger.warn(
-      'JWT_AUDIENCE is not set: a token INITE Auth issued for another service is ' +
-        'accepted outside the MCP and wallet endpoints. Set it to the billing ' +
-        "frontend's OAuth client id (inite-billing).",
+  if (isProduction && !audience) {
+    throw new Error(
+      'JWT_AUDIENCE is required in production: the comma-separated first-party ' +
+        'client ids whose user tokens billing accepts (inite-billing and every ' +
+        "product that forwards its users' tokens). Unset, a token INITE Auth " +
+        "issued for any other audience is accepted. Billing's own resource URLs " +
+        'are added automatically.',
     );
   }
+  if (issuer) logger.log(`Pinning JWT issuer: ${issuer.join(', ')}`);
+  if (audience) logger.log(`Pinning JWT audience: ${audience.join(', ')}`);
 
   const base = {
     jwtFromRequest: extractJwt,

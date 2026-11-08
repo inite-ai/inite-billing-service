@@ -5,7 +5,7 @@ import { TestAppModule } from './test-app.module';
 import { PrismaService } from '../src/common/services/prisma.service';
 import { JwtAuthGuard } from '../src/auth/guards/jwt-auth.guard';
 import { JwtOrServiceGuard } from '../src/auth/guards/jwt-or-service.guard';
-import { MockJwtAuthGuard, MockJwtOrServiceGuard } from './mocks/auth.mock';
+import { MockJwtAuthGuard, MockMcpConnectorGuard } from './mocks/auth.mock';
 import { cleanupTestData } from './helpers/cleanup.helper';
 
 /**
@@ -68,8 +68,9 @@ describe('MCP E2E', () => {
     })
       .overrideGuard(JwtAuthGuard)
       .useClass(MockJwtAuthGuard)
+      // A connector's token: aud = billing's /mcp, scope billing:account.
       .overrideGuard(JwtOrServiceGuard)
-      .useClass(MockJwtOrServiceGuard)
+      .useClass(MockMcpConnectorGuard)
       .compile();
 
     app = moduleFixture.createNestApplication();

@@ -406,6 +406,15 @@ jobs:
               # identity provider signs with auth-api. Unset, this service
               # accepts any token those keys can verify, whoever issued it.
               - JWT_ISSUER=https://auth-api.inite.ai
+              # The `aud` values billing accepts: the first-party INITE Auth client
+              # ids whose signed-in users' tokens reach billing (the billing
+              # frontend, and every product that forwards its person's token
+              # through @inite/billing). Billing's own resources (/mcp,
+              # /mcp/wallet, /v1/agent-wallet) are added in code. Required:
+              # the service refuses to start without it. A token for any other
+              # audience (another service, a self-registered client's own
+              # dcr_ id) is refused. A new first-party product joins here.
+              - JWT_AUDIENCE=inite-billing,inite-ai,brain-landing,smart-chat,smart-chat-admin,break3-backend,floripa,content-generator,ideaudit-dashboard,inite-bloom,inite-cli,inite-club,inite-education,inite-education-billing,inite-estate,inite-events,inite-food,inite-fund,inite-health,inite-rent,inite-services,inite-shop,inite-solutions,inite-training,inite-travel,mikefluff,neuralcosmology,nobodyquits
               # INITE ID shows the person's wallet from billing (/v1/wallet).
               - CORS_ORIGINS=https://${{ env.DOMAIN }},https://auth.inite.ai
               - ANTHROPIC_API_KEY=\${ANTHROPIC_API_KEY}

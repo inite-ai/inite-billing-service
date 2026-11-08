@@ -67,6 +67,8 @@ describe('Triad token contract — billing verifier', () => {
       NODE_ENV: 'production',
       AUTH_SERVICE_URL: authUrl,
       JWT_ISSUER: ISSUER,
+      // Required in production (fail closed); the first-party client id.
+      JWT_AUDIENCE: 'inite-billing',
       FRONTEND_URL: BILLING,
       ...env,
     };
@@ -215,9 +217,17 @@ describe('Triad token contract — billing verifier', () => {
       expect(out.user).toBeUndefined();
     });
 
-    it("unpinned, the MCP guard still refuses a token for another service's resource", async () => {
+    it('a token whose aud is a self-registered client id (dcr_), whatever its scope', async () => {
       const out = await authenticate(
         strategy(),
+        mint(userAccessClaims('billing:account'), { aud: 'dcr_0123456789abcdef0123456789abcdef' }),
+      );
+      expect(out.user).toBeUndefined();
+    });
+
+    it("unpinned (outside production), the MCP guard still refuses a token for another service's resource", async () => {
+      const out = await authenticate(
+        strategy({ NODE_ENV: 'development', JWT_AUDIENCE: '' }),
         mint(userAccessClaims('billing:account'), { aud: 'https://brain.triad.test/mcp' }),
       );
       expect(out.user).toBeDefined();

@@ -41,12 +41,23 @@ describe('McpResourceGuard', () => {
     ).toThrow(UnauthorizedException);
   });
 
-  it('leaves first-party tokens and service keys as they were', () => {
-    expect(guard.canActivate(ctx({ userId: 'did:key:a', audience: ['inite-billing-web'] }))).toBe(
-      true,
-    );
-    expect(guard.canActivate(ctx({ userId: 'did:key:a' }))).toBe(true);
+  it('lets service keys in as before', () => {
     expect(guard.canActivate(ctx({ userId: null, isService: true }))).toBe(true);
+  });
+
+  // The hole: only a token whose aud was this URL was asked for the scope;
+  // every other non-URL audience passed with no check at all.
+  it.each([
+    ['a self-registered client id', ['dcr_0123456789abcdef0123456789abcdef']],
+    ['a first-party client id', ['inite-billing-web']],
+    ['no audience', undefined],
+  ])('refuses a token whose audience is %s, even with billing:account', (_label, audience) => {
+    expect(() =>
+      guard.canActivate(ctx({ userId: 'did:key:a', audience, scopes: ['billing:account'] })),
+    ).toThrow(UnauthorizedException);
+    expect(() => guard.canActivate(ctx({ userId: 'did:key:a', audience, scopes: [] }))).toThrow(
+      UnauthorizedException,
+    );
   });
 });
 

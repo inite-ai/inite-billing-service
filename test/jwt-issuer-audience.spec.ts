@@ -27,16 +27,28 @@ describe('buildJwtOptions issuer/audience pinning', () => {
     ).toThrow(/JWT_ISSUER/);
   });
 
-  it('does not require an audience in production (yet)', () => {
-    const opts = buildJwtOptions(
-      cfg({
-        NODE_ENV: 'production',
-        AUTH_SERVICE_URL: 'https://auth.example.com',
-        JWT_ISSUER: 'https://auth-api.example.com',
-      }),
-    ) as any;
-    expect(opts.issuer).toEqual(['https://auth-api.example.com', 'https://auth-api.example.com/']);
-    expect(opts.audience).toBeUndefined();
+  // Fail closed: unset, every token the JWKS verifies was accepted whatever its
+  // `aud` (another service's, or a self-registered client's own dcr_ id).
+  it('refuses to start in production without an audience', () => {
+    expect(() =>
+      buildJwtOptions(
+        cfg({
+          NODE_ENV: 'production',
+          AUTH_SERVICE_URL: 'https://auth.example.com',
+          JWT_ISSUER: 'https://auth-api.example.com',
+        }),
+      ),
+    ).toThrow(/JWT_AUDIENCE/);
+    expect(() =>
+      buildJwtOptions(
+        cfg({
+          NODE_ENV: 'production',
+          AUTH_SERVICE_URL: 'https://auth.example.com',
+          JWT_ISSUER: 'https://auth-api.example.com',
+          JWT_AUDIENCE: ' , ',
+        }),
+      ),
+    ).toThrow(/JWT_AUDIENCE/);
   });
 
   it('accepts an issuer that is not the JWKS host', () => {
@@ -47,6 +59,7 @@ describe('buildJwtOptions issuer/audience pinning', () => {
         NODE_ENV: 'production',
         AUTH_SERVICE_URL: 'https://auth.example.com',
         JWT_ISSUER: 'https://auth-api.example.com',
+        JWT_AUDIENCE: 'inite-billing',
       }),
     ) as any;
     expect(opts.issuer).not.toContain('https://auth.example.com');
@@ -97,7 +110,13 @@ describe('buildJwtOptions JWKS issuer requirement', () => {
 
   it('fails loudly in production when AUTH_SERVICE_URL is missing', () => {
     expect(() =>
-      buildJwtOptions(cfg({ NODE_ENV: 'production', JWT_ISSUER: 'https://auth-api.example.com' })),
+      buildJwtOptions(
+        cfg({
+          NODE_ENV: 'production',
+          JWT_ISSUER: 'https://auth-api.example.com',
+          JWT_AUDIENCE: 'inite-billing',
+        }),
+      ),
     ).toThrow(/AUTH_SERVICE_URL/);
   });
 
@@ -109,6 +128,7 @@ describe('buildJwtOptions JWKS issuer requirement', () => {
           NODE_ENV: 'production',
           AUTH_SERVICE_URL: 'https://auth.acme.example',
           JWT_ISSUER: 'https://auth-api.acme.example',
+          JWT_AUDIENCE: 'inite-billing',
         }),
       );
     }).not.toThrow();

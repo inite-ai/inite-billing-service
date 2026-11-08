@@ -10,8 +10,8 @@ import { ConfigService } from '@nestjs/config';
  *    slash is not a different issuer. The FIRST entry is this deployment's
  *    issuer: the one advertised in discovery and used to recognise an
  *    agent's did:web.
- *  - `aud`, when pinned with JWT_AUDIENCE, is one of the configured values
- *    (the billing frontend's client id, `inite-billing` by default) or one
+ *  - `aud` is one of the JWT_AUDIENCE values (first-party client ids;
+ *    required in production, see jwt.strategy.ts) or one
  *    of billing's own OAuth resources — the MCP endpoint, the wallet MCP
  *    and the agent wallet API. Those are what an RFC 8707 client asks INITE
  *    Auth for, so pinning the audience can never lock them out.
@@ -49,9 +49,8 @@ export function billingResources(config: Pick<ConfigService, 'get'>): string[] {
 }
 
 /**
- * The `aud` allow-list, or undefined when JWT_AUDIENCE is unset (audience
- * then is checked per endpoint only — see McpResourceGuard and the wallet
- * guards).
+ * The `aud` allow-list, or undefined when JWT_AUDIENCE is unset (only
+ * outside production: buildJwtOptions refuses to start without it there).
  */
 export function acceptedAudiences(config: Pick<ConfigService, 'get'>): string[] | undefined {
   const configured = (config.get<string>('JWT_AUDIENCE') ?? '')
