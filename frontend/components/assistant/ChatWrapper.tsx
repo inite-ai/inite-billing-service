@@ -5,6 +5,7 @@ import ChatPanel from './ChatPanel'
 
 export default function ChatWrapper() {
   const { user } = useAuth()
-  if (!user) return null
+  // The assistant answers with a model; the demo makes no model calls.
+  if (!user || user.demo) return null
   return <ChatPanel />
 }

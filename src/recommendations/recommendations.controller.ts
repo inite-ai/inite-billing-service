@@ -35,7 +35,8 @@ export class RecommendationsController {
     return this.recommendationsService.getNextBestOffers(user.userId, {
       surface: surface === 'checkout' ? 'checkout' : 'dashboard',
       limit: limit ? parseInt(limit, 10) : undefined,
-      explain: explain === 'true',
+      // An explanation is a model call; the demo makes none.
+      explain: explain === 'true' && user.demo !== true,
       locale,
     });
   }

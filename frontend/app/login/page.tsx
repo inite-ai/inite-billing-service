@@ -7,13 +7,16 @@ import { LedgerShell } from '@/components/ledger/LedgerShell';
 import { OAuthClient } from '@/lib/oauth-client';
 import { safeReturnTo } from '@/lib/safe-redirect';
 import { useTranslations } from 'next-intl';
+import { DemoSignInButton } from '@/components/demo/DemoSignInButton';
 
 function LoginContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const t = useTranslations('login');
+  const td = useTranslations('demo');
   const searchParams = useSearchParams();
   const returnTo = searchParams?.get('returnTo');
+  const demoUnavailable = searchParams?.get('auth_error') === 'demo_unavailable';
 
   const handleLogin = async () => {
     try {
@@ -43,6 +46,11 @@ function LoginContent() {
               {error}
             </p>
           )}
+          {demoUnavailable && (
+            <p className="note err mb-5" role="alert">
+              {td('unavailable')}
+            </p>
+          )}
 
           <button type="button" onClick={handleLogin} disabled={isLoading} className="btn acc block">
             {isLoading ? (
@@ -57,6 +65,9 @@ function LoginContent() {
               </>
             )}
           </button>
+          <div className="mt-3">
+            <DemoSignInButton className="btn ghost block" withHint />
+          </div>
         </div>
         <div className="flex items-center justify-between border-t border-[color:var(--line-2)] px-7 py-3.5 sm:px-9">
           <span className="mono text-[11.5px] text-[color:var(--dim-2)]">{t('protocol')}</span>

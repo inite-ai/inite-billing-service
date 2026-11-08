@@ -31,7 +31,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
       clearTokens();
+      const wasDemo = user?.demo === true;
       setUser(null);
+      // A demo session has no session at auth to end.
+      if (wasDemo) {
+        // A hard navigation on purpose, as for a real sign-out: every piece of
+        // state fetched under the demo session goes with it.
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+        window.location.href = '/';
+        return;
+      }
 
       const AUTH_DOMAIN = process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || 'https://auth.inite.ai';
       // eslint-disable-next-line @next/next/no-location-assign-relative-destination

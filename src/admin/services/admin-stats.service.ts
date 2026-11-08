@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../common/services/prisma.service';
+import { NOT_DEMO } from '../../common/demo';
 import { paginate } from '../../common/helpers/paginate';
 import { resolveOrderBy, SortWhitelist } from '../../common/helpers/sort';
 
@@ -15,6 +16,7 @@ export const WEBHOOK_SORT: SortWhitelist = {
 export class AdminStatsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** Every figure leaves the demo tenant out: its orders and plans are made up. */
   async getStats() {
     const [
       totalOrders,
@@ -26,14 +28,14 @@ export class AdminStatsService {
       revenueRows,
       commissionRows,
     ] = await Promise.all([
-      this.prisma.order.count(),
-      this.prisma.order.count({ where: { status: 'paid' } }),
+      this.prisma.order.count({ where: { userId: NOT_DEMO } }),
+      this.prisma.order.count({ where: { status: 'paid', userId: NOT_DEMO } }),
       this.prisma.order.aggregate({
-        where: { status: 'paid' },
+        where: { status: 'paid', userId: NOT_DEMO },
         _sum: { amount: true },
       }),
       this.prisma.subscription.count({
-        where: { status: { in: ['active', 'trialing'] } },
+        where: { status: { in: ['active', 'trialing'] }, userId: NOT_DEMO },
       }),
       this.prisma.affiliate.count({ where: { status: 'active' } }),
       this.prisma.affiliateCommission.aggregate({
@@ -42,7 +44,7 @@ export class AdminStatsService {
       }),
       this.prisma.order.groupBy({
         by: ['currency'],
-        where: { status: 'paid' },
+        where: { status: 'paid', userId: NOT_DEMO },
         _sum: { amount: true },
       }),
       this.prisma.affiliateCommission.groupBy({
@@ -100,9 +102,13 @@ export class AdminStatsService {
       }),
       this.prisma.riskAssessment.count({ where: { status: { in: ['flagged', 'blocked'] } } }),
       this.prisma.webhookEvent.count({ where: { status: 'failed' } }),
-      this.prisma.subscription.count({ where: { status: 'past_due' } }),
+      this.prisma.subscription.count({ where: { status: 'past_due', userId: NOT_DEMO } }),
       this.prisma.order.count({
-        where: { status: { in: ['created', 'open'] }, createdAt: { lt: staleBefore } },
+        where: {
+          status: { in: ['created', 'open'] },
+          createdAt: { lt: staleBefore },
+          userId: NOT_DEMO,
+        },
       }),
       this.prisma.outboxEvent.count({ where: { status: 'failed' } }),
     ]);

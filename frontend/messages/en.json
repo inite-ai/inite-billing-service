@@ -300,7 +300,9 @@
     "creditsUsed": "{used} of {total} used",
     "resets": "Resets {date}",
     "entitlementsHint": "What your plans unlock in INITE products.",
-    "noEntitlements": "No access granted yet"
+    "noEntitlements": "No access granted yet",
+    "usageTitle": "Credits spent in the last 30 days",
+    "usageUnits": "{units} units"
   },
   "orders": {
     "title": "Order History",
@@ -1723,5 +1725,18 @@
     "cardButton": "Pay ${amount} by card",
     "cardNote": "After payment, {amount} USDC arrives in this wallet within a couple of minutes.",
     "cardFailed": "The card payment could not be started"
+  },
+  "demo": {
+    "button": "Try the demo",
+    "banner": "This is a demo: the company and its data are made up, and nothing can be changed.",
+    "left": "{time} left.",
+    "exit": "Leave the demo",
+    "ended": "The demo has ended.",
+    "again": "Open it again",
+    "hours": "h",
+    "minutes": "min",
+    "note": "Payments, refunds and plan changes are off in the demo.",
+    "hint": "No sign-in: look at a made-up company’s subscriptions, invoices and credits.",
+    "unavailable": "The demo is not available right now. Try again later."
   }
 }

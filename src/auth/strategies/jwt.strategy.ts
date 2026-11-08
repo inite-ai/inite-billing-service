@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { passportJwtSecret } from 'jwks-rsa';
 import { Request } from 'express';
 import { acceptedAudiences, acceptedIssuers } from '../token-contract';
+import { DEMO_ORG_ID, DEMO_SUBSCRIBER, isDemoClaims } from '../../common/demo';
 
 export interface JwtPayload {
   /** The person's DID (did:key:…), or an agent's own did:web — never a UUID. */
@@ -26,6 +27,8 @@ export interface JwtPayload {
   org_id?: string;
   /** The person's role in that organisation (Membership.role). */
   org_role?: string;
+  /** A persona of the family's demo tenant, from INITE Auth's demo grant. */
+  demo?: boolean;
 }
 
 const ORG_ID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
@@ -155,6 +158,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Invalid token: missing sub');
     }
 
+    if (isDemoClaims(payload)) return demoUser(payload);
+
     return {
       userId: payload.sub,
       roles: payload.roles || [],
@@ -171,4 +176,28 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       ...orgOf(payload),
     };
   }
+}
+
+/**
+ * A demo persona (INITE Auth's demo grant: `demo: true`, `org_id` the demo
+ * tenant). Its rows are the demo tenant's (`org:<DEMO_ORG_ID>`), so it reads
+ * Atlântica's subscriptions, orders and credits and can never reach a real
+ * person's. No platform roles, so never admin, whatever the token says; no
+ * verified address, so it claims nothing; no agent acting for it. Writes are
+ * refused by DemoReadOnlyInterceptor before any handler runs.
+ */
+export function demoUser(payload: JwtPayload) {
+  const role = typeof payload.org_role === 'string' ? payload.org_role.toLowerCase() : '';
+  return {
+    userId: DEMO_SUBSCRIBER,
+    personId: payload.sub,
+    demo: true,
+    roles: [] as string[],
+    email: payload.email,
+    emailVerified: false,
+    audience: payload.aud === undefined ? [] : [payload.aud].flat(),
+    scopes: typeof payload.scope === 'string' ? payload.scope.split(/\s+/).filter(Boolean) : [],
+    orgId: DEMO_ORG_ID,
+    ...(role ? { orgRole: role } : {}),
+  };
 }

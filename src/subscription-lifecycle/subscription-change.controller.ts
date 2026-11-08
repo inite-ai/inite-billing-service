@@ -54,6 +54,7 @@ export class SubscriptionChangeController {
           userId: String(req.user?.userId),
           orgId: req.user?.orgId as string | undefined,
           orgRole: req.user?.orgRole as string | undefined,
+          demo: req.user?.demo === true,
         };
     return this.planChange.change(caller, { subscriptionId: id, ...body });
   }
