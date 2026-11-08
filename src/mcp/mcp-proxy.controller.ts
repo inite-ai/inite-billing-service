@@ -3,7 +3,7 @@ import { Request, Response } from 'express';
 import { ApiTags, ApiExcludeEndpoint } from '@nestjs/swagger';
 import { JwtOrServiceGuard } from '../auth/guards/jwt-or-service.guard';
 import { User, RequestUser } from '../auth/decorators/user.decorator';
-import { McpProxyService } from './mcp-proxy.service';
+import { McpProxyService, mcpRequestHeaders } from './mcp-proxy.service';
 import { McpCaller } from './mcp-tools.service';
 import { McpGatewayChallengeFilter, McpGatewayResourceGuard } from './mcp-gateway-resource';
 
@@ -59,7 +59,39 @@ export class McpProxyController {
     // it is only carrying.
     const rawBody = JSON.stringify(req.body ?? {});
 
-    const answer = await this.proxy.handle(slug, caller, req.body, rawBody);
-    res.status(answer.status).type(answer.contentType).send(answer.body);
+    const answer = await this.proxy.handle(
+      slug,
+      caller,
+      req.body,
+      rawBody,
+      mcpRequestHeaders(req.headers),
+    );
+    // An MCP answer is JSON or one SSE stream, nothing else. The upstream is
+    // the operator's and it now sees the client's mcp-* headers, so the type
+    // it claims is not trusted: this origin never serves the upstream's HTML.
+    res.status(answer.status).setHeader('X-Content-Type-Options', 'nosniff');
+    if (/^text\/event-stream\b/i.test(answer.contentType)) {
+      // One SSE stream of JSON-RPC messages, relayed as bytes.
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.end(Buffer.from(answer.body, 'utf8'));
+      return;
+    }
+    // Anything else must be a JSON-RPC message: parsed and re-serialised, so
+    // nothing the upstream sends is ever served as markup.
+    let message: unknown;
+    try {
+      message = JSON.parse(answer.body);
+    } catch {
+      res.status(502).json({
+        jsonrpc: '2.0',
+        id: null,
+        error: {
+          code: -32603,
+          message: 'The server behind this endpoint answered something other than JSON.',
+        },
+      });
+      return;
+    }
+    res.json(message);
   }
 }
