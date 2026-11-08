@@ -69,9 +69,13 @@ export class McpProxyController {
     // An MCP answer is JSON or one SSE stream, nothing else. The upstream is
     // the operator's and it now sees the client's mcp-* headers, so the type
     // it claims is not trusted: this origin never serves the upstream's HTML.
-    const type = /^text\/event-stream\b/i.test(answer.contentType)
-      ? 'text/event-stream'
-      : 'application/json';
-    res.status(answer.status).type(type).set('X-Content-Type-Options', 'nosniff').send(answer.body);
+    res.status(answer.status);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    if (/^text\/event-stream\b/i.test(answer.contentType)) {
+      res.setHeader('Content-Type', 'text/event-stream');
+    } else {
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    }
+    res.send(answer.body);
   }
 }

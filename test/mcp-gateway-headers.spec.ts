@@ -113,6 +113,10 @@ describe('MCP gateway forwards the MCP request headers', () => {
     const res: any = {
       status: (s: number) => ((out.status = s), res),
       type: (t: string) => ((out.type = t), res),
+      setHeader: (k: string, v: string) => (
+        k.toLowerCase() === 'content-type' && (out.type = v),
+        res
+      ),
       set: () => res,
       json: (b: unknown) => ((out.body = JSON.stringify(b)), res),
       send: (b: string) => ((out.body = b), res),
@@ -198,8 +202,8 @@ describe('MCP gateway forwards the MCP request headers', () => {
 
   it('never serves what the upstream calls HTML as HTML', async () => {
     const out = await post({ jsonrpc: '2.0', id: 9, method: 'probe/html' }, {});
-    expect(out.type).toBe('application/json');
+    expect(out.type).toBe('application/json; charset=utf-8');
     const sse = await post({ jsonrpc: '2.0', id: 2, method: 'tools/list' }, {});
-    expect(sse.type).toBe('application/json');
+    expect(sse.type).toBe('application/json; charset=utf-8');
   });
 });
