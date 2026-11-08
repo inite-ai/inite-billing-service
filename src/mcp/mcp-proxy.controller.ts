@@ -69,13 +69,29 @@ export class McpProxyController {
     // An MCP answer is JSON or one SSE stream, nothing else. The upstream is
     // the operator's and it now sees the client's mcp-* headers, so the type
     // it claims is not trusted: this origin never serves the upstream's HTML.
-    res.status(answer.status);
-    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.status(answer.status).setHeader('X-Content-Type-Options', 'nosniff');
     if (/^text\/event-stream\b/i.test(answer.contentType)) {
+      // One SSE stream of JSON-RPC messages, relayed as bytes.
       res.setHeader('Content-Type', 'text/event-stream');
-    } else {
-      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.end(Buffer.from(answer.body, 'utf8'));
+      return;
     }
-    res.send(answer.body);
+    // Anything else must be a JSON-RPC message: parsed and re-serialised, so
+    // nothing the upstream sends is ever served as markup.
+    let message: unknown;
+    try {
+      message = JSON.parse(answer.body);
+    } catch {
+      res.status(502).json({
+        jsonrpc: '2.0',
+        id: null,
+        error: {
+          code: -32603,
+          message: 'The server behind this endpoint answered something other than JSON.',
+        },
+      });
+      return;
+    }
+    res.json(message);
   }
 }

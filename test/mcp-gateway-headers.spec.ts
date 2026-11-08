@@ -33,6 +33,10 @@ describe('MCP gateway forwards the MCP request headers', () => {
       req.on('end', () => {
         seen.push(req.headers);
         const body = JSON.parse(raw || '{}');
+        if (body.method === 'probe/markup') {
+          res.writeHead(200, { 'content-type': 'text/html' });
+          return void res.end('<script>alert(1)</script>');
+        }
         if (body.method === 'probe/html') {
           res.writeHead(200, { 'content-type': 'text/html' });
           return void res.end('{"jsonrpc":"2.0","id":9,"result":{}}');
@@ -118,7 +122,13 @@ describe('MCP gateway forwards the MCP request headers', () => {
         res
       ),
       set: () => res,
-      json: (b: unknown) => ((out.body = JSON.stringify(b)), res),
+      // Express's res.json sets this type itself.
+      json: (b: unknown) => (
+        (out.type = 'application/json; charset=utf-8'),
+        (out.body = JSON.stringify(b)),
+        res
+      ),
+      end: (b: Buffer) => ((out.body = b.toString('utf8')), res),
       send: (b: string) => ((out.body = b), res),
     };
     const lower = Object.fromEntries(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v]));
@@ -205,5 +215,12 @@ describe('MCP gateway forwards the MCP request headers', () => {
     expect(out.type).toBe('application/json; charset=utf-8');
     const sse = await post({ jsonrpc: '2.0', id: 2, method: 'tools/list' }, {});
     expect(sse.type).toBe('application/json; charset=utf-8');
+  });
+
+  it('an upstream answer that is not JSON is refused, never relayed', async () => {
+    const out = await post({ jsonrpc: '2.0', id: 10, method: 'probe/markup' }, {});
+    expect(out.status).toBe(502);
+    expect(out.type).toBe('application/json; charset=utf-8');
+    expect(JSON.stringify(out.json)).not.toContain('<script>');
   });
 });
