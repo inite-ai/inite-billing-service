@@ -1,5 +1,6 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { NOT_DEMO } from '../common/demo';
 import { PrismaService } from '../common/services/prisma.service';
 import { PaymentOrchestratorService } from '../payment-orchestrator/payment-orchestrator.service';
 import { DistributedLockService } from '../common/locks/distributed-lock.service';
@@ -47,6 +48,8 @@ export class SubscriptionExpirerScheduler {
       where: {
         status: { in: ['active', 'trialing', 'past_due'] },
         currentPeriodEnd: { lte: now },
+        // The demo tenant's plans are fixtures: they never end, renew or emit.
+        userId: NOT_DEMO,
       },
       include: { price: { include: { product: true } } },
     });

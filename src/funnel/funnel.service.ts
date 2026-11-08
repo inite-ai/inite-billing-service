@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { Cron } from '@nestjs/schedule';
+import { isDemoSubscriber, NOT_DEMO } from '../common/demo';
 import { PrismaService } from '../common/services/prisma.service';
 import { DistributedLockService } from '../common/locks/distributed-lock.service';
 
@@ -28,6 +29,8 @@ export class FunnelService {
     currency?: string;
     properties?: Record<string, any>;
   }): Promise<void> {
+    // The demo tenant is not a customer: it never enters the funnel.
+    if (isDemoSubscriber(data.userId)) return;
     try {
       await this.prisma.funnelEvent.create({
         data: {
@@ -170,6 +173,7 @@ export class FunnelService {
         status: 'active',
         cancelAtPeriodEnd: true,
         currentPeriodEnd: { lte: threeDaysFromNow },
+        userId: NOT_DEMO,
       },
       include: {
         price: { include: { product: true } },

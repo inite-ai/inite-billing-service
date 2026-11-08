@@ -9,6 +9,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../common/services/prisma.service';
+import { assertNotDemoSubscriber } from '../common/demo';
 import { OutboxService } from '../outbox/outbox.service';
 import { resolveFrontendUrl } from '../common/config/frontend-url';
 import { newCheckoutLink } from '../checkout/checkout-link';
@@ -86,6 +87,8 @@ export class PlanChangeService {
         : serviceId === caller.serviceId);
     // The same answer for "not yours" and "not there": no probing other ids.
     if (!sub || !mine) throw new NotFoundException('Subscription not found');
+    // The demo tenant's plans are fixtures: no order, link or event for them.
+    assertNotDemoSubscriber(sub.userId);
     // The organisation's plan, seen by a member: only its owner or admin moves it.
     if ('userId' in caller && !mayManage(caller, sub.userId)) {
       throw new ForbiddenException(ORG_MANAGERS_ONLY);

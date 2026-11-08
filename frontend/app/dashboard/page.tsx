@@ -18,6 +18,14 @@ import api from '@/lib/api'
 import type { Order, Subscription, AffiliateStats, Entitlement, CreditBalance } from '@/lib/types'
 import Link from 'next/link'
 
+/** One line of `/v1/credits/me/usage/breakdown` (by feature, last 30 days). */
+interface UsageLine {
+  featureCode: string | null
+  featureName: string
+  totalCredits: number
+  totalUnits: number
+}
+
 export default function DashboardPage() {
   const { user, isLoading: authLoading } = useAuth()
   const router = useRouter()
@@ -29,6 +37,7 @@ export default function DashboardPage() {
   const [entitlements, setEntitlements] = useState<Entitlement[]>([])
   const [creditBalances, setCreditBalances] = useState<CreditBalance[]>([])
   const [affiliateStats, setAffiliateStats] = useState<AffiliateStats | null>(null)
+  const [usage, setUsage] = useState<UsageLine[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -37,12 +46,14 @@ export default function DashboardPage() {
 
     async function load() {
       try {
-        const [ordersRes, subsRes, entRes, creditsRes] = await Promise.all([
+        const [ordersRes, subsRes, entRes, creditsRes, usageRes] = await Promise.all([
           api.get('/v1/orders/me').catch(() => ({ data: [] })),
           api.get('/v1/subscriptions/me').catch(() => ({ data: [] })),
           api.get('/v1/entitlements/me').catch(() => ({ data: [] })),
           api.get('/v1/credits/me').catch(() => ({ data: [] })),
+          api.get('/v1/credits/me/usage/breakdown').catch(() => ({ data: [] })),
         ])
+        setUsage(Array.isArray(usageRes.data) ? usageRes.data.filter((u: UsageLine) => u.totalCredits > 0) : [])
         setOrders(ordersRes.data)
         setSubscriptions(subsRes.data)
         setEntitlements(entRes.data)
@@ -216,6 +227,22 @@ export default function DashboardPage() {
                     )
                   })}
                 </div>
+                {usage.length > 0 && (
+                  <div className="mt-5 border-t border-slate-100 dark:border-slate-800 pt-4">
+                    <h4 className="mb-3 text-sm font-medium text-slate-900 dark:text-white">{t('usageTitle')}</h4>
+                    <ul className="space-y-2">
+                      {usage.slice(0, 6).map((u) => (
+                        <li key={u.featureCode ?? 'none'} className="flex items-center justify-between gap-3 text-xs">
+                          <span className="font-mono text-slate-300 truncate">{u.featureName}</span>
+                          <span className="shrink-0 text-slate-500">
+                            {t('usageUnits', { units: f.num(u.totalUnits) })} ·{' '}
+                            <span className="font-mono font-semibold text-slate-200">{f.num(u.totalCredits)}</span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </Card>
             </motion.div>
           )}

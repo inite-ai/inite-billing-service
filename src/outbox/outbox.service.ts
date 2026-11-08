@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/services/prisma.service';
+import { isDemoSubscriber } from '../common/demo';
 
 /** Give up re-delivering a `failed` event after this many attempts. */
 const MAX_DELIVERY_ATTEMPTS = 10;
@@ -34,6 +35,11 @@ export class OutboxService {
     } = {},
   ): Promise<void> {
     const { serviceId, aggregate, tx } = options;
+    // The demo tenant's rows are fixtures: no consumer ever hears of them.
+    if (isDemoSubscriber(payload?.user_id) || isDemoSubscriber(payload?.userId)) {
+      this.logger.debug(`Outbox event for the demo tenant dropped: ${eventType}`);
+      return;
+    }
     const client = tx || this.prisma;
     try {
       await client.outboxEvent.create({

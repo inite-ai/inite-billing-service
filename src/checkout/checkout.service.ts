@@ -44,6 +44,7 @@ import {
 } from './open-product';
 import { OpenSalePolicy } from './open-sale.policy';
 import { isOrgSubscriber } from '../common/validators/is-user-id';
+import { assertNotDemoSubscriber } from '../common/demo';
 
 @Injectable()
 export class CheckoutService {
@@ -198,6 +199,8 @@ export class CheckoutService {
      */
     callerServiceId?: string,
   ): Promise<CheckoutSessionResponseDto> {
+    // The demo tenant never reaches an order, a provider or a webhook.
+    assertNotDemoSubscriber(userId);
     // Idempotency check (Redis-backed so it survives restarts and is shared
     // across instances; falls back to an in-process Map if Redis is absent).
     const idemKey = idempotencyKey ? `checkout:idem:${userId}:${idempotencyKey}` : null;
@@ -411,6 +414,8 @@ export class CheckoutService {
     idempotencyKey: string,
     callerServiceId: string,
   ): Promise<CheckoutSessionResponseDto & { amount: string; currency: string }> {
+    // The demo tenant never reaches an order, a provider or a webhook.
+    assertNotDemoSubscriber(userId);
     const idemKey = `checkout:cart:${userId}:${idempotencyKey}`;
     const claim = await this.idempotencyClaim(idemKey);
     if (claim.kind === 'completed') {
@@ -567,6 +572,8 @@ export class CheckoutService {
     idempotencyKey: string,
     caller: { serviceId: string; serviceCode: string; clientId?: string | null },
   ): Promise<OpenSessionResponse> {
+    // The demo tenant never reaches an order, a provider or a webhook.
+    assertNotDemoSubscriber(userId);
     if (!this.openPolicy) throw new BadRequestException('Open products are not sold here');
     const idemKey = `checkout:open:${caller.serviceId}:${userId}:${idempotencyKey}`;
     const claim = await this.idempotencyClaim(idemKey);
@@ -758,6 +765,9 @@ export class CheckoutService {
     /** The token from the checkout link: opens the order without a session. */
     linkToken?: string,
   ) {
+    // A demo session opens no checkout: listing a session's methods asks the
+    // provider, and opening a guest's order would claim it.
+    assertNotDemoSubscriber(userId);
     const order = await this.prisma.order.findUnique({
       where: { id: sessionId },
       include: {
@@ -772,6 +782,7 @@ export class CheckoutService {
     if (!order) {
       throw new NotFoundException('Checkout session not found');
     }
+    assertNotDemoSubscriber(order.userId);
 
     if (linkToken) {
       this.assertLink(order, linkToken);
@@ -994,6 +1005,8 @@ export class CheckoutService {
     buyerEmail?: string,
     linkToken?: string,
   ): Promise<PaySessionResponseDto> {
+    // The demo tenant never reaches an order, a provider or a webhook.
+    assertNotDemoSubscriber(userId);
     const order = await this.prisma.order.findUnique({
       where: { id: sessionId },
       include: {
@@ -1008,6 +1021,7 @@ export class CheckoutService {
     if (!order) {
       throw new NotFoundException('Checkout session not found');
     }
+    assertNotDemoSubscriber(order.userId);
 
     // Paid through the link, the order stays with the buyer the store opened
     // it for: their DID for a signed-in store, the store's guest id otherwise.
@@ -1336,8 +1350,11 @@ export class CheckoutService {
    * so the order is settled even when no webhook arrives.
    */
   async refreshPayment(sessionId: string, userId: string | undefined, linkToken?: string) {
+    // The demo tenant never reaches an order, a provider or a webhook.
+    assertNotDemoSubscriber(userId);
     const order = await this.prisma.order.findUnique({ where: { id: sessionId } });
     if (!order) throw new NotFoundException('Checkout session not found');
+    assertNotDemoSubscriber(order.userId);
     if (linkToken) {
       this.assertLink(order, linkToken);
     } else if (!userId) {

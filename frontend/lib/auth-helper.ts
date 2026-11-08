@@ -7,6 +7,7 @@
  */
 
 import { decodeJWT, isJWTExpired } from './pkce';
+import type { DemoIdentity } from './demo';
 
 export interface UserSession {
   id: string;
@@ -14,6 +15,19 @@ export interface UserSession {
   name: string;
   role: 'USER' | 'ADMIN';
   avatarUrl?: string;
+  /** A demo persona of «Atlântica Group (demo)»: read-only, never an admin. */
+  demo?: boolean;
+}
+
+/** The page's view of a demo session (never an admin, whatever the token says). */
+export function demoUserSession(identity: DemoIdentity): UserSession {
+  return {
+    id: identity.id,
+    email: identity.email,
+    name: identity.name || identity.email,
+    role: 'USER',
+    demo: true,
+  };
 }
 
 // In-memory token storage — not persisted across page reloads.
@@ -54,6 +68,9 @@ export async function getUserSession(): Promise<UserSession | null> {
     });
     if (response.ok) {
       const data = await response.json();
+      if (data.demo === true && data.user) {
+        return demoUserSession(data.user as DemoIdentity);
+      }
       if (data.id_token) {
         storeIdToken(data.id_token);
         return getUserSessionFromIdToken(data.id_token);

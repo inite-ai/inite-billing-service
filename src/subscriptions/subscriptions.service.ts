@@ -14,6 +14,8 @@ import { CreditsService } from '../credits/credits.service';
 import { FunnelService } from '../funnel/funnel.service';
 import { PaymentOrchestratorService } from '../payment-orchestrator/payment-orchestrator.service';
 import { ORG_MANAGERS_ONLY, SubscriberCaller, mayManage, visibleSubscribers } from './subscribers';
+import { isOrgSubscriber } from '../common/validators/is-user-id';
+import { assertNotDemoSubscriber } from '../common/demo';
 
 /** A person by their id alone (an agent's action), or with their token's organisation. */
 export type SubscriptionCaller = string | SubscriberCaller;
@@ -53,6 +55,7 @@ export class SubscriptionsService {
     if (!subscription) {
       throw new NotFoundException(`Subscription not found: ${subscriptionId}`);
     }
+    assertNotDemoSubscriber(subscription.userId);
     if (!mayManage(who, subscription.userId)) {
       throw new ForbiddenException(ORG_MANAGERS_ONLY);
     }
@@ -222,7 +225,7 @@ export class SubscriptionsService {
     const subs = await this.getUserSubscriptions(visibleSubscribers(caller), serviceId);
     return subs.map((s) => ({
       ...s,
-      heldBy: s.userId === caller.userId ? 'self' : 'organization',
+      heldBy: s.userId === caller.userId && !isOrgSubscriber(s.userId) ? 'self' : 'organization',
       canManage: mayManage(caller, s.userId),
     }));
   }

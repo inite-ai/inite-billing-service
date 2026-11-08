@@ -23,6 +23,10 @@ export interface RequestUser {
   orgId?: string;
   /** The person's role in `orgId` (its `org_role`), lower-case. */
   orgRole?: string;
+  /** A demo persona's session: read-only, keyed to the demo tenant (src/common/demo.ts). */
+  demo?: boolean;
+  /** For a demo session, the persona's own `sub`; `userId` is then the demo tenant. */
+  personId?: string;
   isService?: boolean;
   serviceId?: string;
   serviceCode?: string;
