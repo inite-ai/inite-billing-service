@@ -186,7 +186,15 @@ export function buildLandingJsonLd(locale: Locale) {
               : 'Free to integrate — you only pay your payment provider fees',
         },
       },
-      { '@type': 'Brand', '@id': `${SITE_URL}/#brand`, name: BRAND.name, url: SITE_URL },
+      {
+        '@type': 'Brand',
+        '@id': `${SITE_URL}/#brand`,
+        name: BRAND.name,
+        url: SITE_URL,
+        // The product's own logo (app/icon.tsx, 512 px) and profiles; never a family domain.
+        logo: `${SITE_URL}/icon`,
+        sameAs: [...BRAND.sameAs],
+      },
       { ...COMPANY_REF },
       {
         '@type': 'FAQPage',
