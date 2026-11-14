@@ -128,60 +128,52 @@ const featureList = [
   'INITE wallet: people’s own USDC under their passkey, spent by their AI agents within approved limits',
 ]
 
-/** JSON-LD @graph for the landing: Organization + WebSite + SoftwareApplication + FAQPage. */
+/**
+ * The company, inite LLC, as every family site names it: by @id, with enough
+ * to resolve on its own. Described in full on inite.ai only.
+ *
+ * Owner, 13.11.2026: there is one company and its products. A product site
+ * declares no Organization of its own, no `parentOrganization`, and no
+ * `sameAs` to family sites; INITE Billing is a SoftwareApplication of INITE
+ * (inite LLC), https://inite.ai. The first four nodes below are the family
+ * registry's graph for `billing` (@inite/landing `familySchema`).
+ */
+export const COMPANY_ID = `${ORG.url}/#organization`
+const COMPANY = { '@id': COMPANY_ID }
+const COMPANY_REF = { '@type': 'Organization', '@id': COMPANY_ID, name: 'INITE', url: ORG.url }
+
+/** The product's line in the family registry (@inite/landing locales/<lang>/family.json). */
+const FAMILY_LINE: Record<Locale, string> = {
+  en: 'Subscriptions, usage, credits, entitlements and referrals.',
+  ru: 'Подписки, оплата, лимиты и доступные функции.',
+}
+
+/** JSON-LD @graph for the landing: WebSite + SoftwareApplication + Brand + the company + FAQPage. */
 export function buildLandingJsonLd(locale: Locale) {
-  const m = META[locale]
   return {
     '@context': 'https://schema.org',
     '@graph': [
-      /**
-       * INITE Billing, as its own entity.
-       *
-       * This node used to describe the parent instead: `@id` was
-       * https://inite.ai/#organization and the name was INITE AI, on a site
-       * that is not inite.ai. inite.ai lists seventeen brands as
-       * `subOrganization`, one of them https://billing.inite.ai/#organization
-       * — and nothing declared it, so the reference resolved to nothing. Every
-       * other node here also pointed its publisher at a company on a different
-       * domain, which is a claim about inite.ai rather than about this product.
-       *
-       * Billing is a product with a name, a repository and a licence. It gets
-       * to be a company of its own, hanging off the one that makes it.
-       */
-      {
-        '@type': 'Organization',
-        '@id': `${SITE_URL}/#organization`,
-        name: BRAND.name,
-        legalName: ORG.legalName,
-        url: SITE_URL,
-        description: m.description,
-        logo: { '@type': 'ImageObject', url: ORG.logo, width: 512, height: 512 },
-        sameAs: BRAND.sameAs,
-        parentOrganization: {
-          '@type': 'Organization',
-          '@id': `${ORG.url}/#organization`,
-          name: ORG.name,
-          legalName: ORG.legalName,
-          url: ORG.url,
-        },
-        founder: { '@type': 'Person', name: ORG.founder.name, jobTitle: ORG.founder.jobTitle },
-      },
       {
         '@type': 'WebSite',
         '@id': `${SITE_URL}/#website`,
-        name: BRAND.name,
         url: SITE_URL,
-        inLanguage: ['en', 'ru'],
-        publisher: { '@id': `${SITE_URL}/#organization` },
+        name: BRAND.name,
+        publisher: COMPANY,
+        inLanguage: locale,
+        about: { '@id': `${SITE_URL}/#app` },
       },
       {
         '@type': 'SoftwareApplication',
         '@id': `${SITE_URL}/#app`,
         name: BRAND.name,
-        applicationCategory: 'BusinessApplication',
-        operatingSystem: 'Web',
         url: SITE_URL,
-        description: m.description,
+        description: FAMILY_LINE[locale],
+        provider: COMPANY,
+        brand: { '@id': `${SITE_URL}/#brand` },
+        publisher: COMPANY,
+        applicationCategory: 'DeveloperApplication',
+        operatingSystem: 'Web',
+        // Product facts, not about the organization: kept.
         image: `${SITE_URL}/api/og`,
         featureList,
         offers: {
@@ -193,9 +185,17 @@ export function buildLandingJsonLd(locale: Locale) {
               ? 'Бесплатная интеграция — вы платите только комиссию платёжного провайдера'
               : 'Free to integrate — you only pay your payment provider fees',
         },
-        publisher: { '@id': `${SITE_URL}/#organization` },
-        provider: { '@id': `${SITE_URL}/#organization` },
       },
+      {
+        '@type': 'Brand',
+        '@id': `${SITE_URL}/#brand`,
+        name: BRAND.name,
+        url: SITE_URL,
+        // The product's own logo (app/icon.tsx, 512 px) and profiles; never a family domain.
+        logo: `${SITE_URL}/icon`,
+        sameAs: [...BRAND.sameAs],
+      },
+      { ...COMPANY_REF },
       {
         '@type': 'FAQPage',
         '@id': `${SITE_URL}/#faq`,

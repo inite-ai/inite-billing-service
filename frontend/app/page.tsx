@@ -13,7 +13,7 @@ export default async function Page() {
     <>
       <script
         type="application/ld+json"
-        // Landing structured data (Organization + WebSite + SoftwareApplication + FAQPage).
+        // Landing structured data (WebSite + SoftwareApplication + Brand + the company + FAQPage).
         dangerouslySetInnerHTML={{
           __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c'),
         }}
