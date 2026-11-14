@@ -37,7 +37,7 @@ export const BRAND = {
   contactEmail: 'support@inite.ai',
   // Ordered by SERP authority, shared with the parent org.
   // Pages about this product only. ORG.sameAs are inite.ai's profiles: they
-  // identify the parent (parentOrganization in lib/seo.ts), not this product.
+  // belong to the company, described on inite.ai, not to this product.
   sameAs: ['https://github.com/inite-ai/inite-billing-service'],
   // Verifiable product facts (kept true to the codebase).
   facts: {
