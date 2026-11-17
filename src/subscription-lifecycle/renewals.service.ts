@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
+import { NOT_DEMO } from '../common/demo';
 import { PrismaService } from '../common/services/prisma.service';
 import { resolveFrontendUrl } from '../common/config/frontend-url';
 import { DistributedLockService } from '../common/locks/distributed-lock.service';
@@ -64,6 +65,8 @@ export class SubscriptionRenewalsService {
         providerSubscriptionId: null,
         rail: { not: null },
         currentPeriodEnd: { lte: horizon },
+        // No renewal order or pay link for the demo tenant's fixtures.
+        userId: NOT_DEMO,
       },
       include: { price: { include: { product: { include: { service: true } } } } },
     });

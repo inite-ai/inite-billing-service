@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import { isDemoSubscriber } from '../common/demo';
 import { PrismaService } from '../common/services/prisma.service';
 import { UserContactService } from './user-contact.service';
 import { resolveFrontendUrl } from '../common/config/frontend-url';
@@ -42,6 +43,8 @@ export class NotificationsService {
 
   async notify(input: NotifyInput) {
     const created: any[] = [];
+    // The demo tenant is made up: no notice, mail or queue job is ever for it.
+    if (isDemoSubscriber(input.userId)) return created;
 
     for (const channel of input.channels) {
       if (channel === 'in_app') {

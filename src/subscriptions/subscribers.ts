@@ -22,6 +22,8 @@ export interface SubscriberCaller {
   userId: string;
   orgId?: string;
   orgRole?: string;
+  /** A demo persona: sees the demo tenant's plans, moves none of them. */
+  demo?: boolean;
 }
 
 /** The token's organisation as a subscriber, or null. */
@@ -32,11 +34,13 @@ export function callerOrg(caller: SubscriberCaller): string | null {
 /** Every subscriber whose plans the person sees: themselves, then their organisation. */
 export function visibleSubscribers(caller: SubscriberCaller): string[] {
   const org = callerOrg(caller);
-  return org ? [caller.userId, org] : [caller.userId];
+  // A demo session is keyed to its organisation already: one subscriber.
+  return org && org !== caller.userId ? [caller.userId, org] : [caller.userId];
 }
 
 /** Whether the person may cancel, resume or change a plan held by `subscriber`. */
 export function mayManage(caller: SubscriberCaller, subscriber: string): boolean {
+  if (caller.demo === true) return false;
   if (subscriber === caller.userId) return true;
   if (!isOrgSubscriber(subscriber)) return false;
   return (

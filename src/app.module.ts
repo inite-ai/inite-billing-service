@@ -3,7 +3,8 @@ import { ConfigModule } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { DemoReadOnlyInterceptor } from './common/demo-read-only.interceptor';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { LockModule } from './common/locks/lock.module';
 import { bullConnectionFromUrl } from './common/redis-connection';
@@ -88,6 +89,11 @@ import { ServiceApiModule } from './service-api/service-api.module';
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    // The family demo is read-only across the API (src/common/demo.ts).
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: DemoReadOnlyInterceptor,
     },
   ],
 })

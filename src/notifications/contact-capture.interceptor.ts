@@ -15,7 +15,8 @@ export class ContactCaptureInterceptor implements NestInterceptor {
     try {
       const req = context.switchToHttp().getRequest();
       const user = req?.user;
-      if (user?.userId && !user.isService) {
+      // A demo session leaves no contact behind: nothing is ever sent to it.
+      if (user?.userId && !user.isService && !user.demo) {
         const locale = (req.headers?.['x-user-locale'] as string) || req.cookies?.locale;
         void this.userContactService.touch(user.userId, user.email, locale);
       }

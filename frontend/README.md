@@ -47,6 +47,7 @@ Copy `.env.example` → `.env.local`. Full descriptions live in that file; summa
 | `AUTH_SERVICE_URL` | server | Identity provider base for the token/refresh routes (falls back to the `NEXT_PUBLIC_` value) |
 | `OAUTH_CLIENT_ID` | server | OAuth client id for token exchange (falls back to the `NEXT_PUBLIC_` value) |
 | `OAUTH_CLIENT_SECRET` | server | Confidential-client secret; leave empty for a public (PKCE-only) client |
+| `DEMO_ENABLED` | server | `1` turns on the family's read-only demo (`/api/auth/demo`, the «Try the demo» buttons); needs `OAUTH_CLIENT_SECRET` |
 
 `NEXT_PUBLIC_*` values are inlined into the browser bundle — never put secrets
 there. `OAUTH_CLIENT_SECRET` and the other unprefixed values are read only by the
@@ -60,6 +61,14 @@ server-side routes under `app/api/auth/*`.
 3. The server routes `app/api/auth/token` and `app/api/auth/refresh` exchange the
    code (and later refresh tokens) with `{AUTH_SERVICE_URL}` — adding
    `OAUTH_CLIENT_SECRET` when the client is confidential.
+
+The family demo: `/api/auth/demo?persona=owner|manager|staff` (on only with
+`DEMO_ENABLED=1`) asks the provider for a demo persona's token through the demo
+grant (`lib/demo-grant.ts`), with a 5-a-minute bucket per visitor, and signs the
+visitor in with an access cookie only plus the readable `demo_session` (the
+demo's end) that `components/demo/DemoBanner.tsx` counts down. The backend
+reads a demo token as «Atlântica Group (demo)» (`src/common/demo.ts`) and
+refuses all its writes.
 
 To use your own identity provider, point `*_AUTH_SERVICE_URL` at it (it must
 expose `/.well-known/jwks.json`, which the backend uses to verify the issued

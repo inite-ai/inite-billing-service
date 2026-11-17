@@ -10,6 +10,7 @@
  */
 
 import { decodeJWT, isJWTExpired } from '../pkce';
+import { isDemoClaims } from '../demo';
 
 export interface UserToken {
   id: string;
@@ -32,6 +33,8 @@ function asString(value: unknown): string | undefined {
 }
 
 function isAdminFromToken(decoded: Record<string, unknown>): boolean {
+  // A demo persona is never an admin, whatever its token carries.
+  if (isDemoClaims(decoded)) return false;
   const roles = decoded.roles as string[] | undefined;
   const metadata = decoded.metadata as { isAdmin?: boolean } | undefined;
   return roles?.includes('admin') || metadata?.isAdmin === true;

@@ -49,6 +49,7 @@
     "prisma:studio": "prisma studio",
     "db:reset": "prisma migrate reset",
     "db:seed": "prisma db seed",
+    "db:seed:demo-tenant": "ts-node prisma/demo-tenant/run.ts",
     "postinstall": "prisma generate",
     "prepare": "husky || true",
     "mcp:build": "npm --prefix mcp run build"

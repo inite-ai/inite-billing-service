@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useTranslations } from 'next-intl'
+import { DemoSignInButton } from '@/components/demo/DemoSignInButton'
 import { useAuth } from '@/contexts/AuthContext'
 import LanguageSwitcher from '@/components/ui/LanguageSwitcher'
 
@@ -111,6 +112,7 @@ export default function LandingClient() {
             <Link href="/docs" className="btn ghost">
               {t('docs')}
             </Link>
+            {!user && <DemoSignInButton className="btn ghost" />}
           </div>
           <div className="microrail rise d4">{t('heroMicro')}</div>
         </div>

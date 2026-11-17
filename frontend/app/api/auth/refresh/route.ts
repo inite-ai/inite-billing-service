@@ -1,10 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { demoIdentity } from '@/lib/demo';
 
 const AUTH_DOMAIN = process.env.AUTH_SERVICE_URL || process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || 'https://auth.inite.ai';
 const CLIENT_ID = process.env.OAUTH_CLIENT_ID || process.env.NEXT_PUBLIC_OAUTH_CLIENT_ID || 'inite-billing';
 const CLIENT_SECRET = process.env.OAUTH_CLIENT_SECRET;
 
 export async function POST(request: NextRequest) {
+  // A demo session has no refresh token by design: it ends with its access
+  // token. Answer who it is instead of clearing it (which would end the demo
+  // on the first page that asks).
+  const demo = request.cookies.get('refresh_token')?.value
+    ? null
+    : demoIdentity(request.cookies.get('access_token')?.value);
+  if (demo) {
+    return NextResponse.json({ demo: true, user: demo }, { headers: { 'Cache-Control': 'no-store' } });
+  }
+
   if (!CLIENT_SECRET) {
     return NextResponse.json({ error: 'OAuth configuration error' }, { status: 500 });
   }

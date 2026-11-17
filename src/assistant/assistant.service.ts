@@ -2,6 +2,7 @@ import { Injectable, Inject, Logger, BadRequestException } from '@nestjs/common'
 import { randomUUID } from 'crypto';
 import Anthropic from '@anthropic-ai/sdk';
 import { sse, sseDone } from './stream-protocol';
+import { NOT_DEMO } from '../common/demo';
 import { PrismaService } from '../common/services/prisma.service';
 import { ANTHROPIC_CLIENT } from '../common/anthropic/anthropic.constants';
 import { AnthropicConfigService } from '../common/anthropic/anthropic-config.service';
@@ -739,14 +740,15 @@ Example: ["Unlimited API calls", "Priority support", "Advanced analytics"]`,
       // Admin tools
       case 'get_admin_stats': {
         if (!isAdmin) throw new Error('Admin access required');
+        // The demo tenant's made-up orders and plans count in no total.
         const [totalOrders, revenue, activeSubscriptions, totalAffiliates] = await Promise.all([
-          this.prisma.order.count(),
+          this.prisma.order.count({ where: { userId: NOT_DEMO } }),
           this.prisma.order.aggregate({
-            where: { status: 'paid' },
+            where: { status: 'paid', userId: NOT_DEMO },
             _sum: { amount: true },
           }),
           this.prisma.subscription.count({
-            where: { status: 'active' },
+            where: { status: 'active', userId: NOT_DEMO },
           }),
           this.prisma.affiliate.count(),
         ]);
