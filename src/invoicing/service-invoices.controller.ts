@@ -17,7 +17,6 @@ import { Throttle } from '@nestjs/throttler';
 import { ServiceAuthGuard } from '../auth/guards/service-auth.guard';
 import { InvoicingService } from './invoicing.service';
 import { CreateInvoiceDto, MarkInvoicePaidDto } from './invoicing.dto';
-import { assertOwnGuestId } from '../service-api/buyer';
 
 /**
  * Invoices for the service that owns the API key (x-api-key, the key inite.ai
@@ -43,7 +42,10 @@ export class ServiceInvoicesController {
   ) {
     if (!idempotencyKey?.trim())
       throw new BadRequestException('idempotency-key header is required');
-    assertOwnGuestId(dto.userId, req.user.serviceCode);
+    // The buyer is checked against the buyer pattern (DTO), as POST
+    // /v1/checkout/sessions does under a service key, not against the
+    // service code: a site's guest ids are named for the site, and inite.ai's
+    // (`initeai:<hash>`, claimed on sign-in) predate its service code.
     return this.invoicing.create(
       { serviceId: req.user.serviceId, serviceCode: req.user.serviceCode },
       dto,
