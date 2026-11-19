@@ -208,3 +208,30 @@ The legal and tax side, which must be settled before any code:
 connects. For (b), the legal entity and the jurisdictions, the fee, the
 payout schedule and reserve, and confirmation from lava.top and Hodle that
 they allow marketplace sales. Until then, the shop side is not built.
+
+## Invoices
+
+An invoice is an open sale that says it is one: one line on one of the
+service's open products, opened with `POST /v1/service/invoices` under the
+service's API key, with `metadata.invoice = { description, dueAt }` beside
+whatever the service puts in `metadata` (inite.ai puts `dealId`, `rung`,
+`month`). The product's bounds, the service's daily cap and the audit row all
+apply as to any open sale; the payer gets the ordinary checkout link.
+
+When the money came another way (a PIX straight to the account, a bank
+transfer), the service or an admin marks it paid:
+`POST /v1/service/invoices/:id/mark-paid` or
+`POST /v1/admin/invoices/:id/mark-paid`, with the method and the bank's
+reference. That is a payment intent on the rail `manual`, one per order,
+moved to `paid` by the orchestrator: the invoice row, the commission and
+`billing.payment.succeeded` come from the same place as for a card, and
+marking it twice does nothing the second time. A payment the payer had
+started by the link and not finished is closed first, so the provider poll
+cannot later expire a paid order.
+
+`POST …/cancel` ends an unpaid invoice (`billing.payment.failed`); a paid one
+is refunded with the admin's ordinary refund, which for the `manual` rail
+records the refund in billing only. `GET /v1/admin/invoices` lists the newest.
+
+Repeating a monthly invoice is the selling service's job: it knows whether the
+work goes on, and it opens next month's invoice with its own idempotency key.
