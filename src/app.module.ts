@@ -13,6 +13,7 @@ import { PaymentOrchestratorModule } from './payment-orchestrator/payment-orches
 import { AdaptersModule } from './adapters/adapters.module';
 import { CatalogModule } from './catalog/catalog.module';
 import { CheckoutModule } from './checkout/checkout.module';
+import { InvoicingModule } from './invoicing/invoicing.module';
 import { OrdersModule } from './orders/orders.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { EntitlementsModule } from './entitlements/entitlements.module';
@@ -58,6 +59,7 @@ import { ServiceApiModule } from './service-api/service-api.module';
     AdaptersModule,
     CatalogModule,
     CheckoutModule,
+    InvoicingModule,
     OrdersModule,
     SubscriptionsModule,
     EntitlementsModule,

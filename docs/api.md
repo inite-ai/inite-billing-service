@@ -69,6 +69,10 @@ Admin endpoints additionally require the `admin` role in the JWT.
 | `POST /v1/checkout/validate-promo` | JWT or service | Dry-run promo validation |
 | `POST /v1/service-checkout/sessions` | service token (`billing:checkout`) | One price, a cart of `{priceCode, quantity}` lines, or one open line `{productCode, amount, currency, title, ref, quantity}` — see [open-product.md](open-product.md) |
 | `GET /v1/service-checkout/sessions/:id` | service token | Status; an open line's `title`, `ref`, `entitlementKey` |
+| `POST /v1/service/invoices` | service key (`x-api-key`) | An invoice: one open line (`productCode`, `amount`, `currency`, `description`, `ref`) with `metadata.invoice`; `idempotency-key` required — see [open-product.md](open-product.md#invoices) |
+| `GET /v1/service/invoices/:id` | service key | The invoice, its status and how it was paid |
+| `POST /v1/service/invoices/:id/mark-paid` | service key | Money that came another way: `{ method: pix\|bank_transfer\|cash\|other, reference?, paidAt? }` |
+| `POST /v1/service/invoices/:id/cancel` | service key | Cancel an unpaid invoice (`billing.payment.failed`) |
 
 ### Orders, subscriptions, entitlements
 
