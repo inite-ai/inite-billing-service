@@ -13,7 +13,8 @@ export type EntitlementStatus = 'active' | 'revoked' | 'expired';
 export type InvoiceStatus = 'open' | 'paid' | 'void' | 'failed' | 'refunded';
 
 /**
- * Valid state transitions for payment intents
+ * Valid state transitions for payment intents. `failed` and `expired` are left
+ * only by PaymentOrchestratorService.settleLate, for money confirmed late.
  */
 export const VALID_INTENT_TRANSITIONS: Record<IntentStatus, IntentStatus[]> = {
   created: ['opened', 'paid', 'failed', 'expired'],

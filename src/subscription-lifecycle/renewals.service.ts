@@ -12,6 +12,11 @@ import { SessionLinksService } from '../service-api/session-links';
 import { RENEWAL_KEY, renewedByBilling } from '../payment-orchestrator/subscription-changes';
 import { renewalLeadDays, renewalsEnabled } from './renewals-config';
 
+/** Wallet charges tried for one renewal before the person is asked to pay. */
+const MAX_TRIES = 3;
+
+const CLOSED: ReadonlySet<string> = new Set(['expired', 'failed']);
+
 const LIVE = ['trialing', 'active', 'past_due'] as const;
 
 /**
@@ -86,9 +91,20 @@ export class SubscriptionRenewalsService {
     const periodOver = new Date(sub.currentPeriodEnd).getTime() <= now.getTime();
 
     if (await this.walletAllows(sub.userId, service?.id)) {
-      // The wallet pays on the day the period ends, not days ahead of it.
-      if (!periodOver || metadata.walletAttemptedAt) return;
-      await this.patchOrder(order, { walletAttemptedAt: now.toISOString() });
+      // The wallet pays on the day the period ends, not days ahead of it; a
+      // renewal already handed to the link stays with the link.
+      if (!periodOver || metadata.renewalNotifiedAt) return;
+      // What the last charge did is read back, not remembered: a mark written
+      // before the charge made a crash look like an attempt, and neither a
+      // retry nor the link followed.
+      const state = await this.merchants.chargeState(order.id, now);
+      if (state === 'pending') return;
+      const tries = Number(metadata.walletTries ?? (metadata.walletAttemptedAt ? MAX_TRIES : 0));
+      if (tries >= MAX_TRIES) {
+        await this.sendLink(sub, order);
+        return;
+      }
+      await this.patchOrder(order, { walletTries: tries + 1 });
       try {
         const result = await this.merchants.pay({
           ownerDid: sub.userId,
@@ -104,9 +120,9 @@ export class SubscriptionRenewalsService {
         }
         this.logger.log(`Wallet refused renewal of ${sub.id} (${result.reason}); sending the link`);
       } catch (error: any) {
-        this.logger.warn(
-          `Wallet renewal of ${sub.id} failed (${error?.message}); sending the link`,
-        );
+        this.logger.warn(`Wallet renewal of ${sub.id} failed: ${error?.message}`);
+        // It may have left the wallet, or may be worth another try later.
+        if (tries + 1 < MAX_TRIES) return;
       }
       await this.sendLink(sub, order);
       return;
@@ -121,7 +137,7 @@ export class SubscriptionRenewalsService {
     if (sub.renewalOrderId) {
       const existing = await this.prisma.order.findUnique({ where: { id: sub.renewalOrderId } });
       const meta = (existing?.metadata as Record<string, any>)?.[RENEWAL_KEY];
-      if (existing && meta?.periodEnd === periodEnd) return existing;
+      if (existing && meta?.periodEnd === periodEnd) return this.payable(existing);
     }
 
     const price = sub.pendingPriceId
@@ -137,8 +153,15 @@ export class SubscriptionRenewalsService {
       return null;
     }
 
-    const externalId = `billing_renewal_${sub.id}_${periodEnd}`;
+    // A renewal closed by a plan change is not the next one: that is a new
+    // order of the same period, at the new plan's price.
+    const base = `billing_renewal_${sub.id}_${periodEnd}`;
+    let externalId = base;
     let order = await this.prisma.order.findUnique({ where: { externalId } });
+    for (let n = 2; order && CLOSED.has(order.status) && n < 20; n++) {
+      externalId = `${base}_r${n}`;
+      order = await this.prisma.order.findUnique({ where: { externalId } });
+    }
     if (!order) {
       const portal = this.portalUrl(sub.price.product.service?.code);
       order = await this.prisma.order
@@ -185,6 +208,20 @@ export class SubscriptionRenewalsService {
       });
     }
     return order;
+  }
+
+  /**
+   * An expired attempt used to end the renewal it was for. Such an order, still
+   * the subscription's own for this period, is put back; one a plan change
+   * closed is no longer the subscription's.
+   */
+  private async payable(order: any) {
+    if (!CLOSED.has(order.status)) return order;
+    await this.prisma.order.updateMany({
+      where: { id: order.id, status: order.status },
+      data: { status: 'created' },
+    });
+    return { ...order, status: 'created' };
   }
 
   private async walletAllows(userId: string, serviceId?: string): Promise<boolean> {

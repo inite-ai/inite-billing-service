@@ -21,6 +21,9 @@ import {
   X402_TOKEN,
   usdcAddress,
 } from '../adapters/crypto/x402/protocol';
+import { invoiceBase } from '../adapters/crypto/crypto.adapter';
+import { loadCryptoSettings } from '../adapters/crypto/crypto-config';
+import { FxRates } from '../adapters/crypto/fx';
 import { Settlements } from '../adapters/crypto/x402/settlements';
 import { CHECKOUT_MAX_PAYMENT, usdc } from './agent-limits';
 import { AgentPaymentsService } from './agent-payments.service';
@@ -28,6 +31,11 @@ import { WalletAgentsService, startOfMonth } from './wallet-agents.service';
 import { primaryIssuer } from '../auth/token-contract';
 
 const PAID = ['paid', 'completed', 'fulfilled'];
+const USDC_DECIMALS = 6;
+/** After an authorization runs out: how long the chain and the watcher may still bring it. */
+const CHAIN_SLACK_MS = 60 * 60 * 1000;
+/** Longer than signing and claiming take. */
+const SIGNING_MS = 15 * 60 * 1000;
 const AMOUNT = /^\d{1,5}(\.\d{1,2})?$/;
 
 export type NeedsReason = 'no_wallet' | 'not_approved' | 'over_limit' | 'insufficient_funds';
@@ -239,6 +247,17 @@ export class WalletMerchantsService {
     const merchant = await this.merchant(wallet.id, input.serviceId);
     if (!checkoutUser || !merchant) return needs('not_approved');
 
+    // Asked before an invoice exists: opened first, a refused charge left a
+    // live invoice on the order, and its timer running out ended the renewal.
+    const estimate = await this.estimate(order.amount, order.currency);
+    if (estimate !== null) {
+      if (estimate > usdc(merchant.perPayment)) return needs('over_limit');
+      const spent = await this.spentThisMonth(wallet, input.serviceId);
+      if (spent + estimate > usdc(merchant.monthly)) return needs('over_limit');
+      const held = await this.payments.usdcBalance(wallet.address as `0x${string}`);
+      if (held < estimate) return needs('insufficient_funds');
+    }
+
     // The session's invoice on Base: the live one, or a new one.
     const opened: Record<string, any> = await this.checkout.paySession(order.id, input.ownerDid, {
       rail: 'CRYPTO',
@@ -310,6 +329,48 @@ export class WalletMerchantsService {
     });
     this.logger.log(`Order ${order.id} paid from wallet ${wallet.address}: ${txHash}`);
     return { status: 'confirming', orderId: order.id, txHash };
+  }
+
+  /** The USDC an invoice for this would start from; null when there is no rate. */
+  private async estimate(amount: unknown, currency: string): Promise<bigint | null> {
+    const settings = await loadCryptoSettings(this.prisma);
+    const quote = await new FxRates(this.prisma).quote(currency, settings ?? undefined);
+    if (!quote) return null;
+    const { baseAmountRaw } = invoiceBase(
+      String(amount),
+      quote,
+      settings?.fxMarkupPercent ?? 0,
+      USDC_DECIMALS,
+    );
+    return BigInt(baseAmountRaw);
+  }
+
+  /**
+   * Where the last wallet charge of an order stands. `pending` covers every
+   * case in which money may still move: the order must not be charged again.
+   * `dead` is certain: nothing was sent, the chain reverted it, or the signed
+   * authorization has run out (with slack for the watcher to have seen it).
+   */
+  async chargeState(orderId: string, now = new Date()): Promise<'none' | 'pending' | 'dead'> {
+    const last = await this.prisma.walletAgentPayment.findFirst({
+      where: { orderId },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!last) return 'none';
+    const claim = await this.prisma.x402Payment.findFirst({
+      where: { nonce: { equals: last.nonce, mode: 'insensitive' } },
+    });
+    if (claim) {
+      if (claim.status === 'mined') return 'pending';
+      if (claim.status === 'reverted') return 'dead';
+      return now.getTime() > claim.validBefore.getTime() + CHAIN_SLACK_MS ? 'dead' : 'pending';
+    }
+    // Claimed before it is sent, so without a claim it never left this process;
+    // a row still being signed may yet claim.
+    if (last.status === 'signing' && now.getTime() - last.createdAt.getTime() < SIGNING_MS) {
+      return 'pending';
+    }
+    return 'dead';
   }
 
   /** Record the payment under a per-wallet-and-site lock, so two at once cannot both fit the month. */

@@ -11,17 +11,16 @@ import {
 import { Prisma } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../common/services/prisma.service';
-import { PaymentRailAdapter } from '../common/interfaces/payment-rail-adapter.interface';
+import {
+  IntentStatusResult,
+  PaymentRailAdapter,
+} from '../common/interfaces/payment-rail-adapter.interface';
 import { ConnectorRegistry } from '../common/connectors/connector-registry.service';
 import { Connector, RenewalEvidence } from '../common/connectors/connector.interface';
 import { calculatePeriodEnd, orderAccessEndsAt } from './period.util';
 import { lockPaymentPath } from './lock-order';
 import { reconcileAmount } from '../workers/reconcile-amount';
-import {
-  isValidTransition,
-  mapIntentToOrderStatus,
-  IntentStatus,
-} from '../common/types/payment-state.types';
+import { isValidTransition, IntentStatus } from '../common/types/payment-state.types';
 import { OutboxService } from '../outbox/outbox.service';
 import { AffiliatesService } from '../affiliates/affiliates.service';
 import { FunnelService } from '../funnel/funnel.service';
@@ -260,29 +259,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
         },
       });
 
-      // Map to order status
-      const orderStatus = mapIntentToOrderStatus(newStatus);
-
-      // Update order if status changed
-      const currentOrderStatus = intent.order.status;
-      if (currentOrderStatus !== orderStatus) {
-        await tx.order.update({
-          where: { id: intent.orderId },
-          data: {
-            status: orderStatus,
-            updatedAt: new Date(),
-          },
-        });
-
-        // Handle order status changes
-        if (orderStatus === 'paid') {
-          await this.handleOrderPaid(intent.orderId, tx);
-        } else if (orderStatus === 'refunded') {
-          await this.handleOrderRefunded(intent.orderId, tx);
-        } else if (orderStatus === 'failed' || orderStatus === 'expired') {
-          await this.handleOrderFailed(intent.orderId, tx);
-        }
-      }
+      await this.applyAttemptToOrder(tx, intent, newStatus);
 
       // Emit outbox events
       await this.outboxService.emit(
@@ -327,6 +304,196 @@ export class PaymentOrchestratorService implements OnModuleInit {
         });
       }
     }, FULFILMENT_TX_OPTIONS);
+  }
+
+  /**
+   * What an attempt's new state does to the order it was for. An attempt is
+   * not the order: the order is ended only by the last attempt that could pay
+   * it, and a renewal order is not ended by attempts at all. Money that comes
+   * for an order that cannot take it is kept (UnappliedPayment), never dropped
+   * and never granted twice. Runs with the order locked.
+   */
+  private async applyAttemptToOrder(tx: any, intent: any, newStatus: IntentStatus): Promise<void> {
+    const order = intent.order;
+    const setOrder = (status: string) =>
+      tx.order.update({ where: { id: order.id }, data: { status, updatedAt: new Date() } });
+
+    switch (newStatus) {
+      case 'created':
+        return;
+
+      case 'opened':
+        if (!intent.supersededAt && order.status === 'created') await setOrder('open');
+        return;
+
+      case 'paid': {
+        if (order.status === 'created' || order.status === 'open') {
+          await setOrder('paid');
+          // Whatever else is open may still settle; it no longer counts as live.
+          await tx.paymentIntent.updateMany({
+            where: {
+              orderId: order.id,
+              id: { not: intent.id },
+              status: { in: ['created', 'opened'] },
+              supersededAt: null,
+            },
+            data: { supersededAt: new Date() },
+          });
+          await this.handleOrderPaid(order.id, tx);
+          return;
+        }
+        await this.keepUnapplied(
+          tx,
+          intent,
+          order.status === 'paid'
+            ? 'already_paid'
+            : order.status === 'refunded'
+              ? 'order_refunded'
+              : 'order_closed',
+        );
+        return;
+      }
+
+      case 'refunded': {
+        const kept = await tx.unappliedPayment.updateMany({
+          where: { paymentIntentId: intent.id },
+          data: { status: 'refunded', resolvedAt: new Date() },
+        });
+        // Returning money that paid nothing takes nothing back.
+        if (kept.count > 0 || order.status === 'refunded') return;
+        await setOrder('refunded');
+        await this.handleOrderRefunded(order.id, tx);
+        return;
+      }
+
+      case 'failed':
+      case 'expired': {
+        if (order.status !== 'created' && order.status !== 'open') return;
+        if (intent.supersededAt) return;
+        const otherLive = await tx.paymentIntent.count({
+          where: {
+            orderId: order.id,
+            id: { not: intent.id },
+            status: { in: ['created', 'opened'] },
+            supersededAt: null,
+          },
+        });
+        if (otherLive > 0) return;
+        if (subscriptionOrderKind(order)?.kind === 'renewal') {
+          // Payable again: the renewal ends by its own clock.
+          if (order.status !== 'created') await setOrder('created');
+          return;
+        }
+        await setOrder(newStatus);
+        await this.handleOrderFailed(order.id, tx);
+        return;
+      }
+    }
+  }
+
+  /** Money that paid no order: one row per attempt, for a person to settle. */
+  private async keepUnapplied(
+    tx: any,
+    intent: any,
+    reason: string,
+    settled?: { amount?: unknown; currency?: string },
+  ): Promise<void> {
+    const amount = settled?.amount ?? intent.amount;
+    const currency = settled?.currency ?? intent.currency;
+    await tx.unappliedPayment.upsert({
+      where: { paymentIntentId: intent.id },
+      update: {},
+      create: {
+        paymentIntentId: intent.id,
+        orderId: intent.orderId,
+        userId: intent.order.userId,
+        rail: intent.rail,
+        amount: String(amount),
+        currency,
+        providerRef: intent.providerIntentId,
+        reason,
+      },
+    });
+    this.logger.error(
+      `Payment ${intent.id} (${intent.rail}) settled ${amount} ${currency} that order ${intent.orderId} cannot take (${reason}); kept for review`,
+    );
+    await this.outboxService.emit(
+      'billing.payment.unapplied',
+      {
+        payment_intent_id: intent.id,
+        order_id: intent.orderId,
+        user_id: intent.order.userId,
+        amount: String(amount),
+        currency,
+        reason,
+      },
+      { serviceId: intent.order.price?.product?.serviceId ?? null, tx },
+    );
+  }
+
+  /**
+   * A provider says an attempt we had closed (`expired`, `failed`) is paid.
+   *
+   * The only way out of those two states. The amount and the currency are
+   * checked as for any payment. An order that can still be paid is paid, once,
+   * through the same fulfilment; anything else keeps the money as unapplied.
+   */
+  async settleLate(
+    paymentIntentId: string,
+    result: Pick<
+      IntentStatusResult,
+      'status' | 'amount' | 'currency' | 'amountVerifiedByAdapter' | 'providerData'
+    >,
+  ): Promise<void> {
+    if (result.status !== 'paid') return;
+    await this.prisma.$transaction(async (tx) => {
+      await lockPaymentPath(tx, paymentIntentId);
+      const intent: any = await tx.paymentIntent.findUnique({
+        where: { id: paymentIntentId },
+        include: { order: { include: { price: { include: { product: true } } } } },
+      });
+      if (!intent) throw new NotFoundException(`Payment intent not found: ${paymentIntentId}`);
+      // Someone settled it while we waited for the lock.
+      if (intent.status !== 'expired' && intent.status !== 'failed') return;
+
+      const rec = reconcileAmount(intent.order, result);
+      if (!rec.ok) {
+        await this.keepUnapplied(tx, intent, rec.reason!, {
+          amount: result.amount,
+          currency: result.currency?.toUpperCase(),
+        });
+        return;
+      }
+      await tx.paymentIntent.update({
+        where: { id: intent.id },
+        data: {
+          status: 'paid',
+          snapshot: (result.providerData || intent.snapshot) as any,
+          updatedAt: new Date(),
+        },
+      });
+      await this.applyAttemptToOrder(tx, intent, 'paid');
+      await this.outboxService.emit(
+        'billing.payment.status_changed',
+        {
+          payment_intent_id: intent.id,
+          order_id: intent.orderId,
+          status: 'paid',
+          previous_status: intent.status,
+        },
+        { serviceId: intent.order.price?.product?.serviceId ?? null, tx },
+      );
+    }, FULFILMENT_TX_OPTIONS);
+  }
+
+  /** Ask a provider about an attempt we closed; settle it if the money came. */
+  async recheckClosedIntent(paymentIntentId: string): Promise<boolean> {
+    const intent = await this.prisma.paymentIntent.findUnique({ where: { id: paymentIntentId } });
+    if (!intent?.providerIntentId || !['expired', 'failed'].includes(intent.status)) return false;
+    const result = await this.getAdapter(intent.rail).getIntentStatus(intent.providerIntentId);
+    if (result.status !== 'paid') return false;
+    await this.settleLate(intent.id, result);
+    return true;
   }
 
   private async handleOrderPaid(orderId: string, tx: any): Promise<void> {

@@ -70,7 +70,7 @@ describe('SubscriptionRenewalsService', () => {
       walletMerchant: { findFirst: jest.fn().mockResolvedValue(null) },
     };
     notifications = { notify: jest.fn() };
-    merchants = { pay: jest.fn() };
+    merchants = { pay: jest.fn(), chargeState: jest.fn().mockResolvedValue('none') };
     links = {
       reopen: jest.fn((id: string) => ({
         sessionId: id,
@@ -179,9 +179,24 @@ describe('SubscriptionRenewalsService', () => {
     });
     expect(notifications.notify).not.toHaveBeenCalled();
 
-    // One attempt per period: the next sweep does not charge again.
+    // While that charge may still land, the next sweep does not charge again.
+    merchants.chargeState.mockResolvedValue('pending');
     await service.runSweep(atEnd);
     expect(merchants.pay).toHaveBeenCalledTimes(1);
+  });
+
+  it('tries again after a charge that certainly came to nothing, three times, then links', async () => {
+    prisma.wallet.findUnique.mockResolvedValue({ id: 'w-1', ownerKey: null });
+    prisma.walletMerchant.findFirst.mockResolvedValue({ id: 'm-1' });
+    merchants.chargeState.mockResolvedValue('dead');
+    merchants.pay.mockRejectedValue(new Error('relayer down'));
+    prisma.subscription.findMany.mockResolvedValue([subscription({ rail: 'CRYPTO' })]);
+    const atEnd = new Date('2026-11-30T00:30:00Z');
+    for (let i = 0; i < 2; i++) await service.runSweep(atEnd);
+    expect(notifications.notify).not.toHaveBeenCalled();
+    for (let i = 0; i < 3; i++) await service.runSweep(atEnd);
+    expect(merchants.pay).toHaveBeenCalledTimes(3);
+    expect(notifications.notify).toHaveBeenCalledTimes(1);
   });
 
   it('sends the link when the wallet refuses', async () => {

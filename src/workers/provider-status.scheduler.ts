@@ -7,6 +7,10 @@ import { Connector } from '../common/connectors/connector.interface';
 
 /** How long an unpaid redirect payment is watched before it is given up on. */
 const ABANDON_AFTER_MS = 72 * 60 * 60 * 1000;
+/** How long a closed payment is still asked about, in case its money comes late. */
+const LATE_WINDOW_MS = 72 * 60 * 60 * 1000;
+const LATE_EVERY_MS = 6 * 60 * 60 * 1000;
+const MAX_LATE_PER_RUN = 50;
 /** Subscriptions are checked from this long before their period ends. */
 const RENEWAL_WINDOW_MS = 60 * 60 * 1000;
 const MAX_INTENTS_PER_RUN = 100;
@@ -132,6 +136,29 @@ export class ProviderStatusScheduler {
         this.logger.warn(
           `Could not check payment ${intent.id} with its provider: ${error.message}`,
         );
+      }
+    }
+
+    const closed =
+      (await this.prisma.paymentIntent.findMany({
+        where: {
+          rail: { in: [...rails.keys()] },
+          status: { in: ['expired', 'failed'] },
+          providerIntentId: { not: null },
+          unapplied: { is: null },
+          updatedAt: { gte: new Date(now - LATE_WINDOW_MS) },
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: MAX_LATE_PER_RUN,
+        select: { id: true },
+      })) ?? [];
+    for (const intent of closed) {
+      if (!this.due(`late:${intent.id}`, LATE_EVERY_MS, now)) continue;
+      report.checked++;
+      try {
+        if (await this.orchestrator.recheckClosedIntent(intent.id)) report.settled++;
+      } catch (error: any) {
+        this.logger.warn(`Could not recheck closed payment ${intent.id}: ${error.message}`);
       }
     }
 
