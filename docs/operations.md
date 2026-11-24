@@ -93,7 +93,13 @@ export class NewRailAdapter implements PaymentRailAdapter {
    module init; there is no hand-kept list in `main.ts`.
 3. Add a webhook endpoint in `src/webhooks/` if the provider pushes events —
    store to `webhook_events` and let the BullMQ processor validate and apply.
-4. Add provider credentials via the admin UI (`payment_providers`).
+4. Answer `quote(order, provider)`: whether the rail takes an order, and as
+   what (`one_off` or `open_provider_subscription`). Pure, no network. Add the
+   rail to `test/rail-contract.spec.ts`, which holds the answer to what
+   `createPaymentIntent` does. A rail that declares `provider_managed` must
+   implement `readRenewal`. Amounts go through `roundToMinorUnits`.
+5. Add provider credentials via the admin UI (`payment_providers`). They are
+   read on every answer: `GET /v1/admin/payable-prices` shows the effect at once.
 
 ```mermaid
 flowchart LR

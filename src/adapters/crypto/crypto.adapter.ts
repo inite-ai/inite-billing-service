@@ -7,6 +7,7 @@ import {
   WebhookVerifyInput,
 } from '../../common/connectors/connector.interface';
 import { safeTimingSafeEqual } from '../../common/connectors/webhook-verify.util';
+import { Quote, QuoteInput, refuse } from '../../common/connectors/rail-contract';
 import { RAILS } from '../../common/connectors/rail';
 import {
   CreateIntentInput,
@@ -96,7 +97,17 @@ export class CryptoAdapter implements Connector {
       supportedModes: ['PAYMENT'],
       requiresRedirect: false,
       selectableMethods: true,
+      collects: ['buyer_approved'],
     };
+  }
+
+  /**
+   * One invoice per period, in a dollar stablecoin. Whether there is a rate
+   * for the currency and a network to pay on is asked of {@link listMethods}.
+   */
+  quote(order: QuoteInput): Quote {
+    if (!order.amount.gt(0)) return refuse('below_minimum');
+    return { ok: true, purpose: 'one_off', strategy: 'buyer_approved', chargedIn: 'USD' };
   }
 
   private async settings(): Promise<CryptoSettings> {
@@ -125,10 +136,17 @@ export class CryptoAdapter implements Connector {
    * Every network/token pair a customer can pay with right now — none for a
    * price in a currency there is no usable exchange rate for.
    */
-  async listMethods(context: { currency?: string } = {}): Promise<PaymentMethod[]> {
+  async listMethods(
+    context: { currency?: string; storedOnly?: boolean } = {},
+  ): Promise<PaymentMethod[]> {
     const settings = await loadCryptoSettings(this.prisma);
     if (!settings?.isActive) return [];
-    if (context.currency && !(await this.fx.quote(context.currency, settings))) return [];
+    if (
+      context.currency &&
+      !(await this.fx.quote(context.currency, settings, { storedOnly: context.storedOnly }))
+    ) {
+      return [];
+    }
 
     const methods: PaymentMethod[] = [];
     for (const chainId of CHAIN_IDS) {

@@ -7,9 +7,18 @@ import {
   WebhookVerifyInput,
 } from '../../common/connectors/connector.interface';
 import { safeTimingSafeEqual } from '../../common/connectors/webhook-verify.util';
+import {
+  Quote,
+  QuoteInput,
+  QuoteProvider,
+  record,
+  refuse,
+  ticked,
+} from '../../common/connectors/rail-contract';
 import { RAILS } from '../../common/connectors/rail';
 import {
   CreateIntentInput,
+  opensProviderSubscription,
   CreateIntentResult,
   IntentStatusResult,
   PaymentMethod,
@@ -205,7 +214,49 @@ export class LavaAdapter implements Connector {
       statusPolling: true,
       currencies: LAVA_CURRENCIES,
       convertsTo: [CONVERT_TO],
+      collects: ['provider_managed', 'buyer_approved'],
     };
+  }
+
+  /**
+   * A price with a lava.top offer of its own is sold by it — a plan then is a
+   * lava.top subscription, which charges the offer's price. Anything else goes
+   * through the general offer, whose amount is sent with each invoice: one
+   * payment, one period. With no general offer saved, such an order is not
+   * taken; nothing is assumed about one.
+   */
+  quote(order: QuoteInput, provider: QuoteProvider): Quote {
+    const config = record(provider.config);
+    if (!config.apiKey) return refuse('not_configured');
+    const currency = order.currency.toUpperCase();
+    const general =
+      typeof config.defaultOfferId === 'string' && config.defaultOfferId.trim() !== '';
+    const oneOff = (chargedIn: string): Quote =>
+      general
+        ? { ok: true, purpose: 'one_off', strategy: 'buyer_approved', chargedIn }
+        : refuse('no_general_offer');
+
+    if (!LAVA_CURRENCIES.includes(currency)) {
+      return ticked(provider, currency) ? oneOff(CONVERT_TO) : refuse('currency');
+    }
+    const own =
+      record(order.orderMetadata).lavaOfferId ||
+      record(order.priceMetadata).lavaOfferId ||
+      record(order.productMetadata).lavaOfferId;
+    const discounted = order.amount.lt(order.listAmount.minus('0.005'));
+    if (own && !discounted && order.productType !== 'open') {
+      if (!order.recurring) {
+        return { ok: true, purpose: 'one_off', strategy: 'buyer_approved', chargedIn: currency };
+      }
+      if (!PERIODICITY[order.interval ?? 'month']) return refuse('interval');
+      return {
+        ok: true,
+        purpose: 'open_provider_subscription',
+        strategy: 'provider_managed',
+        chargedIn: currency,
+      };
+    }
+    return oneOff(currency);
   }
 
   /** Card, СБП or PayPal — whatever lava.top carries for this currency. */
@@ -307,7 +358,7 @@ export class LavaAdapter implements Connector {
 
     if (own && !discounted && !open) return { offerId: String(own), interval };
 
-    if (input.mode === 'SUBSCRIPTION') {
+    if (opensProviderSubscription(input)) {
       throw new BadRequestException(
         own
           ? 'A discounted lava.top subscription needs its own discounted offer; lava.top charges the offer price'
@@ -335,7 +386,7 @@ export class LavaAdapter implements Connector {
         `lava.top takes ${LAVA_CURRENCIES.join(', ')}; this price is in ${input.currency}`,
       );
     }
-    if (converting && input.mode === 'SUBSCRIPTION') {
+    if (converting && opensProviderSubscription(input)) {
       throw new BadRequestException(
         `A subscription in ${asked} cannot be charged by card: lava.top bills subscriptions in its own currencies`,
       );
@@ -367,7 +418,7 @@ export class LavaAdapter implements Connector {
     }
 
     let periodicity = 'ONE_TIME';
-    if (input.mode === 'SUBSCRIPTION') {
+    if (opensProviderSubscription(input)) {
       periodicity = PERIODICITY[interval ?? 'month'] ?? '';
       if (!periodicity) {
         throw new BadRequestException(`lava.top has no subscription period for "${interval}"`);

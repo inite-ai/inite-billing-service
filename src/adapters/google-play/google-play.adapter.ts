@@ -153,6 +153,7 @@ export class GooglePlayAdapter implements Connector {
     return {
       supportedModes: ['SUBSCRIPTION', 'PAYMENT'],
       isClientSide: true,
+      collects: ['provider_managed'],
     };
   }
 

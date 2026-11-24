@@ -30,6 +30,22 @@ export class PriceResponseDto {
 
   @ApiPropertyOptional({ description: "Present on the storefront, e.g. a credit pack's `credits`" })
   metadata?: Record<string, any>;
+
+  @ApiPropertyOptional({ description: 'Whether any payment method takes this price now' })
+  payable?: boolean;
+
+  @ApiPropertyOptional({
+    enum: ['automatic', 'you_confirm'],
+    nullable: true,
+    description: 'A plan: charged by itself, or confirmed by the buyer each period',
+  })
+  collects?: 'automatic' | 'you_confirm' | null;
+
+  @ApiPropertyOptional({
+    description: 'The methods that take it, and the currency each charges',
+    example: [{ rail: 'HODLE', chargedIn: 'BRL' }],
+  })
+  methods?: Array<{ rail: string; chargedIn: string }>;
 }
 
 export class ProductResponseDto {

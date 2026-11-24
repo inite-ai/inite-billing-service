@@ -6,10 +6,18 @@ import {
   RenewalEvidence,
   WebhookVerifyInput,
 } from '../../common/connectors/connector.interface';
-import { fromMinorUnits } from '../../common/money';
+import { fromMinorUnits, roundToMinorUnits } from '../../common/money';
+import {
+  Quote,
+  QuoteInput,
+  QuoteProvider,
+  record,
+  refuse,
+} from '../../common/connectors/rail-contract';
 import { RAILS } from '../../common/connectors/rail';
 import {
   CreateIntentInput,
+  opensProviderSubscription,
   CreateIntentResult,
   IntentStatusResult,
   PaymentMethod,
@@ -74,6 +82,17 @@ export class StripeAdapter implements Connector {
       requiresRedirect: true,
       supportsRefund: true,
       supportsCancel: true,
+      collects: ['provider_managed'],
+    };
+  }
+
+  quote(order: QuoteInput, provider: QuoteProvider): Quote {
+    if (!record(provider.config).secretKey) return refuse('not_configured');
+    return {
+      ok: true,
+      purpose: order.recurring ? 'open_provider_subscription' : 'one_off',
+      strategy: 'provider_managed',
+      chargedIn: order.currency.toUpperCase(),
     };
   }
 
@@ -98,7 +117,9 @@ export class StripeAdapter implements Connector {
     const body: Record<string, any> = { payment_intent: input.providerIntentId };
     if (input.amount != null) {
       // Stripe amounts are in the smallest currency unit.
-      body.amount = Math.round(input.amount * 100);
+      // Without the currency its smallest unit is a guess, a hundredfold one for CLP.
+      if (!input.currency) throw new Error('A partial Stripe refund needs its currency');
+      body.amount = roundToMinorUnits(input.amount, input.currency);
     }
     const refund = await this.stripeRequest('POST', '/v1/refunds', body);
     return {
@@ -191,7 +212,7 @@ export class StripeAdapter implements Connector {
 
   async createPaymentIntent(input: CreateIntentInput): Promise<CreateIntentResult> {
     try {
-      if (input.mode === 'SUBSCRIPTION') {
+      if (opensProviderSubscription(input)) {
         return this.createSubscriptionCheckout(input);
       }
       return this.createPaymentCheckout(input);
@@ -203,7 +224,7 @@ export class StripeAdapter implements Connector {
 
   private async createPaymentCheckout(input: CreateIntentInput): Promise<CreateIntentResult> {
     // Amount in smallest currency unit (cents for USD)
-    const amountInCents = Math.round(input.amount * 100);
+    const amountInCents = roundToMinorUnits(input.exactAmount ?? input.amount, input.currency);
 
     const sessionData: Record<string, any> = {
       mode: 'payment',
@@ -257,7 +278,7 @@ export class StripeAdapter implements Connector {
   }
 
   private async createSubscriptionCheckout(input: CreateIntentInput): Promise<CreateIntentResult> {
-    const amountInCents = Math.round(input.amount * 100);
+    const amountInCents = roundToMinorUnits(input.exactAmount ?? input.amount, input.currency);
     const interval = input.metadata?.interval || 'month';
 
     const session = await this.stripeRequest('POST', '/v1/checkout/sessions', {
@@ -318,7 +339,10 @@ export class StripeAdapter implements Connector {
           metadata: { stripe_status: pi.status },
           // Stripe amounts are in the smallest currency unit (cents) — normalize
           // to major units so the processor reconciles against Order.amount.
-          amount: typeof pi.amount === 'number' ? pi.amount / 100 : undefined,
+          amount:
+            typeof pi.amount === 'number'
+              ? fromMinorUnits(pi.amount, pi.currency).toNumber()
+              : undefined,
           currency: pi.currency ? String(pi.currency).toUpperCase() : undefined,
           providerData: {
             id: pi.id,
@@ -346,7 +370,10 @@ export class StripeAdapter implements Connector {
           status: statusMap[session.status] || 'created',
           metadata: { stripe_status: session.status },
           // Checkout Session totals are in cents under amount_total.
-          amount: typeof session.amount_total === 'number' ? session.amount_total / 100 : undefined,
+          amount:
+            typeof session.amount_total === 'number'
+              ? fromMinorUnits(session.amount_total, session.currency).toNumber()
+              : undefined,
           currency: session.currency ? String(session.currency).toUpperCase() : undefined,
           providerData: session,
         };

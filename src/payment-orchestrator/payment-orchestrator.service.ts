@@ -1509,8 +1509,11 @@ export class PaymentOrchestratorService implements OnModuleInit {
         break;
       case 'LAVA':
         // Lava reuses the contract ID as the subscription anchor; later
-        // recurring contracts reference this one via parentContractId.
-        providerSubscriptionId = intent.providerIntentId || null;
+        // recurring contracts reference this one via parentContractId. A
+        // one-off payment has no contract that recurs: linked to one, billing
+        // would wait for a renewal lava.top will never make.
+        providerSubscriptionId =
+          snapshot.periodicity === 'ONE_TIME' ? null : intent.providerIntentId || null;
         break;
       case 'APPLE_IAP':
         // Apple identifies an auto-renewable subscription by its ORIGINAL

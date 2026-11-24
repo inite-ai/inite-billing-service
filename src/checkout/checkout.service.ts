@@ -20,6 +20,7 @@ import { AffiliatesService } from '../affiliates/affiliates.service';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
 import { FunnelService } from '../funnel/funnel.service';
 import {
+  CheckoutMode,
   CreateCheckoutSessionDto,
   CheckoutSessionResponseDto,
   PaySessionResponseDto,
@@ -44,6 +45,7 @@ import {
   SAFE_REF,
 } from './open-product';
 import { OpenSalePolicy } from './open-sale.policy';
+import { quoteInput, railDecision } from './rail-decision';
 import { isOrgSubscriber } from '../common/validators/is-user-id';
 
 /** An attempt that, paid, starts a subscription its provider goes on charging. */
@@ -274,8 +276,16 @@ export class CheckoutService {
       throw new BadRequestException(`Product ${product.code} is not active`);
     }
 
+    // The buyer's side need not say how it is paid: a price with a period on a
+    // subscription product is a plan, anything else is bought once.
+    const mode =
+      dto.mode ??
+      (product.type === 'subscription' && price.interval
+        ? CheckoutMode.SUBSCRIPTION
+        : CheckoutMode.PAYMENT);
+
     // Validate mode matches product type
-    if (dto.mode === 'SUBSCRIPTION' && product.type !== 'subscription') {
+    if (mode === 'SUBSCRIPTION' && product.type !== 'subscription') {
       throw new BadRequestException(`Product ${product.code} is not a subscription product`);
     }
     // A subscription product's price with a period may also be bought once:
@@ -284,7 +294,7 @@ export class CheckoutService {
     // left #191 unreachable — every one-time annual licence on inite.ai was
     // answered 400 at checkout. A price without a period on a subscription
     // product still has to be bought as a subscription.
-    if (dto.mode === 'PAYMENT' && product.type === 'subscription' && !price.interval) {
+    if (mode === 'PAYMENT' && product.type === 'subscription' && !price.interval) {
       throw new BadRequestException(
         `Product ${product.code} is a subscription product, use SUBSCRIPTION mode`,
       );
@@ -326,7 +336,7 @@ export class CheckoutService {
       data: {
         userId,
         priceId: price.id,
-        mode: dto.mode,
+        mode,
         status: 'created',
         amount: price.amount,
         currency: price.currency,
@@ -814,6 +824,7 @@ export class CheckoutService {
         name: true,
         supportedModes: true,
         currencies: true,
+        config: true,
       },
     });
 
@@ -821,8 +832,11 @@ export class CheckoutService {
     // price in any other — crypto sells dollar prices only. A rail whose
     // customer picks a method first (a crypto network) brings its options,
     // and is not offered when it has none to give.
-    const paymentMethods: Array<(typeof providers)[number] & { options?: unknown[] }> = [];
-    for (const provider of providers) {
+    // The credentials in `config` never leave: it is read here and left behind.
+    type Offered = Omit<(typeof providers)[number], 'config'> & { options?: unknown[] };
+    const paymentMethods: Offered[] = [];
+    const asked = quoteInput(order as any);
+    for (const { config, ...provider } of providers) {
       let connector: Connector | null = null;
       try {
         connector = this.paymentOrchestrator.getAdapter(provider.code) as Connector;
@@ -843,6 +857,8 @@ export class CheckoutService {
       ) {
         continue;
       }
+      const decision = railDecision(connector, { ...provider, config }, asked);
+      if (decision && !decision.ok) continue;
       if (capabilities?.selectableMethods && connector) {
         const options = connector.listMethods
           ? await connector.listMethods({ currency: order.currency }).catch(() => [])
@@ -1210,9 +1226,26 @@ export class CheckoutService {
       adapter = null;
     }
 
+    // The rail says what it would do with this order; a refusal is left to the
+    // adapter, which answers the buyer in its own words as it always has.
+    const railRow = await this.prisma.paymentProvider.findUnique?.({
+      where: { code: rail },
+      select: { code: true, currencies: true, config: true },
+    });
+    const decision =
+      adapter && railRow
+        ? railDecision(
+            adapter,
+            railRow,
+            quoteInput({ ...order, amount: orderAmountDecimal } as any),
+          )
+        : null;
+
     const intentInput: CreateIntentInput = {
       orderId: order.externalId!,
       amount: orderAmount,
+      exactAmount: orderAmountDecimal.toFixed(),
+      ...(decision?.ok ? { purpose: decision.purpose } : {}),
       currency: price.currency,
       mode: order.mode,
       successUrl,

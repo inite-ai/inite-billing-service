@@ -96,6 +96,14 @@ export function fromMinorUnits(minor: number | string | bigint, currency: string
   return new Decimal(minor.toString()).div(new Decimal(10).pow(minorDigits(currency)));
 }
 
+/** An amount rounded to a currency's smallest unit, half away from zero. */
+export function roundToMinorUnits(amount: MoneyInput, currency: string): number {
+  return toMoney(amount)
+    .mul(new Decimal(10).pow(minorDigits(currency)))
+    .toDecimalPlaces(0, Decimal.ROUND_HALF_UP)
+    .toNumber();
+}
+
 /** An exact amount in a currency's smallest unit; refuses one finer than that unit. */
 export function toMinorUnits(amount: Decimal | string | number, currency: string): number {
   const minor = new Decimal(amount.toString()).mul(new Decimal(10).pow(minorDigits(currency)));

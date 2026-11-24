@@ -33,7 +33,11 @@ describe('Provider refund / cancel wiring', () => {
         ok: true,
         json: async () => ({ id: 're_1', status: 'succeeded' }),
       });
-      const res = await adapter.refund({ providerIntentId: 'pi_123', amount: 12.5 });
+      const res = await adapter.refund({
+        providerIntentId: 'pi_123',
+        amount: 12.5,
+        currency: 'USD',
+      });
       expect(res).toEqual({ refunded: true, providerRefundId: 're_1' });
       const [url, opts] = fetchMock.mock.calls[0];
       expect(url).toBe('https://api.stripe.com/v1/refunds');

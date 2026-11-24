@@ -7,9 +7,17 @@ import {
   WebhookVerifyInput,
 } from '../../common/connectors/connector.interface';
 import { safeTimingSafeEqual } from '../../common/connectors/webhook-verify.util';
+import {
+  Quote,
+  QuoteInput,
+  QuoteProvider,
+  record,
+  refuse,
+} from '../../common/connectors/rail-contract';
 import { RAILS } from '../../common/connectors/rail';
 import {
   CreateIntentInput,
+  opensProviderSubscription,
   CreateIntentResult,
   IntentStatusResult,
   WebhookParseResult,
@@ -81,6 +89,16 @@ export class OneAdapter implements Connector {
     };
   }
 
+  quote(order: QuoteInput, provider: QuoteProvider): Quote {
+    if (!record(provider.config).apiKey) return refuse('not_configured');
+    return {
+      ok: true,
+      purpose: order.recurring ? 'open_provider_subscription' : 'one_off',
+      strategy: 'provider_managed',
+      chargedIn: order.currency.toUpperCase(),
+    };
+  }
+
   /** HMAC-SHA256 over the raw body with the provider apiSecret. Fails closed
    * when the secret is unset (an empty-key HMAC is attacker-computable). */
   verifyWebhook({ rawBody, headers, config }: WebhookVerifyInput): boolean {
@@ -94,7 +112,7 @@ export class OneAdapter implements Connector {
   async createPaymentIntent(input: CreateIntentInput): Promise<CreateIntentResult> {
     const { apiBaseUrl, apiKey, apiSecret } = await this.getConfig();
 
-    const preferenceType = input.mode === 'SUBSCRIPTION' ? 'SUBSCRIPTION' : 'PAYMENT';
+    const preferenceType = opensProviderSubscription(input) ? 'SUBSCRIPTION' : 'PAYMENT';
 
     const preferenceData: any = {
       type: preferenceType,
