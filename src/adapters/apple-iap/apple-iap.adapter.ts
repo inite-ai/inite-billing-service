@@ -285,6 +285,8 @@ export class AppleIAPAdapter implements Connector {
     if (!tx?.transactionId) throw new Error('Apple renewal names no transaction');
     return {
       chargeId: String(tx.transactionId),
+      named: true,
+      ...(tx.purchaseDate ? { chargedAt: new Date(tx.purchaseDate) } : {}),
       ...(tx.price != null && tx.currency
         ? {
             amount: new Decimal(String(tx.price)).div(1000).toString(),

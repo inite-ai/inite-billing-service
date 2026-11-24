@@ -283,5 +283,6 @@ export class PlanChangeService {
       where: { id: orderId, status: 'created' },
       data: { status: 'expired' },
     });
+    await this.links.revoke(orderId);
   }
 }

@@ -104,8 +104,10 @@ export interface PaymentRailAdapter {
   /**
    * Optional. Methods a customer can pay with. `context.currency` is the price's currency,
    * for a rail that can only take some (crypto needs an exchange rate for it).
+   * `storedOnly`: answer from what is stored, with no call to anyone — asked by
+   * a page that many read.
    */
-  listMethods?(context?: { currency?: string }): Promise<PaymentMethod[]>;
+  listMethods?(context?: { currency?: string; storedOnly?: boolean }): Promise<PaymentMethod[]>;
 
   /**
    * Optional: Parse webhook payload from provider

@@ -411,6 +411,7 @@ export class GooglePlayAdapter implements Connector {
     const price = line.autoRenewingPlan?.recurringPrice;
     return {
       chargeId: String(sub.latestOrderId),
+      named: true,
       ...(price?.currencyCode
         ? {
             amount: new Decimal(String(price.units ?? 0))

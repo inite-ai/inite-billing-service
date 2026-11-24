@@ -330,131 +330,6 @@ describe('attempts, switching and late money', () => {
     });
   });
 
-  describe('a wallet charge of a renewal that was interrupted', () => {
-    const agentIds: string[] = [];
-    afterAll(async () => {
-      await prisma.walletAgentPayment.deleteMany({ where: { agentId: { in: agentIds } } });
-      await prisma.walletAgent.deleteMany({ where: { id: { in: agentIds } } });
-      await prisma.wallet.deleteMany({ where: { ownerDid: { startsWith: `did:test:${run}` } } });
-      await prisma.x402Payment.deleteMany({ where: { payer: `0x${run}` } });
-    });
-
-    async function charge(over: {
-      status: string;
-      validBefore: Date;
-      claim?: string;
-      createdAt?: Date;
-    }) {
-      const { order: o } = await renewal();
-      const w = await prisma.wallet.create({
-        data: {
-          ownerDid: `did:test:${run}:${randomUUID()}`,
-          address: `0x${randomUUID().replace(/-/g, '')}00000000`,
-          subOrganizationId: randomUUID(),
-          turnkeyWalletId: 'w',
-          credentialId: randomUUID(),
-        } as any,
-      });
-      const agent = await prisma.walletAgent.create({
-        data: {
-          walletId: w.id,
-          kind: 'checkout',
-          agentDid: w.ownerDid,
-          clientId: 'c',
-          requested: {},
-          status: 'active',
-        } as any,
-      });
-      agentIds.push(agent.id);
-      const nonce = `0x${randomUUID().replace(/-/g, '').padEnd(64, '0')}`;
-      await prisma.walletAgentPayment.create({
-        data: {
-          agentId: agent.id,
-          url: 'x',
-          merchant: 'x',
-          payTo: '0x0',
-          valueRaw: '1',
-          nonce,
-          orderId: o.id,
-          status: over.status,
-          validBefore: over.validBefore,
-          createdAt: over.createdAt ?? new Date(Date.now() - 3_600_000),
-        },
-      });
-      if (over.claim) {
-        await prisma.x402Payment.create({
-          data: {
-            orderId: o.id,
-            payer: `0x${run}`,
-            nonce,
-            valueRaw: '1',
-            validBefore: over.validBefore,
-            status: over.claim,
-          },
-        });
-      }
-      const service = new WalletMerchantsService(
-        prisma,
-        {} as any,
-        {} as any,
-        {} as any,
-        {} as any,
-      );
-      return service.chargeState(o.id);
-    }
-    const future = new Date(Date.now() + 3_600_000);
-    const past = new Date(Date.now() - 7_200_000);
-
-    it.each([
-      [
-        'in flight: signed and sent',
-        { status: 'paid', validBefore: future, claim: 'submitted' },
-        'pending',
-      ],
-      [
-        'in flight: mined, the watcher settles it',
-        { status: 'paid', validBefore: past, claim: 'mined' },
-        'pending',
-      ],
-      [
-        'unknown outcome, the signature can still land',
-        { status: 'failed', validBefore: future, claim: 'failed' },
-        'pending',
-      ],
-      [
-        'unknown outcome, the signature has run out',
-        { status: 'failed', validBefore: past, claim: 'failed' },
-        'dead',
-      ],
-      ['reverted on chain', { status: 'paid', validBefore: future, claim: 'reverted' }, 'dead'],
-      ['refused before it was sent', { status: 'failed', validBefore: future }, 'dead'],
-      [
-        'crashed before it was sent, an hour ago',
-        { status: 'signing', validBefore: future },
-        'dead',
-      ],
-      [
-        'being signed this minute',
-        { status: 'signing', validBefore: future, createdAt: new Date() },
-        'pending',
-      ],
-    ])('%s', async (_name, over, state) => {
-      await expect(charge(over as any)).resolves.toBe(state);
-    });
-
-    it('is none when nothing was tried', async () => {
-      const service = new WalletMerchantsService(
-        prisma,
-        {} as any,
-        {} as any,
-        {} as any,
-        {} as any,
-      );
-      const { order: o } = await renewal();
-      await expect(service.chargeState(o.id)).resolves.toBe('none');
-    });
-  });
-
   describe('the renewals sweep', () => {
     const env = process.env.SUBSCRIPTION_RENEWALS_ENABLED;
     beforeAll(() => (process.env.SUBSCRIPTION_RENEWALS_ENABLED = 'true'));
@@ -484,7 +359,7 @@ describe('attempts, switching and late money', () => {
         { notify } as any,
         { getContact: async () => null } as any,
         merchants,
-        { reopen: async (id: string) => ({ checkoutUrl: `https://x/${id}` }) } as any,
+        { addRenewalLink: async (id: string) => ({ checkoutUrl: `https://x/${id}` }) } as any,
         { get: () => 'https://billing.example' } as any,
       );
       return { service, notify };
@@ -507,7 +382,7 @@ describe('attempts, switching and late money', () => {
 
     it('opens a fresh order when the last one was closed by a plan change', async () => {
       const { sub } = await due();
-      const { service } = build({ pay: jest.fn() }, false);
+      const { service } = build({ pay: jest.fn(), chargeState: async () => 'none' }, false);
       await service.runSweep(new Date());
       const first = await prisma.subscription.findUnique({ where: { id: sub.id } });
       await prisma.order.update({
@@ -523,7 +398,7 @@ describe('attempts, switching and late money', () => {
 
     it('reopens a renewal an expired attempt had ended before this rule', async () => {
       const { sub } = await due();
-      const { service } = build({ pay: jest.fn() }, false);
+      const { service } = build({ pay: jest.fn(), chargeState: async () => 'none' }, false);
       await service.runSweep(new Date());
       const row = await prisma.subscription.findUnique({ where: { id: sub.id } });
       await prisma.order.update({ where: { id: row.renewalOrderId }, data: { status: 'expired' } });

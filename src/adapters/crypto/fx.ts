@@ -118,7 +118,12 @@ export class FxRates {
     private readonly sources: Array<() => Promise<FetchedRates>> = [fetchOpenErApi, fetchCbr],
   ) {}
 
-  async quote(currencyInput: string, settings: FxSettings = {}): Promise<UsdQuote | null> {
+  /** `storedOnly` never fetches: the rate the hourly refresh last stored, or none. */
+  async quote(
+    currencyInput: string,
+    settings: FxSettings = {},
+    opts: { storedOnly?: boolean } = {},
+  ): Promise<UsdQuote | null> {
     const currency = String(currencyInput).toUpperCase();
     if (STABLECOIN_CURRENCIES.has(currency)) {
       return { currency, perUsd: new Decimal(1), source: 'par', publishedAt: null };
@@ -131,7 +136,7 @@ export class FxRates {
     }
 
     let row = await this.prisma.fxRate.findUnique({ where: { currency } });
-    if (!row || Date.now() - row.fetchedAt.getTime() > REFRESH_AFTER_MS) {
+    if (!opts.storedOnly && (!row || Date.now() - row.fetchedAt.getTime() > REFRESH_AFTER_MS)) {
       await this.refresh().catch(() => undefined);
       row = await this.prisma.fxRate.findUnique({ where: { currency } });
     }

@@ -1,5 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { CheckoutService } from '../src/checkout/checkout.service';
+import { AdminOrdersService } from '../src/admin/services/admin-orders.service';
+import { hashCheckoutLink } from '../src/checkout/checkout-link';
+import { invoiceView } from '../src/invoicing/invoicing.service';
+import { OrdersService } from '../src/orders/orders.service';
 import { SessionLinksService } from '../src/service-api/session-links';
 import { SubscriptionRenewalsService } from '../src/subscription-lifecycle/renewals.service';
 import { reminderStep } from '../src/subscription-lifecycle/renewal-reminders';
@@ -48,7 +52,7 @@ describe('the renewal pay page and its letters', () => {
       {} as any,
       { notify } as any,
       { getContact: async () => ({ locale }) } as any,
-      {} as any,
+      { chargeState: async () => 'none' } as any,
       links,
       config,
     );
@@ -134,6 +138,69 @@ describe('the renewal pay page and its letters', () => {
     }
     const id = urls[0].pathname.split('/').pop()!;
     await expect(checkout.getSession(id, undefined, undefined, 'not-a-token')).rejects.toThrow();
+  });
+
+  it('reopening a session stops every earlier link, letters included; closing it stops all', async () => {
+    await plan();
+    await at('2026-04-07T12:00:00Z');
+    const url = new URL(notify.mock.calls[0][0].metadata.ctaUrl);
+    const id = url.pathname.split('/').pop()!;
+    const token = url.hash.slice('#t='.length);
+    const fresh = await links.reopen(id);
+    await expect(checkout.getSession(id, undefined, undefined, token)).rejects.toThrow();
+    const newer = new URL(fresh!.checkoutUrl).hash.slice('#t='.length);
+    await checkout.getSession(id, undefined, undefined, newer);
+    await links.revoke(id);
+    await expect(checkout.getSession(id, undefined, undefined, newer)).rejects.toThrow();
+  });
+
+  it('keeps a bounded number of links, the newest also where older code looks', async () => {
+    const sub = await plan();
+    await at('2026-04-07T12:00:00Z');
+    const { renewalOrderId } = await prisma.subscription.findUnique({ where: { id: sub.id } });
+    let last = '';
+    for (let i = 0; i < 10; i++) {
+      last = new URL((await links.addRenewalLink(renewalOrderId))!.checkoutUrl).hash.slice(3);
+    }
+    const { metadata } = await prisma.order.findUnique({ where: { id: renewalOrderId } });
+    expect(metadata.linkTokenHashes).toHaveLength(6);
+    expect(metadata.linkTokenHash).toBe(hashCheckoutLink(last));
+  });
+
+  it('no answer of the API carries a link hash', async () => {
+    const sub = await plan();
+    await at('2026-04-07T12:00:00Z');
+    const { renewalOrderId: id } = await prisma.subscription.findUnique({ where: { id: sub.id } });
+    const admin: any = Object.create(AdminOrdersService.prototype);
+    Object.assign(admin, { prisma });
+    const orders: any = Object.create(OrdersService.prototype);
+    Object.assign(orders, { prisma });
+    const full = await prisma.order.findUnique({
+      where: { id },
+      include: { paymentIntents: true, price: { include: { product: true } } },
+    });
+    const answers = [
+      await admin.getOrderById(id),
+      await admin.getOrders({ userId: user }),
+      await orders.getUserOrders(user),
+      invoiceView(full),
+      await checkout.getSession(id, user),
+    ];
+    expect(JSON.stringify(full)).toContain('linkTokenHash');
+    for (const answer of answers) expect(JSON.stringify(answer)).not.toContain('linkTokenHash');
+  });
+
+  it('a letter that found the renewal closed is not counted as sent', async () => {
+    const sub = await plan();
+    const spy = jest.spyOn(links, 'addRenewalLink').mockResolvedValueOnce(null);
+    await at('2026-04-07T12:00:00Z');
+    spy.mockRestore();
+    expect(notify).not.toHaveBeenCalled();
+    const { renewalOrderId } = await prisma.subscription.findUnique({ where: { id: sub.id } });
+    const { metadata } = await prisma.order.findUnique({ where: { id: renewalOrderId } });
+    expect(metadata.renewalReminders).toEqual({});
+    await at('2026-04-07T13:00:00Z');
+    expect(steps()).toEqual(['lead']);
   });
 
   it('stops when it is paid, and when an expired attempt is still payable it does not', async () => {

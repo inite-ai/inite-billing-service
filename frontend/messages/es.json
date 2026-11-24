@@ -740,10 +740,10 @@
       "created": "Precio creado",
       "deleted": "Precio eliminado",
       "deleteConfirm": "¿Eliminar este precio?",
-      "unpayableTitle": "Precios que nadie puede pagar",
+      "unpayableTitle": "Precios con problemas de pago",
       "unpayableNobody": "Sin método de pago",
       "unpayableCrypto": "Solo cripto",
-      "unpayableHint": "Comprobado con los proveedores de pago activos. Un plan se comprueba como suscripción."
+      "unpayableHint": "Comprobado con los proveedores de pago activos. Para los planes solo cuentan los métodos que permiten vender una suscripción."
     },
     "orders": {
       "title": "Pedidos",

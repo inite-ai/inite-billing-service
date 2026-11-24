@@ -90,6 +90,9 @@ export class SubscriptionRenewalsService {
   private async renewOne(sub: any, now: Date): Promise<void> {
     const order = await this.renewalOrder(sub);
     if (!order || order.status !== 'created') return;
+    // A charge that may still land comes first, whatever the person has changed
+    // since: neither another charge nor a link to pay beside it.
+    if ((await this.merchants.chargeState(order.id)) === 'pending') return;
 
     const service = sub.price.product.service;
     const metadata = (order.metadata as Record<string, any>) ?? {};
@@ -103,11 +106,8 @@ export class SubscriptionRenewalsService {
         await this.remind(sub, order, now);
         return;
       }
-      // What the last charge did is read back, not remembered: a mark written
-      // before the charge made a crash look like an attempt, and neither a
-      // retry nor the link followed.
-      const state = await this.merchants.chargeState(order.id, now);
-      if (state === 'pending') return;
+      // A charge is counted before it is made and read back above: a mark alone
+      // made a crash look like an attempt, and neither a retry nor the link came.
       const tries = Number(metadata.walletTries ?? (metadata.walletAttemptedAt ? MAX_TRIES : 0));
       if (tries >= MAX_TRIES) {
         await this.remind(sub, order, now);
@@ -251,15 +251,19 @@ export class SubscriptionRenewalsService {
   private async remind(sub: any, order: any, now: Date): Promise<void> {
     const step = reminderStep(sub, now);
     if (!step || !(await this.claimStep(order.id, step))) return;
+    let sent = false;
     try {
-      await this.sendLink(sub, order, step);
-    } catch (error) {
-      await this.prisma.$executeRaw`
-        UPDATE billing.orders SET metadata = metadata #- ARRAY['renewalReminders', ${step}::text]
-         WHERE id = ${order.id}::uuid
-      `;
-      throw error;
+      sent = await this.sendLink(sub, order, step);
+    } finally {
+      if (!sent) await this.releaseStep(order.id, step);
     }
+  }
+
+  private async releaseStep(orderId: string, step: ReminderStep): Promise<void> {
+    await this.prisma.$executeRaw`
+      UPDATE billing.orders SET metadata = metadata #- ARRAY['renewalReminders', ${step}::text]
+       WHERE id = ${orderId}::uuid
+    `;
   }
 
   private async claimStep(orderId: string, step: ReminderStep): Promise<boolean> {
@@ -276,11 +280,12 @@ export class SubscriptionRenewalsService {
     return claimed === 1;
   }
 
-  private async sendLink(sub: any, order: any, step: ReminderStep): Promise<void> {
+  private async sendLink(sub: any, order: any, step: ReminderStep): Promise<boolean> {
     const contact = await this.contacts.getContact(sub.userId);
     const locale = renewalLocale(contact?.locale);
-    const links = await this.links.reopen(order.id, locale);
-    if (!links) return;
+    const links = await this.links.addRenewalLink(order.id, locale);
+    // Paid or closed since it was read: nothing to ask for, and nothing sent.
+    if (!links) return false;
     const product = sub.price.product;
     const copy = renewalCopy(step, locale, {
       product: product.name,
@@ -307,6 +312,7 @@ export class SubscriptionRenewalsService {
     });
     await this.patchOrder(order, { renewalNotifiedAt: new Date().toISOString() });
     this.logger.log(`Renewal letter "${step}" for subscription ${sub.id} (order ${order.id})`);
+    return true;
   }
 
   private async patchOrder(order: any, patch: Record<string, unknown>): Promise<void> {

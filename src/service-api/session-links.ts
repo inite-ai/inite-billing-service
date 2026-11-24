@@ -1,11 +1,14 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../common/services/prisma.service';
 import { resolveFrontendUrl } from '../common/config/frontend-url';
 import { newCheckoutLink } from '../checkout/checkout-link';
 import { checkoutPageUrl } from '../checkout/checkout.service';
-import { subscriptionOrderKind } from '../payment-orchestrator/subscription-changes';
 import { X402Service } from '../checkout/x402.service';
+
+/** A renewal sends four letters; a few more are kept for a sweep that had to repeat one. */
+const MAX_RENEWAL_LINKS = 6;
 
 export interface SessionLinks {
   sessionId: string;
@@ -42,34 +45,59 @@ export class SessionLinksService {
    * A new link for an unpaid session whose first link the product no longer
    * has (the person closed the page). Only the hash is stored, so the old
    * token cannot be shown again: the link rotates and the old one stops
-   * working.
+   * working — every link of the session, a renewal's letters included.
    */
   async reopen(orderId: string, locale?: string): Promise<SessionLinks | null> {
     const order = await this.prisma.order.findUnique({ where: { id: orderId } });
     if (!order || order.status !== 'created') return null;
     const link = newCheckoutLink();
-    if (subscriptionOrderKind(order)?.kind === 'renewal') {
-      // The page a renewal is paid on does not move: a letter sent on the last
-      // day must not kill the link in the first one.
-      await this.prisma.$executeRaw`
-        UPDATE billing.orders
-           SET metadata = jsonb_set(
-                 COALESCE(metadata, '{}'::jsonb), '{linkTokenHashes}',
-                 (COALESCE(metadata->'linkTokenHashes', '[]'::jsonb) || to_jsonb(${link.hash}::text)))
-         WHERE id = ${orderId}::uuid
-      `;
-      return this.withX402({
-        sessionId: order.id,
-        checkoutUrl: `${checkoutPageUrl(resolveFrontendUrl(this.config), order.id, locale)}#t=${link.token}`,
-      });
-    }
+    const { linkTokenHashes: _revoked, ...metadata } = (order.metadata ?? {}) as Record<
+      string,
+      unknown
+    >;
     await this.prisma.order.update({
       where: { id: orderId },
-      data: { metadata: { ...((order.metadata as object) ?? {}), linkTokenHash: link.hash } },
+      data: { metadata: { ...metadata, linkTokenHash: link.hash } as Prisma.InputJsonValue },
     });
     return this.withX402({
       sessionId: order.id,
       checkoutUrl: `${checkoutPageUrl(resolveFrontendUrl(this.config), order.id, locale)}#t=${link.token}`,
     });
+  }
+
+  /**
+   * One more link to a renewal's page, for a letter: the page does not move,
+   * and a letter sent on the last day must not kill the link in the first one.
+   * The newest is also the one link older code knows, so a rollback keeps it.
+   */
+  async addRenewalLink(orderId: string, locale?: string): Promise<SessionLinks | null> {
+    const link = newCheckoutLink();
+    const added = await this.prisma.$executeRaw`
+      UPDATE billing.orders
+         SET metadata = COALESCE(metadata, '{}'::jsonb)
+               || jsonb_build_object('linkTokenHash', ${link.hash}::text)
+               || jsonb_build_object('linkTokenHashes', (
+                    SELECT jsonb_agg(h) FROM (
+                      SELECT h FROM jsonb_array_elements(
+                        COALESCE(metadata->'linkTokenHashes', '[]'::jsonb) || to_jsonb(${link.hash}::text)
+                      ) WITH ORDINALITY AS t(h, n)
+                      ORDER BY n DESC LIMIT ${MAX_RENEWAL_LINKS}
+                    ) kept))
+       WHERE id = ${orderId}::uuid AND status = 'created'
+    `;
+    if (added !== 1) return null;
+    return this.withX402({
+      sessionId: orderId,
+      checkoutUrl: `${checkoutPageUrl(resolveFrontendUrl(this.config), orderId, locale)}#t=${link.token}`,
+    });
+  }
+
+  /** Stop every link of a session. */
+  async revoke(orderId: string): Promise<void> {
+    await this.prisma.$executeRaw`
+      UPDATE billing.orders
+         SET metadata = COALESCE(metadata, '{}'::jsonb) - 'linkTokenHash' - 'linkTokenHashes'
+       WHERE id = ${orderId}::uuid
+    `;
   }
 }

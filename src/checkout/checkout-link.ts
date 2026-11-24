@@ -45,3 +45,13 @@ export function checkoutLinkFrom(request: {
   const value = request.headers[CHECKOUT_LINK_HEADER];
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
+
+/** An order's metadata without what opens it: the hashes stay in billing. */
+export function withoutLinkHashes(metadata: unknown): Record<string, unknown> {
+  const {
+    linkTokenHash: _one,
+    linkTokenHashes: _many,
+    ...rest
+  } = (metadata ?? {}) as Record<string, unknown>;
+  return rest;
+}

@@ -1,4 +1,5 @@
 import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { withoutLinkHashes } from '../checkout/checkout-link';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/services/prisma.service';
 import { isGuestUserId } from '../checkout/checkout.service';
@@ -33,7 +34,7 @@ export class OrdersService {
       amount: o.amount.toString(),
       currency: o.currency,
       externalId: o.externalId || undefined,
-      metadata: o.metadata as Record<string, any> | undefined,
+      metadata: withoutLinkHashes(o.metadata),
       snapshot: (o.snapshot as Record<string, any> | null) ?? undefined,
       createdAt: o.createdAt,
       updatedAt: o.updatedAt,
@@ -80,7 +81,7 @@ export class OrdersService {
       amount: order.amount.toString(),
       currency: order.currency,
       externalId: order.externalId || undefined,
-      metadata: order.metadata as Record<string, any> | undefined,
+      metadata: withoutLinkHashes(order.metadata),
       snapshot: (order.snapshot as Record<string, any> | null) ?? undefined,
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,

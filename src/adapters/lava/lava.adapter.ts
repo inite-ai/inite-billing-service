@@ -609,6 +609,7 @@ export class LavaAdapter implements Connector {
 
     const contractId = payload?.contractId ? String(payload.contractId) : null;
     let receipt = first?.receipt;
+    let chargedAt: Date | undefined;
     if (contractId && contractId !== providerSubscriptionId) {
       const contract = await this.call(config, path(contractId));
       if (contract?.parentInvoice?.id !== providerSubscriptionId) {
@@ -618,10 +619,13 @@ export class LavaAdapter implements Connector {
         throw new Error(`lava.top contract ${contractId} is ${contract?.status}, not completed`);
       }
       receipt = contract.receipt;
+      const at = contract.datetime ? new Date(contract.datetime) : null;
+      if (at && !Number.isNaN(at.getTime())) chargedAt = at;
     }
     return {
       chargeId: `lava_${providerSubscriptionId}_${paidUntil.toISOString()}`,
-      ...(contractId ? { aliases: [contractId] } : {}),
+      ...(contractId ? { aliases: [contractId], named: true } : {}),
+      ...(chargedAt ? { chargedAt } : {}),
       ...(receipt?.amount != null && receipt?.currency
         ? { amount: String(receipt.amount), currency: String(receipt.currency).toUpperCase() }
         : {}),

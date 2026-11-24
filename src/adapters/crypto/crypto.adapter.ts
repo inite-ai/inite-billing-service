@@ -136,10 +136,17 @@ export class CryptoAdapter implements Connector {
    * Every network/token pair a customer can pay with right now — none for a
    * price in a currency there is no usable exchange rate for.
    */
-  async listMethods(context: { currency?: string } = {}): Promise<PaymentMethod[]> {
+  async listMethods(
+    context: { currency?: string; storedOnly?: boolean } = {},
+  ): Promise<PaymentMethod[]> {
     const settings = await loadCryptoSettings(this.prisma);
     if (!settings?.isActive) return [];
-    if (context.currency && !(await this.fx.quote(context.currency, settings))) return [];
+    if (
+      context.currency &&
+      !(await this.fx.quote(context.currency, settings, { storedOnly: context.storedOnly }))
+    ) {
+      return [];
+    }
 
     const methods: PaymentMethod[] = [];
     for (const chainId of CHAIN_IDS) {

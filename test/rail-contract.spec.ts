@@ -396,6 +396,22 @@ describe('which prices can be paid', () => {
     ]);
   });
 
+  it('never waits for an exchange rate source', async () => {
+    const { prisma, adapters } = harness(null, []);
+    prisma.paymentProvider.findMany.mockResolvedValue([provider('CRYPTO')]);
+    prisma.paymentProvider.findUnique = jest
+      .fn()
+      .mockResolvedValue(
+        provider('CRYPTO', { config: { wallets: { EVM: `0x${'1'.repeat(40)}` } } }),
+      );
+    prisma.fxRate.findUnique = jest.fn().mockResolvedValue(null);
+    global.fetch = jest.fn(() => new Promise(() => undefined)) as any;
+    const service = new PayabilityService(prisma, { get: (c: string) => adapters[c] } as any);
+    const answer = await ask(service, 'EUR');
+    expect(answer.reasons).toEqual({ CRYPTO: 'no_method' });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
   it('adds fields to the catalogue, drops none, and survives its own failure', async () => {
     const { prisma, service } = build([provider('HODLE')]);
     prisma.price.findMany.mockResolvedValue([

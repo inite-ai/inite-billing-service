@@ -78,7 +78,7 @@ describe('State Machine — orchestrator side effects', () => {
         update: jest.fn(),
         findFirst: jest.fn().mockResolvedValue(null),
         updateMany: jest.fn().mockResolvedValue({ count: 0 }),
-        count: jest.fn().mockResolvedValue(0),
+        findMany: jest.fn().mockResolvedValue([]),
       },
       unappliedPayment: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
       order: { findUnique: jest.fn(), update: jest.fn() },

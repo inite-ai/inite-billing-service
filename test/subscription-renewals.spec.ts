@@ -81,7 +81,7 @@ describe('SubscriptionRenewalsService', () => {
     notifications = { notify: jest.fn() };
     merchants = { pay: jest.fn(), chargeState: jest.fn().mockResolvedValue('none') };
     links = {
-      reopen: jest.fn((id: string) => ({
+      addRenewalLink: jest.fn((id: string) => ({
         sessionId: id,
         checkoutUrl: `https://b/checkout/${id}#t=x`,
       })),
