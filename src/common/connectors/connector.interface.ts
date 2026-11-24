@@ -50,6 +50,24 @@ export interface ConnectorCapabilities {
   minAmounts?: Record<string, string>;
 }
 
+/** One renewal charge, as the provider's own record describes it. */
+export interface RenewalEvidence {
+  /** The charge's identity: the same by webhook, by poll, by a late delivery. */
+  chargeId: string;
+  /** The provider's other names for the same charge (a contract id). */
+  aliases?: string[];
+  /** The evidence is of one charge, not only of a period (lava.top's poll names none). */
+  named?: boolean;
+  /** When it was charged, if the provider says. */
+  chargedAt?: Date;
+  /** What was charged, an exact decimal, with its currency. */
+  amount?: string;
+  currency?: string;
+  /** The period it paid for, when the provider owns the clock. */
+  periodStart?: Date;
+  periodEnd?: Date;
+}
+
 /**
  * A payment connector: the existing {@link PaymentRailAdapter} plus a capability
  * declaration and (optionally) the provider-side refund / cancel / subscription
@@ -108,6 +126,18 @@ export interface Connector extends PaymentRailAdapter {
   }): Promise<
     'subscription.renewed' | 'subscription.renewal_failed' | 'subscription.cancelled' | null
   >;
+
+  /**
+   * Which charge a renewal event is about, read from the provider (or from a
+   * payload the provider signed). Null: the event is not a renewal. Throws
+   * when the charge cannot be established — the event is retried, never
+   * booked on a guess.
+   */
+  readRenewal?(input: {
+    providerSubscriptionId: string;
+    currentPeriodEnd: Date;
+    payload: Record<string, any>;
+  }): Promise<RenewalEvidence | null>;
 
   /** Release what the provider holds for an intent that is being replaced. */
   releaseIntent?(intent: { providerIntentId: string | null }): Promise<void>;

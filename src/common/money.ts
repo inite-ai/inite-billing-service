@@ -60,3 +60,47 @@ export function sumMoney(values: Iterable<MoneyInput>): Decimal {
 export function moneyToNumber(value: MoneyInput): number {
   return roundMoney(value).toNumber();
 }
+
+/** ISO 4217 currencies whose smallest unit is not a hundredth. */
+const MINOR_DIGITS: Record<string, number> = {
+  BIF: 0,
+  CLP: 0,
+  DJF: 0,
+  GNF: 0,
+  JPY: 0,
+  KMF: 0,
+  KRW: 0,
+  PYG: 0,
+  RWF: 0,
+  VND: 0,
+  VUV: 0,
+  XAF: 0,
+  XOF: 0,
+  XPF: 0,
+  BHD: 3,
+  IQD: 3,
+  JOD: 3,
+  KWD: 3,
+  LYD: 3,
+  OMR: 3,
+  TND: 3,
+};
+
+/** How many decimals a currency has: 2 for most, 0 for CLP or JPY, 3 for KWD. */
+export function minorDigits(currency: string): number {
+  return MINOR_DIGITS[String(currency).toUpperCase()] ?? 2;
+}
+
+/** An amount in a currency's smallest unit (cents), as an exact decimal. */
+export function fromMinorUnits(minor: number | string | bigint, currency: string): Decimal {
+  return new Decimal(minor.toString()).div(new Decimal(10).pow(minorDigits(currency)));
+}
+
+/** An exact amount in a currency's smallest unit; refuses one finer than that unit. */
+export function toMinorUnits(amount: Decimal | string | number, currency: string): number {
+  const minor = new Decimal(amount.toString()).mul(new Decimal(10).pow(minorDigits(currency)));
+  if (!minor.isInteger()) {
+    throw new Error(`${amount} ${currency} is finer than the currency's smallest unit`);
+  }
+  return minor.toNumber();
+}

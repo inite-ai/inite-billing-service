@@ -54,7 +54,36 @@ describe('calculatePeriodEnd', () => {
   });
 
   it('defaults an unknown interval to one month rather than instant expiry', () => {
-    expect(calculatePeriodEnd(iso('2026-03-15T00:00:00.000Z'), 'quarter').toISOString()).toBe(
+    expect(calculatePeriodEnd(iso('2026-03-15T00:00:00.000Z'), 'fortnight').toISOString()).toBe(
+      '2026-04-15T00:00:00.000Z',
+    );
+  });
+
+  // 'quarter' used to be the unknown interval above: a rail that bills three
+  // months (lava.top does) sold a period of one.
+  it('adds three and six months for a quarter and a half year', () => {
+    const start = iso('2026-03-15T00:00:00.000Z');
+    expect(calculatePeriodEnd(start, 'quarter').toISOString()).toBe('2026-06-15T00:00:00.000Z');
+    expect(calculatePeriodEnd(start, 'half_year').toISOString()).toBe('2026-09-15T00:00:00.000Z');
+  });
+
+  it('counts from the anchor: the 31st comes back after a short month', () => {
+    const anchor = iso('2026-01-31T00:00:00.000Z');
+    const feb = calculatePeriodEnd(anchor, 'month', anchor);
+    expect(feb.toISOString()).toBe('2026-02-28T00:00:00.000Z');
+    expect(calculatePeriodEnd(feb, 'month', anchor).toISOString()).toBe('2026-03-31T00:00:00.000Z');
+  });
+
+  it('keeps 29 February on a leap anchor, year after year', () => {
+    const anchor = iso('2028-02-29T00:00:00.000Z');
+    let end = anchor;
+    for (let i = 0; i < 4; i++) end = calculatePeriodEnd(end, 'year', anchor);
+    expect(end.toISOString()).toBe('2032-02-29T00:00:00.000Z');
+  });
+
+  it('does not pull back a period the provider moved off the anchor’s day', () => {
+    const anchor = iso('2026-01-31T00:00:00.000Z');
+    expect(calculatePeriodEnd(iso('2026-03-15T00:00:00.000Z'), 'month', anchor).toISOString()).toBe(
       '2026-04-15T00:00:00.000Z',
     );
   });

@@ -40,7 +40,8 @@ describe('family subscription events', () => {
   beforeEach(async () => {
     prisma = {
       $transaction: jest.fn((cb: any) => cb(prisma)),
-      order: { findUnique: jest.fn() },
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      order: { findUnique: jest.fn(), update: jest.fn() },
       invoice: { create: jest.fn() },
       paymentIntent: { findFirst: jest.fn().mockResolvedValue({ rail: 'HODLE', snapshot: {} }) },
       subscription: {

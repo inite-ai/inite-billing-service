@@ -12,9 +12,15 @@
  * `Jan 31 + 1mo → Feb 28/29` and `Feb 29 + 1yr → Feb 28`. day/week were
  * previously unhandled (period end == start → immediate expiry); they now add
  * the right number of days.
+ *
+ * `anchor` is what the periods are counted from (Subscription.billingAnchor):
+ * without it, Jan 31 → Feb 28 → Mar 28 loses the 31st for good. It is used
+ * only while `start` still sits on the anchor's day, so a period the provider
+ * moved is not pulled back.
  */
-export function calculatePeriodEnd(start: Date, interval: string): Date {
+export function calculatePeriodEnd(start: Date, interval: string, anchor?: Date | null): Date {
   const end = new Date(start);
+  const day = anchorDay(start, anchor);
   switch (interval) {
     case 'day':
       end.setUTCDate(end.getUTCDate() + 1);
@@ -23,28 +29,42 @@ export function calculatePeriodEnd(start: Date, interval: string): Date {
       end.setUTCDate(end.getUTCDate() + 7);
       break;
     case 'year':
-      addUTCMonthsClamped(end, 12);
+      addUTCMonthsClamped(end, 12, day);
+      break;
+    case 'half_year':
+    case '6months':
+      addUTCMonthsClamped(end, 6, day);
+      break;
+    case 'quarter':
+    case '3months':
+      addUTCMonthsClamped(end, 3, day);
       break;
     case 'month':
     default:
-      addUTCMonthsClamped(end, 1);
+      addUTCMonthsClamped(end, 1, day);
       break;
   }
   return end;
+}
+
+function daysInMonth(date: Date): number {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate();
+}
+
+function anchorDay(start: Date, anchor?: Date | null): number {
+  if (!anchor) return start.getUTCDate();
+  const day = anchor.getUTCDate();
+  return Math.min(day, daysInMonth(start)) === start.getUTCDate() ? day : start.getUTCDate();
 }
 
 /**
  * Add whole months in UTC, clamping the day of month so we never overflow into
  * the following month (and thus never skip a month). Preserves the time of day.
  */
-function addUTCMonthsClamped(date: Date, months: number): void {
-  const day = date.getUTCDate();
+function addUTCMonthsClamped(date: Date, months: number, day: number): void {
   date.setUTCDate(1);
   date.setUTCMonth(date.getUTCMonth() + months);
-  const daysInTargetMonth = new Date(
-    Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0),
-  ).getUTCDate();
-  date.setUTCDate(Math.min(day, daysInTargetMonth));
+  date.setUTCDate(Math.min(day, daysInMonth(date)));
 }
 
 /**

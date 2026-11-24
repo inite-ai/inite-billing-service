@@ -113,8 +113,16 @@ describe('order refund → credits and subscription', () => {
     const tx: any = {
       // Voiding settled commissions is one `UPDATE ... RETURNING`; nothing was
       // settled in these fixtures, so it returns no rows to unwind.
-      $queryRaw: jest.fn().mockResolvedValue([]),
-      order: { findUnique: jest.fn().mockResolvedValue(order) },
+      // Besides that, the order's subscription is asked for (subscription-links.ts).
+      $queryRaw: jest.fn(async (q: any) =>
+        String(q.strings ?? q).includes('AS id') && overrides.subscription
+          ? [{ id: overrides.subscription.id }]
+          : [],
+      ),
+      order: {
+        findUnique: jest.fn().mockResolvedValue(order),
+        count: jest.fn().mockResolvedValue(0),
+      },
       invoice: { updateMany: jest.fn() },
       affiliate: { update: jest.fn() },
       affiliateCommission: { updateMany: jest.fn(), count: jest.fn().mockResolvedValue(0) },
@@ -130,6 +138,7 @@ describe('order refund → credits and subscription', () => {
         findUnique: jest.fn().mockResolvedValue({
           id: 'sub-1',
           price: { product: { serviceId: 'svc-1' } },
+          ...overrides.subscription,
         }),
         update: jest.fn(),
       },

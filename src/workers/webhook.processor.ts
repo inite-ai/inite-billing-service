@@ -4,6 +4,7 @@ import { Logger, Optional } from '@nestjs/common';
 import { PrismaService } from '../common/services/prisma.service';
 import { PaymentOrchestratorService } from '../payment-orchestrator/payment-orchestrator.service';
 import { RiskService } from '../risk/risk.service';
+import { noteForOperator } from '../payment-orchestrator/operator-items';
 import { reconcileAmount } from './reconcile-amount';
 import { isSubscriptionEvent } from '../payment-orchestrator/payment-orchestrator.service';
 import { UNMATCHED_TRANSFER_EVENT } from '../adapters/crypto/crypto.adapter';
@@ -174,6 +175,7 @@ export class WebhookProcessor extends WorkerHost {
             attempts: webhookEvent.attempts + 1,
           },
         });
+        await this.surface(webhookEvent, 'Payment intent not found');
         return;
       }
 
@@ -245,8 +247,32 @@ export class WebhookProcessor extends WorkerHost {
           attempts: webhookEvent.attempts + 1,
         },
       });
+      await this.surface(webhookEvent, error.message);
 
       throw error;
     }
+  }
+
+  /**
+   * A webhook that failed is not retried by the queue: unless the provider
+   * sends it again, it stays failed. A person is told, once per event.
+   */
+  private async surface(
+    event: { rail: string; webhookId: string; eventType: string; entityId: string },
+    error: string,
+  ) {
+    await noteForOperator(this.prisma, {
+      kind: 'webhook_failed',
+      key: `${event.rail}:${event.webhookId}`,
+      detail: {
+        rail: event.rail,
+        webhookId: event.webhookId,
+        eventType: event.eventType,
+        entityId: event.entityId,
+        error: String(error).slice(0, 500),
+      },
+    }).catch((e: any) =>
+      this.logger.error(`Could not record failed webhook ${event.webhookId}: ${e?.message}`),
+    );
   }
 }

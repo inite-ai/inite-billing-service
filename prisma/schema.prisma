@@ -232,6 +232,13 @@ model Order {
   /// order's description of itself — a receipt that changes after the fact.
   snapshot Json? @default("{}")
 
+  /// The subscription this order paid a period of, and that period. Null on a
+  /// one-time order, on an order not paid yet, and on those paid before these
+  /// columns existed.
+  subscriptionId String?   @map("subscription_id") @db.Uuid
+  periodStart    DateTime? @map("period_start") @db.Timestamptz(6)
+  periodEnd      DateTime? @map("period_end") @db.Timestamptz(6)
+
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -298,6 +305,10 @@ model Subscription {
   /// The renewal order billing opened for the period that ends next, on a
   /// rail that cannot recur by itself (PIX, crypto, the INITE wallet).
   renewalOrderId         String?            @map("renewal_order_id") @db.Uuid
+  /// What periods are counted from: a plan bought on the 31st renews on the
+  /// last day of short months and on the 31st again after. Null on rows made
+  /// before the column: counted from the period's own start, as they were.
+  billingAnchor          DateTime?          @map("billing_anchor") @db.Timestamptz(6)
   createdAt              DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt              DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -307,6 +318,27 @@ model Subscription {
   @@index([providerSubscriptionId])
   @@index([status, currentPeriodEnd])
   @@map("subscriptions")
+  @@schema("billing")
+}
+
+/// A question about money only a person can answer (see operator-items.ts).
+model OperatorItem {
+  id             String    @id @default(uuid()) @db.Uuid
+  key            String    @unique @db.VarChar(255)
+  /// charge_not_placed | wallet_charge_unapplied
+  kind           String    @db.VarChar(40)
+  subscriptionId String?   @map("subscription_id") @db.Uuid
+  orderId        String?   @map("order_id") @db.Uuid
+  detail         Json      @default("{}")
+  /// open | resolved
+  status         String    @default("open") @db.VarChar(20)
+  note           String?   @db.Text
+  resolvedBy     String?   @map("resolved_by") @db.VarChar(255)
+  resolvedAt     DateTime? @map("resolved_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([status, createdAt])
+  @@map("operator_items")
   @@schema("billing")
 }
 

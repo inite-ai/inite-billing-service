@@ -148,6 +148,23 @@ function graceEnd(periodEnd: Date, price: { graceDays?: number | null }): Date {
   return days ? new Date(periodEnd.getTime() + days * 86_400_000) : periodEnd;
 }
 
+/** Record on a paid order which subscription and which period it paid for. */
+export async function linkOrderToPeriod(
+  tx: any,
+  order: any,
+  subscriptionId: string,
+  periodStart: Date,
+  periodEnd: Date,
+): Promise<void> {
+  order.subscriptionId = subscriptionId;
+  order.periodStart = periodStart;
+  order.periodEnd = periodEnd;
+  await tx.order.update({
+    where: { id: order.id },
+    data: { subscriptionId, periodStart, periodEnd },
+  });
+}
+
 /**
  * A paid renewal order: the next period, at the order's price (which is the
  * scheduled plan when a downgrade was waiting).
@@ -177,10 +194,12 @@ export async function applyRenewalPayment(
   const live = LIVE.includes(sub.status);
   const interval = price.interval || 'month';
   let periodStart = live ? new Date(sub.currentPeriodEnd) : now;
-  let periodEnd = calculatePeriodEnd(periodStart, interval);
+  let periodEnd = calculatePeriodEnd(periodStart, interval, live ? sub.billingAnchor : null);
+  let restarted = !live;
   // Continuing from the old end must not buy time that is already gone.
   if (periodEnd.getTime() <= now.getTime()) {
     periodStart = now;
+    restarted = true;
     periodEnd = calculatePeriodEnd(now, interval);
   }
   const latestIntent = await tx.paymentIntent.findFirst({
@@ -198,6 +217,7 @@ export async function applyRenewalPayment(
       status: 'active',
       currentPeriodStart: periodStart,
       currentPeriodEnd: periodEnd,
+      ...(restarted || changedPlan ? { billingAnchor: periodStart } : {}),
       cancelAtPeriodEnd: false,
       // The rail this period was paid on: the next renewal starts from it.
       ...(latestIntent?.rail ? { rail: latestIntent.rail } : {}),
@@ -205,6 +225,7 @@ export async function applyRenewalPayment(
     },
   });
 
+  await linkOrderToPeriod(tx, order, sub.id, periodStart, periodEnd);
   await regrantSubscriptionEntitlements(deps, tx, sub, product, graceEnd(periodEnd, price));
 
   if (changedPlan) {
