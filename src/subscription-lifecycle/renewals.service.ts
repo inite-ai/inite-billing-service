@@ -85,6 +85,9 @@ export class SubscriptionRenewalsService {
   private async renewOne(sub: any, now: Date): Promise<void> {
     const order = await this.renewalOrder(sub);
     if (!order || order.status !== 'created') return;
+    // A charge that may still land comes first, whatever the person has changed
+    // since: neither another charge nor a link to pay beside it.
+    if ((await this.merchants.chargeState(order.id)) === 'pending') return;
 
     const service = sub.price.product.service;
     const metadata = (order.metadata as Record<string, any>) ?? {};
@@ -94,11 +97,8 @@ export class SubscriptionRenewalsService {
       // The wallet pays on the day the period ends, not days ahead of it; a
       // renewal already handed to the link stays with the link.
       if (!periodOver || metadata.renewalNotifiedAt) return;
-      // What the last charge did is read back, not remembered: a mark written
-      // before the charge made a crash look like an attempt, and neither a
-      // retry nor the link followed.
-      const state = await this.merchants.chargeState(order.id, now);
-      if (state === 'pending') return;
+      // A charge is counted before it is made and read back above: a mark alone
+      // made a crash look like an attempt, and neither a retry nor the link came.
       const tries = Number(metadata.walletTries ?? (metadata.walletAttemptedAt ? MAX_TRIES : 0));
       if (tries >= MAX_TRIES) {
         await this.sendLink(sub, order);

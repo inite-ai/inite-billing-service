@@ -11,6 +11,8 @@ const ABANDON_AFTER_MS = 72 * 60 * 60 * 1000;
 const LATE_WINDOW_MS = 72 * 60 * 60 * 1000;
 const LATE_EVERY_MS = 6 * 60 * 60 * 1000;
 const MAX_LATE_PER_RUN = 50;
+/** More than are ever closed in the window; the run limit is on questions asked. */
+const MAX_LATE_WATCHED = 5000;
 /** Subscriptions are checked from this long before their period ends. */
 const RENEWAL_WINDOW_MS = 60 * 60 * 1000;
 const MAX_INTENTS_PER_RUN = 100;
@@ -149,11 +151,14 @@ export class ProviderStatusScheduler {
           updatedAt: { gte: new Date(now - LATE_WINDOW_MS) },
         },
         orderBy: { updatedAt: 'desc' },
-        take: MAX_LATE_PER_RUN,
+        take: MAX_LATE_WATCHED,
         select: { id: true },
       })) ?? [];
+    let late = 0;
     for (const intent of closed) {
+      if (late >= MAX_LATE_PER_RUN) break;
       if (!this.due(`late:${intent.id}`, LATE_EVERY_MS, now)) continue;
+      late++;
       report.checked++;
       try {
         if (await this.orchestrator.recheckClosedIntent(intent.id)) report.settled++;

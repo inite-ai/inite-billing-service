@@ -327,6 +327,25 @@ export class AgentPaymentsService {
     return this.prisma.walletAgentPayment.update({ where: { id }, data }).catch(() => undefined);
   }
 
+  /** Whether the chain has used an authorization, and the chain's own time. */
+  async authorization(
+    from: `0x${string}`,
+    nonce: `0x${string}`,
+  ): Promise<{ used: boolean; now: Date }> {
+    const settings = await loadCryptoSettings(this.prisma);
+    const client = baseClient(settings?.rpcUrls[X402_CHAIN]);
+    // One block for both answers: unused in it, and its time.
+    const block = await client.getBlock({ blockTag: 'latest' });
+    const used = await client.readContract({
+      address: usdcAddress(),
+      abi: USDC_ABI,
+      functionName: 'authorizationState',
+      args: [from, nonce],
+      blockNumber: block.number,
+    });
+    return { used, now: new Date(Number(block.timestamp) * 1000) };
+  }
+
   async usdcBalance(address: `0x${string}`): Promise<bigint> {
     const settings = await loadCryptoSettings(this.prisma);
     return baseClient(settings?.rpcUrls[X402_CHAIN]).readContract({

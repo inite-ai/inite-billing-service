@@ -147,6 +147,7 @@ describe('Provider refund / cancel wiring', () => {
       };
       const orchestrator: any = {
         getAdapter: jest.fn().mockReturnValue(connector),
+        subscriptionPaidBy: jest.fn().mockResolvedValue(null),
         applyStateTransition: jest.fn().mockResolvedValue(undefined),
       };
       return { service: new AdminOrdersService(prisma, orchestrator), orchestrator };
