@@ -122,8 +122,45 @@ describe('refunds and rows from before', () => {
       const other = await makePlan(prisma, run);
       const first = await paid(price, ago(5));
       const s = await subOf(other, { createdAt: ago(5) });
+      // What a plan change leaves behind.
+      const change = await prisma.outboxEvent.create({
+        data: {
+          eventType: 'billing.subscription.plan_changed',
+          payload: { subscription_id: s.id, from_price_id: price.id, to_price_id: other.id },
+        },
+      });
       await orchestrator.applyStateTransition(first.intent.id, 'refunded');
+      await prisma.outboxEvent.delete({ where: { id: change.id } });
       expect(await status(s)).toBe('ended');
+    });
+
+    it('never ends another product bought in the same minute', async () => {
+      const price = await makePlan(prisma, run);
+      const other = await makePlan(prisma, run);
+      const mine = await subOf(price, { createdAt: ago(100) });
+      const theirs = await subOf(other, { createdAt: ago(10) });
+      const again = await paid(price, ago(10));
+      await orchestrator.applyStateTransition(again.intent.id, 'refunded');
+      expect([await status(mine), await status(theirs)]).toEqual(['ended', 'active']);
+    });
+
+    it('a plan bought again on the same row is a newer month of it', async () => {
+      const price = await makePlan(prisma, run);
+      const s = await subOf(price, { rail: 'CRYPTO', createdAt: ago(40) });
+      const first = await paid(price, ago(40));
+      const second = await paid(price, ago(10));
+      await orchestrator.applyStateTransition(first.intent.id, 'refunded');
+      expect(await status(s)).toBe('active');
+      await orchestrator.applyStateTransition(second.intent.id, 'refunded');
+      expect(await status(s)).toBe('ended');
+    });
+
+    it('does not end a subscription bought after the refunded payment', async () => {
+      const price = await makePlan(prisma, run);
+      const orphan = await paid(price, ago(20));
+      const s = await subOf(price, { createdAt: ago(5) });
+      await orchestrator.applyStateTransition(orphan.intent.id, 'refunded');
+      expect(await status(s)).toBe('active');
     });
 
     it('a period bought once, or another subscription, is not a newer month of this one', async () => {
@@ -143,6 +180,50 @@ describe('refunds and rows from before', () => {
       await orchestrator.applyStateTransition(first.intent.id, 'refunded');
       expect(await status(s)).toBe('active');
     });
+  });
+
+  it('refunding the running period keeps the one paid ahead: it starts now', async () => {
+    const price = await makePlan(prisma, run);
+    const s = await subOf(price, { currentPeriodStart: ago(-2), currentPeriodEnd: ago(-32) });
+    const running = await paid(price, ago(28), {
+      subscriptionId: s.id,
+      periodStart: ago(28),
+      periodEnd: s.currentPeriodStart,
+    });
+    const next = await paid(price, ago(1), {
+      subscriptionId: s.id,
+      periodStart: s.currentPeriodStart,
+      periodEnd: s.currentPeriodEnd,
+    });
+    await prisma.entitlement.create({
+      data: {
+        userId: user,
+        key: `k-${randomUUID()}`,
+        source: 'subscription',
+        status: 'active',
+        startsAt: ago(28),
+        expiresAt: ago(-35),
+        value: { subscription_id: s.id },
+      },
+    });
+    await admin.refundOrder(running.order.id);
+    const after = await prisma.subscription.findUnique({ where: { id: s.id } });
+    expect(after.status).toBe('active');
+    expect(Math.abs(after.currentPeriodStart.getTime() - Date.now())).toBeLessThan(60_000);
+    expect(after.currentPeriodEnd.getTime() - after.currentPeriodStart.getTime()).toBe(
+      s.currentPeriodEnd.getTime() - s.currentPeriodStart.getTime(),
+    );
+    const moved = await prisma.order.findUnique({ where: { id: next.order.id } });
+    expect(moved.periodEnd.getTime()).toBe(after.currentPeriodEnd.getTime());
+    const right = await prisma.entitlement.findFirst({
+      where: { value: { path: ['subscription_id'], equals: s.id } },
+    });
+    expect(right.status).toBe('active');
+    expect(right.expiresAt.getTime() - after.currentPeriodEnd.getTime()).toBe(3 * DAY);
+    expect(cancel).not.toHaveBeenCalled();
+    // And refunding that one too ends it.
+    await admin.refundOrder(next.order.id);
+    expect(await status(s)).toBe('ended');
   });
 
   describe('an admin refund', () => {
@@ -252,6 +333,32 @@ describe('refunds and rows from before', () => {
       expect(
         rows.filter((o: any) => o.metadata.provider_charge_aliases?.includes(id)),
       ).toHaveLength(1);
+    });
+
+    it('heard of too late to place is put before a person, once', async () => {
+      const { parent, orders, s } = await doubled();
+      const end = ago(-14);
+      await prisma.subscription.update({ where: { id: s.id }, data: { currentPeriodEnd: end } });
+      invoices[parent].subscriptionDetails.expiredAt = end.toISOString();
+      const id = `c-${randomUUID()}`;
+      // No date on the contract: when it was charged is not known.
+      invoices[id] = {
+        id,
+        status: 'COMPLETED',
+        parentInvoice: { id: parent },
+        receipt: { amount: 29, currency: 'USD' },
+      };
+      for (let i = 0; i < 2; i++) {
+        await orchestrator.handleSubscriptionEvent('LAVA', 'subscription.renewed', parent, {
+          contractId: id,
+        });
+      }
+      expect(await orders()).toHaveLength(2);
+      const items = await prisma.operatorItem.findMany({
+        where: { kind: 'charge_not_placed', subscriptionId: s.id },
+      });
+      expect(items).toHaveLength(1);
+      expect(items[0]).toMatchObject({ status: 'open', detail: { charge: id, amount: '29' } });
     });
 
     it('is retried while lava.top has not moved its own date yet', async () => {

@@ -40,12 +40,22 @@ const day = (date: Date, locale: RenewalLocale) =>
 /** The amount as the reader writes money. */
 export function renewalAmount(amount: string, currency: string, locale: RenewalLocale): string {
   const value = Number(amount);
-  return new Intl.NumberFormat(TAG[locale], {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: Number.isInteger(value) ? 0 : undefined,
-    maximumFractionDigits: Number.isInteger(value) ? 0 : undefined,
-  }).format(value);
+  const whole = Number.isInteger(value);
+  try {
+    return new Intl.NumberFormat(TAG[locale], {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: whole ? 0 : undefined,
+      maximumFractionDigits: whole ? 0 : undefined,
+    }).format(value);
+  } catch {
+    // Not an ISO currency (USDC, USDT): the number in the reader's way, then its name.
+    const number = new Intl.NumberFormat(TAG[locale], {
+      minimumFractionDigits: whole ? 0 : 2,
+      maximumFractionDigits: whole ? 0 : 6,
+    }).format(value);
+    return `${number} ${currency}`;
+  }
 }
 
 const COPY: Record<

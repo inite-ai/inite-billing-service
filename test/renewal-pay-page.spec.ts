@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { CheckoutService } from '../src/checkout/checkout.service';
 import { AdminOrdersService } from '../src/admin/services/admin-orders.service';
-import { hashCheckoutLink } from '../src/checkout/checkout-link';
+import { checkoutLinkMatches, hashCheckoutLink } from '../src/checkout/checkout-link';
 import { invoiceView } from '../src/invoicing/invoicing.service';
 import { OrdersService } from '../src/orders/orders.service';
 import { SessionLinksService } from '../src/service-api/session-links';
@@ -140,31 +140,32 @@ describe('the renewal pay page and its letters', () => {
     await expect(checkout.getSession(id, undefined, undefined, 'not-a-token')).rejects.toThrow();
   });
 
-  it('reopening a session stops every earlier link, letters included; closing it stops all', async () => {
+  it('closing a renewal stops every link to it', async () => {
     await plan();
     await at('2026-04-07T12:00:00Z');
     const url = new URL(notify.mock.calls[0][0].metadata.ctaUrl);
     const id = url.pathname.split('/').pop()!;
-    const token = url.hash.slice('#t='.length);
-    const fresh = await links.reopen(id);
-    await expect(checkout.getSession(id, undefined, undefined, token)).rejects.toThrow();
-    const newer = new URL(fresh!.checkoutUrl).hash.slice('#t='.length);
-    await checkout.getSession(id, undefined, undefined, newer);
+    const token = decodeURIComponent(url.hash.slice('#t='.length));
+    await checkout.getSession(id, undefined, undefined, token);
     await links.revoke(id);
-    await expect(checkout.getSession(id, undefined, undefined, newer)).rejects.toThrow();
+    await expect(checkout.getSession(id, undefined, undefined, token)).rejects.toThrow();
   });
 
   it('keeps a bounded number of links, the newest also where older code looks', async () => {
     const sub = await plan();
     await at('2026-04-07T12:00:00Z');
     const { renewalOrderId } = await prisma.subscription.findUnique({ where: { id: sub.id } });
-    let last = '';
+    const tokens: string[] = [];
     for (let i = 0; i < 10; i++) {
-      last = new URL((await links.addRenewalLink(renewalOrderId))!.checkoutUrl).hash.slice(3);
+      const url = new URL((await links.addRenewalLink(renewalOrderId))!.checkoutUrl);
+      tokens.push(decodeURIComponent(url.hash.slice(3)));
+      const { metadata } = await prisma.order.findUnique({ where: { id: renewalOrderId } });
+      // The newest six open it, every time; the older ones do not.
+      const open = tokens.map((t) => checkoutLinkMatches(metadata, t));
+      expect(open).toEqual(tokens.map((_t, j) => j >= tokens.length - 6));
+      expect(metadata.linkTokenHashes.length).toBeLessThanOrEqual(6);
+      expect(metadata.linkTokenHash).toBe(hashCheckoutLink(tokens[tokens.length - 1]));
     }
-    const { metadata } = await prisma.order.findUnique({ where: { id: renewalOrderId } });
-    expect(metadata.linkTokenHashes).toHaveLength(6);
-    expect(metadata.linkTokenHash).toBe(hashCheckoutLink(last));
   });
 
   it('no answer of the API carries a link hash', async () => {
@@ -257,6 +258,9 @@ describe('the renewal pay page and its letters', () => {
     });
     expect(wallet.body).not.toContain('automatically');
     expect(renewalLocale(null)).toBe('en');
+    // A stablecoin has no ISO code: written as it is, never thrown.
+    expect(renewalAmount('29.00', 'USDC', 'en')).toBe('29 USDC');
+    expect(renewalAmount('29.5', 'USDT', 'pt')).toBe('29,50 USDT');
     expect(renewalAmount('199.0000', 'BRL', 'pt').replace(/\s/g, ' ')).toBe('R$ 199');
     expect(renewalAmount('29.9', 'USD', 'en')).toBe('$29.90');
     expect(renewalAmount('10990', 'CLP', 'es')).toMatch(/10\.990/);

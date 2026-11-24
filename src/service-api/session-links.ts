@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../common/services/prisma.service';
 import { resolveFrontendUrl } from '../common/config/frontend-url';
@@ -42,33 +41,10 @@ export class SessionLinksService {
   }
 
   /**
-   * A new link for an unpaid session whose first link the product no longer
-   * has (the person closed the page). Only the hash is stored, so the old
-   * token cannot be shown again: the link rotates and the old one stops
-   * working — every link of the session, a renewal's letters included.
-   */
-  async reopen(orderId: string, locale?: string): Promise<SessionLinks | null> {
-    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
-    if (!order || order.status !== 'created') return null;
-    const link = newCheckoutLink();
-    const { linkTokenHashes: _revoked, ...metadata } = (order.metadata ?? {}) as Record<
-      string,
-      unknown
-    >;
-    await this.prisma.order.update({
-      where: { id: orderId },
-      data: { metadata: { ...metadata, linkTokenHash: link.hash } as Prisma.InputJsonValue },
-    });
-    return this.withX402({
-      sessionId: order.id,
-      checkoutUrl: `${checkoutPageUrl(resolveFrontendUrl(this.config), order.id, locale)}#t=${link.token}`,
-    });
-  }
-
-  /**
    * One more link to a renewal's page, for a letter: the page does not move,
    * and a letter sent on the last day must not kill the link in the first one.
    * The newest is also the one link older code knows, so a rollback keeps it.
+   * (`reopen`, which replaced a session's link, had no caller left and went.)
    */
   async addRenewalLink(orderId: string, locale?: string): Promise<SessionLinks | null> {
     const link = newCheckoutLink();
@@ -77,8 +53,9 @@ export class SessionLinksService {
          SET metadata = COALESCE(metadata, '{}'::jsonb)
                || jsonb_build_object('linkTokenHash', ${link.hash}::text)
                || jsonb_build_object('linkTokenHashes', (
-                    SELECT jsonb_agg(h) FROM (
-                      SELECT h FROM jsonb_array_elements(
+                    -- The newest kept, in the order they were made.
+                    SELECT jsonb_agg(h ORDER BY n) FROM (
+                      SELECT h, n FROM jsonb_array_elements(
                         COALESCE(metadata->'linkTokenHashes', '[]'::jsonb) || to_jsonb(${link.hash}::text)
                       ) WITH ORDINALITY AS t(h, n)
                       ORDER BY n DESC LIMIT ${MAX_RENEWAL_LINKS}

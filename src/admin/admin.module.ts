@@ -20,6 +20,7 @@ import { UnappliedPaymentsController } from './unapplied-payments.controller';
 import { ConnectorsModule } from '../common/connectors/connectors.module';
 import { PayabilityService } from '../checkout/payability.service';
 import { PayablePricesController } from './payable-prices.controller';
+import { OperatorItemsController } from './operator-items.controller';
 import { RagModule } from '../rag/rag.module';
 
 @Module({
@@ -37,6 +38,7 @@ import { RagModule } from '../rag/rag.module';
     ServiceWebhookSecretController,
     UnappliedPaymentsController,
     PayablePricesController,
+    OperatorItemsController,
   ],
   providers: [
     AdminService,
