@@ -958,8 +958,26 @@ export class PaymentOrchestratorService implements OnModuleInit {
             Math.min(half / 2, NOT_MOVED_MS)
           ) {
             // Charged at the end of a period, and the provider's own date still
-            // is that end: it has not moved it yet.
-            throw new Error(
+            // is that end: it has not moved it yet. A webhook is not retried,
+            // so this one stops here. With the charge's date, the poll books the
+            // renewal when the provider moves its date. Without it, this may as
+            // well be an old charge: a person compares it with the provider.
+            if (!evidence.chargedAt) {
+              await noteForOperator(tx, {
+                kind: 'charge_not_placed',
+                key: `${subscription.rail}:${ids[ids.length - 1]}`,
+                subscriptionId: subscription.id,
+                detail: {
+                  charge: ids[ids.length - 1],
+                  rail: subscription.rail,
+                  amount: evidence.amount ?? null,
+                  currency: evidence.currency ?? null,
+                  providerPeriodEnd: evidence.periodEnd.toISOString(),
+                  reason: 'no_charge_date',
+                },
+              });
+            }
+            this.logger.warn(
               `${subscription.rail} has not moved the date of ${subscription.id} for charge ${evidence.chargeId} yet`,
             );
           } else if (evidence.periodEnd.getTime() > chargedAt.getTime() + half) {
