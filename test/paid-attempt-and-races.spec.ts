@@ -113,7 +113,7 @@ describe('the attempt that paid', () => {
 
   describe('two methods chosen at once', () => {
     /** Both requests are past every earlier check when either opens its payment. */
-    function rails() {
+    function rails(whileBothOpen: () => Promise<unknown> = async () => undefined) {
       let waiting = 0;
       let open: () => void;
       const both = new Promise<void>((resolve) => (open = resolve));
@@ -122,7 +122,10 @@ describe('the attempt that paid', () => {
         rail: () => code,
         capabilities: () => ({ supportedModes: ['PAYMENT'] }),
         createPaymentIntent: async () => {
-          if (++waiting === 2) open();
+          if (++waiting === 2) {
+            await whileBothOpen();
+            open();
+          }
           await both;
           return { providerIntentId: `${code}-${randomUUID()}`, metadata: snapshot };
         },
@@ -170,13 +173,14 @@ describe('the attempt that paid', () => {
 
     it('opens nothing on an order that was paid meanwhile', async () => {
       const o = await one();
-      const { checkout, released } = rails();
+      const { checkout, released } = rails(() =>
+        prisma.order.update({ where: { id: o.id }, data: { status: 'paid' } }),
+      );
       const paying = checkout.paySession(o.id, user, { rail: 'HODLE' });
       const other = checkout.paySession(o.id, user, { rail: 'HODLE' });
-      await prisma.order.update({ where: { id: o.id }, data: { status: 'paid' } });
       const results = await Promise.allSettled([paying, other]);
       expect(results.every((r) => r.status === 'rejected')).toBe(true);
-      expect(released.length).toBeGreaterThan(0);
+      expect(released).toEqual(['HODLE', 'HODLE']);
       expect(await prisma.paymentIntent.count({ where: { orderId: o.id } })).toBe(0);
     });
   });
@@ -307,7 +311,7 @@ describe('the attempt that paid', () => {
       { notify } as any,
       { getContact: async () => null } as any,
       { chargeState: async () => charge, pay: jest.fn() } as any,
-      { reopen: async (id: string) => ({ checkoutUrl: `https://x/${id}` }) } as any,
+      { addRenewalLink: async (id: string) => ({ checkoutUrl: `https://x/${id}` }) } as any,
       { get: () => 'https://billing.example' } as any,
     );
     await service.runSweep(new Date());
