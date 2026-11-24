@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { AdminOrdersService } from '../src/admin/services/admin-orders.service';
+import { WebhookProcessor } from '../src/workers/webhook.processor';
 import { LavaAdapter } from '../src/adapters/lava/lava.adapter';
 import { billingDb, cleanBilling, makeIntent, makeOrder, makePlan } from './helpers/billing-db';
 
@@ -226,6 +227,37 @@ describe('refunds and rows from before', () => {
     expect(await status(s)).toBe('ended');
   });
 
+  it('a webhook that fails is put before a person, once', async () => {
+    const webhookId = `wh-${randomUUID()}`;
+    await prisma.webhookEvent.create({
+      data: {
+        rail: 'BROKENRAIL',
+        webhookId,
+        eventType: 'payment.paid',
+        entityId: `x-${randomUUID()}`,
+        payload: {},
+      },
+    });
+    orchestrator.registerAdapter({
+      rail: () => 'BROKENRAIL',
+      getIntentStatus: async () => {
+        throw new Error('provider says no');
+      },
+    } as any);
+    const processor = new WebhookProcessor(prisma, orchestrator);
+    for (let i = 0; i < 2; i++) {
+      await expect(
+        processor.process({ data: { rail: 'BROKENRAIL', webhookId } } as any),
+      ).rejects.toThrow('provider says no');
+    }
+    const items = await prisma.operatorItem.findMany({
+      where: { kind: 'webhook_failed', key: { contains: webhookId } },
+    });
+    expect(items).toHaveLength(1);
+    expect(items[0].detail).toMatchObject({ rail: 'BROKENRAIL', error: 'provider says no' });
+    await prisma.webhookEvent.deleteMany({ where: { webhookId } });
+  });
+
   describe('an admin refund', () => {
     it('of an old month does not cancel the provider’s billing', async () => {
       const price = await makePlan(prisma, run);
@@ -361,11 +393,37 @@ describe('refunds and rows from before', () => {
       expect(items[0]).toMatchObject({ status: 'open', detail: { charge: id, amount: '29' } });
     });
 
-    it('is retried while lava.top has not moved its own date yet', async () => {
-      const { parent, charge, orders } = await doubled();
+    it('charged as lava.top has not yet moved its date: left to the poll, no failure', async () => {
+      const { parent, charge, orders, s } = await doubled();
       invoices[parent].subscriptionDetails.expiredAt = ago(5).toISOString();
-      await expect(charge(`c-${randomUUID()}`, ago(5))).rejects.toThrow(/not moved/);
+      await prisma.subscription.update({ where: { id: s.id }, data: { currentPeriodEnd: ago(5) } });
+      await expect(charge(`c-${randomUUID()}`, ago(5))).resolves.toBeUndefined();
       expect(await orders()).toHaveLength(2);
+    });
+
+    it('with no date on the contract and nothing to place it by: a person is told, no failure', async () => {
+      const { parent, orders, s } = await doubled();
+      const end = ago(-2);
+      await prisma.subscription.update({ where: { id: s.id }, data: { currentPeriodEnd: end } });
+      invoices[parent].subscriptionDetails.expiredAt = end.toISOString();
+      const id = `c-${randomUUID()}`;
+      invoices[id] = {
+        id,
+        status: 'COMPLETED',
+        parentInvoice: { id: parent },
+        receipt: { amount: 29, currency: 'USD' },
+      };
+      await expect(
+        orchestrator.handleSubscriptionEvent('LAVA', 'subscription.renewed', parent, {
+          contractId: id,
+        }),
+      ).resolves.toBeUndefined();
+      expect(await orders()).toHaveLength(2);
+      const items = await prisma.operatorItem.findMany({
+        where: { subscriptionId: s.id, kind: 'charge_not_placed' },
+      });
+      expect(items).toHaveLength(1);
+      expect(items[0].detail).toMatchObject({ charge: id, reason: 'no_charge_date' });
     });
   });
 });
