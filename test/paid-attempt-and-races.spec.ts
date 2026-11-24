@@ -276,6 +276,19 @@ describe('the attempt that paid', () => {
       await expect(state(async () => chain as any, claim as any)).resolves.toBe(expected);
     });
 
+    it('used on chain long ago with the order still unpaid: never again, and a person is told', async () => {
+      await expect(state(async () => ({ used: true, now: after.now }), 'mined')).resolves.toBe(
+        'pending',
+      );
+      const items = await prisma.operatorItem.findMany({
+        where: {
+          kind: 'wallet_charge_unapplied',
+          createdAt: { gte: new Date(Date.now() - 60_000) },
+        },
+      });
+      expect(items.length).toBeGreaterThan(0);
+    });
+
     it('the chain cannot be read', async () => {
       await expect(
         state(async () => {
@@ -323,6 +336,66 @@ describe('the attempt that paid', () => {
     await service.runSweep(new Date());
     expect(notify).toHaveBeenCalledTimes(1);
     delete process.env.SUBSCRIPTION_RENEWALS_ENABLED;
+  });
+
+  it('a charge that failed with its outcome unknown sends no link while it may land', async () => {
+    process.env.SUBSCRIPTION_RENEWALS_ENABLED = 'true';
+    const { sub, o } = await renewalOrder('CRYPTO', {
+      userId: `did:test:${run}`,
+      currentPeriodEnd: new Date(Date.now() - 3_600_000),
+    });
+    await prisma.order.update({ where: { id: o.id }, data: { userId: `did:test:${run}` } });
+    await prisma.subscription.update({ where: { id: sub.id }, data: { renewalOrderId: o.id } });
+    const notify = jest.fn();
+    let state = 'none';
+    const db = new Proxy(prisma, {
+      get: (target, key) => {
+        if (key === 'subscription')
+          return {
+            findMany: (a: any) =>
+              target.subscription.findMany({ ...a, where: { ...a.where, id: sub.id } }),
+            update: (a: any) => target.subscription.update(a),
+          };
+        if (key === 'wallet') return { findUnique: async () => ({ id: 'w', ownerKey: null }) };
+        if (key === 'walletMerchant') return { findFirst: async () => ({ id: 'm' }) };
+        const value = target[key as string];
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
+    const pay = jest.fn(async () => {
+      state = 'pending';
+      throw new Error('relayer timed out after sending');
+    });
+    const service = new SubscriptionRenewalsService(
+      db as any,
+      {} as any,
+      { notify } as any,
+      { getContact: async () => null } as any,
+      { chargeState: async () => state, pay } as any,
+      {
+        reopen: async (id: string) => ({ checkoutUrl: `https://x/${id}` }),
+        addRenewalLink: async (id: string) => ({ checkoutUrl: `https://x/${id}` }),
+      } as any,
+      { get: () => 'https://billing.example' } as any,
+    );
+    await prisma.order.update({
+      where: { id: o.id },
+      data: {
+        metadata: {
+          subscriptionRenewal: {
+            subscriptionId: sub.id,
+            periodEnd: sub.currentPeriodEnd.toISOString(),
+          },
+          walletTries: 2,
+        },
+      },
+    });
+    await service.runSweep(new Date());
+    expect(pay).toHaveBeenCalledTimes(1);
+    expect(notify).not.toHaveBeenCalled();
+    delete process.env.SUBSCRIPTION_RENEWALS_ENABLED;
+    await prisma.order.deleteMany({ where: { userId: `did:test:${run}` } });
+    await prisma.subscription.deleteMany({ where: { userId: `did:test:${run}` } });
   });
 
   it('late money is found behind any number of closed payments', async () => {

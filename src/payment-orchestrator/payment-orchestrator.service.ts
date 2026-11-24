@@ -18,6 +18,7 @@ import {
 import { ConnectorRegistry } from '../common/connectors/connector-registry.service';
 import { Connector, RenewalEvidence } from '../common/connectors/connector.interface';
 import { calculatePeriodEnd, orderAccessEndsAt } from './period.util';
+import { noteForOperator } from './operator-items';
 import { lockPaymentPath } from './lock-order';
 import { bookedFor, chargeNamed, paidAgainAfter, subscriptionOfOrder } from './subscription-links';
 import { reconcileAmount } from '../workers/reconcile-amount';
@@ -65,6 +66,9 @@ export const SUBSCRIPTION_EVENT_TYPES = [
   'subscription.created',
   'subscription.updated',
 ] as const;
+
+/** How close to the end of a period its renewal is charged, with room to spare. */
+const NOT_MOVED_MS = 3 * 86_400_000;
 
 /** The provider took money for another period. */
 const RENEWAL_EVENTS: ReadonlySet<string> = new Set([
@@ -1130,13 +1134,35 @@ export class PaymentOrchestratorService implements OnModuleInit {
               where: { id: booked },
               data: { metadata: { ...(row.metadata ?? {}), provider_charge_aliases: ids } },
             });
-          } else if (evidence.periodEnd.getTime() <= chargedAt.getTime() + half) {
-            // Charged, and the provider's own date still says before it.
+          } else if (
+            Math.abs(evidence.periodEnd.getTime() - chargedAt.getTime()) <=
+            Math.min(half / 2, NOT_MOVED_MS)
+          ) {
+            // Charged at the end of a period, and the provider's own date still
+            // is that end: it has not moved it yet.
             throw new Error(
               `${subscription.rail} has not moved the date of ${subscription.id} for charge ${evidence.chargeId} yet`,
             );
-          } else {
+          } else if (evidence.periodEnd.getTime() > chargedAt.getTime() + half) {
             await this.recordCharge(subscription, evidence, ids, providerData, tx);
+          } else {
+            // Too late to tell whether it is in the books under another key or
+            // in none: a person compares it with the provider.
+            await noteForOperator(tx, {
+              kind: 'charge_not_placed',
+              key: `${subscription.rail}:${ids[ids.length - 1]}`,
+              subscriptionId: subscription.id,
+              detail: {
+                charge: ids[ids.length - 1],
+                rail: subscription.rail,
+                amount: evidence.amount ?? null,
+                currency: evidence.currency ?? null,
+                providerPeriodEnd: evidence.periodEnd.toISOString(),
+              },
+            });
+            this.logger.error(
+              `Charge ${ids[ids.length - 1]} of subscription ${subscription.id} could not be placed; left for an operator`,
+            );
           }
         }
         await this.confirmHeldPeriod(subscription, ahead > 0 ? evidence.periodEnd : heldEnd, tx);
@@ -1622,6 +1648,8 @@ export class PaymentOrchestratorService implements OnModuleInit {
       return;
     }
 
+    if (order.periodEnd && (await this.startPrepaidNow(subscription, order, tx))) return;
+
     await tx.subscription.update({
       where: { id: subscription.id },
       data: { status: 'ended', updatedAt: new Date() },
@@ -1640,6 +1668,70 @@ export class PaymentOrchestratorService implements OnModuleInit {
     );
 
     this.logger.log(`Ended subscription ${subscription.id}: order ${order.id} was refunded`);
+  }
+
+  /**
+   * The running period was refunded and the next ones are paid: what was paid
+   * stays bought. It begins now instead of when the refunded period would have
+   * ended, for its full length. False when nothing is paid ahead.
+   */
+  private async startPrepaidNow(subscription: any, order: any, tx: any): Promise<boolean> {
+    const ahead = await tx.order.findMany({
+      where: {
+        subscriptionId: subscription.id,
+        status: 'paid',
+        id: { not: order.id },
+        periodStart: { gte: order.periodEnd },
+        periodEnd: { gt: new Date() },
+      },
+      orderBy: { periodStart: 'asc' },
+    });
+    if (ahead.length === 0) return false;
+    const now = new Date();
+    const earlier = new Date(ahead[0].periodStart).getTime() - now.getTime();
+    const back = (date: Date) => new Date(new Date(date).getTime() - earlier);
+    for (const paid of ahead) {
+      await tx.order.update({
+        where: { id: paid.id },
+        data: { periodStart: back(paid.periodStart), periodEnd: back(paid.periodEnd) },
+      });
+    }
+    const last = ahead[ahead.length - 1];
+    const end = back(last.periodEnd);
+    // A renewal opened for the end that just moved is for a date nobody has now.
+    if (subscription.renewalOrderId) {
+      await tx.order.updateMany({
+        where: { id: subscription.renewalOrderId, status: 'created' },
+        data: { status: 'expired' },
+      });
+    }
+    await tx.subscription.update({
+      where: { id: subscription.id },
+      data: {
+        currentPeriodStart: back(last.periodStart),
+        currentPeriodEnd: end,
+        billingAnchor: now,
+        renewalOrderId: null,
+        updatedAt: now,
+      },
+    });
+    const price = await tx.price.findUnique({ where: { id: subscription.priceId } });
+    await tx.entitlement.updateMany({
+      where: {
+        userId: subscription.userId,
+        source: 'subscription',
+        status: 'active',
+        value: { path: ['subscription_id'], equals: subscription.id },
+      },
+      data: {
+        expiresAt: new Date(end.getTime() + (price?.graceDays || 0) * 86_400_000),
+        updatedAt: now,
+      },
+    });
+    this.logger.log(
+      `Order ${order.id} was refunded: what subscription ${subscription.id} paid ahead starts now, until ${end.toISOString()}`,
+    );
+    return true;
   }
 
   private async takeBackPrepaidPeriod(subscription: any, order: any, tx: any): Promise<void> {
