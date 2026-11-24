@@ -10,7 +10,7 @@ import { quoteInput, railDecision } from './rail-decision';
 /** Crypto alone makes a price payable only here, or where an admin ticked it (owner, 24.11.2026). */
 const CRYPTO_CURRENCIES = ['USD', 'EUR'];
 
-/** Listing a rail's methods may read an exchange rate; the catalogue is read by every site. */
+/** Listing a rail's methods reads its settings and a stored rate; nothing here calls out. */
 const METHODS_TTL_MS = 60_000;
 
 export interface PayMethod {
@@ -66,7 +66,7 @@ export class PayabilityService {
       const known = this.listed.get(key);
       if (known && known.until > Date.now()) return known.any;
       const methods = connector.listMethods
-        ? await connector.listMethods({ currency }).catch(() => [])
+        ? await connector.listMethods({ currency, storedOnly: true }).catch(() => [])
         : [];
       this.listed.set(key, { any: methods.length > 0, until: Date.now() + METHODS_TTL_MS });
       return methods.length > 0;

@@ -32,10 +32,8 @@ import { primaryIssuer } from '../auth/token-contract';
 
 const PAID = ['paid', 'completed', 'fulfilled'];
 const USDC_DECIMALS = 6;
-/** After an authorization runs out: how long the chain and the watcher may still bring it. */
-const CHAIN_SLACK_MS = 60 * 60 * 1000;
-/** Longer than signing and claiming take. */
-const SIGNING_MS = 15 * 60 * 1000;
+/** Past an authorization's end, by the chain's clock: a reorganised block is older than this. */
+const CHAIN_SLACK_MS = 2 * 60 * 1000;
 const AMOUNT = /^\d{1,5}(\.\d{1,2})?$/;
 
 export type NeedsReason = 'no_wallet' | 'not_approved' | 'over_limit' | 'insufficient_funds';
@@ -348,29 +346,34 @@ export class WalletMerchantsService {
   /**
    * Where the last wallet charge of an order stands. `pending` covers every
    * case in which money may still move: the order must not be charged again.
-   * `dead` is certain: nothing was sent, the chain reverted it, or the signed
-   * authorization has run out (with slack for the watcher to have seen it).
+   * `dead` is the chain's word: the authorization is unused and its time is
+   * over, so it can never be used. Nothing of ours is taken for that — not a
+   * failed send, not a revert, not a missing claim — and a chain that cannot
+   * be read leaves it pending.
    */
-  async chargeState(orderId: string, now = new Date()): Promise<'none' | 'pending' | 'dead'> {
+  async chargeState(orderId: string): Promise<'none' | 'pending' | 'dead'> {
     const last = await this.prisma.walletAgentPayment.findFirst({
       where: { orderId },
       orderBy: { createdAt: 'desc' },
+      include: { agent: { include: { wallet: { select: { address: true } } } } },
     });
     if (!last) return 'none';
     const claim = await this.prisma.x402Payment.findFirst({
       where: { nonce: { equals: last.nonce, mode: 'insensitive' } },
+      select: { status: true },
     });
-    if (claim) {
-      if (claim.status === 'mined') return 'pending';
-      if (claim.status === 'reverted') return 'dead';
-      return now.getTime() > claim.validBefore.getTime() + CHAIN_SLACK_MS ? 'dead' : 'pending';
-    }
-    // Claimed before it is sent, so without a claim it never left this process;
-    // a row still being signed may yet claim.
-    if (last.status === 'signing' && now.getTime() - last.createdAt.getTime() < SIGNING_MS) {
+    if (claim?.status === 'mined') return 'pending';
+    try {
+      const { used, now } = await this.payments.authorization(
+        last.agent.wallet.address as `0x${string}`,
+        last.nonce as `0x${string}`,
+      );
+      const over = now.getTime() > last.validBefore.getTime() + CHAIN_SLACK_MS;
+      return !used && over ? 'dead' : 'pending';
+    } catch (error: any) {
+      this.logger.warn(`Could not read the charge of order ${orderId}: ${error?.message}`);
       return 'pending';
     }
-    return 'dead';
   }
 
   /** Record the payment under a per-wallet-and-site lock, so two at once cannot both fit the month. */

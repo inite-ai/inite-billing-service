@@ -48,6 +48,23 @@ import { OpenSalePolicy } from './open-sale.policy';
 import { quoteInput, railDecision } from './rail-decision';
 import { isOrgSubscriber } from '../common/validators/is-user-id';
 
+/** An attempt that, paid, starts a subscription its provider goes on charging. */
+function startsProviderSubscription(
+  mode: string | undefined,
+  intent: { rail: string; snapshot: unknown },
+): boolean {
+  const periodicity = (intent.snapshot as Record<string, any> | null)?.periodicity;
+  return intent.rail === 'LAVA'
+    ? !!periodicity && periodicity !== 'ONE_TIME'
+    : mode === 'SUBSCRIPTION' && intent.rail === 'STRIPE';
+}
+
+function subscriptionStillOpen(rail: string): ConflictException {
+  return new ConflictException(
+    `A subscription payment through ${rail} is still open: finish it, or wait for it to expire`,
+  );
+}
+
 @Injectable()
 export class CheckoutService {
   private readonly logger = new Logger(CheckoutService.name);
@@ -1348,6 +1365,10 @@ export class CheckoutService {
         },
       });
     } catch (error: any) {
+      if (error instanceof ConflictException) {
+        await adapter.releaseIntent?.({ providerIntentId: intentResult.providerIntentId });
+        throw error;
+      }
       if (error?.code === 'P2002') {
         await adapter.releaseIntent?.({ providerIntentId: intentResult.providerIntentId });
         const winner = await this.prisma.paymentIntent.findFirst({
@@ -1422,53 +1443,78 @@ export class CheckoutService {
       }
       return;
     }
-    const periodicity = (other.snapshot as Record<string, any> | null)?.periodicity;
-    const startsSubscription =
-      other.rail === 'LAVA'
-        ? !!periodicity && periodicity !== 'ONE_TIME'
-        : order.mode === 'SUBSCRIPTION' && other.rail === 'STRIPE';
-    if (startsSubscription) {
-      throw new ConflictException(
-        `A subscription payment through ${other.rail} is still open: finish it, or wait for it to expire`,
-      );
-    }
+    if (startsProviderSubscription(order.mode, other)) throw subscriptionStillOpen(other.rail);
   }
 
-  /** Record a new attempt as the order's live one, setting any other aside. */
+  /**
+   * Make one attempt the order's live one, setting any other aside, with the
+   * order locked: what was checked before the provider was called is checked
+   * again against what the other request has written since.
+   */
+  private async withOrderLive<T>(
+    orderId: string,
+    keepIntentId: string | null,
+    write: (tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw(
+        Prisma.sql`SELECT id FROM billing.orders WHERE id = ${orderId}::uuid FOR UPDATE`,
+      );
+      const order = await tx.order.findUnique({
+        where: { id: orderId },
+        select: { status: true, mode: true },
+      });
+      if (order && order.status !== 'created') {
+        throw new ConflictException(`This order is ${order.status}; reload the page`);
+      }
+      const live = await tx.paymentIntent.findFirst({
+        where: {
+          orderId,
+          status: { in: ['created', 'opened'] },
+          supersededAt: null,
+          ...(keepIntentId ? { id: { not: keepIntentId } } : {}),
+        },
+        select: { id: true, rail: true, status: true, snapshot: true },
+      });
+      if (live) {
+        if (live.status === 'opened') {
+          throw new ConflictException(`This order is already being paid through ${live.rail}`);
+        }
+        if (startsProviderSubscription(order?.mode, live)) throw subscriptionStillOpen(live.rail);
+        await tx.paymentIntent.updateMany({
+          where: { id: live.id, status: 'created' },
+          data: { supersededAt: new Date() },
+        });
+      }
+      return write(tx);
+    });
+  }
+
   private async recordAttempt(
     orderId: string,
     create: Prisma.PaymentIntentCreateArgs,
   ): Promise<PaymentIntent> {
-    const other = await this.prisma.paymentIntent.findFirst({
+    // The same method asked for twice: the unique index answers, and the first
+    // request's payment is given back to the second.
+    const same = await this.prisma.paymentIntent.findFirst({
       where: {
         orderId,
-        rail: { not: String(create.data.rail) },
-        status: 'created',
+        rail: String(create.data.rail),
+        status: { in: ['created', 'opened'] },
         supersededAt: null,
       },
       select: { id: true },
     });
-    if (!other) return this.prisma.paymentIntent.create(create);
-    return this.prisma.$transaction(async (tx) => {
-      await tx.paymentIntent.updateMany({
-        where: { id: other.id, status: 'created', supersededAt: null },
-        data: { supersededAt: new Date() },
-      });
-      return tx.paymentIntent.create(create);
-    });
+    return this.withOrderLive(orderId, same?.id ?? null, (tx) => tx.paymentIntent.create(create));
   }
 
   private async makeLive(orderId: string, intentId: string): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
-      await tx.paymentIntent.updateMany({
-        where: { orderId, id: { not: intentId }, status: 'created', supersededAt: null },
-        data: { supersededAt: new Date() },
-      });
-      await tx.paymentIntent.updateMany({
+    await this.withOrderLive(orderId, intentId, (tx) =>
+      tx.paymentIntent.updateMany({
         where: { id: intentId, status: 'created' },
         data: { supersededAt: null },
-      });
-    });
+      }),
+    );
   }
 
   /**

@@ -425,6 +425,8 @@ export class StripeAdapter implements Connector {
     const currency = invoice.currency ? String(invoice.currency).toUpperCase() : undefined;
     return {
       chargeId: String(invoice.id),
+      named: true,
+      ...(invoice.created ? { chargedAt: new Date(invoice.created * 1000) } : {}),
       ...(currency && typeof invoice.amount_paid === 'number'
         ? { amount: fromMinorUnits(invoice.amount_paid, currency).toString(), currency }
         : {}),

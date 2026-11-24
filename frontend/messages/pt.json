@@ -740,10 +740,10 @@
       "created": "Preço criado",
       "deleted": "Preço excluído",
       "deleteConfirm": "Excluir este preço?",
-      "unpayableTitle": "Preços que ninguém consegue pagar",
+      "unpayableTitle": "Preços com problemas de pagamento",
       "unpayableNobody": "Sem forma de pagamento",
       "unpayableCrypto": "Só cripto",
-      "unpayableHint": "Verificado com os provedores de pagamento ativos. Um plano é verificado como assinatura."
+      "unpayableHint": "Verificado com os provedores de pagamento ativos. Para planos, só contam os métodos que permitem vender uma assinatura."
     },
     "orders": {
       "title": "Pedidos",
