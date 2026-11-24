@@ -4,6 +4,7 @@ import { PrismaService } from '../common/services/prisma.service';
 import { resolveFrontendUrl } from '../common/config/frontend-url';
 import { newCheckoutLink } from '../checkout/checkout-link';
 import { checkoutPageUrl } from '../checkout/checkout.service';
+import { subscriptionOrderKind } from '../payment-orchestrator/subscription-changes';
 import { X402Service } from '../checkout/x402.service';
 
 export interface SessionLinks {
@@ -47,6 +48,21 @@ export class SessionLinksService {
     const order = await this.prisma.order.findUnique({ where: { id: orderId } });
     if (!order || order.status !== 'created') return null;
     const link = newCheckoutLink();
+    if (subscriptionOrderKind(order)?.kind === 'renewal') {
+      // The page a renewal is paid on does not move: a letter sent on the last
+      // day must not kill the link in the first one.
+      await this.prisma.$executeRaw`
+        UPDATE billing.orders
+           SET metadata = jsonb_set(
+                 COALESCE(metadata, '{}'::jsonb), '{linkTokenHashes}',
+                 (COALESCE(metadata->'linkTokenHashes', '[]'::jsonb) || to_jsonb(${link.hash}::text)))
+         WHERE id = ${orderId}::uuid
+      `;
+      return this.withX402({
+        sessionId: order.id,
+        checkoutUrl: `${checkoutPageUrl(resolveFrontendUrl(this.config), order.id, locale)}#t=${link.token}`,
+      });
+    }
     await this.prisma.order.update({
       where: { id: orderId },
       data: { metadata: { ...((order.metadata as object) ?? {}), linkTokenHash: link.hash } },

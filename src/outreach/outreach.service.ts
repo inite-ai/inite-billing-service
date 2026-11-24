@@ -102,7 +102,8 @@ export class OutreachService {
     const locale: TemplateLocale =
       contact?.locale === 'ru'
         ? 'ru'
-        : contact?.locale === 'en'
+        : // Templates are in two languages; a Portuguese or Spanish reader gets English.
+          contact?.locale
           ? 'en'
           : this.config.get('OUTREACH_DEFAULT_LOCALE') === 'ru'
             ? 'ru'

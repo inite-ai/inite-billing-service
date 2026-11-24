@@ -6,7 +6,8 @@ import { resolveFrontendUrl } from '../common/config/frontend-url';
 import { DistributedLockService } from '../common/locks/distributed-lock.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { UserContactService } from '../notifications/user-contact.service';
-import { templateCopy, TemplateLocale } from '../notifications/templates';
+import { renewalCopy, renewalLocale } from './renewal-copy';
+import { ReminderStep, accessEnds, reminderStep } from './renewal-reminders';
 import { WalletMerchantsService } from '../wallet/wallet-merchants.service';
 import { SessionLinksService } from '../service-api/session-links';
 import { RENEWAL_KEY, renewedByBilling } from '../payment-orchestrator/subscription-changes';
@@ -30,6 +31,10 @@ const LIVE = ['trialing', 'active', 'past_due'] as const;
  *   the limit, not enough USDC) are they sent the link.
  * - **PIX and crypto.** `renewalLeadDays` before the period ends, billing
  *   opens the next period's order and mails its pay link.
+ *
+ * Letters: when the order opens, on the day the period ends, half way through
+ * the grace days and a day before they run out, each once, in the person's
+ * language. Their links all keep working until the renewal is paid or closed.
  *
  * Paid: the orchestrator advances the period (`applyRenewalPayment`). Not
  * paid by the end of the period: the expirer moves the subscription to
@@ -93,7 +98,11 @@ export class SubscriptionRenewalsService {
     if (await this.walletAllows(sub.userId, service?.id)) {
       // The wallet pays on the day the period ends, not days ahead of it; a
       // renewal already handed to the link stays with the link.
-      if (!periodOver || metadata.renewalNotifiedAt) return;
+      if (!periodOver) return;
+      if (metadata.renewalNotifiedAt) {
+        await this.remind(sub, order, now);
+        return;
+      }
       // What the last charge did is read back, not remembered: a mark written
       // before the charge made a crash look like an attempt, and neither a
       // retry nor the link followed.
@@ -101,7 +110,7 @@ export class SubscriptionRenewalsService {
       if (state === 'pending') return;
       const tries = Number(metadata.walletTries ?? (metadata.walletAttemptedAt ? MAX_TRIES : 0));
       if (tries >= MAX_TRIES) {
-        await this.sendLink(sub, order);
+        await this.remind(sub, order, now);
         return;
       }
       await this.patchOrder(order, { walletTries: tries + 1 });
@@ -124,11 +133,11 @@ export class SubscriptionRenewalsService {
         // It may have left the wallet, or may be worth another try later.
         if (tries + 1 < MAX_TRIES) return;
       }
-      await this.sendLink(sub, order);
+      await this.remind(sub, order, now);
       return;
     }
 
-    if (!metadata.renewalNotifiedAt) await this.sendLink(sub, order);
+    await this.remind(sub, order, now);
   }
 
   /** The open order for the period that ends next, made once per period. */
@@ -234,18 +243,50 @@ export class SubscriptionRenewalsService {
     return !!merchant;
   }
 
-  private async sendLink(sub: any, order: any): Promise<void> {
-    const links = await this.links.reopen(order.id);
-    if (!links) return;
+  /**
+   * The letter due now, once. The step is claimed on the order before it is
+   * sent, in one statement, so two sweeps cannot send it twice; a letter that
+   * could not be made gives its claim back.
+   */
+  private async remind(sub: any, order: any, now: Date): Promise<void> {
+    const step = reminderStep(sub, now);
+    if (!step || !(await this.claimStep(order.id, step))) return;
+    try {
+      await this.sendLink(sub, order, step);
+    } catch (error) {
+      await this.prisma.$executeRaw`
+        UPDATE billing.orders SET metadata = metadata #- ARRAY['renewalReminders', ${step}::text]
+         WHERE id = ${order.id}::uuid
+      `;
+      throw error;
+    }
+  }
+
+  private async claimStep(orderId: string, step: ReminderStep): Promise<boolean> {
+    const claimed = await this.prisma.$executeRaw`
+      UPDATE billing.orders
+         SET metadata = jsonb_set(
+               jsonb_set(COALESCE(metadata, '{}'::jsonb), '{renewalReminders}',
+                         COALESCE(metadata->'renewalReminders', '{}'::jsonb)),
+               ARRAY['renewalReminders', ${step}::text], to_jsonb(now()))
+       WHERE id = ${orderId}::uuid AND status = 'created'
+         AND metadata #> ARRAY['renewalReminders', ${step}::text] IS NULL
+         AND NOT (${step}::text = 'lead' AND metadata ? 'renewalNotifiedAt')
+    `;
+    return claimed === 1;
+  }
+
+  private async sendLink(sub: any, order: any, step: ReminderStep): Promise<void> {
     const contact = await this.contacts.getContact(sub.userId);
-    const locale: TemplateLocale = contact?.locale === 'ru' ? 'ru' : 'en';
+    const locale = renewalLocale(contact?.locale);
+    const links = await this.links.reopen(order.id, locale);
+    if (!links) return;
     const product = sub.price.product;
-    const copy = templateCopy('renewal_due', locale, {
-      productName: product.name,
-      serviceName: product.service?.name,
-      amount: String(order.amount),
-      currency: order.currency,
-      periodEnd: new Date(sub.currentPeriodEnd).toISOString().slice(0, 10),
+    const copy = renewalCopy(step, locale, {
+      product: product.name,
+      amount: `${order.amount} ${order.currency}`,
+      periodEnd: new Date(sub.currentPeriodEnd),
+      lastDay: accessEnds(sub),
     });
     await this.notifications.notify({
       userId: sub.userId,
@@ -259,10 +300,12 @@ export class SubscriptionRenewalsService {
         ctaLabel: copy.ctaLabel,
         subscriptionId: sub.id,
         orderId: order.id,
+        locale,
+        step,
       },
     });
     await this.patchOrder(order, { renewalNotifiedAt: new Date().toISOString() });
-    this.logger.log(`Renewal link sent for subscription ${sub.id} (order ${order.id})`);
+    this.logger.log(`Renewal letter "${step}" for subscription ${sub.id} (order ${order.id})`);
   }
 
   private async patchOrder(order: any, patch: Record<string, unknown>): Promise<void> {

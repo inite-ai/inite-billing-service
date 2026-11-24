@@ -41,6 +41,12 @@ export class SubscriptionResponseDto {
   renewsByLink?: boolean;
 
   @ApiPropertyOptional({
+    description:
+      'Billing opens and collects the next period of this plan. A service must not charge it as well.',
+  })
+  billingRenews?: boolean;
+
+  @ApiPropertyOptional({
     enum: ['self', 'organization'],
     description: "Whose plan it is: the signed-in person's own, or their organisation's",
   })

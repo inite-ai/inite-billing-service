@@ -17,8 +17,14 @@ export function textToHtml(text: string): string {
     .join('');
 }
 
+export type LayoutLocale = 'en' | 'ru' | 'pt' | 'es';
+
+export function isLayoutLocale(value: unknown): value is LayoutLocale {
+  return value === 'en' || value === 'ru' || value === 'pt' || value === 'es';
+}
+
 export interface LayoutParams {
-  locale: 'en' | 'ru';
+  locale: LayoutLocale;
   title: string;
   bodyHtml: string;
   ctaUrl?: string;
@@ -26,9 +32,18 @@ export interface LayoutParams {
   unsubscribeUrl?: string;
 }
 
-const UNSUBSCRIBE_LABEL: Record<'en' | 'ru', string> = {
+const OPEN_LABEL: Record<LayoutLocale, string> = {
+  en: 'Open',
+  ru: 'Открыть',
+  pt: 'Abrir',
+  es: 'Abrir',
+};
+
+const UNSUBSCRIBE_LABEL: Record<LayoutLocale, string> = {
   en: 'Unsubscribe from these emails',
   ru: 'Отписаться от этих писем',
+  pt: 'Cancelar o recebimento destes e-mails',
+  es: 'Dejar de recibir estos correos',
 };
 
 export function renderLayout(params: LayoutParams): string {
@@ -49,7 +64,7 @@ export function renderLayout(params: LayoutParams): string {
           ${
             ctaUrl
               ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:24px;"><tr><td style="border-radius:8px;background:linear-gradient(90deg,#7c3aed,#9333ea);">
-                  <a href="${esc(ctaUrl)}" target="_blank" style="display:inline-block;padding:12px 24px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;">${esc(ctaLabel || (locale === 'ru' ? 'Открыть' : 'Open'))}</a>
+                  <a href="${esc(ctaUrl)}" target="_blank" style="display:inline-block;padding:12px 24px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;">${esc(ctaLabel || OPEN_LABEL[locale])}</a>
                 </td></tr></table>`
               : ''
           }
