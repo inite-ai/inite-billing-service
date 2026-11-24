@@ -28,6 +28,7 @@ describe('SubscriptionRenewalsService', () => {
     currentPeriodEnd: new Date('2026-11-30T00:00:00Z'),
     price: {
       id: 'price-1',
+      graceDays: 3,
       code: 'studio-pro-monthly-brl',
       amount: { toString: () => '199' },
       currency: 'BRL',
@@ -48,7 +49,15 @@ describe('SubscriptionRenewalsService', () => {
   beforeEach(() => {
     process.env.SUBSCRIPTION_RENEWALS_ENABLED = 'true';
     const orders = new Map<string, any>();
+    const claimed = new Set<string>();
     prisma = {
+      // Claiming a letter is one statement: the first caller for (step, order) wins.
+      $executeRaw: jest.fn(async (_sql: any, ...values: any[]) => {
+        const key = values.join('|');
+        if (claimed.has(key)) return 0;
+        claimed.add(key);
+        return 1;
+      }),
       subscription: { findMany: jest.fn(), update: jest.fn() },
       price: { findUnique: jest.fn() },
       order: {
@@ -72,7 +81,7 @@ describe('SubscriptionRenewalsService', () => {
     notifications = { notify: jest.fn() };
     merchants = { pay: jest.fn(), chargeState: jest.fn().mockResolvedValue('none') };
     links = {
-      reopen: jest.fn((id: string) => ({
+      addRenewalLink: jest.fn((id: string) => ({
         sessionId: id,
         checkoutUrl: `https://b/checkout/${id}#t=x`,
       })),

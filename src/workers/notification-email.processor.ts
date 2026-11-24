@@ -3,7 +3,8 @@ import { Job, UnrecoverableError } from 'bullmq';
 import { Logger } from '@nestjs/common';
 import { PrismaService } from '../common/services/prisma.service';
 import { EmailService } from '../notifications/email.service';
-import { wrapLlmBody, TemplateLocale } from '../notifications/templates';
+import { wrapLlmBody } from '../notifications/templates';
+import { LayoutLocale, isLayoutLocale } from '../notifications/templates/layout';
 
 @Processor('notifications', {
   concurrency: 5,
@@ -28,7 +29,7 @@ export class NotificationEmailProcessor extends WorkerHost {
     if (notification.channel !== 'email' || !notification.emailTo) return;
 
     const metadata = (notification.metadata ?? {}) as Record<string, any>;
-    const locale: TemplateLocale = metadata.locale === 'ru' ? 'ru' : 'en';
+    const locale: LayoutLocale = isLayoutLocale(metadata.locale) ? metadata.locale : 'en';
     const rendered = wrapLlmBody(notification.title, notification.body, locale, {
       ctaUrl: metadata.ctaUrl,
       ctaLabel: metadata.ctaLabel,

@@ -62,7 +62,7 @@ describe('PlanChangeService', () => {
     };
     outbox = { emit: jest.fn() };
     orchestrator = { changePlanWithoutPayment: jest.fn().mockResolvedValue(true) };
-    links = { withX402: jest.fn().mockImplementation((s: any) => s) };
+    links = { withX402: jest.fn().mockImplementation((s: any) => s), revoke: jest.fn() };
     const config = {
       get: (k: string) => (k === 'FRONTEND_URL' ? 'https://billing.test' : undefined),
     };

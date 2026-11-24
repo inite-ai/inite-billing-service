@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { withoutLinkHashes } from '../checkout/checkout-link';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/services/prisma.service';
 import { CheckoutService, OpenSessionResponse } from '../checkout/checkout.service';
@@ -60,8 +61,7 @@ export interface InvoiceView {
 
 /** The order's metadata without what only billing should hold. */
 function publicMeta(metadata: unknown): Record<string, unknown> {
-  const { linkTokenHash: _hidden, ...rest } = (metadata ?? {}) as Record<string, unknown>;
-  return rest;
+  return withoutLinkHashes(metadata);
 }
 
 export function invoiceView(order: OrderRow): InvoiceView {

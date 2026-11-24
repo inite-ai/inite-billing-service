@@ -4,6 +4,8 @@ import { PrismaService } from '../common/services/prisma.service';
 
 const TOUCH_CACHE_TTL_MS = 60 * 60 * 1000;
 
+const LOCALES = ['en', 'ru', 'pt', 'es'];
+
 @Injectable()
 export class UserContactService {
   private readonly logger = new Logger(UserContactService.name);
@@ -14,7 +16,8 @@ export class UserContactService {
 
   async touch(userId: string, email?: string, locale?: string): Promise<void> {
     try {
-      const normalizedLocale = locale === 'ru' ? 'ru' : locale === 'en' ? 'en' : undefined;
+      const base = locale?.toLowerCase().split(/[-_]/)[0];
+      const normalizedLocale = base && LOCALES.includes(base) ? base : undefined;
       const hash = createHash('sha1')
         .update(`${email ?? ''}|${normalizedLocale ?? ''}`)
         .digest('hex');

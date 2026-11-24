@@ -359,7 +359,7 @@ describe('attempts, switching and late money', () => {
         { notify } as any,
         { getContact: async () => null } as any,
         merchants,
-        { reopen: async (id: string) => ({ checkoutUrl: `https://x/${id}` }) } as any,
+        { addRenewalLink: async (id: string) => ({ checkoutUrl: `https://x/${id}` }) } as any,
         { get: () => 'https://billing.example' } as any,
       );
       return { service, notify };

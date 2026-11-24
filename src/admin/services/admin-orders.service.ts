@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { withoutLinkHashes } from '../../checkout/checkout-link';
 import { PrismaService } from '../../common/services/prisma.service';
 import { PaymentOrchestratorService } from '../../payment-orchestrator/payment-orchestrator.service';
 import { Connector } from '../../common/connectors/connector.interface';
@@ -50,6 +51,11 @@ export function buildOrderWhere(params: { status?: string; userId?: string; sear
   return where;
 }
 
+/** An order as the admin sees it: not the hashes of the links that open it. */
+function shown<T extends { metadata?: unknown }>(order: T): T {
+  return { ...order, metadata: withoutLinkHashes(order.metadata) };
+}
+
 @Injectable()
 export class AdminOrdersService {
   private readonly logger = new Logger(AdminOrdersService.name);
@@ -78,12 +84,13 @@ export class AdminOrdersService {
     const { status, userId, search, page, limit, sortBy, sortOrder } = params;
     const where = buildOrderWhere({ status, userId, search });
 
-    return paginate(this.prisma.order, where, {
+    const found = await paginate(this.prisma.order, where, {
       page,
       limit,
       orderBy: resolveOrderBy(ORDER_SORT, { createdAt: 'desc' }, sortBy, sortOrder),
       include: { price: { include: { product: true } }, paymentIntents: true },
     });
+    return { ...found, items: found.items.map((order) => shown(order as { metadata?: unknown })) };
   }
 
   async getOrderById(id: string) {
@@ -97,7 +104,7 @@ export class AdminOrdersService {
       },
     });
     if (!order) throw new NotFoundException(`Order not found: ${id}`);
-    return order;
+    return shown(order);
   }
 
   async refundOrder(id: string) {
@@ -166,10 +173,11 @@ export class AdminOrdersService {
       }
     }
 
-    return this.prisma.order.findUnique({
+    const result = await this.prisma.order.findUnique({
       where: { id },
       include: { paymentIntents: true },
     });
+    return result && shown(result);
   }
 
   /**

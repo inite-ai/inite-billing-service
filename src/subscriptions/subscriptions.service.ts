@@ -7,6 +7,8 @@ import {
   Inject,
   forwardRef,
 } from '@nestjs/common';
+import { renewedByBilling } from '../payment-orchestrator/subscription-changes';
+import { renewalsEnabled } from '../subscription-lifecycle/renewals-config';
 import { PrismaService } from '../common/services/prisma.service';
 import { SubscriptionResponseDto } from '../common/dto/subscription.dto';
 import { OutboxService } from '../outbox/outbox.service';
@@ -199,6 +201,8 @@ export class SubscriptionsService {
           : null,
         // No provider renews it: billing sends a pay link before it ends.
         renewsByLink: !!s.rail && !s.providerSubscriptionId && s.rail !== 'PROMO',
+        // And it is switched on: a service that collects its own renewals stops for this one.
+        billingRenews: renewalsEnabled() && renewedByBilling(s) && !s.cancelAtPeriodEnd,
       };
     });
   }

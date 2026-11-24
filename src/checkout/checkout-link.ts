@@ -18,13 +18,24 @@ export function hashCheckoutLink(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
-/** Whether `token` opens the order whose metadata is given. */
+/**
+ * Whether `token` opens the order whose metadata is given. A renewal holds
+ * several (`linkTokenHashes`): one per letter sent, all good while it is unpaid.
+ */
 export function checkoutLinkMatches(metadata: unknown, token: string | undefined): boolean {
-  const stored = (metadata as Record<string, unknown> | null)?.linkTokenHash;
-  if (!token || typeof stored !== 'string') return false;
+  const held = metadata as Record<string, unknown> | null;
+  const stored = [
+    held?.linkTokenHash,
+    ...(Array.isArray(held?.linkTokenHashes) ? held.linkTokenHashes : []),
+  ].filter((hash): hash is string => typeof hash === 'string');
+  if (!token) return false;
   const a = Buffer.from(hashCheckoutLink(token), 'hex');
-  const b = Buffer.from(stored, 'hex');
-  return a.length === b.length && timingSafeEqual(a, b);
+  let ok = false;
+  for (const hash of stored) {
+    const b = Buffer.from(hash, 'hex');
+    if (a.length === b.length && timingSafeEqual(a, b)) ok = true;
+  }
+  return ok;
 }
 
 /** The token a request presents, if any. */
@@ -33,4 +44,14 @@ export function checkoutLinkFrom(request: {
 }): string | undefined {
   const value = request.headers[CHECKOUT_LINK_HEADER];
   return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+/** An order's metadata without what opens it: the hashes stay in billing. */
+export function withoutLinkHashes(metadata: unknown): Record<string, unknown> {
+  const {
+    linkTokenHash: _one,
+    linkTokenHashes: _many,
+    ...rest
+  } = (metadata ?? {}) as Record<string, unknown>;
+  return rest;
 }
