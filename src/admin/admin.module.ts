@@ -16,11 +16,17 @@ import { PaymentOrchestratorModule } from '../payment-orchestrator/payment-orche
 import { PromoCodesModule } from '../promo-codes/promo-codes.module';
 import { FunnelModule } from '../funnel/funnel.module';
 import { CreditsModule } from '../credits/credits.module';
+import { OperatorItemsController } from './operator-items.controller';
 import { RagModule } from '../rag/rag.module';
 
 @Module({
   imports: [PaymentOrchestratorModule, PromoCodesModule, FunnelModule, CreditsModule, RagModule],
-  controllers: [AdminController, MeteringAdminController, ServiceWebhookSecretController],
+  controllers: [
+    AdminController,
+    MeteringAdminController,
+    ServiceWebhookSecretController,
+    OperatorItemsController,
+  ],
   providers: [
     AdminService,
     AdminCatalogService,
