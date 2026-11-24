@@ -6,7 +6,7 @@ import { resolveFrontendUrl } from '../common/config/frontend-url';
 import { DistributedLockService } from '../common/locks/distributed-lock.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { UserContactService } from '../notifications/user-contact.service';
-import { renewalCopy, renewalLocale } from './renewal-copy';
+import { renewalAmount, renewalCopy, renewalLocale } from './renewal-copy';
 import { ReminderStep, accessEnds, reminderStep } from './renewal-reminders';
 import { WalletMerchantsService } from '../wallet/wallet-merchants.service';
 import { SessionLinksService } from '../service-api/session-links';
@@ -284,9 +284,10 @@ export class SubscriptionRenewalsService {
     const product = sub.price.product;
     const copy = renewalCopy(step, locale, {
       product: product.name,
-      amount: `${order.amount} ${order.currency}`,
+      amount: renewalAmount(String(order.amount), order.currency, locale),
       periodEnd: new Date(sub.currentPeriodEnd),
       lastDay: accessEnds(sub),
+      buyerConfirms: !(await this.walletAllows(sub.userId, product.service?.id)),
     });
     await this.notifications.notify({
       userId: sub.userId,

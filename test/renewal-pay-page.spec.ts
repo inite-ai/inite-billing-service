@@ -3,7 +3,11 @@ import { CheckoutService } from '../src/checkout/checkout.service';
 import { SessionLinksService } from '../src/service-api/session-links';
 import { SubscriptionRenewalsService } from '../src/subscription-lifecycle/renewals.service';
 import { reminderStep } from '../src/subscription-lifecycle/renewal-reminders';
-import { renewalCopy, renewalLocale } from '../src/subscription-lifecycle/renewal-copy';
+import {
+  renewalAmount,
+  renewalCopy,
+  renewalLocale,
+} from '../src/subscription-lifecycle/renewal-copy';
 import { SubscriptionsService } from '../src/subscriptions/subscriptions.service';
 import { billingDb, cleanBilling, clockAt, makeIntent, makePlan } from './helpers/billing-db';
 
@@ -169,12 +173,26 @@ describe('the renewal pay page and its letters', () => {
           amount: '29 USD',
           periodEnd: new Date('2026-04-10T00:00:00Z'),
           lastDay: new Date('2026-04-17T00:00:00Z'),
+          buyerConfirms: true,
         });
         expect(`${c.subject} ${c.body}`).toContain('29 USD');
-        expect(`${c.subject}${c.body}${c.ctaLabel}`).not.toMatch(/undefined|null|\$\{|Invalid/);
+        expect(`${c.subject}${c.body}${c.ctaLabel}`).not.toMatch(
+          /undefined|null|\$\{|Invalid|\.\./,
+        );
       }
     }
+    const wallet = renewalCopy('due', 'en', {
+      product: 'Plan',
+      amount: '$29',
+      periodEnd: new Date(),
+      lastDay: new Date(),
+      buyerConfirms: false,
+    });
+    expect(wallet.body).not.toContain('automatically');
     expect(renewalLocale(null)).toBe('en');
+    expect(renewalAmount('199.0000', 'BRL', 'pt').replace(/\s/g, ' ')).toBe('R$ 199');
+    expect(renewalAmount('29.9', 'USD', 'en')).toBe('$29.90');
+    expect(renewalAmount('10990', 'CLP', 'es')).toMatch(/10\.990/);
   });
 
   it('asks nothing after the period when there are no grace days', () => {
