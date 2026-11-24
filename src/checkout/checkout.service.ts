@@ -42,6 +42,7 @@ import {
   sanitizeTitle,
   SAFE_REF,
 } from './open-product';
+import { currencyProofEnabled, needsCountryProof, railProvesCountry } from './currency-proof';
 import { OpenSalePolicy } from './open-sale.policy';
 import { isOrgSubscriber } from '../common/validators/is-user-id';
 
@@ -803,6 +804,9 @@ export class CheckoutService {
     // price in any other — crypto sells dollar prices only. A rail whose
     // customer picks a method first (a crypto network) brings its options,
     // and is not offered when it has none to give.
+    const proofNeeded =
+      currencyProofEnabled() &&
+      needsCountryProof({ currency: order.currency, productType: order.price.product.type });
     const paymentMethods: Array<(typeof providers)[number] & { options?: unknown[] }> = [];
     for (const provider of providers) {
       let connector: Connector | null = null;
@@ -812,6 +816,7 @@ export class CheckoutService {
         connector = null;
       }
       const capabilities = connector?.capabilities?.();
+      if (proofNeeded && !railProvesCountry(provider.code, order.currency)) continue;
       const currency = String(order.currency).toUpperCase();
       // A currency the rail cannot take natively is still offered when it can
       // convert it and the admin ticked that currency on the provider.
@@ -1031,6 +1036,9 @@ export class CheckoutService {
     // only for the adapter interface, which takes one.
     let orderAmountDecimal = toMoney(order.amount);
     const originalAmount = moneyToNumber(orderAmountDecimal);
+
+    // Before the promo code: a refusal here must not use up the customer's code.
+    await this.assertCurrencyProof(order, data.rail);
 
     // Validate + apply promo code if provided (wrapped in transaction to prevent race conditions)
     let promoValidation: any = null;
@@ -1327,6 +1335,46 @@ export class CheckoutService {
       paymentIntentId: paymentIntent.id,
       ...(await this.describe(adapter, paymentIntent)),
     };
+  }
+
+  /**
+   * A plan price in a local currency is charged only on a rail that shows the
+   * payer is in that country (currency-proof.ts). Every way to pay — the page,
+   * a link, x402, the wallet — comes through paySession, so this is the one
+   * place it is checked. The refusal names the dollar price to offer instead;
+   * the order's currency is never changed under the buyer.
+   */
+  private async assertCurrencyProof(
+    order: {
+      currency: string;
+      price: { interval: string | null; productId: string; product: { type: string } };
+    },
+    rail?: string,
+  ): Promise<void> {
+    if (!currencyProofEnabled()) return;
+    if (!needsCountryProof({ currency: order.currency, productType: order.price.product.type })) {
+      return;
+    }
+    // No rail named: the default one is arbitrary, so it proves nothing.
+    if (rail && railProvesCountry(rail, order.currency)) return;
+    const usd = await this.prisma.price.findFirst({
+      where: {
+        productId: order.price.productId,
+        currency: 'USD',
+        interval: order.price.interval,
+        isActive: true,
+        trialDays: 0,
+      },
+      orderBy: { createdAt: 'asc' },
+      select: { code: true },
+    });
+    throw new BadRequestException({
+      statusCode: 400,
+      error: 'Bad Request',
+      code: 'currency_needs_country_proof',
+      message: `A price in ${order.currency} is for buyers in that country; pay with a local method or choose the dollar price`,
+      usdPriceCode: usd?.code ?? null,
+    });
   }
 
   /**
