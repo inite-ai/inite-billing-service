@@ -56,6 +56,10 @@ export interface RenewalEvidence {
   chargeId: string;
   /** The provider's other names for the same charge (a contract id). */
   aliases?: string[];
+  /** The evidence is of one charge, not only of a period (lava.top's poll names none). */
+  named?: boolean;
+  /** When it was charged, if the provider says. */
+  chargedAt?: Date;
   /** What was charged, an exact decimal, with its currency. */
   amount?: string;
   currency?: string;

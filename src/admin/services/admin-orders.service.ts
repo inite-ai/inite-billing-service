@@ -115,17 +115,7 @@ export class AdminOrdersService {
     // Read the live subscription before the transition ends it: the orchestrator
     // sets status to `ended`, and stopping the provider's billing afterwards
     // needs the rail and the provider's own subscription id from that row.
-    const liveSubscription =
-      order.mode === 'SUBSCRIPTION'
-        ? await this.prisma.subscription.findFirst({
-            where: {
-              userId: order.userId,
-              priceId: order.priceId,
-              status: { in: ['trialing', 'active', 'past_due'] },
-            },
-            orderBy: { updatedAt: 'desc' },
-          })
-        : null;
+    const paidFor = await this.paymentOrchestrator.subscriptionPaidBy(order);
 
     const paidIntent = order.paymentIntents.find((pi) => pi.status === 'paid');
     if (paidIntent) {
@@ -150,20 +140,28 @@ export class AdminOrdersService {
     // slow rail turns into lock contention on every paid order. Failing here
     // must not undo the refund either — the money is already back — so it is
     // logged loudly for someone to finish by hand.
-    if (liveSubscription) {
+    //
+    // Only for what the refund did to the subscription: an old month's refund
+    // leaves it running, and the provider must go on charging for it.
+    const after = paidFor
+      ? await this.prisma.subscription.findUnique({ where: { id: paidFor.id } })
+      : null;
+    const ended = paidFor?.status !== 'ended' && after?.status === 'ended';
+    const stopping = !!after && !ended && !paidFor.cancelAtPeriodEnd && after.cancelAtPeriodEnd;
+    if (paidFor?.providerSubscriptionId && (ended || stopping)) {
       try {
         const stopped = await this.paymentOrchestrator.cancelProviderSubscription(
-          liveSubscription,
-          false,
+          paidFor,
+          stopping,
         );
         if (!stopped) {
           this.logger.warn(
-            `Order ${id} refunded and subscription ${liveSubscription.id} ended, but the rail did not confirm cancellation — check ${liveSubscription.rail ?? 'the provider'} before the next billing date`,
+            `Order ${id} refunded, but the rail did not confirm cancelling subscription ${paidFor.id}: check ${paidFor.rail ?? 'the provider'} before the next billing date`,
           );
         }
       } catch (error: any) {
         this.logger.error(
-          `Order ${id} refunded and subscription ${liveSubscription.id} ended, but cancelling it at the provider failed: ${error.message}. It will bill again unless cancelled manually.`,
+          `Order ${id} refunded, but cancelling subscription ${paidFor.id} at the provider failed: ${error.message}. It will bill again unless cancelled manually.`,
         );
       }
     }

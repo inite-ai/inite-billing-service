@@ -76,6 +76,12 @@ describe('a renewal charged by a provider', () => {
       snapshot: { periodicity: 'MONTHLY', buyerEmail: 'buyer@example.com' },
     });
     await orchestrator.applyStateTransition(intent.id, 'paid');
+    // The database stamps rows by its own clock; these tests move ours.
+    await prisma.order.update({ where: { id: order.id }, data: { createdAt: new Date() } });
+    await prisma.invoice.update({
+      where: { orderId: order.id },
+      data: { createdAt: new Date() },
+    });
     const sub = await prisma.subscription.findFirst({
       where: { userId: user, priceId: price.id },
     });
@@ -156,6 +162,7 @@ describe('a renewal charged by a provider', () => {
     const { price, parent, sub } = await bought('2026-01-15T12:00:00Z');
     const old = await makeOrder(prisma, price, user, {
       status: 'paid',
+      createdAt: new Date('2026-02-15T12:40:00Z'),
       externalId: `renewal_renewal_${sub.id}_2026-02-15T12:00:00.000Z`,
       metadata: { renewal: true, subscription_id: sub.id },
     });
@@ -233,6 +240,8 @@ describe('a renewal charged by a provider', () => {
     await prisma.subscription.update({ where: { id: sub.id }, data: { status: 'past_due' } });
     parentInvoice(parent, '2026-02-15T12:00:00Z');
     contract(`c-${parent}`, parent);
+    // Word of the first charge, heard again.
+    invoices[`c-${parent}`].datetime = '2026-01-15T12:00:00Z';
     clockAt('2026-02-10T12:00:00Z');
     await webhook(parent, `c-${parent}`);
     expect((await current(sub)).status).toBe('active');
