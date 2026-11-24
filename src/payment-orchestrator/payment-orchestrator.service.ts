@@ -14,6 +14,7 @@ import { PrismaService } from '../common/services/prisma.service';
 import { PaymentRailAdapter } from '../common/interfaces/payment-rail-adapter.interface';
 import { ConnectorRegistry } from '../common/connectors/connector-registry.service';
 import { Connector } from '../common/connectors/connector.interface';
+import { definedCredits, orderCompanyId, subscriptionCompanyId } from '../credits/credit-company';
 import { calculatePeriodEnd, orderAccessEndsAt } from './period.util';
 import { reconcileAmount } from '../workers/reconcile-amount';
 import {
@@ -863,6 +864,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
       return;
     }
 
+    const companyId = await subscriptionCompanyId(tx, subscription);
     const order = await tx.order.create({
       data: {
         userId: subscription.userId,
@@ -876,6 +878,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
           renewal: true,
           subscription_id: subscription.id,
           provider_charge_id: renewalChargeId,
+          ...(companyId ? { company_id: companyId } : {}),
         },
       },
     });
@@ -1115,23 +1118,34 @@ export class PaymentOrchestratorService implements OnModuleInit {
   }
 
   /**
-   * Grant credits if product metadata defines creditsPerPeriod or credits
+   * Grant the credits an order bought, once per order. A subscription grants
+   * what its product defines per period; a one-time order grants what its
+   * price defines (a pack is sold in sizes, one price each), or failing that
+   * its product. Never both.
    */
   private async handleCreditsGrant(order: any, tx: any): Promise<void> {
-    const product = order.price?.product;
+    const price = order.price;
+    const product = price?.product;
     if (!product) return;
 
-    const metadata = product.metadata || {};
-    const creditsPerPeriod = metadata.creditsPerPeriod || metadata.credits;
-    if (!creditsPerPeriod) return;
+    const kind = subscriptionOrderKind(order);
+    const isSubscription = order.mode === 'SUBSCRIPTION' || !!kind;
+    const productCredits = definedCredits(
+      product.metadata?.creditsPerPeriod || product.metadata?.credits,
+    );
+    const amount = isSubscription
+      ? productCredits
+      : (definedCredits(price.metadata?.credits) ?? productCredits);
+    if (!amount) return;
 
     const serviceId = product.serviceId;
+    const companyId = orderCompanyId(order.metadata);
 
     // Credits are granted on the SAME transaction as the payment (tx) — never a
     // separate one. A failure here must roll the whole fulfilment back (the
     // webhook then retries) rather than be swallowed, otherwise a paid order can
     // silently grant nothing, and a later rollback would leave phantom credits.
-    if (order.mode === 'SUBSCRIPTION' || subscriptionOrderKind(order)) {
+    if (isSubscription) {
       // For subscriptions, find the subscription to get period end
       const subscription = await tx.subscription.findFirst({
         where: {
@@ -1149,10 +1163,16 @@ export class PaymentOrchestratorService implements OnModuleInit {
         {
           userId: order.userId,
           serviceId,
-          newBalance: creditsPerPeriod,
+          newBalance: amount,
           resetsAt: periodEnd,
           // Stamped so a refund of this order can find what it granted.
           orderId: order.id,
+          source: {
+            source: 'subscription',
+            periodStart: subscription?.currentPeriodStart ?? undefined,
+            periodEnd,
+            companyId,
+          },
         },
         tx,
       );
@@ -1161,9 +1181,10 @@ export class PaymentOrchestratorService implements OnModuleInit {
         {
           userId: order.userId,
           serviceId,
-          amount: creditsPerPeriod,
+          amount,
           description: `Credits from order ${order.id}`,
           orderId: order.id,
+          source: { source: 'pack', companyId },
         },
         tx,
       );
@@ -1251,6 +1272,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
           serviceId: grant.creditBalance.serviceId ?? undefined,
           amount: grant.amount,
           orderId: order.id,
+          grant: { id: grant.id, metadata: grant.metadata },
         },
         tx,
       );

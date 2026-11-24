@@ -222,7 +222,7 @@ describe('CreditsService metered consume', () => {
       evaluateQuotas: jest.fn().mockResolvedValue({ softCapCrossed: [] }),
       emitSoftCapWarnings: jest.fn(),
     };
-    service = new CreditsService(mockPrisma, mockMetering);
+    service = new CreditsService(mockPrisma, mockMetering, { emit: jest.fn() } as any);
   });
 
   it('legacy flat consume works without metering calls, but still row-locks the balance', async () => {

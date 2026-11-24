@@ -1,3 +1,4 @@
+import { subscriptionCompanyId } from '../credits/credit-company';
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
@@ -141,6 +142,7 @@ export class SubscriptionRenewalsService {
     let order = await this.prisma.order.findUnique({ where: { externalId } });
     if (!order) {
       const portal = this.portalUrl(sub.price.product.service?.code);
+      const companyId = await subscriptionCompanyId(this.prisma, sub);
       order = await this.prisma.order
         .create({
           data: {
@@ -166,6 +168,7 @@ export class SubscriptionRenewalsService {
             },
             metadata: {
               [RENEWAL_KEY]: { subscriptionId: sub.id, periodEnd },
+              ...(companyId ? { company_id: companyId } : {}),
               successUrl: portal,
               errorUrl: portal,
             },

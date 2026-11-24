@@ -21,7 +21,10 @@ describe('consume() idempotency', () => {
       },
     };
     const prisma: any = { $transaction: jest.fn((fn: any) => fn(tx)) };
-    return { tx, service: new CreditsService(prisma, { emit: jest.fn() } as any) };
+    return {
+      tx,
+      service: new CreditsService(prisma, { emit: jest.fn() } as any, { emit: jest.fn() } as any),
+    };
   };
 
   it('charges once and stamps the key', async () => {

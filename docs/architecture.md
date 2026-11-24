@@ -113,9 +113,11 @@ stateDiagram-v2
 Side effects fire exactly once per transition:
 
 - `paid` → order paid, subscription created/renewed, entitlements granted, credits granted
-  (`Product.metadata.creditsPerPeriod` / `.credits`), invoice written, affiliate commission
+  (a subscription: `Product.metadata.creditsPerPeriod`, expiring with the period; a one-time
+  order: `Price.metadata.credits`, or the product's, which do not expire), `billing.credits.granted`
+  emitted, invoice written, affiliate commission
   recorded, `billing.payment.succeeded` emitted, funnel `payment_completed` tracked.
-- `refunded` → entitlements revoked, credits refunded, affiliate commissions voided,
+- `refunded` → entitlements revoked, credits revoked (`billing.credits.revoked`), affiliate commissions voided,
   `billing.payment.refunded` emitted.
 - `failed` / `expired` → funnel `payment_failed`, risk failure signal recorded;
   `billing.subscription.payment_failed` for renewals (dunning picks it up).

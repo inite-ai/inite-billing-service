@@ -25,7 +25,8 @@ describe('CreditsService transaction threading', () => {
       create: jest.fn().mockResolvedValue(baseBalance),
       update: jest.fn().mockResolvedValue({ ...baseBalance, balance: 100 }),
     },
-    creditUsage: { create: jest.fn().mockResolvedValue({}) },
+    $queryRaw: jest.fn().mockResolvedValue([]),
+    creditUsage: { create: jest.fn().mockResolvedValue({}), findFirst: jest.fn() },
   });
 
   let mockPrisma: any;
@@ -39,7 +40,7 @@ describe('CreditsService transaction threading', () => {
     mockPrisma = {
       $transaction: jest.fn((fn: any) => fn(ownTx)),
     };
-    service = new CreditsService(mockPrisma);
+    service = new CreditsService(mockPrisma, undefined, { emit: jest.fn() } as any);
   });
 
   describe.each([

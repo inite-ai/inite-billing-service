@@ -33,6 +33,7 @@ describe('CreditsService', () => {
       },
       creditUsage: {
         create: jest.fn(),
+        findFirst: jest.fn(),
       },
     };
 
@@ -52,7 +53,7 @@ describe('CreditsService', () => {
       },
     };
 
-    service = new CreditsService(mockPrisma);
+    service = new CreditsService(mockPrisma, undefined, { emit: jest.fn() } as any);
   });
 
   // --- grant() ---
@@ -228,7 +229,7 @@ describe('CreditsService', () => {
   // --- resetForPeriod() ---
 
   it('resetForPeriod() resets balance and logs reset + grant usages', async () => {
-    const existing = { ...baseBalance, balance: 30, totalGranted: 100 };
+    const existing = { ...baseBalance, balance: 30, periodBalance: 30, totalGranted: 100 };
     const resetsAt = new Date('2026-04-01');
     mockTx.creditBalance.findFirst.mockResolvedValue(existing);
     mockTx.creditBalance.update.mockResolvedValue({

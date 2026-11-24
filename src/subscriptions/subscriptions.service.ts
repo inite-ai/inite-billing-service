@@ -1,3 +1,4 @@
+import { definedCredits } from '../credits/credit-company';
 import {
   Injectable,
   ForbiddenException,
@@ -345,7 +346,7 @@ export class SubscriptionsService {
 
       // Grant credits if product defines them
       const metadata = (product.metadata as Record<string, any>) || {};
-      const creditsPerPeriod = metadata.creditsPerPeriod || metadata.credits;
+      const creditsPerPeriod = definedCredits(metadata.creditsPerPeriod || metadata.credits);
       if (creditsPerPeriod) {
         await this.creditsService.grant(
           {
@@ -354,6 +355,12 @@ export class SubscriptionsService {
             amount: creditsPerPeriod,
             description: `Trial credits for ${product.code}`,
             resetsAt: trialEnd,
+            bucket: 'period',
+            source: {
+              source: 'trial',
+              periodStart: subscription.currentPeriodStart,
+              periodEnd: trialEnd,
+            },
           },
           tx,
         );

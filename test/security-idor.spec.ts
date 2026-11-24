@@ -212,7 +212,7 @@ describe('IDOR — Credits Consume', () => {
       creditUsage: { findMany: jest.fn(), count: jest.fn(), create: jest.fn() },
     };
 
-    service = new CreditsService(mockPrisma);
+    service = new CreditsService(mockPrisma, undefined, { emit: jest.fn() } as any);
   });
 
   it('negative admin adjust is blocked when exceeds balance', async () => {
