@@ -581,6 +581,57 @@
       }
     },
     {
+      "service": "analitics",
+      "product": "inite-mcp-security-team",
+      "kind": "company",
+      "action": "create",
+      "trialDays": 0,
+      "graceDays": 3,
+      "prices": [
+        {
+          "code": "inite-mcp-security-team-monthly",
+          "currency": "USD",
+          "interval": "month",
+          "amount": 29,
+          "action": "create"
+        },
+        {
+          "code": "inite-mcp-security-team-yearly",
+          "currency": "USD",
+          "interval": "year",
+          "amount": 290,
+          "action": "create"
+        },
+        {
+          "code": "inite-mcp-security-team-monthly-brl",
+          "currency": "BRL",
+          "interval": "month",
+          "amount": 145,
+          "action": "create"
+        },
+        {
+          "code": "inite-mcp-security-team-yearly-brl",
+          "currency": "BRL",
+          "interval": "year",
+          "amount": 1450,
+          "action": "create"
+        }
+      ],
+      "name": "MCP Security Check Team",
+      "addEntitlements": [
+        "inite:mcp-security-team"
+      ],
+      "note": "New 22.11.2026 (the owner delegated the price): inite.ai's MCP Security Check team plan, an add-on beside the visibility plans. inite.ai reads `inite:mcp-security-team` (lib/mcp-security/owner/plan.ts); the check, the report and the badge stay free.",
+      "tier": "mcp-security-team",
+      "rank": 11,
+      "isAddon": true,
+      "limits": {
+        "monitoredServers": 25,
+        "scheduledActiveDays": 7,
+        "manualActivePerDay": 10
+      }
+    },
+    {
       "service": "inite-rent",
       "product": "inite-rent-starter",
       "kind": "company",
