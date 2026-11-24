@@ -136,6 +136,7 @@ export class AppleIAPAdapter implements Connector {
     return {
       supportedModes: ['SUBSCRIPTION', 'PAYMENT'],
       isClientSide: true,
+      collects: ['provider_managed'],
     };
   }
 

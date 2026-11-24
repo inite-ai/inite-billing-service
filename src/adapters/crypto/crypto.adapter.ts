@@ -7,6 +7,7 @@ import {
   WebhookVerifyInput,
 } from '../../common/connectors/connector.interface';
 import { safeTimingSafeEqual } from '../../common/connectors/webhook-verify.util';
+import { Quote, QuoteInput, refuse } from '../../common/connectors/rail-contract';
 import { RAILS } from '../../common/connectors/rail';
 import {
   CreateIntentInput,
@@ -96,7 +97,17 @@ export class CryptoAdapter implements Connector {
       supportedModes: ['PAYMENT'],
       requiresRedirect: false,
       selectableMethods: true,
+      collects: ['buyer_approved'],
     };
+  }
+
+  /**
+   * One invoice per period, in a dollar stablecoin. Whether there is a rate
+   * for the currency and a network to pay on is asked of {@link listMethods}.
+   */
+  quote(order: QuoteInput): Quote {
+    if (!order.amount.gt(0)) return refuse('below_minimum');
+    return { ok: true, purpose: 'one_off', strategy: 'buyer_approved', chargedIn: 'USD' };
   }
 
   private async settings(): Promise<CryptoSettings> {

@@ -4,6 +4,7 @@ import {
   PaymentRailAdapter,
 } from '../interfaces/payment-rail-adapter.interface';
 import { Rail } from './rail';
+import type { Quote, QuoteInput, QuoteProvider, Strategy } from './rail-contract';
 
 /**
  * What a connector can do, declared once on the connector itself instead of
@@ -48,6 +49,11 @@ export interface ConnectorCapabilities {
    * rail (src/checkout/rail-minimums.ts). Undeclared means none is documented.
    */
   minAmounts?: Record<string, string>;
+  /**
+   * How this rail can collect a subscription. `provider_managed` requires
+   * `readRenewal` (held by test/rail-contract.spec.ts).
+   */
+  collects?: Strategy[];
 }
 
 /** One renewal charge, as the provider's own record describes it. */
@@ -73,6 +79,13 @@ export interface RenewalEvidence {
 export interface Connector extends PaymentRailAdapter {
   /** Static capability declaration for this rail. */
   capabilities?(): ConnectorCapabilities;
+
+  /**
+   * Whether this rail would take the order, and as what. Pure. It accepts
+   * exactly when createPaymentIntent reaches the provider — the contract test
+   * runs both and compares.
+   */
+  quote?(order: QuoteInput, provider: QuoteProvider): Quote;
 
   /** Issue a provider-side refund for a paid intent. Only when `supportsRefund`. */
   refund?(input: { providerIntentId: string; amount?: number; currency?: string }): Promise<{

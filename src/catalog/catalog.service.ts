@@ -1,4 +1,11 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+  Optional,
+} from '@nestjs/common';
+import { PayabilityService, PriceToAsk } from '../checkout/payability.service';
 import { PrismaService } from '../common/services/prisma.service';
 import {
   ProductResponseDto,
@@ -16,7 +23,12 @@ function displayNameOf(service: { name: string; metadata: unknown }): string {
 
 @Injectable()
 export class CatalogService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(CatalogService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly payabilityService?: PayabilityService,
+  ) {}
 
   async getProducts(serviceId?: string): Promise<ProductResponseDto[]> {
     // An open product has no price to show: its service names one per sale.
@@ -76,6 +88,9 @@ export class CatalogService {
       }),
     ]);
 
+    const pay = await this.payability(
+      products.flatMap((product) => product.prices.map((price) => ({ ...price, product }))),
+    );
     const listed = products.filter((p) => {
       const meta = (p.metadata ?? {}) as Record<string, unknown>;
       return meta.unlisted !== true && p.prices.length > 0;
@@ -111,6 +126,7 @@ export class CatalogService {
                 graceDays: pr.graceDays || undefined,
                 isActive: pr.isActive,
                 metadata: (pr.metadata ?? undefined) as Record<string, any> | undefined,
+                ...pay(pr.code),
               })),
             })),
         }))
@@ -143,6 +159,7 @@ export class CatalogService {
       orderBy: { createdAt: 'desc' },
     });
 
+    const pay = await this.payability(prices as any);
     return prices.map((p) => ({
       id: p.id,
       productId: p.productId,
@@ -153,7 +170,25 @@ export class CatalogService {
       trialDays: p.trialDays || undefined,
       graceDays: p.graceDays || undefined,
       isActive: p.isActive,
+      ...pay(p.code),
     }));
+  }
+
+  /** The payment fields of each price; none when rails cannot be asked here. */
+  private async payability(prices: PriceToAsk[]) {
+    const answers = this.payabilityService
+      ? await this.payabilityService.forPrices(prices).catch((error: any) => {
+          // The catalogue is read by every site: it does not go down with this.
+          this.logger.warn(`Payability not answered: ${error?.message}`);
+          return null;
+        })
+      : null;
+    return (code: string) => {
+      const a = answers?.get(code);
+      return a
+        ? { payable: a.state !== 'unpayable', collects: a.collects, methods: a.methods }
+        : {};
+    };
   }
 
   async getPriceByCode(code: string) {

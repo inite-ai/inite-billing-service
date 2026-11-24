@@ -24,9 +24,14 @@ export class CreateCheckoutSessionDto {
   @IsString()
   priceCode: string;
 
-  @ApiProperty({ enum: CheckoutMode, description: 'Payment mode' })
+  @ApiPropertyOptional({
+    enum: CheckoutMode,
+    description:
+      'Left out, the price decides: a plan is a subscription, anything else is bought once. PAYMENT on a plan buys one period.',
+  })
+  @IsOptional()
   @IsEnum(CheckoutMode)
-  mode: CheckoutMode;
+  mode?: CheckoutMode;
 
   @ApiPropertyOptional({ description: 'Success redirect URL' })
   @IsUrl()

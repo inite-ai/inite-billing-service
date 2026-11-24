@@ -1,8 +1,17 @@
+import type { Purpose } from '../connectors/rail-contract';
+
 export interface CreateIntentInput {
   orderId: string;
   amount: number;
   currency: string;
   mode: 'PAYMENT' | 'SUBSCRIPTION';
+  /**
+   * What to open, decided by billing from the rail's own quote. Absent from a
+   * caller that does not quote: then `mode` decides, as it used to.
+   */
+  purpose?: Purpose;
+  /** {@link amount} exactly, as a decimal string. */
+  exactAmount?: string;
   successUrl?: string;
   errorUrl?: string;
   metadata?: Record<string, any>;
@@ -10,6 +19,15 @@ export interface CreateIntentInput {
   cryptoChainId?: string;
   cryptoToken?: string;
   receiverAddress?: string; // For crypto
+}
+
+/** Whether the adapter is asked to start a subscription at the provider. */
+export function opensProviderSubscription(
+  input: Pick<CreateIntentInput, 'mode' | 'purpose'>,
+): boolean {
+  return input.purpose
+    ? input.purpose === 'open_provider_subscription'
+    : input.mode === 'SUBSCRIPTION';
 }
 
 export interface CreateIntentResult {

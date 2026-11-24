@@ -7,9 +7,18 @@ import {
   WebhookVerifyInput,
 } from '../../common/connectors/connector.interface';
 import { safeTimingSafeEqual } from '../../common/connectors/webhook-verify.util';
+import {
+  Quote,
+  QuoteInput,
+  QuoteProvider,
+  record,
+  refuse,
+} from '../../common/connectors/rail-contract';
+import { roundToMinorUnits } from '../../common/money';
 import { RAILS } from '../../common/connectors/rail';
 import {
   CreateIntentInput,
+  opensProviderSubscription,
   CreateIntentResult,
   IntentStatusResult,
   PaymentMethod,
@@ -149,7 +158,16 @@ export class HodleAdapter implements Connector {
       countries: ['BR'],
       // createPaymentIntent refuses under this, as Hodle does.
       minAmounts: { BRL: '1.00' },
+      collects: ['buyer_approved'],
     };
+  }
+
+  /** One PIX code per period: the buyer approves each one. */
+  quote(order: QuoteInput, provider: QuoteProvider): Quote {
+    if (!HODLE_CURRENCIES.includes(order.currency.toUpperCase())) return refuse('currency');
+    if (roundToMinorUnits(order.amount, 'BRL') < 100) return refuse('below_minimum');
+    if (!record(provider.config).apiKey) return refuse('not_configured');
+    return { ok: true, purpose: 'one_off', strategy: 'buyer_approved', chargedIn: 'BRL' };
   }
 
   async listMethods(): Promise<PaymentMethod[]> {
@@ -191,14 +209,14 @@ export class HodleAdapter implements Connector {
   }
 
   async createPaymentIntent(input: CreateIntentInput): Promise<CreateIntentResult> {
-    if (input.mode !== 'PAYMENT') {
+    if (opensProviderSubscription(input)) {
       throw new BadRequestException('PIX through Hodle takes one-time payments only');
     }
     const currency = String(input.currency).toUpperCase();
     if (!HODLE_CURRENCIES.includes(currency)) {
       throw new BadRequestException(`PIX takes reais; this price is in ${input.currency}`);
     }
-    const value = Math.round(Number(input.amount) * 100);
+    const value = roundToMinorUnits(input.exactAmount ?? input.amount, currency);
     if (!Number.isFinite(value) || value < 100) {
       throw new BadRequestException('PIX through Hodle needs at least R$1.00');
     }
