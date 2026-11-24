@@ -3,6 +3,7 @@ import {
   Connector,
   ConnectorCapabilities,
   RegisterConnector,
+  RenewalEvidence,
   WebhookVerifyInput,
 } from '../../common/connectors/connector.interface';
 import { safeTimingSafeEqual } from '../../common/connectors/webhook-verify.util';
@@ -529,6 +530,52 @@ export class LavaAdapter implements Connector {
       return 'subscription.renewed';
     }
     return null;
+  }
+
+  /**
+   * The renewal's identity is the paid-until date of the subscription's first
+   * contract: the webhook names a contract, the poll names none, and this is
+   * what both can read. The webhook's own contract is checked (completed, and
+   * of this subscription) and is where the charged amount comes from; without
+   * one it is the amount the subscription's offer charges.
+   */
+  async readRenewal({
+    providerSubscriptionId,
+    payload,
+  }: {
+    providerSubscriptionId: string;
+    currentPeriodEnd: Date;
+    payload: Record<string, any>;
+  }): Promise<RenewalEvidence | null> {
+    const config = await this.getConfig();
+    const path = (id: string) => `/api/v2/invoices/${encodeURIComponent(id)}`;
+    const first = await this.call(config, path(providerSubscriptionId));
+    const expiredAt = first?.subscriptionDetails?.expiredAt;
+    const paidUntil = expiredAt ? new Date(expiredAt) : null;
+    if (!paidUntil || Number.isNaN(paidUntil.getTime())) {
+      throw new Error(`lava.top names no paid-until date for ${providerSubscriptionId}`);
+    }
+
+    const contractId = payload?.contractId ? String(payload.contractId) : null;
+    let receipt = first?.receipt;
+    if (contractId && contractId !== providerSubscriptionId) {
+      const contract = await this.call(config, path(contractId));
+      if (contract?.parentInvoice?.id !== providerSubscriptionId) {
+        throw new Error(`lava.top contract ${contractId} is not of ${providerSubscriptionId}`);
+      }
+      if (STATUS[normaliseStatus(contract?.status)] !== 'paid') {
+        throw new Error(`lava.top contract ${contractId} is ${contract?.status}, not completed`);
+      }
+      receipt = contract.receipt;
+    }
+    return {
+      chargeId: `lava_${providerSubscriptionId}_${paidUntil.toISOString()}`,
+      ...(contractId ? { aliases: [contractId] } : {}),
+      ...(receipt?.amount != null && receipt?.currency
+        ? { amount: String(receipt.amount), currency: String(receipt.currency).toUpperCase() }
+        : {}),
+      periodEnd: paidUntil,
+    };
   }
 
   /**

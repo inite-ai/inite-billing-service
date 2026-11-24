@@ -3,8 +3,10 @@ import {
   Connector,
   ConnectorCapabilities,
   RegisterConnector,
+  RenewalEvidence,
   WebhookVerifyInput,
 } from '../../common/connectors/connector.interface';
+import { Decimal } from '@prisma/client/runtime/library';
 import { RAILS } from '../../common/connectors/rail';
 import {
   CreateIntentInput,
@@ -259,6 +261,38 @@ export class AppleIAPAdapter implements Connector {
     );
 
     return result;
+  }
+
+  /**
+   * The transaction of the notification, decoded from the signed payload as it
+   * was stored (its signature was checked when it arrived). `price` is in
+   * thousandths of the currency.
+   */
+  async readRenewal({
+    payload,
+  }: {
+    providerSubscriptionId: string;
+    currentPeriodEnd: Date;
+    payload: Record<string, any>;
+  }): Promise<RenewalEvidence | null> {
+    const notification =
+      typeof payload?.signedPayload === 'string'
+        ? this.decodeJWSPayload(payload.signedPayload)
+        : payload;
+    const signed = notification?.data?.signedTransactionInfo;
+    const tx = signed ? this.decodeJWSPayload(signed) : notification?.transaction;
+    if (!tx?.transactionId) throw new Error('Apple renewal names no transaction');
+    return {
+      chargeId: String(tx.transactionId),
+      ...(tx.price != null && tx.currency
+        ? {
+            amount: new Decimal(String(tx.price)).div(1000).toString(),
+            currency: String(tx.currency).toUpperCase(),
+          }
+        : {}),
+      ...(tx.purchaseDate ? { periodStart: new Date(tx.purchaseDate) } : {}),
+      ...(tx.expiresDate ? { periodEnd: new Date(tx.expiresDate) } : {}),
+    };
   }
 
   async listMethods(): Promise<PaymentMethod[]> {

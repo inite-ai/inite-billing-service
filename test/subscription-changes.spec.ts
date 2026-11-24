@@ -52,6 +52,7 @@ describe('subscription changes paid through billing', () => {
     outbox = { emit: jest.fn() };
     tx = {
       subscription: { findUnique: jest.fn(), update: jest.fn() },
+      order: { update: jest.fn() },
       paymentIntent: { findFirst: jest.fn().mockResolvedValue({ rail: 'CRYPTO' }) },
       entitlement: {
         findMany: jest.fn().mockResolvedValue([

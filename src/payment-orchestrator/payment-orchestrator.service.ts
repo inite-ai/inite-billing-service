@@ -13,8 +13,9 @@ import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../common/services/prisma.service';
 import { PaymentRailAdapter } from '../common/interfaces/payment-rail-adapter.interface';
 import { ConnectorRegistry } from '../common/connectors/connector-registry.service';
-import { Connector } from '../common/connectors/connector.interface';
+import { Connector, RenewalEvidence } from '../common/connectors/connector.interface';
 import { calculatePeriodEnd, orderAccessEndsAt } from './period.util';
+import { lockPaymentPath } from './lock-order';
 import { reconcileAmount } from '../workers/reconcile-amount';
 import {
   isValidTransition,
@@ -29,6 +30,7 @@ import {
   applyPlanChangeNow,
   applyPlanChangePayment,
   applyRenewalPayment,
+  linkOrderToPeriod,
   subscriptionOrderKind,
 } from './subscription-changes';
 
@@ -63,6 +65,13 @@ export const SUBSCRIPTION_EVENT_TYPES = [
   'subscription.created',
   'subscription.updated',
 ] as const;
+
+/** The provider took money for another period. */
+const RENEWAL_EVENTS: ReadonlySet<string> = new Set([
+  'subscription.renewed',
+  'subscription.recovered',
+  'subscription.restarted',
+]);
 
 export type SubscriptionEventType = (typeof SUBSCRIPTION_EVENT_TYPES)[number];
 
@@ -214,9 +223,10 @@ export class PaymentOrchestratorService implements OnModuleInit {
       // grants, two entitlements, two commissions, two events. The lock makes
       // the loser wait and re-read the state the winner committed, where the
       // idempotency check finally does its job.
-      await tx.$queryRaw(
-        Prisma.sql`SELECT id FROM billing.payment_intents WHERE id = ${paymentIntentId}::uuid FOR UPDATE`,
-      );
+      //
+      // Subscription, order, intent, always in that order: a renewal event and
+      // a payment of the same subscription must not wait for each other.
+      await lockPaymentPath(tx, paymentIntentId);
 
       const intent = await tx.paymentIntent.findUnique({
         where: { id: paymentIntentId },
@@ -574,7 +584,11 @@ export class PaymentOrchestratorService implements OnModuleInit {
   private async handleSubscriptionPayment(order: any, tx: any): Promise<void> {
     const price = order.price;
     const now = new Date();
-    const periodEnd = this.calculatePeriodEnd(now, price.interval || 'month');
+    // A renewal the provider charged carries the period it paid for.
+    const periodStart = order.periodEnd ? new Date(order.periodStart ?? now) : now;
+    const periodEnd = order.periodEnd
+      ? new Date(order.periodEnd)
+      : calculatePeriodEnd(now, price.interval || 'month');
     const expiresAt = price.graceDays
       ? new Date(periodEnd.getTime() + price.graceDays * 24 * 60 * 60 * 1000)
       : periodEnd;
@@ -589,13 +603,15 @@ export class PaymentOrchestratorService implements OnModuleInit {
     const providerLinkage = this.extractProviderSubscriptionLinkage(latestIntent);
 
     // Find or create subscription
-    let subscription = await tx.subscription.findFirst({
-      where: {
-        userId: order.userId,
-        priceId: price.id,
-        status: { in: ['trialing', 'active', 'past_due'] },
-      },
-    });
+    let subscription = order.subscriptionId
+      ? await tx.subscription.findUnique({ where: { id: order.subscriptionId } })
+      : await tx.subscription.findFirst({
+          where: {
+            userId: order.userId,
+            priceId: price.id,
+            status: { in: ['trialing', 'active', 'past_due'] },
+          },
+        });
 
     const isRenewal = !!subscription;
     // A no-card trial (startTrial) has no rail; its first payment is the
@@ -609,8 +625,9 @@ export class PaymentOrchestratorService implements OnModuleInit {
         where: { id: subscription.id },
         data: {
           status: 'active',
-          currentPeriodStart: now,
+          currentPeriodStart: periodStart,
           currentPeriodEnd: periodEnd,
+          ...(order.periodEnd ? {} : { billingAnchor: now }),
           cancelAtPeriodEnd: false,
           updatedAt: now,
           ...(subscription.providerSubscriptionId
@@ -629,14 +646,17 @@ export class PaymentOrchestratorService implements OnModuleInit {
           userId: order.userId,
           priceId: price.id,
           status: price.trialDays && price.trialDays > 0 ? 'trialing' : 'active',
-          currentPeriodStart: now,
+          currentPeriodStart: periodStart,
           currentPeriodEnd: periodEnd,
+          billingAnchor: periodStart,
           cancelAtPeriodEnd: false,
           providerSubscriptionId: providerLinkage.providerSubscriptionId,
           rail: providerLinkage.rail,
         },
       });
     }
+
+    await linkOrderToPeriod(tx, order, subscription.id, periodStart, periodEnd);
 
     // Track funnel event for subscription
     const product = order.price.product;
@@ -762,7 +782,21 @@ export class PaymentOrchestratorService implements OnModuleInit {
     providerSubscriptionId: string,
     providerData: Record<string, any>,
   ): Promise<void> {
+    const evidence = await this.renewalEvidence(
+      rail,
+      eventType,
+      providerSubscriptionId,
+      providerData,
+    );
+    if (evidence === null) {
+      this.logger.log(`${eventType} for ${rail} ${providerSubscriptionId} is not a renewal`);
+      return;
+    }
     return this.prisma.$transaction(async (tx) => {
+      // Locked before it is read: a poll and a webhook for one renewal take turns.
+      await tx.$queryRaw(
+        Prisma.sql`SELECT id FROM billing.subscriptions WHERE rail = ${rail} AND provider_subscription_id = ${providerSubscriptionId} ORDER BY id FOR UPDATE`,
+      );
       const subscription = await tx.subscription.findFirst({
         where: { rail, providerSubscriptionId },
         include: { price: { include: { product: true } } },
@@ -782,7 +816,7 @@ export class PaymentOrchestratorService implements OnModuleInit {
         // the provider is charging again, which is a renewal to us.
         case 'subscription.recovered':
         case 'subscription.restarted':
-          await this.advanceSubscriptionPeriodFromWebhook(subscription, providerData, tx);
+          await this.advanceSubscriptionPeriod(subscription, evidence!, providerData, tx);
           break;
 
         case 'subscription.renewal_failed':
@@ -821,61 +855,123 @@ export class PaymentOrchestratorService implements OnModuleInit {
   }
 
   /**
+   * Which charge a renewal event is about: from the adapter where the rail has
+   * one to ask, else from the charge id in the payload. Undefined for events
+   * that are not renewals, null when the adapter says this one is not.
+   *
+   * There is no fallback to our own period. It was the period being renewed,
+   * so a poll that had already renewed it gave the late webhook of the same
+   * charge a fresh key, and a second renewal.
+   */
+  private async renewalEvidence(
+    rail: string,
+    eventType: SubscriptionEventType,
+    providerSubscriptionId: string,
+    payload: Record<string, any>,
+  ): Promise<RenewalEvidence | null | undefined> {
+    if (!RENEWAL_EVENTS.has(eventType)) return undefined;
+    const subscription = await this.prisma.subscription.findFirst({
+      where: { rail, providerSubscriptionId },
+      select: { currentPeriodEnd: true },
+    });
+    if (!subscription) return undefined;
+
+    let connector: Connector | null = null;
+    try {
+      connector = this.getAdapter(rail) as Connector;
+    } catch {
+      connector = null;
+    }
+    if (connector?.readRenewal) {
+      return connector.readRenewal({
+        providerSubscriptionId,
+        currentPeriodEnd: subscription.currentPeriodEnd,
+        payload,
+      });
+    }
+    const chargeId = payload?.id || payload?.charge || payload?.payment_intent;
+    if (!chargeId) {
+      throw new Error(`${rail} renewal of ${providerSubscriptionId} names no charge`);
+    }
+    return { chargeId: String(chargeId) };
+  }
+
+  /**
    * Renewal — synthesise paid Order + PaymentIntent and run handleOrderPaid
    * so the existing period-advance / entitlement-regrant / credits / outbox
-   * logic fires unchanged.
+   * logic fires unchanged. One charge is booked once, for what was charged and
+   * the period it paid for. The unique (provider_intent_id, rail) is the
+   * backstop behind the guards below.
    */
-  private async advanceSubscriptionPeriodFromWebhook(
+  private async advanceSubscriptionPeriod(
     subscription: any,
+    evidence: RenewalEvidence,
     providerData: Record<string, any>,
     tx: any,
   ): Promise<void> {
     const price = subscription.price;
-
-    // Idempotency key for THIS renewal cycle. Prefer the provider's charge id
-    // (stable across webhook re-deliveries). The fallback must be DETERMINISTIC —
-    // the old `renewal_<sub>_<Date.now()>` produced a fresh id every time, so a
-    // reprocess (crash between the renewal commit and marking the webhook event
-    // 'processed' → 5-min recovery re-run; or a BullMQ retry) created a SECOND
-    // paid renewal Order and double-granted entitlements/credits. Deriving it
-    // from the current (about-to-be-advanced) period makes a retry map to the
-    // same key.
-    const renewalChargeId = String(
-      providerData?.id ||
-        providerData?.charge ||
-        providerData?.payment_intent ||
-        `renewal_${subscription.id}_${new Date(subscription.currentPeriodEnd).toISOString()}`,
-    );
-
-    // Idempotency guard: if a PaymentIntent already exists for
-    // (rail, renewalChargeId) this renewal was already applied — skip instead of
-    // double-charging/regranting. The DB unique constraint
-    // (provider_intent_id, rail) is the race backstop for concurrent deliveries
-    // (the loser's tx aborts, the webhook is retried, and this guard then hits).
+    const ids = [evidence.chargeId, ...(evidence.aliases ?? [])];
     const existing = await tx.paymentIntent.findFirst({
-      where: { rail: subscription.rail, providerIntentId: renewalChargeId },
+      where: { rail: subscription.rail, providerIntentId: { in: ids } },
       select: { id: true },
     });
     if (existing) {
       this.logger.warn(
-        `Renewal ${renewalChargeId} already applied for subscription ${subscription.id}; skipping (idempotent)`,
+        `Renewal ${evidence.chargeId} already applied for subscription ${subscription.id}; skipping (idempotent)`,
       );
       return;
+    }
+
+    const interval = price.interval || 'month';
+    const heldEnd = new Date(subscription.currentPeriodEnd);
+    if (evidence.periodEnd) {
+      // A period we already hold is not a second renewal of it: this is also
+      // what recognises one the code before this booked under its own key.
+      const half = (calculatePeriodEnd(heldEnd, interval).getTime() - heldEnd.getTime()) / 2;
+      const ahead = evidence.periodEnd.getTime() - heldEnd.getTime();
+      if (ahead <= half) {
+        await this.confirmHeldPeriod(subscription, ahead > 0 ? evidence.periodEnd : heldEnd, tx);
+        return;
+      }
+    }
+
+    const now = new Date();
+    let periodStart = heldEnd;
+    let periodEnd =
+      evidence.periodEnd ?? calculatePeriodEnd(heldEnd, interval, subscription.billingAnchor);
+    if (evidence.periodEnd && evidence.periodStart && evidence.periodStart < evidence.periodEnd) {
+      periodStart = evidence.periodStart;
+    } else if (!evidence.periodEnd && periodEnd <= now) {
+      // The old period ended so long ago that continuing it buys nothing.
+      periodStart = now;
+      periodEnd = calculatePeriodEnd(now, interval);
+    }
+
+    const amount = evidence.amount ?? price.amount;
+    const currency = evidence.amount && evidence.currency ? evidence.currency : price.currency;
+    if (String(currency) !== String(price.currency) || Number(amount) !== Number(price.amount)) {
+      this.logger.warn(
+        `Renewal ${evidence.chargeId} of subscription ${subscription.id} was charged ${amount} ${currency}; its price is ${price.amount} ${price.currency}`,
+      );
     }
 
     const order = await tx.order.create({
       data: {
         userId: subscription.userId,
         priceId: price.id,
-        externalId: `renewal_${renewalChargeId}`,
+        externalId: `renewal_${evidence.chargeId}`,
         status: 'paid',
         mode: 'SUBSCRIPTION',
-        amount: price.amount,
-        currency: price.currency,
+        amount,
+        currency,
+        subscriptionId: subscription.id,
+        periodStart,
+        periodEnd,
         metadata: {
           renewal: true,
           subscription_id: subscription.id,
-          provider_charge_id: renewalChargeId,
+          provider_charge_id: evidence.chargeId,
+          ...(evidence.aliases?.length ? { provider_charge_aliases: evidence.aliases } : {}),
         },
       },
     });
@@ -885,9 +981,9 @@ export class PaymentOrchestratorService implements OnModuleInit {
         orderId: order.id,
         rail: subscription.rail,
         status: 'paid',
-        providerIntentId: renewalChargeId,
-        amount: price.amount,
-        currency: price.currency,
+        providerIntentId: evidence.chargeId,
+        amount,
+        currency,
         snapshot: providerData,
       },
     });
@@ -895,6 +991,37 @@ export class PaymentOrchestratorService implements OnModuleInit {
     // Reuse existing fulfilment — creates invoice, advances period, grants
     // entitlements, resets credits, emits outbox events.
     await this.handleOrderPaid(order.id, tx);
+  }
+
+  /**
+   * The provider's period is the one already held, give or take its own date:
+   * take the date, and a subscription marked past due while it was paid up
+   * stops being so. No money moved, so no order.
+   */
+  private async confirmHeldPeriod(subscription: any, periodEnd: Date, tx: any): Promise<void> {
+    const moved = periodEnd.getTime() !== new Date(subscription.currentPeriodEnd).getTime();
+    const revived = subscription.status === 'past_due' && periodEnd > new Date();
+    if (!moved && !revived) return;
+    await tx.subscription.update({
+      where: { id: subscription.id },
+      data: {
+        currentPeriodEnd: periodEnd,
+        ...(revived ? { status: 'active' } : {}),
+        updatedAt: new Date(),
+      },
+    });
+    if (moved) {
+      const grace = (subscription.price?.graceDays || 0) * 86_400_000;
+      await tx.entitlement.updateMany({
+        where: {
+          userId: subscription.userId,
+          source: 'subscription',
+          status: 'active',
+          value: { path: ['subscription_id'], equals: subscription.id },
+        },
+        data: { expiresAt: new Date(periodEnd.getTime() + grace), updatedAt: new Date() },
+      });
+    }
   }
 
   private async markSubscriptionPastDue(
@@ -1110,10 +1237,6 @@ export class PaymentOrchestratorService implements OnModuleInit {
     return { providerSubscriptionId, rail };
   }
 
-  private calculatePeriodEnd(start: Date, interval: string): Date {
-    return calculatePeriodEnd(start, interval);
-  }
-
   /**
    * Grant credits if product metadata defines creditsPerPeriod or credits
    */
@@ -1133,14 +1256,16 @@ export class PaymentOrchestratorService implements OnModuleInit {
     // silently grant nothing, and a later rollback would leave phantom credits.
     if (order.mode === 'SUBSCRIPTION' || subscriptionOrderKind(order)) {
       // For subscriptions, find the subscription to get period end
-      const subscription = await tx.subscription.findFirst({
-        where: {
-          userId: order.userId,
-          priceId: order.priceId,
-          status: { in: ['trialing', 'active', 'past_due'] },
-        },
-        orderBy: { updatedAt: 'desc' },
-      });
+      const subscription = order.subscriptionId
+        ? await tx.subscription.findUnique({ where: { id: order.subscriptionId } })
+        : await tx.subscription.findFirst({
+            where: {
+              userId: order.userId,
+              priceId: order.priceId,
+              status: { in: ['trialing', 'active', 'past_due'] },
+            },
+            orderBy: { updatedAt: 'desc' },
+          });
 
       const periodEnd =
         subscription?.currentPeriodEnd || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
@@ -1186,24 +1311,68 @@ export class PaymentOrchestratorService implements OnModuleInit {
    * attempt on the same order cannot double-debit.
    */
   /**
-   * End the subscription this order paid for.
+   * What a full refund does to the subscription the order paid for: refunding
+   * a period that is over changes no access, a period paid ahead is taken
+   * back and nothing else, and the running period ends it.
    *
-   * Orders carry no subscription id, so the period is matched the same way the
-   * payment path creates it: by (userId, priceId). Only a live subscription is
-   * touched — refunding an old order for a subscription that has since ended
-   * must not resurrect and re-end it, and must not emit a second
-   * `subscription.ended`.
+   * The order names its subscription and its period. One paid before orders
+   * did is matched as it always was, by (userId, priceId), and only when no
+   * newer paid order of that plan exists: refunding an old month used to end
+   * today's subscription. Only a live subscription is touched.
    */
   private async endSubscriptionForRefundedOrder(order: any, tx: any): Promise<void> {
-    const subscription = await tx.subscription.findFirst({
-      where: {
-        userId: order.userId,
-        priceId: order.priceId,
-        status: { in: ['trialing', 'active', 'past_due'] },
-      },
-      orderBy: { updatedAt: 'desc' },
-    });
-    if (!subscription) return;
+    const renewal = subscriptionOrderKind(order);
+    const linkedId =
+      order.subscriptionId ??
+      (renewal?.kind === 'renewal' ? renewal.meta.subscriptionId : null) ??
+      ((order.metadata as any)?.renewal ? (order.metadata as any).subscription_id : null);
+    let subscription: any;
+    if (linkedId) {
+      subscription = await tx.subscription.findUnique({ where: { id: linkedId } });
+      if (!subscription || !['trialing', 'active', 'past_due'].includes(subscription.status)) {
+        return;
+      }
+    } else {
+      const newer = await tx.order.count({
+        where: {
+          userId: order.userId,
+          priceId: order.priceId,
+          status: 'paid',
+          createdAt: { gt: order.createdAt },
+        },
+      });
+      if (newer > 0) {
+        this.logger.log(`Order ${order.id} was refunded for an earlier period: access unchanged`);
+        return;
+      }
+      subscription = await tx.subscription.findFirst({
+        where: {
+          userId: order.userId,
+          priceId: order.priceId,
+          status: { in: ['trialing', 'active', 'past_due'] },
+        },
+        orderBy: { updatedAt: 'desc' },
+      });
+      if (!subscription) return;
+    }
+
+    const now = new Date();
+    if (
+      order.periodEnd &&
+      new Date(order.periodEnd) <= now &&
+      subscription.currentPeriodEnd > now
+    ) {
+      this.logger.log(`Order ${order.id} was refunded for a period that is over: access unchanged`);
+      return;
+    }
+    if (
+      order.periodStart &&
+      new Date(order.periodStart) > now &&
+      new Date(subscription.currentPeriodStart).getTime() === new Date(order.periodStart).getTime()
+    ) {
+      await this.takeBackPrepaidPeriod(subscription, order, tx);
+      return;
+    }
 
     await tx.subscription.update({
       where: { id: subscription.id },
@@ -1223,6 +1392,36 @@ export class PaymentOrchestratorService implements OnModuleInit {
     );
 
     this.logger.log(`Ended subscription ${subscription.id}: order ${order.id} was refunded`);
+  }
+
+  private async takeBackPrepaidPeriod(subscription: any, order: any, tx: any): Promise<void> {
+    const before = await tx.order.findFirst({
+      where: { subscriptionId: subscription.id, periodEnd: order.periodStart, status: 'paid' },
+      include: { price: true },
+    });
+    const periodEnd = new Date(order.periodStart);
+    const grace = ((before?.price ?? order.price)?.graceDays || 0) * 86_400_000;
+    await tx.subscription.update({
+      where: { id: subscription.id },
+      data: {
+        currentPeriodStart: before?.periodStart ?? subscription.createdAt,
+        currentPeriodEnd: periodEnd,
+        cancelAtPeriodEnd: true,
+        updatedAt: new Date(),
+      },
+    });
+    await tx.entitlement.updateMany({
+      where: {
+        userId: subscription.userId,
+        source: 'subscription',
+        status: 'active',
+        value: { path: ['subscription_id'], equals: subscription.id },
+      },
+      data: { expiresAt: new Date(periodEnd.getTime() + grace), updatedAt: new Date() },
+    });
+    this.logger.log(
+      `Order ${order.id} was refunded: subscription ${subscription.id} ends ${periodEnd.toISOString()}`,
+    );
   }
 
   private async handleCreditsRefund(order: any, tx: any): Promise<void> {

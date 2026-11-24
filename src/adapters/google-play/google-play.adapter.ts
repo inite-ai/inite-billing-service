@@ -3,9 +3,11 @@ import {
   Connector,
   ConnectorCapabilities,
   RegisterConnector,
+  RenewalEvidence,
   WebhookVerifyInput,
 } from '../../common/connectors/connector.interface';
 import { safeTimingSafeEqual } from '../../common/connectors/webhook-verify.util';
+import { Decimal } from '@prisma/client/runtime/library';
 import { RAILS } from '../../common/connectors/rail';
 import {
   CreateIntentInput,
@@ -382,6 +384,42 @@ export class GooglePlayAdapter implements Connector {
     }
 
     this.logger.log(`Acknowledged Google Play purchase: ${productId}`);
+  }
+
+  /**
+   * The notification names only the purchase token, which never changes: the
+   * charge is the token's latest order, read from Google.
+   */
+  async readRenewal({
+    providerSubscriptionId,
+  }: {
+    providerSubscriptionId: string;
+    currentPeriodEnd: Date;
+    payload: Record<string, any>;
+  }): Promise<RenewalEvidence | null> {
+    const config = await this.getConfig();
+    const sub = await this.googleRequest(
+      'GET',
+      `/applications/${config.packageName}/purchases/subscriptionsv2/tokens/${providerSubscriptionId}`,
+    );
+    const line = sub?.lineItems?.[0];
+    const expiry = line?.expiryTime ? new Date(line.expiryTime) : undefined;
+    if (!sub?.latestOrderId || !expiry) {
+      throw new Error('Google names no order for this renewal');
+    }
+    const price = line.autoRenewingPlan?.recurringPrice;
+    return {
+      chargeId: String(sub.latestOrderId),
+      ...(price?.currencyCode
+        ? {
+            amount: new Decimal(String(price.units ?? 0))
+              .plus(new Decimal(price.nanos ?? 0).div(1_000_000_000))
+              .toString(),
+            currency: String(price.currencyCode).toUpperCase(),
+          }
+        : {}),
+      periodEnd: expiry,
+    };
   }
 
   async listMethods(): Promise<PaymentMethod[]> {

@@ -114,7 +114,10 @@ describe('order refund → credits and subscription', () => {
       // Voiding settled commissions is one `UPDATE ... RETURNING`; nothing was
       // settled in these fixtures, so it returns no rows to unwind.
       $queryRaw: jest.fn().mockResolvedValue([]),
-      order: { findUnique: jest.fn().mockResolvedValue(order) },
+      order: {
+        findUnique: jest.fn().mockResolvedValue(order),
+        count: jest.fn().mockResolvedValue(0),
+      },
       invoice: { updateMany: jest.fn() },
       affiliate: { update: jest.fn() },
       affiliateCommission: { updateMany: jest.fn(), count: jest.fn().mockResolvedValue(0) },

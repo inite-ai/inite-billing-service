@@ -232,6 +232,13 @@ model Order {
   /// order's description of itself — a receipt that changes after the fact.
   snapshot Json? @default("{}")
 
+  /// The subscription this order paid a period of, and that period. Null on a
+  /// one-time order, on an order not paid yet, and on those paid before these
+  /// columns existed.
+  subscriptionId String?   @map("subscription_id") @db.Uuid
+  periodStart    DateTime? @map("period_start") @db.Timestamptz(6)
+  periodEnd      DateTime? @map("period_end") @db.Timestamptz(6)
+
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -298,6 +305,10 @@ model Subscription {
   /// The renewal order billing opened for the period that ends next, on a
   /// rail that cannot recur by itself (PIX, crypto, the INITE wallet).
   renewalOrderId         String?            @map("renewal_order_id") @db.Uuid
+  /// What periods are counted from: a plan bought on the 31st renews on the
+  /// last day of short months and on the 31st again after. Null on rows made
+  /// before the column: counted from the period's own start, as they were.
+  billingAnchor          DateTime?          @map("billing_anchor") @db.Timestamptz(6)
   createdAt              DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt              DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
 

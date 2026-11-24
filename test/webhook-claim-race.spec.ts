@@ -133,8 +133,13 @@ describe('applyStateTransition locking', () => {
     // Already in the target state: the point is the ORDER of lock and read.
     await service.applyStateTransition('pi-1', 'paid' as any);
 
-    expect(calls[0]).toContain('FOR UPDATE');
-    expect(calls[1]).toBe('read');
+    // The first query only resolves ids (the subscription and the order are
+    // locked before the intent); the intent's lock is the last thing before the read.
+    expect(calls[0]).not.toContain('FOR UPDATE');
+    const read = calls.indexOf('read');
+    expect(calls[read - 1]).toContain('FOR UPDATE');
+    expect(calls[read - 1]).toContain('billing.payment_intents');
+    expect(calls.filter((c) => c === 'read')).toHaveLength(1);
     expect(tx.paymentIntent.update).not.toHaveBeenCalled();
   });
 });

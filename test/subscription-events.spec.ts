@@ -44,6 +44,7 @@ describe('handleSubscriptionEvent', () => {
   beforeEach(async () => {
     prisma = {
       $transaction: jest.fn((cb: any) => cb(prisma)),
+      $queryRaw: jest.fn().mockResolvedValue([]),
       subscription: {
         findFirst: jest.fn(),
         // Also answers the owner lookup: outbox events are addressed to the
@@ -196,37 +197,21 @@ describe('handleSubscriptionEvent', () => {
       expect(prisma.invoice.create).not.toHaveBeenCalled();
     });
 
-    it('uses a deterministic charge id (no Date.now) when the provider sends none', async () => {
-      const sub = mockSub();
-      prisma.subscription.findFirst.mockResolvedValue(sub);
-      prisma.order.findUnique.mockResolvedValue({
-        id: 'renewal-order-1',
-        userId: sub.userId,
-        priceId: sub.priceId,
-        amount: 29,
-        currency: 'USD',
-        mode: 'SUBSCRIPTION',
-        status: 'paid',
-        price: sub.price,
-      });
-      prisma.subscription.findUnique.mockResolvedValue(sub);
-
-      // No id/charge/payment_intent in providerData → deterministic fallback.
-      await orchestrator.handleSubscriptionEvent(
-        'STRIPE',
-        'subscription.renewed',
-        'sub_stripe_xyz',
-        {},
-      );
-
-      const providerIntentId = prisma.paymentIntent.create.mock.calls[0][0].data.providerIntentId;
-      expect(providerIntentId).toBe(`renewal_sub-1_${sub.currentPeriodEnd.toISOString()}`);
-      // The guard checked (rail, that same deterministic id) first.
-      expect(prisma.paymentIntent.findFirst).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { rail: 'STRIPE', providerIntentId },
-        }),
-      );
+    // It used to fall back to the period being renewed. A poll that had already
+    // renewed moved that period, so the late webhook of the same charge got a
+    // fresh key and renewed again.
+    it('books nothing, and fails for a retry, when the provider names no charge', async () => {
+      prisma.subscription.findFirst.mockResolvedValue(mockSub());
+      await expect(
+        orchestrator.handleSubscriptionEvent(
+          'STRIPE',
+          'subscription.renewed',
+          'sub_stripe_xyz',
+          {},
+        ),
+      ).rejects.toThrow('names no charge');
+      expect(prisma.order.create).not.toHaveBeenCalled();
+      expect(prisma.subscription.update).not.toHaveBeenCalled();
     });
   });
 
@@ -331,7 +316,7 @@ describe('handleSubscriptionEvent', () => {
           'GOOGLE_PLAY',
           eventType as any,
           'google-purchase-token-1',
-          {},
+          { id: 'charge-1' },
         );
 
         expect(prisma.order.create).toHaveBeenCalled();

@@ -3,8 +3,10 @@ import {
   Connector,
   ConnectorCapabilities,
   RegisterConnector,
+  RenewalEvidence,
   WebhookVerifyInput,
 } from '../../common/connectors/connector.interface';
+import { fromMinorUnits } from '../../common/money';
 import { RAILS } from '../../common/connectors/rail';
 import {
   CreateIntentInput,
@@ -376,6 +378,32 @@ export class StripeAdapter implements Connector {
       this.logger.error(`Error fetching Stripe status: ${error.message}`);
       throw error;
     }
+  }
+
+  /**
+   * The invoice is the charge: one invoice can be named by several events.
+   * The subscription's first invoice is its purchase, not a renewal.
+   */
+  async readRenewal({
+    payload,
+  }: {
+    providerSubscriptionId: string;
+    currentPeriodEnd: Date;
+    payload: Record<string, any>;
+  }): Promise<RenewalEvidence | null> {
+    const invoice = payload?.data?.object;
+    if (!invoice?.id) throw new Error('Stripe renewal event names no invoice');
+    if (invoice.billing_reason === 'subscription_create') return null;
+    const period = invoice.lines?.data?.[0]?.period;
+    const currency = invoice.currency ? String(invoice.currency).toUpperCase() : undefined;
+    return {
+      chargeId: String(invoice.id),
+      ...(currency && typeof invoice.amount_paid === 'number'
+        ? { amount: fromMinorUnits(invoice.amount_paid, currency).toString(), currency }
+        : {}),
+      ...(period?.start ? { periodStart: new Date(period.start * 1000) } : {}),
+      ...(period?.end ? { periodEnd: new Date(period.end * 1000) } : {}),
+    };
   }
 
   async listMethods(): Promise<PaymentMethod[]> {
