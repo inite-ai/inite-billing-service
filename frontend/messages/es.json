@@ -739,7 +739,11 @@
       "createTitle": "Crear precio",
       "created": "Precio creado",
       "deleted": "Precio eliminado",
-      "deleteConfirm": "¿Eliminar este precio?"
+      "deleteConfirm": "¿Eliminar este precio?",
+      "unpayableTitle": "Precios que nadie puede pagar",
+      "unpayableNobody": "Sin método de pago",
+      "unpayableCrypto": "Solo cripto",
+      "unpayableHint": "Comprobado con los proveedores de pago activos. Un plan se comprueba como suscripción."
     },
     "orders": {
       "title": "Pedidos",

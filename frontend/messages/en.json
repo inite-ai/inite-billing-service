@@ -739,7 +739,11 @@
       "createTitle": "Create Price",
       "created": "Price created",
       "deleted": "Price deleted",
-      "deleteConfirm": "Delete this price?"
+      "deleteConfirm": "Delete this price?",
+      "unpayableTitle": "Prices nobody can pay",
+      "unpayableNobody": "No payment method",
+      "unpayableCrypto": "Crypto only",
+      "unpayableHint": "Checked against the active payment providers. A plan is checked as a subscription."
     },
     "orders": {
       "title": "Orders",

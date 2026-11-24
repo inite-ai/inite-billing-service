@@ -43,6 +43,7 @@ import {
   SAFE_REF,
 } from './open-product';
 import { OpenSalePolicy } from './open-sale.policy';
+import { railRefuses } from './payable';
 import { isOrgSubscriber } from '../common/validators/is-user-id';
 
 @Injectable()
@@ -796,6 +797,7 @@ export class CheckoutService {
         name: true,
         supportedModes: true,
         currencies: true,
+        config: true,
       },
     });
 
@@ -803,8 +805,11 @@ export class CheckoutService {
     // price in any other — crypto sells dollar prices only. A rail whose
     // customer picks a method first (a crypto network) brings its options,
     // and is not offered when it has none to give.
-    const paymentMethods: Array<(typeof providers)[number] & { options?: unknown[] }> = [];
-    for (const provider of providers) {
+    // The credentials in `config` never leave: it is read here and left behind.
+    type Offered = Omit<(typeof providers)[number], 'config'> & { options?: unknown[] };
+    const paymentMethods: Offered[] = [];
+    const orderMeta = (order.metadata as Record<string, unknown>) ?? {};
+    for (const { config, ...provider } of providers) {
       let connector: Connector | null = null;
       try {
         connector = this.paymentOrchestrator.getAdapter(provider.code) as Connector;
@@ -825,6 +830,19 @@ export class CheckoutService {
       ) {
         continue;
       }
+      const refused = railRefuses(
+        { code: provider.code, currencies: provider.currencies, config },
+        {
+          mode: order.mode,
+          currency,
+          productType: order.price.product.type,
+          priceMetadata: order.price.metadata,
+          productMetadata: order.price.product.metadata,
+          orderLavaOfferId: orderMeta.lavaOfferId,
+          discounted: toMoney(order.amount).lt(toMoney(order.price.amount)),
+        },
+      );
+      if (refused) continue;
       if (capabilities?.selectableMethods && connector) {
         const options = connector.listMethods
           ? await connector.listMethods({ currency: order.currency }).catch(() => [])

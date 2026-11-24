@@ -16,11 +16,18 @@ import { PaymentOrchestratorModule } from '../payment-orchestrator/payment-orche
 import { PromoCodesModule } from '../promo-codes/promo-codes.module';
 import { FunnelModule } from '../funnel/funnel.module';
 import { CreditsModule } from '../credits/credits.module';
+import { PayablePricesService } from '../checkout/payable-prices.service';
+import { PayablePricesController } from './payable-prices.controller';
 import { RagModule } from '../rag/rag.module';
 
 @Module({
   imports: [PaymentOrchestratorModule, PromoCodesModule, FunnelModule, CreditsModule, RagModule],
-  controllers: [AdminController, MeteringAdminController, ServiceWebhookSecretController],
+  controllers: [
+    AdminController,
+    MeteringAdminController,
+    ServiceWebhookSecretController,
+    PayablePricesController,
+  ],
   providers: [
     AdminService,
     AdminCatalogService,
@@ -32,6 +39,8 @@ import { RagModule } from '../rag/rag.module';
     AdminExportService,
     PrismaService,
     ReferralLevelsService,
+    // Provided here: importing CheckoutModule closes a module cycle.
+    PayablePricesService,
   ],
   exports: [AdminOrdersService],
 })
