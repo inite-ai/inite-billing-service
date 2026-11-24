@@ -311,7 +311,10 @@ describe('the attempt that paid', () => {
       { notify } as any,
       { getContact: async () => null } as any,
       { chargeState: async () => charge, pay: jest.fn() } as any,
-      { addRenewalLink: async (id: string) => ({ checkoutUrl: `https://x/${id}` }) } as any,
+      {
+        reopen: async (id: string) => ({ checkoutUrl: `https://x/${id}` }),
+        addRenewalLink: async (id: string) => ({ checkoutUrl: `https://x/${id}` }),
+      } as any,
       { get: () => 'https://billing.example' } as any,
     );
     await service.runSweep(new Date());
