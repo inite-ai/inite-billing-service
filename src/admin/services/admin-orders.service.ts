@@ -103,7 +103,7 @@ export class AdminOrdersService {
   async refundOrder(id: string) {
     const order = await this.prisma.order.findUnique({
       where: { id },
-      include: { paymentIntents: true },
+      include: { paymentIntents: { include: { unapplied: true } } },
     });
     if (!order) throw new NotFoundException(`Order not found: ${id}`);
     if (order.status !== 'paid') {
@@ -117,7 +117,7 @@ export class AdminOrdersService {
     // needs the rail and the provider's own subscription id from that row.
     const paidFor = await this.paymentOrchestrator.subscriptionPaidBy(order);
 
-    const paidIntent = order.paymentIntents.find((pi) => pi.status === 'paid');
+    const paidIntent = order.paymentIntents.find((pi) => pi.status === 'paid' && !pi.unapplied);
     if (paidIntent) {
       // Issue the provider refund BEFORE the DB transition: applyStateTransition
       // revokes entitlements + reverses credits, so if we did that first and the

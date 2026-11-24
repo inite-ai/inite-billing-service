@@ -16,6 +16,7 @@ import { PaymentOrchestratorModule } from '../payment-orchestrator/payment-orche
 import { PromoCodesModule } from '../promo-codes/promo-codes.module';
 import { FunnelModule } from '../funnel/funnel.module';
 import { CreditsModule } from '../credits/credits.module';
+import { UnappliedPaymentsController } from './unapplied-payments.controller';
 import { OperatorItemsController } from './operator-items.controller';
 import { RagModule } from '../rag/rag.module';
 
@@ -25,6 +26,7 @@ import { RagModule } from '../rag/rag.module';
     AdminController,
     MeteringAdminController,
     ServiceWebhookSecretController,
+    UnappliedPaymentsController,
     OperatorItemsController,
   ],
   providers: [

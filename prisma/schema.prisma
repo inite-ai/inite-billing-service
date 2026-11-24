@@ -274,10 +274,14 @@ model PaymentIntent {
   txHash             String?      @map("tx_hash") @db.VarChar(255)
   expiresAt          DateTime?    @map("expires_at") @db.Timestamptz(6)
   snapshot           Json?        @default("{}")
+  /// The buyer chose another method: this attempt is closed for them and no
+  /// longer counts as the order's live one. The provider may still settle it.
+  supersededAt       DateTime?    @map("superseded_at") @db.Timestamptz(6)
   createdAt          DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order     Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  unapplied UnappliedPayment?
 
   @@unique([providerIntentId, rail], name: "unique_provider_intent_rail")
   @@unique([txHash, rail], name: "unique_tx_hash_rail")
@@ -286,6 +290,35 @@ model PaymentIntent {
   @@index([providerIntentId])
   @@index([txHash])
   @@map("payment_intents")
+  @@schema("billing")
+}
+
+/// Money a provider settled that paid no order: late after the order closed, a
+/// second payment of a paid order, or the wrong amount. Nothing was granted for
+/// it; a person refunds it or settles it by hand.
+model UnappliedPayment {
+  id              String    @id @default(uuid()) @db.Uuid
+  paymentIntentId String    @unique @map("payment_intent_id") @db.Uuid
+  orderId         String    @map("order_id") @db.Uuid
+  userId          String    @map("user_id") @db.VarChar(255)
+  rail            String    @db.VarChar(50)
+  amount          Decimal   @db.Decimal(19, 4)
+  currency        String    @db.VarChar(10)
+  providerRef     String?   @map("provider_ref") @db.VarChar(255)
+  /// already_paid | order_closed | order_refunded | amount_too_low | currency_mismatch | amount_unverifiable
+  reason          String    @db.VarChar(40)
+  /// open | resolved | refunded
+  status          String    @default("open") @db.VarChar(20)
+  note            String?   @db.Text
+  resolvedBy      String?   @map("resolved_by") @db.VarChar(255)
+  resolvedAt      DateTime? @map("resolved_at") @db.Timestamptz(6)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  paymentIntent PaymentIntent @relation(fields: [paymentIntentId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([orderId])
+  @@map("unapplied_payments")
   @@schema("billing")
 }
 

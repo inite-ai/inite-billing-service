@@ -21,6 +21,10 @@ import {
   X402_TOKEN,
   usdcAddress,
 } from '../adapters/crypto/x402/protocol';
+import { invoiceBase } from '../adapters/crypto/crypto.adapter';
+import { loadCryptoSettings } from '../adapters/crypto/crypto-config';
+import { FxRates } from '../adapters/crypto/fx';
+import { noteForOperator } from '../payment-orchestrator/operator-items';
 import { Settlements } from '../adapters/crypto/x402/settlements';
 import { CHECKOUT_MAX_PAYMENT, usdc } from './agent-limits';
 import { AgentPaymentsService } from './agent-payments.service';
@@ -28,6 +32,9 @@ import { WalletAgentsService, startOfMonth } from './wallet-agents.service';
 import { primaryIssuer } from '../auth/token-contract';
 
 const PAID = ['paid', 'completed', 'fulfilled'];
+const USDC_DECIMALS = 6;
+/** Past an authorization's end, by the chain's clock: a reorganised block is older than this. */
+const CHAIN_SLACK_MS = 2 * 60 * 1000;
 const AMOUNT = /^\d{1,5}(\.\d{1,2})?$/;
 
 export type NeedsReason = 'no_wallet' | 'not_approved' | 'over_limit' | 'insufficient_funds';
@@ -239,6 +246,17 @@ export class WalletMerchantsService {
     const merchant = await this.merchant(wallet.id, input.serviceId);
     if (!checkoutUser || !merchant) return needs('not_approved');
 
+    // Asked before an invoice exists: opened first, a refused charge left a
+    // live invoice on the order, and its timer running out ended the renewal.
+    const estimate = await this.estimate(order.amount, order.currency);
+    if (estimate !== null) {
+      if (estimate > usdc(merchant.perPayment)) return needs('over_limit');
+      const spent = await this.spentThisMonth(wallet, input.serviceId);
+      if (spent + estimate > usdc(merchant.monthly)) return needs('over_limit');
+      const held = await this.payments.usdcBalance(wallet.address as `0x${string}`);
+      if (held < estimate) return needs('insufficient_funds');
+    }
+
     // The session's invoice on Base: the live one, or a new one.
     const opened: Record<string, any> = await this.checkout.paySession(order.id, input.ownerDid, {
       rail: 'CRYPTO',
@@ -310,6 +328,74 @@ export class WalletMerchantsService {
     });
     this.logger.log(`Order ${order.id} paid from wallet ${wallet.address}: ${txHash}`);
     return { status: 'confirming', orderId: order.id, txHash };
+  }
+
+  /** The USDC an invoice for this would start from; null when there is no rate. */
+  private async estimate(amount: unknown, currency: string): Promise<bigint | null> {
+    const settings = await loadCryptoSettings(this.prisma);
+    const quote = await new FxRates(this.prisma).quote(currency, settings ?? undefined);
+    if (!quote) return null;
+    const { baseAmountRaw } = invoiceBase(
+      String(amount),
+      quote,
+      settings?.fxMarkupPercent ?? 0,
+      USDC_DECIMALS,
+    );
+    return BigInt(baseAmountRaw);
+  }
+
+  /**
+   * Where the last wallet charge of an order stands. `pending` covers every
+   * case in which money may still move: the order must not be charged again.
+   * `dead` is the chain's word: the authorization is unused and its time is
+   * over, so it can never be used. Nothing of ours is taken for that — not a
+   * failed send, not a revert, not a missing claim — and a chain that cannot
+   * be read leaves it pending.
+   */
+  async chargeState(orderId: string): Promise<'none' | 'pending' | 'dead'> {
+    const last = await this.prisma.walletAgentPayment.findFirst({
+      where: { orderId },
+      orderBy: { createdAt: 'desc' },
+      include: { agent: { include: { wallet: { select: { address: true } } } } },
+    });
+    if (!last) return 'none';
+    const claim = await this.prisma.x402Payment.findFirst({
+      where: { nonce: { equals: last.nonce, mode: 'insensitive' } },
+      select: { status: true },
+    });
+    if (claim?.status === 'mined') return 'pending';
+    try {
+      const { used, now } = await this.payments.authorization(
+        last.agent.wallet.address as `0x${string}`,
+        last.nonce as `0x${string}`,
+      );
+      const over = now.getTime() > last.validBefore.getTime() + CHAIN_SLACK_MS;
+      if (used && over) await this.unappliedOnChain(orderId, last);
+      return !used && over ? 'dead' : 'pending';
+    } catch (error: any) {
+      this.logger.warn(`Could not read the charge of order ${orderId}: ${error?.message}`);
+      return 'pending';
+    }
+  }
+
+  /**
+   * The chain took the authorization and its time is long over, yet the order
+   * is still unpaid: the money moved and nothing here settled it. It is never
+   * charged again; a person finds where it went.
+   */
+  private async unappliedOnChain(orderId: string, payment: { id: string; nonce: string }) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: { status: true },
+    });
+    if (!order || order.status === 'paid' || order.status === 'refunded') return;
+    await noteForOperator(this.prisma, {
+      kind: 'wallet_charge_unapplied',
+      key: payment.nonce.toLowerCase(),
+      orderId,
+      detail: { walletAgentPaymentId: payment.id, nonce: payment.nonce, orderStatus: order.status },
+    });
+    this.logger.error(`Wallet charge of order ${orderId} was used on chain but paid nothing`);
   }
 
   /** Record the payment under a per-wallet-and-site lock, so two at once cannot both fit the month. */

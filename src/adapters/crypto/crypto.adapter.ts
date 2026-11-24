@@ -18,7 +18,7 @@ import {
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../common/services/prisma.service';
 import { formatUnits, parseRawAmount } from './amount.util';
-import { FxRates } from './fx';
+import { FxRates, UsdQuote } from './fx';
 import {
   CHAINS,
   CHAIN_IDS,
@@ -56,6 +56,25 @@ export const UNMATCHED_TRANSFER_EVENT = 'crypto.transfer.unmatched';
  * payment after the grace period, a second payment — is recorded as an
  * unmatched transfer for an admin to assign, never dropped.
  */
+/**
+ * What an invoice asks for before its unique tail. Up, never down: the
+ * customer covers the last fraction of a cent, the shop is never short by it.
+ */
+export function invoiceBase(
+  amount: string | number,
+  quote: UsdQuote,
+  fxMarkupPercent: number,
+  decimals: number,
+): { usd: Decimal; markupPercent: number; baseAmountRaw: string } {
+  const markupPercent = quote.source === 'par' ? 0 : fxMarkupPercent;
+  const usd = FxRates.toUsd(amount, quote, markupPercent);
+  const baseAmountRaw = usd
+    .mul(new Decimal(10).pow(decimals))
+    .toDecimalPlaces(0, Decimal.ROUND_CEIL)
+    .toFixed(0);
+  return { usd, markupPercent, baseAmountRaw };
+}
+
 @RegisterConnector(RAILS.CRYPTO)
 @Injectable()
 export class CryptoAdapter implements Connector {
@@ -165,14 +184,12 @@ export class CryptoAdapter implements Connector {
         `Crypto payments are unavailable for prices in ${input.currency} right now: there is no current exchange rate for it`,
       );
     }
-    const markupPercent = quote.source === 'par' ? 0 : settings.fxMarkupPercent;
-    const usd = FxRates.toUsd(input.amount, quote, markupPercent);
-    // Up, never down: the customer covers the last fraction of a cent, the shop
-    // is never short by it.
-    const baseAmountRaw = usd
-      .mul(new Decimal(10).pow(tokenInfo.decimals))
-      .toDecimalPlaces(0, Decimal.ROUND_CEIL)
-      .toFixed(0);
+    const { usd, markupPercent, baseAmountRaw } = invoiceBase(
+      input.amount,
+      quote,
+      settings.fxMarkupPercent,
+      tokenInfo.decimals,
+    );
 
     if (!payable(settings, chainId)) {
       throw new BadRequestException(`Payments on ${chain.name} are not being accepted right now`);

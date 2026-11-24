@@ -25,6 +25,7 @@ import {
   PaySessionResponseDto,
 } from '../common/dto/checkout.dto';
 import { randomUUID } from 'node:crypto';
+import { PaymentIntent, Prisma } from '@prisma/client';
 import { Connector } from '../common/connectors/connector.interface';
 import { CreateIntentInput } from '../common/interfaces/payment-rail-adapter.interface';
 import { moneyToNumber, roundMoney, toMoney } from '../common/money';
@@ -44,6 +45,23 @@ import {
 } from './open-product';
 import { OpenSalePolicy } from './open-sale.policy';
 import { isOrgSubscriber } from '../common/validators/is-user-id';
+
+/** An attempt that, paid, starts a subscription its provider goes on charging. */
+function startsProviderSubscription(
+  mode: string | undefined,
+  intent: { rail: string; snapshot: unknown },
+): boolean {
+  const periodicity = (intent.snapshot as Record<string, any> | null)?.periodicity;
+  return intent.rail === 'LAVA'
+    ? !!periodicity && periodicity !== 'ONE_TIME'
+    : mode === 'SUBSCRIPTION' && intent.rail === 'STRIPE';
+}
+
+function subscriptionStillOpen(rail: string): ConflictException {
+  return new ConflictException(
+    `A subscription payment through ${rail} is still open: finish it, or wait for it to expire`,
+  );
+}
 
 @Injectable()
 export class CheckoutService {
@@ -850,7 +868,11 @@ export class CheckoutService {
     // checkout page shows the crypto invoice again after a reload, and keeps
     // showing its progress once the order has moved past `created`.
     const latestIntent = await this.prisma.paymentIntent.findFirst({
-      where: { orderId: order.id, status: { in: ['created', 'opened', 'paid'] } },
+      where: {
+        orderId: order.id,
+        status: { in: ['created', 'opened', 'paid'] },
+        supersededAt: null,
+      },
       orderBy: { createdAt: 'desc' },
     });
     let payment: Record<string, any> | null = null;
@@ -1215,10 +1237,17 @@ export class CheckoutService {
     // Reuse a still-live intent for this order + rail instead of creating a
     // second one. Without this a double-click / retry (or two tabs) issues two
     // payment URLs for the same order — the customer can pay both and get
-    // double-charged. A DIFFERENT rail is a deliberate method switch, so it
-    // still creates a fresh intent (the previous one abandons/expires).
+    // double-charged. A DIFFERENT rail is a deliberate method switch: the previous
+    // attempt is set aside (superseded) when the new one is recorded.
+    await this.leaveOtherAttempt(order, rail);
     const liveIntent = await this.prisma.paymentIntent.findFirst({
-      where: { orderId: order.id, rail, status: { in: ['created', 'opened'] } },
+      where: {
+        orderId: order.id,
+        rail,
+        status: { in: ['created', 'opened'] },
+        // One set aside earlier is brought back if it is for the same money.
+        OR: [{ supersededAt: null }, { amount: orderAmountDecimal, status: 'created' }],
+      },
       orderBy: { createdAt: 'desc' },
     });
     if (liveIntent) {
@@ -1232,6 +1261,7 @@ export class CheckoutService {
         this.logger.log(
           `Reusing live payment intent ${liveIntent.id} for order ${order.id} (${rail})`,
         );
+        if (liveIntent.supersededAt) await this.makeLive(order.id, liveIntent.id);
         return {
           checkoutUrl: liveIntent.checkoutUrl || '',
           paymentIntentId: liveIntent.id,
@@ -1278,7 +1308,7 @@ export class CheckoutService {
     // instead of surfacing a 500. Our own provider intent is left to expire.
     let paymentIntent;
     try {
-      paymentIntent = await this.prisma.paymentIntent.create({
+      paymentIntent = await this.recordAttempt(order.id, {
         data: {
           orderId: order.id,
           rail,
@@ -1302,10 +1332,19 @@ export class CheckoutService {
         },
       });
     } catch (error: any) {
+      if (error instanceof ConflictException) {
+        await adapter.releaseIntent?.({ providerIntentId: intentResult.providerIntentId });
+        throw error;
+      }
       if (error?.code === 'P2002') {
         await adapter.releaseIntent?.({ providerIntentId: intentResult.providerIntentId });
         const winner = await this.prisma.paymentIntent.findFirst({
-          where: { orderId: order.id, rail, status: { in: ['created', 'opened'] } },
+          where: {
+            orderId: order.id,
+            rail,
+            status: { in: ['created', 'opened'] },
+            supersededAt: null,
+          },
           orderBy: { createdAt: 'desc' },
         });
         if (winner) {
@@ -1318,6 +1357,9 @@ export class CheckoutService {
             ...(await this.describe(adapter, winner)),
           };
         }
+        throw new ConflictException(
+          'Another payment for this order was just started; reload to continue it',
+        );
       }
       throw error;
     }
@@ -1327,6 +1369,119 @@ export class CheckoutService {
       paymentIntentId: paymentIntent.id,
       ...(await this.describe(adapter, paymentIntent)),
     };
+  }
+
+  /**
+   * The buyer is choosing another method while an attempt on a different rail
+   * is open. The provider is asked first: what is already paid or on its way
+   * is not set aside. An attempt that would start a provider subscription
+   * cannot be left at all — paid later, it would go on charging beside the one
+   * chosen now, and no rail here can call it off before it starts.
+   */
+  private async leaveOtherAttempt(
+    order: { id: string; mode: string },
+    rail: string,
+  ): Promise<void> {
+    const other = await this.prisma.paymentIntent.findFirst({
+      where: {
+        orderId: order.id,
+        rail: { not: rail },
+        status: { in: ['created', 'opened'] },
+        supersededAt: null,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!other || other.rail === rail) return;
+    let status: string = other.status;
+    if (other.providerIntentId) {
+      try {
+        ({ status } = await this.paymentOrchestrator.syncIntentWithProvider(other.id));
+      } catch (error: any) {
+        this.logger.warn(`Could not check payment ${other.id} before a switch: ${error.message}`);
+      }
+    }
+    if (status === 'opened' || status === 'paid') {
+      throw new ConflictException(`This order is already being paid through ${other.rail}`);
+    }
+    if (status !== 'created') {
+      const fresh = await this.prisma.order.findUnique({ where: { id: order.id } });
+      if (fresh && fresh.status !== 'created') {
+        throw new BadRequestException(`Order is in '${fresh.status}' status and cannot be paid`);
+      }
+      return;
+    }
+    if (startsProviderSubscription(order.mode, other)) throw subscriptionStillOpen(other.rail);
+  }
+
+  /**
+   * Make one attempt the order's live one, setting any other aside, with the
+   * order locked: what was checked before the provider was called is checked
+   * again against what the other request has written since.
+   */
+  private async withOrderLive<T>(
+    orderId: string,
+    keepIntentId: string | null,
+    write: (tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw(
+        Prisma.sql`SELECT id FROM billing.orders WHERE id = ${orderId}::uuid FOR UPDATE`,
+      );
+      const order = await tx.order.findUnique({
+        where: { id: orderId },
+        select: { status: true, mode: true },
+      });
+      if (order && order.status !== 'created') {
+        throw new ConflictException(`This order is ${order.status}; reload the page`);
+      }
+      const live = await tx.paymentIntent.findFirst({
+        where: {
+          orderId,
+          status: { in: ['created', 'opened'] },
+          supersededAt: null,
+          ...(keepIntentId ? { id: { not: keepIntentId } } : {}),
+        },
+        select: { id: true, rail: true, status: true, snapshot: true },
+      });
+      if (live) {
+        if (live.status === 'opened') {
+          throw new ConflictException(`This order is already being paid through ${live.rail}`);
+        }
+        if (startsProviderSubscription(order?.mode, live)) throw subscriptionStillOpen(live.rail);
+        await tx.paymentIntent.updateMany({
+          where: { id: live.id, status: 'created' },
+          data: { supersededAt: new Date() },
+        });
+      }
+      return write(tx);
+    });
+  }
+
+  private async recordAttempt(
+    orderId: string,
+    create: Prisma.PaymentIntentCreateArgs,
+  ): Promise<PaymentIntent> {
+    // The same method asked for twice: the unique index answers, and the first
+    // request's payment is given back to the second.
+    const same = await this.prisma.paymentIntent.findFirst({
+      where: {
+        orderId,
+        rail: String(create.data.rail),
+        status: { in: ['created', 'opened'] },
+        supersededAt: null,
+      },
+      select: { id: true },
+    });
+    return this.withOrderLive(orderId, same?.id ?? null, (tx) => tx.paymentIntent.create(create));
+  }
+
+  private async makeLive(orderId: string, intentId: string): Promise<void> {
+    await this.withOrderLive(orderId, intentId, (tx) =>
+      tx.paymentIntent.updateMany({
+        where: { id: intentId, status: 'created' },
+        data: { supersededAt: null },
+      }),
+    );
   }
 
   /**

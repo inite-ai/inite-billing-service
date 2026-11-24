@@ -180,6 +180,7 @@ export async function applyRenewalPayment(
   tx: any,
   order: any,
   meta: RenewalMeta,
+  paidBy?: any,
 ): Promise<void> {
   const sub = await tx.subscription.findUnique({ where: { id: meta.subscriptionId } });
   if (!sub || sub.userId !== order.userId) {
@@ -202,10 +203,12 @@ export async function applyRenewalPayment(
     restarted = true;
     periodEnd = calculatePeriodEnd(now, interval);
   }
-  const latestIntent = await tx.paymentIntent.findFirst({
-    where: { orderId: order.id },
-    orderBy: { updatedAt: 'desc' },
-  });
+  const payer =
+    paidBy ??
+    (await tx.paymentIntent.findFirst({
+      where: { orderId: order.id, status: 'paid' },
+      orderBy: { updatedAt: 'desc' },
+    }));
   const changedPlan = sub.priceId !== price.id;
 
   await tx.subscription.update({
@@ -220,7 +223,7 @@ export async function applyRenewalPayment(
       ...(restarted || changedPlan ? { billingAnchor: periodStart } : {}),
       cancelAtPeriodEnd: false,
       // The rail this period was paid on: the next renewal starts from it.
-      ...(latestIntent?.rail ? { rail: latestIntent.rail } : {}),
+      ...(payer?.rail ? { rail: payer.rail } : {}),
       updatedAt: now,
     },
   });

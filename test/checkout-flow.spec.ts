@@ -312,7 +312,11 @@ describe('CheckoutService', () => {
     // The reuse query is scoped to non-terminal intents on this order + rail.
     expect(mockPrisma.paymentIntent.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { orderId: 'order-1', rail: 'STRIPE', status: { in: ['created', 'opened'] } },
+        where: expect.objectContaining({
+          orderId: 'order-1',
+          rail: 'STRIPE',
+          status: { in: ['created', 'opened'] },
+        }),
       }),
     );
   });

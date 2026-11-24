@@ -27,7 +27,8 @@ https://github.com/inite-ai/inite-triad/blob/main/docs/compatibility.md
    floats, no `parseFloat`/`Number()` on an amount that feeds a write.
 3. **Every movement of money goes through the payment orchestrator**
    (`applyStateTransition`). No code path marks an order paid, grants credits
-   or entitlements, or moves a wallet balance on its own.
+   or entitlements, or moves a wallet balance on its own. Money confirmed after
+   its attempt was closed goes through `settleLate` in the same service.
 4. **Don't weaken a check that protects money or identity**: webhook
    signature and amount/currency validation, `iss`/`aud` checks, role guards,
    tenant (`serviceId`) scoping, the SSRF guard on outbound webhooks,

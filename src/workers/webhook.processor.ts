@@ -179,6 +179,20 @@ export class WebhookProcessor extends WorkerHost {
         return;
       }
 
+      // Money for an attempt we had closed. The transition used to throw, the
+      // event was retried until it was abandoned, and the money was nowhere.
+      if (
+        statusResult.status === 'paid' &&
+        (paymentIntent.status === 'expired' || paymentIntent.status === 'failed')
+      ) {
+        await this.paymentOrchestrator.settleLate(paymentIntent.id, statusResult);
+        await this.prisma.webhookEvent.update({
+          where: { id: webhookEvent.id },
+          data: { status: 'processed', processedAt: new Date() },
+        });
+        return;
+      }
+
       let finalStatus = statusResult.status as any;
 
       if (finalStatus === 'paid') {

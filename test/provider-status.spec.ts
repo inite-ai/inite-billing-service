@@ -17,7 +17,12 @@ describe('provider status polling', () => {
     };
     const prisma: any = {
       paymentProvider: { findMany: jest.fn().mockResolvedValue([{ code: 'LAVA' }]) },
-      paymentIntent: { findMany: jest.fn().mockResolvedValue(opts.intents ?? []) },
+      paymentIntent: {
+        // The poll also asks for recently closed payments; there are none here.
+        findMany: jest.fn(async ({ where }: any) =>
+          where.status.in.includes('expired') ? [] : (opts.intents ?? []),
+        ),
+      },
       subscription: { findMany: jest.fn().mockResolvedValue(opts.subscriptions ?? []) },
     };
     const orchestrator: any = {

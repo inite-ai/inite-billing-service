@@ -20,6 +20,7 @@ describe('State Transitions', () => {
       paymentIntent: {
         findUnique: jest.fn(),
         update: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
       order: {
         findUnique: jest.fn(),
