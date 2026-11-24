@@ -24,6 +24,7 @@ import {
 import { invoiceBase } from '../adapters/crypto/crypto.adapter';
 import { loadCryptoSettings } from '../adapters/crypto/crypto-config';
 import { FxRates } from '../adapters/crypto/fx';
+import { noteForOperator } from '../payment-orchestrator/operator-items';
 import { Settlements } from '../adapters/crypto/x402/settlements';
 import { CHECKOUT_MAX_PAYMENT, usdc } from './agent-limits';
 import { AgentPaymentsService } from './agent-payments.service';
@@ -369,11 +370,32 @@ export class WalletMerchantsService {
         last.nonce as `0x${string}`,
       );
       const over = now.getTime() > last.validBefore.getTime() + CHAIN_SLACK_MS;
+      if (used && over) await this.unappliedOnChain(orderId, last);
       return !used && over ? 'dead' : 'pending';
     } catch (error: any) {
       this.logger.warn(`Could not read the charge of order ${orderId}: ${error?.message}`);
       return 'pending';
     }
+  }
+
+  /**
+   * The chain took the authorization and its time is long over, yet the order
+   * is still unpaid: the money moved and nothing here settled it. It is never
+   * charged again; a person finds where it went.
+   */
+  private async unappliedOnChain(orderId: string, payment: { id: string; nonce: string }) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: { status: true },
+    });
+    if (!order || order.status === 'paid' || order.status === 'refunded') return;
+    await noteForOperator(this.prisma, {
+      kind: 'wallet_charge_unapplied',
+      key: payment.nonce.toLowerCase(),
+      orderId,
+      detail: { walletAgentPaymentId: payment.id, nonce: payment.nonce, orderStatus: order.status },
+    });
+    this.logger.error(`Wallet charge of order ${orderId} was used on chain but paid nothing`);
   }
 
   /** Record the payment under a per-wallet-and-site lock, so two at once cannot both fit the month. */

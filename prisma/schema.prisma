@@ -354,6 +354,27 @@ model Subscription {
   @@schema("billing")
 }
 
+/// A question about money only a person can answer (see operator-items.ts).
+model OperatorItem {
+  id             String    @id @default(uuid()) @db.Uuid
+  key            String    @unique @db.VarChar(255)
+  /// charge_not_placed | wallet_charge_unapplied
+  kind           String    @db.VarChar(40)
+  subscriptionId String?   @map("subscription_id") @db.Uuid
+  orderId        String?   @map("order_id") @db.Uuid
+  detail         Json      @default("{}")
+  /// open | resolved
+  status         String    @default("open") @db.VarChar(20)
+  note           String?   @db.Text
+  resolvedBy     String?   @map("resolved_by") @db.VarChar(255)
+  resolvedAt     DateTime? @map("resolved_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([status, createdAt])
+  @@map("operator_items")
+  @@schema("billing")
+}
+
 model Entitlement {
   id        String            @id @default(uuid()) @db.Uuid
   userId    String            @map("user_id") @db.VarChar(255)

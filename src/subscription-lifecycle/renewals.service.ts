@@ -121,6 +121,8 @@ export class SubscriptionRenewalsService {
         this.logger.log(`Wallet refused renewal of ${sub.id} (${result.reason}); sending the link`);
       } catch (error: any) {
         this.logger.warn(`Wallet renewal of ${sub.id} failed: ${error?.message}`);
+        // A failure after the authorization left may still settle: no link beside it.
+        if ((await this.merchants.chargeState(order.id)) === 'pending') return;
         // It may have left the wallet, or may be worth another try later.
         if (tries + 1 < MAX_TRIES) return;
       }
