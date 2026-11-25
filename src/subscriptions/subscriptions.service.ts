@@ -1,4 +1,4 @@
-import { definedCredits } from '../credits/credit-company';
+import { definedCredits, orderCompanyId } from '../credits/credit-company';
 import {
   Injectable,
   ForbiddenException,
@@ -239,11 +239,18 @@ export class SubscriptionsService {
     return this.getUserSubscriptions(userId, service.id);
   }
 
+  /**
+   * `metadata.company_id`, as a checkout takes it, names the selling service's
+   * own account the trial is for: it is kept on the subscription and sent with
+   * the trial's credit grant, so the service can credit that account.
+   */
   async startTrial(
     userId: string,
     priceCode: string,
     callerServiceId?: string,
+    metadata?: Record<string, unknown>,
   ): Promise<SubscriptionResponseDto> {
+    const companyId = orderCompanyId(metadata);
     const price = await this.prisma.price.findUnique({
       where: { code: priceCode },
       include: { product: true },
@@ -305,6 +312,7 @@ export class SubscriptionsService {
           currentPeriodStart: now,
           currentPeriodEnd: trialEnd,
           cancelAtPeriodEnd: false,
+          companyId,
         },
       });
 
@@ -360,6 +368,7 @@ export class SubscriptionsService {
               source: 'trial',
               periodStart: subscription.currentPeriodStart,
               periodEnd: trialEnd,
+              companyId,
             },
           },
           tx,

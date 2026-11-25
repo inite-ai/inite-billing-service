@@ -114,6 +114,8 @@ There's no mock payment rail, but two paths complete the whole flow with zero pr
   it to `paid` — full fulfilment, no provider. Great for wiring up your webhook handler.
 - **Trial** — `POST /v1/subscriptions/trial` with `{ "priceCode": "pro_monthly", "userId": "…" }`
   grants entitlements and trial credits with no payment at all (the price needs `trialDays > 0`).
+  Add `"metadata": { "company_id": "…" }`, as on a checkout, to name your own account the trial
+  is for: its credit events carry it.
 
 > Provider sandboxes also exist (e.g. ONE `sandbox.one.lat`) — set them in the provider `config`
 > for a realistic dry run. See [Go to production](/docs/going-live).

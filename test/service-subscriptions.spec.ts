@@ -192,4 +192,18 @@ describe('Service subscriptions (integration)', () => {
       .expect(201);
     expect(res.body.status).toBe('trialing');
   });
+
+  it('keeps the company a trial is started for on its subscription', async () => {
+    const res = await api()
+      .post('/v1/service-subscriptions/trial')
+      .set('Authorization', `Bearer ${token()}`)
+      .send({
+        userId: 'did:key:z6MkTrialist2',
+        priceCode: 'studio-it-team-monthly',
+        metadata: { company_id: 'co-trial' },
+      })
+      .expect(201);
+    const sub = await prisma.subscription.findUniqueOrThrow({ where: { id: res.body.id } });
+    expect(sub.companyId).toBe('co-trial');
+  });
 });

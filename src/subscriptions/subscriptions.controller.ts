@@ -104,7 +104,12 @@ export class SubscriptionsController {
       throw new BadRequestException('userId is required (pass in body for service API key calls)');
     }
     const callerServiceId = req.user?.isService ? req.user.serviceId : undefined;
-    return this.subscriptionsService.startTrial(userId, body.priceCode, callerServiceId);
+    return this.subscriptionsService.startTrial(
+      userId,
+      body.priceCode,
+      callerServiceId,
+      body.metadata,
+    );
   }
 
   @Get('user/:userId')

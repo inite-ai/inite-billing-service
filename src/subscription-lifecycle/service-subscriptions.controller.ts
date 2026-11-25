@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import { IsString, Matches, MaxLength } from 'class-validator';
+import { IsObject, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 import { RequestUser, User } from '../auth/decorators/user.decorator';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import {
@@ -33,6 +33,8 @@ class ServiceTrialDto {
   })
   userId!: string;
   @IsString() @MaxLength(100) priceCode!: string;
+  /** As on a checkout: `company_id` names this service's own account the trial is for. */
+  @IsOptional() @IsObject() metadata?: Record<string, unknown>;
 }
 
 /**
@@ -59,7 +61,12 @@ export class ServiceSubscriptionsController {
   @ApiOperation({ summary: 'Start a no-card trial of one of this service’s plans' })
   async trial(@User() user: RequestUser, @Body() body: ServiceTrialDto) {
     assertOwnGuestId(body.userId, user.serviceCode);
-    return this.subscriptions.startTrial(body.userId, body.priceCode, user.serviceId!);
+    return this.subscriptions.startTrial(
+      body.userId,
+      body.priceCode,
+      user.serviceId!,
+      body.metadata,
+    );
   }
 
   @Get()

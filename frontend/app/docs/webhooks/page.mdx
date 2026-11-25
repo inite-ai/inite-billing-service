@@ -83,7 +83,8 @@ transaction; a grant is revoked at most once, when its order is refunded. Apply 
 the period from `period_start` to `period_end` and expire with it, pack credits have no period.
 `company_id` is the `company_id` string in the order's metadata (up to 128 characters), carried to the
 renewals of a subscription; it is null when the order names none or the subscription was paid for
-more than one. `amount` is the whole grant: spending and expiry are your ledger's own. Admin
+more than one. A trial takes the same `metadata.company_id` when it is started; the subscription keeps
+it, and its trial grant, renewals and plan changes name that company. `amount` is the whole grant: spending and expiry are your ledger's own. Admin
 adjustments are not sent.
 
 For access control you mostly need `entitlement.granted` / `entitlement.revoked` (see
