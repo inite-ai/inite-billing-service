@@ -28,12 +28,19 @@ describe('CreditsService.revokeGrant', () => {
       create: jest.fn().mockResolvedValue(balance),
       update: jest.fn().mockResolvedValue({ ...balance, ...after }),
     },
-    creditUsage: { create: jest.fn().mockResolvedValue({}) },
+    $queryRaw: jest.fn().mockResolvedValue([]),
+    creditUsage: {
+      create: jest.fn().mockResolvedValue({}),
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+    },
   });
 
   it('takes the credits away instead of adding them', async () => {
     const db = makeDb({ balance: 0, totalGranted: 0 });
-    const service = new CreditsService({ $transaction: (fn: any) => fn(db) } as any);
+    const service = new CreditsService({ $transaction: (fn: any) => fn(db) } as any, undefined, {
+      emit: jest.fn(),
+    } as any);
 
     await service.revokeGrant({ userId: 'user-1', amount: 100, orderId: 'o1' });
 
@@ -45,7 +52,9 @@ describe('CreditsService.revokeGrant', () => {
 
   it('writes the ledger row as a negative purchase reversal', async () => {
     const db = makeDb({ balance: 0 });
-    const service = new CreditsService({ $transaction: (fn: any) => fn(db) } as any);
+    const service = new CreditsService({ $transaction: (fn: any) => fn(db) } as any, undefined, {
+      emit: jest.fn(),
+    } as any);
 
     await service.revokeGrant({ userId: 'user-1', amount: 100, orderId: 'o1' });
 
@@ -59,7 +68,9 @@ describe('CreditsService.revokeGrant', () => {
 
   it('lets the balance go negative when the credits were already spent', async () => {
     const db = makeDb({ balance: -40 });
-    const service = new CreditsService({ $transaction: (fn: any) => fn(db) } as any);
+    const service = new CreditsService({ $transaction: (fn: any) => fn(db) } as any, undefined, {
+      emit: jest.fn(),
+    } as any);
 
     const updated = await service.revokeGrant({ userId: 'user-1', amount: 100, orderId: 'o1' });
 
@@ -73,14 +84,25 @@ describe('CreditsService.resetForPeriod', () => {
   it('stamps the order on the rows it writes, so a refund can find them', async () => {
     const db = {
       creditBalance: {
-        findUnique: jest.fn().mockResolvedValue({ id: 'bal-1', balance: 30, serviceId: null }),
-        findFirst: jest.fn().mockResolvedValue({ id: 'bal-1', balance: 30, serviceId: null }),
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ id: 'bal-1', balance: 30, periodBalance: 30, serviceId: null }),
+        findFirst: jest
+          .fn()
+          .mockResolvedValue({ id: 'bal-1', balance: 30, periodBalance: 30, serviceId: null }),
         create: jest.fn(),
         update: jest.fn().mockResolvedValue({ id: 'bal-1', balance: 500 }),
       },
-      creditUsage: { create: jest.fn().mockResolvedValue({}) },
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      creditUsage: {
+        create: jest.fn().mockResolvedValue({}),
+        findFirst: jest.fn(),
+        findMany: jest.fn(),
+      },
     };
-    const service = new CreditsService({ $transaction: (fn: any) => fn(db) } as any);
+    const service = new CreditsService({ $transaction: (fn: any) => fn(db) } as any, undefined, {
+      emit: jest.fn(),
+    } as any);
 
     await service.resetForPeriod({
       userId: 'user-1',

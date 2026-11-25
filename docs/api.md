@@ -204,6 +204,7 @@ billing.entitlement.{granted,revoked}
 billing.subscription.{created,updated,payment_failed,cancelled,ended,trial_started}
 billing.subscription.{cancel_scheduled,resumed}
 billing.subscription.{plan_changed,plan_change_scheduled,plan_change_cancelled,plan_change_failed}
+billing.credits.{granted,revoked}
 billing.affiliate.payout.created
 billing.quota.warning
 billing.risk.flagged

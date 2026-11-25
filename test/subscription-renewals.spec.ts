@@ -52,6 +52,7 @@ describe('SubscriptionRenewalsService', () => {
       subscription: { findMany: jest.fn(), update: jest.fn() },
       price: { findUnique: jest.fn() },
       order: {
+        findMany: jest.fn().mockResolvedValue([]),
         findUnique: jest.fn(({ where }: any) =>
           where.id
             ? (orders.get(where.id) ?? null)

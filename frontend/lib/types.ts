@@ -273,7 +273,10 @@ export interface CreditBalance {
   id: string
   userId: string
   serviceId?: string
+  /** Both buckets together. */
   balance: number
+  /** The part of `balance` that expires with the period. */
+  periodBalance?: number
   totalGranted: number
   totalUsed: number
   resetsAt?: string

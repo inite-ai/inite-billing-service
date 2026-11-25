@@ -2,6 +2,8 @@ import { BadRequestException, Injectable, Logger, Optional } from '@nestjs/commo
 import { PrismaService } from '../common/services/prisma.service';
 import { CreditBalance, CreditUsage, Prisma } from '@prisma/client';
 import { MeteringService } from './metering.service';
+import { OutboxService } from '../outbox/outbox.service';
+import type { CreditGrantSource } from './credit-company';
 
 import { resolveOrderBy, SortWhitelist } from '../common/helpers/sort';
 
@@ -17,7 +19,8 @@ export class CreditsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    @Optional() private readonly meteringService?: MeteringService,
+    @Optional() private readonly meteringService: MeteringService | undefined,
+    private readonly outbox: OutboxService,
   ) {}
 
   /**
@@ -57,6 +60,76 @@ export class CreditsService {
   }
 
   /**
+   * The balance, locked and read behind the lock. Every write that depends on
+   * what the buckets hold goes through here, so a renewal, a consume and a
+   * refund of the same balance happen one after another.
+   */
+  private async lockBalance(db: any, userId: string, serviceId?: string): Promise<CreditBalance> {
+    const balance = await this.findOrCreateBalance(db, userId, serviceId);
+    await db.$queryRaw(
+      Prisma.sql`SELECT id FROM billing.credit_balances WHERE id = ${balance.id}::uuid FOR UPDATE`,
+    );
+    return (await db.creditBalance.findUnique({ where: { id: balance.id } })) ?? balance;
+  }
+
+  /** Behind the balance lock: whether this order has granted its credits already. */
+  private async alreadyGranted(db: any, balanceId: string, orderId?: string): Promise<boolean> {
+    if (!orderId) return false;
+    const row = await db.creditUsage.findFirst({
+      where: { creditBalanceId: balanceId, orderId, type: 'grant' },
+    });
+    if (row) this.logger.warn(`Credits for order ${orderId} were already granted — skipping`);
+    return !!row;
+  }
+
+  /** The ledger row of a grant, and its event in the same transaction. */
+  private async recordGrant(
+    db: any,
+    balance: CreditBalance,
+    grant: {
+      amount: number;
+      bucket: 'period' | 'purchased';
+      description: string;
+      orderId?: string;
+      source?: CreditGrantSource;
+    },
+  ): Promise<void> {
+    const { source } = grant;
+    const periodStart = source?.periodStart?.toISOString() ?? null;
+    const periodEnd = source?.periodEnd?.toISOString() ?? null;
+    const companyId = source?.companyId ?? null;
+    const row = await db.creditUsage.create({
+      data: {
+        creditBalanceId: balance.id,
+        userId: balance.userId,
+        amount: grant.amount,
+        type: 'grant',
+        description: grant.description,
+        orderId: grant.orderId ?? null,
+        metadata: {
+          bucket: grant.bucket,
+          ...(source ? { source: source.source, periodStart, periodEnd, companyId } : {}),
+        },
+      },
+    });
+    if (!source) return;
+    await this.outbox.emit(
+      'billing.credits.granted',
+      {
+        grant_id: row.id,
+        order_id: grant.orderId ?? null,
+        user_id: balance.userId,
+        company_id: companyId,
+        source: source.source,
+        amount: grant.amount,
+        period_start: periodStart,
+        period_end: periodEnd,
+      },
+      { serviceId: balance.serviceId, tx: db },
+    );
+  }
+
+  /**
    * Get or create balance for user+service
    */
   async getBalance(userId: string, serviceId?: string): Promise<CreditBalance> {
@@ -89,32 +162,33 @@ export class CreditsService {
       description?: string;
       orderId?: string;
       resetsAt?: Date;
+      /** `period` credits expire with the next period; the default never do. */
+      bucket?: 'period' | 'purchased';
+      source?: CreditGrantSource;
     },
     tx?: Prisma.TransactionClient,
   ): Promise<CreditBalance> {
     const run = async (db: Prisma.TransactionClient) => {
-      const balance = await this.findOrCreateBalance(db, data.userId, data.serviceId);
+      const balance = await this.lockBalance(db, data.userId, data.serviceId);
+      if (await this.alreadyGranted(db, balance.id, data.orderId)) return balance;
 
-      // Increment balance and totalGranted
+      // `balance` is the total of both buckets; what is not period is purchased.
       const updated = await db.creditBalance.update({
         where: { id: balance.id },
         data: {
           balance: { increment: data.amount },
           totalGranted: { increment: data.amount },
+          ...(data.bucket === 'period' ? { periodBalance: { increment: data.amount } } : {}),
           resetsAt: data.resetsAt ?? balance.resetsAt,
         },
       });
 
-      // Create CreditUsage record
-      await db.creditUsage.create({
-        data: {
-          creditBalanceId: balance.id,
-          userId: data.userId,
-          amount: data.amount,
-          type: 'grant',
-          description: data.description ?? 'Credits granted',
-          orderId: data.orderId ?? null,
-        },
+      await this.recordGrant(db, balance, {
+        amount: data.amount,
+        bucket: data.bucket ?? 'purchased',
+        description: data.description ?? 'Credits granted',
+        orderId: data.orderId,
+        source: data.source,
       });
 
       this.logger.log(
@@ -266,12 +340,16 @@ export class CreditsService {
         softCapCrossed = evaluation.softCapCrossed;
       }
 
+      const fromPeriod = Math.min(chargeAmount, Math.max(balance.periodBalance ?? 0, 0));
+
       // Decrement balance, increment totalUsed
       const updated = await tx.creditBalance.update({
         where: { id: balance.id },
         data: {
           balance: { decrement: chargeAmount },
           totalUsed: { increment: chargeAmount },
+          // The credits that expire are spent first.
+          ...(fromPeriod > 0 ? { periodBalance: { decrement: fromPeriod } } : {}),
         },
       });
 
@@ -317,7 +395,8 @@ export class CreditsService {
   }
 
   /**
-   * Reset credits (on subscription renewal).
+   * Start a credit period (on subscription payment): what is left of the last
+   * period expires, purchased credits stay.
    *
    * `orderId` is stamped on the ledger rows so a later refund of that order can
    * find what this period granted. Without it the subscription grant was
@@ -330,50 +409,62 @@ export class CreditsService {
       newBalance: number;
       resetsAt: Date;
       orderId?: string;
+      source?: CreditGrantSource;
     },
     tx?: Prisma.TransactionClient,
   ): Promise<CreditBalance> {
     const run = async (db: Prisma.TransactionClient) => {
-      const balance = await this.findOrCreateBalance(db, data.userId, data.serviceId);
+      const balance = await this.lockBalance(db, data.userId, data.serviceId);
+      if (await this.alreadyGranted(db, balance.id, data.orderId)) return balance;
 
-      // If current balance > 0, log old balance as reset
-      if (balance.balance > 0) {
+      // Only what is left of the period expires. Purchased credits stay, and a
+      // negative period bucket (a refunded grant that was already spent) is a
+      // debt the new grant settles.
+      const expired = Math.max(balance.periodBalance ?? 0, 0);
+      if (expired > 0) {
+        const lastGrant = await db.creditUsage.findFirst({
+          where: {
+            creditBalanceId: balance.id,
+            type: 'grant',
+            metadata: { path: ['bucket'], equals: 'period' },
+          },
+          orderBy: { createdAt: 'desc' },
+        });
         await db.creditUsage.create({
           data: {
             creditBalanceId: balance.id,
             userId: data.userId,
-            amount: -balance.balance,
+            amount: -expired,
             type: 'reset',
-            description: `Period reset: ${balance.balance} credits expired`,
+            description: `Period reset: ${expired} credits expired`,
             orderId: data.orderId ?? null,
+            metadata: { expiredGrantId: lastGrant?.id ?? null },
           },
         });
       }
 
-      // Set balance = newBalance, update resetsAt
+      const change = data.newBalance - expired;
       const updated = await db.creditBalance.update({
         where: { id: balance.id },
         data: {
-          balance: data.newBalance,
-          totalGranted: { increment: data.newBalance },
+          balance: { increment: change },
+          periodBalance: { increment: change },
+          // Expired credits leave `totalGranted`, so balance = granted - used.
+          totalGranted: { increment: change },
           resetsAt: data.resetsAt,
         },
       });
 
-      // Log new grant
-      await db.creditUsage.create({
-        data: {
-          creditBalanceId: balance.id,
-          userId: data.userId,
-          amount: data.newBalance,
-          type: 'grant',
-          description: `Period reset: ${data.newBalance} credits granted`,
-          orderId: data.orderId ?? null,
-        },
+      await this.recordGrant(db, balance, {
+        amount: data.newBalance,
+        bucket: 'period',
+        description: `Period reset: ${data.newBalance} credits granted`,
+        orderId: data.orderId,
+        source: data.source,
       });
 
       this.logger.log(
-        `Reset credits for user ${data.userId} (service: ${data.serviceId ?? 'global'}): new balance ${data.newBalance}`,
+        `Reset credits for user ${data.userId} (service: ${data.serviceId ?? 'global'}): period balance ${data.newBalance}`,
       );
 
       return updated;
@@ -392,7 +483,7 @@ export class CreditsService {
     description: string;
   }): Promise<CreditBalance> {
     return this.prisma.$transaction(async (tx) => {
-      const balance = await this.findOrCreateBalance(tx, data.userId, data.serviceId);
+      const balance = await this.lockBalance(tx, data.userId, data.serviceId);
 
       // M5 fix: Check that negative adjustment doesn't result in balance < 0
       if (data.amount < 0 && balance.balance < Math.abs(data.amount)) {
@@ -408,6 +499,11 @@ export class CreditsService {
       } else {
         updateData.balance = { decrement: Math.abs(data.amount) };
         updateData.totalUsed = { increment: Math.abs(data.amount) };
+        // Purchased credits first; only the rest comes out of the period.
+        const period = balance.periodBalance ?? 0;
+        const purchased = Math.max(balance.balance - period, 0);
+        const fromPeriod = Math.max(Math.abs(data.amount) - purchased, 0);
+        if (fromPeriod > 0) updateData.periodBalance = { decrement: fromPeriod };
       }
 
       const updated = await tx.creditBalance.update({
@@ -498,17 +594,48 @@ export class CreditsService {
       amount: number;
       orderId: string;
       reason?: string;
+      /** The ledger row being revoked; a grant is revoked once. */
+      grant?: { id: string; metadata?: unknown };
     },
     tx?: Prisma.TransactionClient,
   ): Promise<CreditBalance> {
     const run = async (db: Prisma.TransactionClient) => {
-      const balance = await this.findOrCreateBalance(db, data.userId, data.serviceId);
+      const balance = await this.lockBalance(db, data.userId, data.serviceId);
+      const { grant } = data;
+      // Grants made before the buckets have no metadata and are purchased.
+      const meta = (grant?.metadata ?? {}) as Record<string, any>;
+      let expired = 0;
+      if (grant) {
+        const revoked = await db.creditUsage.findFirst({
+          where: {
+            creditBalanceId: balance.id,
+            type: 'purchase_reversal',
+            metadata: { path: ['grantId'], equals: grant.id },
+          },
+        });
+        if (revoked) return balance;
+        // What already expired with its period is gone: taking it again would
+        // come out of a later period or a purchase.
+        const resets = await db.creditUsage.findMany({
+          where: {
+            creditBalanceId: balance.id,
+            type: 'reset',
+            metadata: { path: ['expiredGrantId'], equals: grant.id },
+          },
+        });
+        expired = Math.min(
+          resets.reduce((sum, r) => sum - r.amount, 0),
+          data.amount,
+        );
+      }
+      const take = data.amount - expired;
 
       const updated = await db.creditBalance.update({
         where: { id: balance.id },
         data: {
-          balance: { decrement: data.amount },
-          totalGranted: { decrement: data.amount },
+          balance: { decrement: take },
+          totalGranted: { decrement: take },
+          ...(meta.bucket === 'period' ? { periodBalance: { decrement: take } } : {}),
         },
       });
 
@@ -518,20 +645,36 @@ export class CreditsService {
           userId: data.userId,
           // Negative, like `reset`: the ledger reads as a running total, and a
           // positive number here would sum as if credits had been added.
-          amount: -data.amount,
+          amount: take === 0 ? 0 : -take,
           type: 'purchase_reversal',
           description: data.reason ?? `Revoked: order ${data.orderId} refunded`,
           orderId: data.orderId,
+          metadata: grant ? { grantId: grant.id } : {},
         },
       });
 
+      if (grant) {
+        await this.outbox.emit(
+          'billing.credits.revoked',
+          {
+            grant_id: grant.id,
+            order_id: data.orderId,
+            user_id: data.userId,
+            company_id: typeof meta.companyId === 'string' ? meta.companyId : null,
+            // The whole grant: a service with its own ledger expires on its own.
+            amount: data.amount,
+          },
+          { serviceId: balance.serviceId, tx: db },
+        );
+      }
+
       if (updated.balance < 0) {
         this.logger.warn(
-          `Revoked ${data.amount} credits from user ${data.userId} for refunded order ${data.orderId}: balance is now ${updated.balance} (they had already been spent)`,
+          `Revoked ${take} credits from user ${data.userId} for refunded order ${data.orderId}: balance is now ${updated.balance} (they had already been spent)`,
         );
       } else {
         this.logger.log(
-          `Revoked ${data.amount} credits from user ${data.userId} for refunded order ${data.orderId}`,
+          `Revoked ${take} credits from user ${data.userId} for refunded order ${data.orderId}`,
         );
       }
 

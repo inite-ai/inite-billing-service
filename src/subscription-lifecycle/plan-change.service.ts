@@ -1,3 +1,4 @@
+import { subscriptionCompanyId } from '../credits/credit-company';
 import {
   BadRequestException,
   ConflictException,
@@ -191,6 +192,7 @@ export class PlanChangeService {
           sub.price.product.service?.code ?? '',
         )}`;
         const link = newCheckoutLink();
+        const companyId = await subscriptionCompanyId(this.prisma, sub);
         const order = await this.prisma.order.create({
           data: {
             userId: sub.userId,
@@ -221,6 +223,7 @@ export class PlanChangeService {
                 toPriceId: to.id,
                 periodEnd: sub.currentPeriodEnd.toISOString(),
               },
+              ...(companyId ? { company_id: companyId } : {}),
               successUrl: input.successUrl || portal,
               errorUrl: input.errorUrl || portal,
               linkTokenHash: link.hash,

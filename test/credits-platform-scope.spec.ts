@@ -20,7 +20,10 @@ describe('platform-wide credit balances', () => {
         create: jest.fn().mockImplementation(({ data }: any) => ({ id: 'bal-new', ...data })),
       },
     };
-    return { prisma, service: new CreditsService(prisma, { emit: jest.fn() } as any) };
+    return {
+      prisma,
+      service: new CreditsService(prisma, { emit: jest.fn() } as any, { emit: jest.fn() } as any),
+    };
   };
 
   it('finds the balance that has no service', async () => {

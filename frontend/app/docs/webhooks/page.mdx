@@ -70,10 +70,21 @@ The events you'll act on most, with their `data`:
 | `billing.payment.refunded` | `{ order_id, user_id, amount, currency }` |
 | `billing.entitlement.granted` | `{ user_id, key, source, order_id? \| subscription_id?, expires_at?, trial? }` |
 | `billing.entitlement.revoked` | `{ user_id, key, … }` |
+| `billing.credits.granted` | `{ grant_id, order_id, user_id, company_id, source, amount, period_start, period_end }` |
+| `billing.credits.revoked` | `{ grant_id, order_id, user_id, company_id, amount }` |
 | `billing.subscription.updated` / `.cancelled` / `.ended` | subscription id + status |
 | `billing.subscription.payment_failed` | dunning signal for a renewal |
 | `billing.subscription.trial_started` | a trial began |
 | `billing.payment.status_changed` | `{ payment_intent_id, order_id, status, previous_status }` |
+
+**Credits.** For a service that keeps its own credit ledger. One `granted` per grant, in the payment's
+transaction; a grant is revoked at most once, when its order is refunded. Apply each event once by
+`grant_id`. `source` is `subscription`, `pack` or `trial`; subscription and trial credits belong to
+the period from `period_start` to `period_end` and expire with it, pack credits have no period.
+`company_id` is the `company_id` string in the order's metadata (up to 128 characters), carried to the
+renewals of a subscription; it is null when the order names none or the subscription was paid for
+more than one. `amount` is the whole grant: spending and expiry are your ledger's own. Admin
+adjustments are not sent.
 
 For access control you mostly need `entitlement.granted` / `entitlement.revoked` (see
 [Gate access with entitlements](/docs/entitlements)).

@@ -56,6 +56,7 @@ describe('handleSubscriptionEvent', () => {
         create: jest.fn(),
       },
       order: {
+        findMany: jest.fn().mockResolvedValue([]),
         create: jest
           .fn()
           .mockImplementation(({ data }: any) =>
