@@ -1,9 +1,14 @@
 import { randomUUID } from 'crypto';
 import { PrismaClient } from '@prisma/client';
 import { CreditsService } from '../src/credits/credits.service';
-import { definedCredits, orderCompanyId } from '../src/credits/credit-company';
+import {
+  definedCredits,
+  orderCompanyId,
+  subscriptionCompanyId,
+} from '../src/credits/credit-company';
 import { OutboxService } from '../src/outbox/outbox.service';
 import { PaymentOrchestratorService } from '../src/payment-orchestrator/payment-orchestrator.service';
+import { SubscriptionsService } from '../src/subscriptions/subscriptions.service';
 
 /** Credits against the real database: buckets, replays, races and their events. */
 const URL =
@@ -24,6 +29,14 @@ describe('credit buckets (integration)', () => {
     logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
     handleAffiliateCommission: jest.fn(),
   });
+
+  const subscriptions = new SubscriptionsService(
+    prisma as any,
+    outbox,
+    credits,
+    quiet,
+    orchestrator,
+  );
 
   let serviceId: string;
   let userId: string;
@@ -314,6 +327,52 @@ describe('credit buckets (integration)', () => {
     expect(companies.sort()).toEqual(['a', 'b', null].sort());
   });
 
+  // A trial has no paid order, so the company was lost on its grant and on every
+  // renewal after it: the service could only park those credits for review.
+  const trialPrice = async () => {
+    const price = await product({ creditsPerPeriod: 50 });
+    return prisma.price.update({ where: { id: price.id }, data: { trialDays: 7 } });
+  };
+
+  it('a trial grant names the company its trial was started for', async () => {
+    const price = await trialPrice();
+    await subscriptions.startTrial(userId, price.code, serviceId, { company_id: 'co-t' });
+    const sub = await prisma.subscription.findFirstOrThrow({ where: { userId } });
+    expect(sub.companyId).toBe('co-t');
+    const granted = await events('billing.credits.granted');
+    expect(granted.map((e) => [e.source, e.amount, e.company_id])).toEqual([['trial', 50, 'co-t']]);
+  });
+
+  it('a trial started for no company names none', async () => {
+    const price = await trialPrice();
+    await subscriptions.startTrial(userId, price.code, serviceId, { company_id: ' ' });
+    expect(
+      (await prisma.subscription.findFirstOrThrow({ where: { userId } })).companyId,
+    ).toBeNull();
+    expect((await events('billing.credits.granted')).map((e) => e.company_id)).toEqual([null]);
+  });
+
+  it('a renewal after a trial names the company the trial was started for', async () => {
+    const price = await trialPrice();
+    await subscriptions.startTrial(userId, price.code, serviceId, { company_id: 'co-t' });
+    // The card that renews it: the trial never had a paid order to name a company.
+    const sub = await prisma.subscription.update({
+      where: { id: (await prisma.subscription.findFirstOrThrow({ where: { userId } })).id },
+      data: { rail: 'STRIPE', providerSubscriptionId: `sub_${randomUUID()}`, status: 'active' },
+    });
+    await orchestrator.handleSubscriptionEvent(
+      'STRIPE',
+      'subscription.renewed',
+      sub.providerSubscriptionId,
+      { id: `ch-${userId}` },
+    );
+    const granted = await events('billing.credits.granted');
+    expect(granted.map((e) => [e.source, e.company_id])).toEqual([
+      ['trial', 'co-t'],
+      ['subscription', 'co-t'],
+    ]);
+  });
+
   it('a paid order whose credits are malformed is not marked paid', async () => {
     const price = await product({}, { credits: 1.5 }, 'one_time');
     const { order, intent } = await openOrder(price, 'PAYMENT');
@@ -332,6 +391,20 @@ describe('order metadata', () => {
     { company_id: 'x'.repeat(129) },
   ])('names no company for %j', (metadata) => expect(orderCompanyId(metadata)).toBeNull());
   it('carries an opaque id', () => expect(orderCompanyId({ company_id: ' c1 ' })).toBe('c1'));
+  it('prefers the company a subscription names over its orders', async () => {
+    const db = { order: { findMany: jest.fn() } };
+    const sub = { id: 's', userId: 'u', priceId: 'p', companyId: 'own' };
+    await expect(subscriptionCompanyId(db, sub)).resolves.toBe('own');
+    expect(db.order.findMany).not.toHaveBeenCalled();
+  });
+  it('derives it from the paid orders when the subscription names none', async () => {
+    const db = {
+      order: { findMany: jest.fn().mockResolvedValue([{ metadata: { company_id: 'o' } }]) },
+    };
+    await expect(
+      subscriptionCompanyId(db, { id: 's', userId: 'u', priceId: 'p', companyId: null }),
+    ).resolves.toBe('o');
+  });
   it('reads credits', () => {
     expect(definedCredits('500')).toBe(500);
     expect(definedCredits(0)).toBeNull();

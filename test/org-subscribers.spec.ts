@@ -196,7 +196,15 @@ describe('POST /v1/subscriptions/trial for an organisation', () => {
       { user: { isService: true, serviceId: 'svc-1' } },
       { priceCode: 'p', userId: ORG },
     );
-    expect(startTrial).toHaveBeenCalledWith(ORG, 'p', 'svc-1');
+    expect(startTrial).toHaveBeenCalledWith(ORG, 'p', 'svc-1', undefined);
+  });
+
+  it('passes the company the trial is for, as a checkout names it', async () => {
+    await controller.startTrial(
+      { user: { isService: true, serviceId: 'svc-1' } },
+      { priceCode: 'p', userId: ORG, metadata: { company_id: 'co-1' } },
+    );
+    expect(startTrial).toHaveBeenCalledWith(ORG, 'p', 'svc-1', { company_id: 'co-1' });
   });
 
   it('a person starts one for their organisation as its owner or admin', async () => {
@@ -204,7 +212,7 @@ describe('POST /v1/subscriptions/trial for an organisation', () => {
       { user: { userId: DID, orgId: ORG_ID, orgRole: 'admin' } },
       { priceCode: 'p', userId: ORG },
     );
-    expect(startTrial).toHaveBeenCalledWith(ORG, 'p', undefined);
+    expect(startTrial).toHaveBeenCalledWith(ORG, 'p', undefined, undefined);
   });
 
   it('a member, or another organisation, is refused', async () => {

@@ -298,6 +298,11 @@ model Subscription {
   /// The renewal order billing opened for the period that ends next, on a
   /// rail that cannot recur by itself (PIX, crypto, the INITE wallet).
   renewalOrderId         String?            @map("renewal_order_id") @db.Uuid
+  /// The selling service's own account the subscription is for, when the
+  /// trial that started it named one (`metadata.company_id`). Renewals and
+  /// plan changes carry it to their credit events; a trial has no paid order
+  /// to derive it from.
+  companyId              String?            @map("company_id") @db.VarChar(128)
   createdAt              DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt              DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
 

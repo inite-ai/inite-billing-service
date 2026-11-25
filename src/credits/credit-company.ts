@@ -16,13 +16,17 @@ export function orderCompanyId(metadata: unknown): string | null {
 /**
  * The company of a subscription, for the orders billing opens itself (a
  * renewal, a plan change): they are not bought through a checkout that could
- * name one. Two companies among the orders that paid for it, or none, is null:
- * the service reviews it rather than billing guessing.
+ * name one. The company the subscription itself names (its trial named one)
+ * comes first: a trial has no paid order to derive it from. Otherwise two
+ * companies among the orders that paid for it, or none, is null: the service
+ * reviews it rather than billing guessing.
  */
 export async function subscriptionCompanyId(
   db: any,
-  sub: { id: string; userId: string; priceId: string },
+  sub: { id: string; userId: string; priceId: string; companyId?: string | null },
 ): Promise<string | null> {
+  const own = orderCompanyId({ company_id: sub.companyId });
+  if (own) return own;
   const orders = await db.order.findMany({
     where: {
       userId: sub.userId,
