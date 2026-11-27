@@ -1,0 +1,156 @@
+---
+title: "Usage-based billing: models, metering, invoicing and what the software must do"
+description: "How usage-based billing works end to end, from the pricing model to the meter, the rated invoice and the customer's view, and how to judge usage-based billing software."
+date: "2026-11-03"
+author: "INITE Billing"
+category: "SaaS billing"
+tags: ["pricing", "usage-based billing", "metering", "billing software"]
+directAnswer: "Usage-based billing charges each customer for what they consumed in a period: API calls, tokens, seats-hours, gigabytes. It needs four parts that a flat subscription does not: a pricing model that turns units into money, a meter that records every billable event exactly once, a rating step that prices the period, and a customer-facing view of usage before the invoice arrives."
+faqs:
+  - question: "What is usage-based pricing?"
+    answer: "Usage-based pricing sets the price by how much of the product a customer uses, such as requests, tokens, messages or compute time, instead of a fixed fee per seat or per month. Usage-based billing is the machinery that measures that use and turns it into invoices."
+  - question: "What does consumption billing receivable mean?"
+    answer: "It is usage a customer has already consumed but you have not invoiced yet. In usage-based billing the period closes first and the invoice comes after, so at any moment part of your revenue is earned but unbilled. Your billing system should report it so finance can accrue it."
+  - question: "Which software is used in a billing system?"
+    answer: "A usage-based billing stack usually has a payment processor, a billing engine that holds plans and invoices, a metering service that ingests usage events, and often an entitlements layer that decides what each customer may use. Some products cover several of these; few cover all of them well."
+  - question: "What is the difference between subscription and usage-based billing?"
+    answer: "A subscription charges a known amount per period in advance. Usage-based billing charges a variable amount, usually in arrears, after the period's usage is counted. Many products combine the two: a base fee that includes an allowance, plus usage above it."
+---
+
+Usage-based billing means the invoice follows consumption: a customer who made many API calls this month pays for many, and one who barely logged in pays for almost nothing. The usage-based billing system behind it is the hard part, because it has to count every billable event once, price a period that has already happened, and show the customer the number before the invoice surprises them. Below are the pricing models, the metering pipeline, invoicing, and a checklist for choosing usage-based billing software or a platform.
+
+## The pricing models usage billing has to express
+
+Most usage pricing is built from a handful of shapes. Whatever software you choose has to represent the ones you use today and the ones sales will invent next quarter.
+
+### Per unit
+
+Each unit has a price, and the charge is units times price. This is the easiest model to explain and the hardest to defend when your own costs vary per unit, which is the norm in AI products.
+
+### Package
+
+Units are sold in blocks. Stripe's own documentation shows a package price of "0.04 USD per 100 units" in its [usage-based implementation guide](https://docs.stripe.com/billing/subscriptions/usage-based/implementation-guide). A customer who uses 101 units pays for two packages.
+
+### Volume and graduated tiers
+
+The difference between the two tier types decides real money, and Stripe's [thresholds page](https://docs.stripe.com/billing/subscriptions/usage-based/thresholds) puts it precisely: "Volume tiers define the pricing for all units of usage, as opposed to graduated tiers, which define pricing for a specific amount of usage." With volume tiers, crossing a boundary reprices every unit in the period. With graduated tiers, only the units above the boundary get the new rate.
+
+### Base fee plus usage
+
+A monthly platform fee that includes an allowance, with overage above it. It is a common hybrid, because it gives finance a predictable floor and gives heavy users a path to pay more.
+
+### Prepaid credits and commitments
+
+The customer buys credits or commits to an annual spend up front, and usage draws the balance down. This shifts cash collection forward and caps your credit risk, but it adds a ledger: grants, expirations, rollovers, and what happens when the balance hits zero mid-month.
+
+### Minimums and caps
+
+A monthly minimum protects you against customers who sign and never use the product. A cap protects the customer against a runaway script. Both belong in the billing system, because a support ticket comes too late to enforce either.
+
+The pricing model belongs to product and finance. The rest of this article is about what engineering has to build or buy so that model can actually be charged.
+
+## Metering: counting every billable event once
+
+A meter turns product activity into numbers the billing system can price. It sounds like logging, and teams that treat it as logging find out at the first invoice dispute.
+
+### Events, not totals
+
+Send the billing system raw events (customer, event name, quantity, timestamp, and a unique identifier) and let it aggregate. Stripe's meters work this way: a meter event carries "the event name configured on the meter, customer ID, numerical value, and a timestamp (optional)," according to its [recording usage guide](https://docs.stripe.com/billing/subscriptions/usage-based/recording-usage-api). The meter then aggregates by one formula. Stripe's [meter configuration page](https://docs.stripe.com/billing/subscriptions/usage-based/meters/configure) lists three: sum, count, and last.
+
+Pre-aggregating in your own code and sending one total per day is faster to build and much harder to audit. When a customer disputes a number, raw events let you show exactly which calls produced it.
+
+### Idempotency
+
+Retries are normal. A worker crashes after sending an event and before marking it sent, then sends it again. The meter has to recognise the duplicate. Stripe accepts an `identifier` on each meter event and, per its [API reference](https://docs.stripe.com/api/billing/meter-event/create), "enforces uniqueness within a rolling period of at least 24 hours." Outside that window the duplicate is your problem, so generate identifiers from the source record (a request ID, a job ID), never from a random value created at send time.
+
+### Late and corrected events
+
+Events arrive late: a mobile client was offline, a queue backed up, a batch job ran after midnight. Every meter has a window. Stripe accepts timestamps that are "within the past 35 calendar days or up to 5 minutes in the future" ([API reference](https://docs.stripe.com/api/billing/meter-event/create)), and warns that accepting an event "doesn't guarantee that Stripe can include the usage on an invoice" ([recording usage guide](https://docs.stripe.com/billing/subscriptions/usage-based/recording-usage-api)). Corrections have a window too: Stripe lets you cancel events "sent to Stripe within the last 24 hours" ([meter configuration](https://docs.stripe.com/billing/subscriptions/usage-based/meters/configure)).
+
+Decide in advance what you do with usage that misses its period: bill it in the next one, write it off, or reopen the invoice. Write that rule into your terms so support does not improvise it.
+
+### Throughput
+
+Usage can grow much faster than customer count. Stripe's standard meter endpoint allows "1000 calls per second per Stripe account," and its meter event streams accept "up to 10,000 events per second" in live mode ([recording usage guide](https://docs.stripe.com/billing/subscriptions/usage-based/recording-usage-api)). Dedicated metering vendors quote higher figures; Orb says its platform is "regularly stress-tested to volumes such as 250,000+ events/second" on its [pricing page](https://www.withorb.com/pricing). If you are near those numbers, aggregate per customer per minute at the edge and send the aggregates as events with stable identifiers.
+
+## Rating and invoicing
+
+Rating applies the price to the aggregated usage of a period. Invoicing turns the result into a document a customer pays.
+
+### Billing in arrears
+
+Usage is usually invoiced after the period ends. Stripe describes pay-as-you-go pricing as charging "customers in arrears for the usage they accrue," invoiced "at the end of each billing interval" ([implementation guide](https://docs.stripe.com/billing/subscriptions/usage-based/implementation-guide)). Arrears means you extend credit to every customer for a full period. That is fine for a known company and a risk for an anonymous sign-up with a stolen card.
+
+### The grace window before finalisation
+
+Late events need somewhere to land. Stripe holds invoices with "a default finalization grace period of 1 hour," configurable up to "72 hours (3 days)" ([grace period docs](https://docs.stripe.com/billing/subscriptions/usage-based/configure-grace-period)). Usage reported after the window, Stripe says, is not added "to the finalized invoice or the next invoice." If your pipeline can lag by more than the window, extend it or build your own correction step.
+
+### Thresholds
+
+For customers who can run up large bills, invoice early when accrued usage crosses an amount. Stripe supports a monetary threshold of "at least 50 currency units" ([thresholds page](https://docs.stripe.com/billing/subscriptions/usage-based/thresholds)). Thresholds cut your exposure to non-payment and spread the customer's charges more evenly.
+
+### Mid-period changes
+
+Upgrades, downgrades, and price changes in the middle of a period are where homegrown systems break. You need a rule for which price applies to which usage. Stripe notes that when a subscription item's price changes during a cycle, "the grace period doesn't capture late usage" ([grace period docs](https://docs.stripe.com/billing/subscriptions/usage-based/configure-grace-period)), which is the kind of edge case a vendor should document and you should test.
+
+### Credits, refunds and corrections
+
+Once an invoice is finalised it should not change silently. Corrections go through credit notes or a credit on the next invoice. The billing system should keep the event-level trail so finance can explain any line.
+
+## What the customer has to see
+
+Usage billing fails commercially when the first invoice is a surprise. The customer needs a running number throughout the period.
+
+- A usage page that updates within minutes, broken down by feature or model.
+- Alerts at thresholds the customer sets. Stripe allows "a maximum of 25 alerts for each combination of a specific meter and customer" ([monitoring docs](https://docs.stripe.com/billing/subscriptions/usage-based/monitor)).
+- A hard or soft limit, with a clear answer to what happens at the limit: the product stops, slows down, or keeps going and bills overage.
+- An estimate of the current invoice.
+
+Stripe's own guide notes that Billing Meters update usage only at invoice time ("Real-time usage visibility (Billing Meters only updates at invoice time)", [implementation guide](https://docs.stripe.com/billing/subscriptions/usage-based/implementation-guide)), so you will likely build this view yourself or buy a layer that provides it.
+
+## What usage-based billing software must do
+
+Use this checklist on any system, including one you build.
+
+1. Ingest raw events with idempotency and a documented window for late events and corrections.
+2. Express your pricing models without workarounds: per unit, package, volume and graduated tiers, base fee with allowance, minimums, prepaid credits with expiry.
+3. Price per dimension. AI products price by model, region or quality tier. Check whether one meter can carry dimensions or whether you need a meter per price.
+4. Hold a credit ledger if you sell prepaid credits: grants, burn-down order, expiry, and a balance check fast enough to sit in your request path.
+5. Enforce limits in real time, in the request path. A limit checked only at invoice time just reports the overrun.
+6. Invoice correctly across changes: mid-period upgrades, proration, thresholds, and late usage.
+7. Show the customer their usage before the invoice, with alerts.
+8. Report revenue properly: unbilled usage, deferred revenue for prepaid credits, and an audit trail from invoice line back to events.
+9. Work with your payment rails. If you sell through cards, app stores, regional methods or crypto, the billing layer has to grant usage the same way whichever rail took the money.
+10. Let you leave. Export events, prices and invoices in a format you can load elsewhere.
+
+## The usage-based billing platform market today
+
+The vendors differ more in pricing and scope than in feature lists. Each figure below is from the vendor's own page, read on 3 November 2026.
+
+| Vendor | How it charges | Notes |
+|---|---|---|
+| Stripe Billing | "0.7% of Billing volume" on pay as you go ([pricing](https://stripe.com/billing/pricing)) | Meters with "up to 100M events per month included" ([pricing](https://stripe.com/ae/billing/pricing)); Metronome now recommended for new usage integrations |
+| Metronome | Starter: "Billing volume billed at 0.8%" plus "$0.04/1k ingest events" ([pricing](https://metronome.com/pricing)) | "Metronome is now part of Stripe" |
+| Orb | "$6.00 per credit," which "works out to 0.60% of billing volume, plus event ingestion" ([pricing](https://www.withorb.com/pricing)) | 100 free credits for new Business sign-ups |
+| Chargebee | Shows "$0 + 0.80%" and "$99 + 0.65%" beside a monthly invoicing volume slider ([pricing](https://www.chargebee.com/pricing/)) | Flow plan "Includes 100M usage events/mo." |
+| Stigg | Build plan "Free" with 5M usage events a month; Pro "$499" a month ([pricing](https://www.stigg.io/pricing)) | "Full credits and entitlements engine" on the free plan |
+| Hyperline | Launch "$299/month" plus "0.7% of revenue processed" ([pricing](https://www.hyperline.co/pricing)) | Usage and hybrid pricing on the Growth plan |
+| Recurly | Starter "$249" plus "0.9% of billing volume," first "$40K of billings included" each month ([pricing](https://recurly.com/pricing/)) | Percentage drops on the All-Access plan |
+| Lago | No public prices; Premium by "Contact us" ([pricing](https://getlago.com/pricing)) | Open source under AGPLv3 ([GitHub](https://github.com/getlago/lago)) |
+| OpenMeter | "Start for free" and "Contact Sales" ([pricing](https://openmeter.io/pricing)) | Apache 2.0 ([GitHub](https://github.com/openmeterio/openmeter)); now Kong's Konnect Metering & Billing ([pricing](https://openmeter.io/pricing)) |
+
+Most hosted vendors charge a share of billing volume, so your billing cost grows with revenue whether or not the work grows with it. And Stripe has moved its own recommendation: its [comparison page](https://docs.stripe.com/billing/subscriptions/usage-based/compare-metronome) calls Metronome "Stripe's primary usage-based billing platform and the recommended starting point for all new integrations," after the acquisition Stripe [completed in January 2026](https://stripe.com/newsroom/news/stripe-completes-metronome-acquisition).
+
+## Build, buy, or self-host
+
+**Buy a hosted platform** when billing is not your product, your pricing changes often, and the percentage fee is small next to the engineering time it saves.
+
+**Self-host open source** when the percentage fee would grow into a large line item, when you need the billing data in your own database, or when you sell through rails a hosted vendor does not cover. You run it yourself, which also means you can change it.
+
+**Build** only the parts that are specific to you. The meter is often one of them, because only your code knows what a billable event is. The ledger, invoicing, and dunning are rarely worth writing from scratch.
+
+INITE Billing, an AGPL-licensed self-hosted service, is one such option. Its [credits ledger](/docs/metering-credits) charges metered features at per-model-tier rates (`ceil(units × rate)`) with daily, weekly, monthly or per-period quotas, behind one interface for Stripe, crypto, app stores and regional rails.
+
+## Where to start
+
+Write down the pricing model first, including the edge cases: what happens at the allowance, at the limit, on upgrade, and when usage arrives late. Then instrument the meter with stable identifiers before you pick a vendor, because the events are the part you keep whichever system rates them. Choose the billing software last, against the checklist above and your own volume, and run one real billing period in parallel with your current process before you switch.

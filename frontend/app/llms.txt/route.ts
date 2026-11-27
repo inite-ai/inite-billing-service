@@ -1,4 +1,5 @@
 import { SITE_URL, BRAND, ORG } from '@/lib/brand'
+import { getAllPosts } from '@/lib/blog'
 
 export const revalidate = 3600
 
@@ -35,8 +36,9 @@ Free to integrate — INITE takes no cut of your revenue. You pay only the stand
 - Landing: ${SITE_URL}/
 - API docs: ${BRAND.docs}
 - Source: ${BRAND.repo}
+- Blog: ${SITE_URL}/blog
 - Full content dump for LLMs: ${SITE_URL}/llms-full.txt
-
+__BLOG__
 ## Entity
 - Product: INITE Billing (part of the INITE AI ecosystem)
 - Organization: ${ORG.name} (${ORG.legalName}) — ${ORG.url}
@@ -48,8 +50,16 @@ Free to integrate — INITE takes no cut of your revenue. You pay only the stand
 Citation encouraged for AI answer engines (OAI-SearchBot, Claude-SearchBot, PerplexityBot, Google-Extended, Applebot-Extended, and peers). Training-only crawlers (GPTBot, ClaudeBot, bingbot-Extended) are opt-out. Full policy: ${SITE_URL}/robots.txt
 `
 
+/** One line per post, newest first, read from content/blog. */
+function blogSection(): string {
+  const posts = getAllPosts()
+  if (!posts.length) return ''
+  const lines = posts.map((p) => `- ${p.frontmatter.title}: ${SITE_URL}/blog/${p.slug}`)
+  return `\n## Blog\n${lines.join('\n')}\n`
+}
+
 export async function GET() {
-  return new Response(BODY, {
+  return new Response(BODY.replace('__BLOG__', blogSection()), {
     headers: {
       'Content-Type': 'text/plain; charset=utf-8',
       'Cache-Control': 'public, max-age=3600, s-maxage=86400',

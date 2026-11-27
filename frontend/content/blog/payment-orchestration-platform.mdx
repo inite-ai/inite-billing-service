@@ -1,0 +1,115 @@
+---
+title: "Payment orchestration platform: what it does, what it costs, and when you need one"
+description: "How a payment orchestration platform routes, retries and vaults across processors, what vendors charge, and when a single processor is enough."
+date: "2026-11-03"
+author: "INITE Billing"
+category: "SaaS billing"
+tags: ["pricing", "payment orchestration", "payment processing", "build vs buy"]
+directAnswer: "A payment orchestration platform is a layer between your checkout and several payment processors. It picks a processor for each transaction by rules, retries a failed payment on another processor, keeps card credentials in a vault you control, and reports on all processors in one place. Most SaaS companies selling in one or two markets through one processor do not need one yet."
+faqs:
+  - question: "What are payment orchestration platforms?"
+    answer: "They are software layers that sit between a merchant's checkout and several payment processors or acquirers. They decide which processor handles each payment, retry failures on another processor, store card credentials in a processor-independent vault, and merge reporting from every processor into one view. The processors still move the money; the orchestration platform only directs it."
+  - question: "What are the best payment orchestration platforms?"
+    answer: "There is no single best one; the right choice depends on volume, markets and how much infrastructure you want to run. Spreedly is vault-first and publishes a starting price. Primer and Gr4vy sell on quotes to mid-market and enterprise merchants, with Gr4vy running a dedicated cloud instance per merchant. Hyperswitch by Juspay is open source and can be self-hosted. Stripe has its own Orchestration product in private preview for merchants already on Stripe."
+  - question: "Can I create my own payment processor?"
+    answer: "Building a real processor means connecting to card networks through a sponsor bank, holding the licences and carrying the PCI DSS burden of handling raw card data, which is out of reach for almost every SaaS company. What teams usually mean is building their own routing layer over existing processors. That is possible, but the vault and the PCI scope that comes with it are the expensive part, so most teams that build keep the vault with a vendor."
+  - question: "Payment orchestration vs payment gateway: what is the difference?"
+    answer: "A payment gateway connects your checkout to one processor and passes the authorization request through. A payment orchestration platform sits above several gateways and processors and decides which one each payment goes to, retries on another when the first fails, and keeps stored credentials portable between them."
+---
+
+A payment orchestration platform sits between your checkout and two or more payment processors and decides, per transaction, where the money goes. It matters when one processor has become a single point of failure for your revenue, or when your customers live in markets where no single processor approves cards well everywhere. For many SaaS and AI companies it is premature, and this guide explains how to tell which side of that line you are on, what vendors charge, and what you take on if you build it yourself.
+
+## What payment orchestration actually does
+
+A payment orchestration platform does five jobs. Each one is something a single-processor integration either cannot do or does only inside that processor's walls.
+
+### Routing rules
+
+Every payment request passes through a rules engine before it reaches a processor. Rules match on attributes of the transaction (card country, currency, amount, card brand, BIN range, payment method) and send it to a chosen processor. A typical rule set sends domestic EU cards to an acquirer with local licences, US cards to a US acquirer and everything else to a global processor.
+
+Stripe's own orchestration docs describe exactly this model: you create rules in the Dashboard and can route payments "based on conditions such as card country, currency, amount, and more" ([Stripe Orchestration docs](https://docs.stripe.com/payments/orchestration/route-payments)). Hyperswitch, the open-source orchestrator from Juspay, describes routing "based on geography, cost, or success rate" ([Hyperswitch docs](https://docs.hyperswitch.io/)). The more advanced engines adjust weights from observed approval rates instead of fixed rules.
+
+### Failover and cascading retries
+
+When the first processor declines or times out, the orchestrator sends the same payment to a second processor. This is called a cascade or a fallback. Primer describes its Fallbacks feature as a way to "route payments to a secondary processor in the event of a failure" ([Primer](https://primer.io/)).
+
+The hard part is knowing which failures to retry. A processor outage or a soft decline is worth a second attempt. A failed 3D Secure challenge is not, because the cardholder already said no. Stripe's cross-processor retry docs spell out these exclusions: if 3DS was attempted on the main processor and the customer did not authenticate, Orchestration does not retry on the retry processor and sends a `payment_intent.payment_failed` event instead ([Stripe retries docs](https://docs.stripe.com/payments/orchestration/retries)). Any orchestrator you evaluate should document its retry rules this precisely. If it does not, you will find out from your chargeback rate.
+
+### Multiple processors and acquirers
+
+Orchestration only pays off when you actually hold contracts with more than one processor or acquirer. The orchestrator gives you one API and translates it into each processor's dialect. Vendors compete on the size of their connector catalogue: Spreedly lists "150+ gateway connections" ([Spreedly pricing](https://www.spreedly.com/pricing)), and the Hyperswitch repository says it can route "across Stripe, Adyen, Braintree, Worldpay, Checkout.com, and 120+ others" ([Hyperswitch on GitHub](https://github.com/juspay/hyperswitch)). A large catalogue matters less than whether the two or three acquirers you need are deeply integrated, including refunds, disputes and webhooks.
+
+### Tokenization and vaulting, including network tokens
+
+This is the job that creates most of the value and most of the lock-in. When a customer saves a card with Stripe, Stripe holds the card number and gives you a token that only works on Stripe. If you leave, you need a data migration to take those cards with you. An orchestrator stores the card number in its own vault and hands each processor the card data at payment time, so saved cards stay usable whichever processor you route to.
+
+Network tokens are a further layer. Instead of the raw card number, the card network issues a token tied to your merchant and keeps it current when the physical card is reissued. Stripe's Vault and Forward API shows the mechanics: for Apple Pay and Google Pay device tokens it forwards `network_token_number`, `network_token_cryptogram` and `network_token_expiry` fields instead of a card number ([Stripe Vault and Forward docs](https://docs.stripe.com/payments/forwarding)). Spreedly lists network tokenization and account updater in its Performance Optimization tier ([Spreedly pricing](https://www.spreedly.com/pricing)), and Primer markets network tokenization to "increase authorization rates and reduce fraud" ([Primer](https://primer.io/)).
+
+Vault portability is the single best reason to adopt an orchestrator early, even with one processor. Moving a vault later is a project with the old processor's cooperation as a dependency.
+
+### Unified reporting and reconciliation
+
+With three processors you get three settlement reports, three fee structures and three dispute dashboards. The orchestrator merges them into one ledger of attempts and outcomes, so you can compare approval rates per processor and per country. Hyperswitch lists reconciliation as a module that matches "transaction data across banks, PSPs, and internal systems" ([Hyperswitch docs](https://docs.hyperswitch.io/)), though on its pricing page reconciliation is a paid add-on for the self-hosted editions ([Hyperswitch pricing](https://hyperswitch.io/pricing)). Check what "unified" covers: Stripe's Orchestration docs state that it "doesn't support disputes or settlement-related activity" for third-party processors, which you still manage in that processor's dashboard ([Stripe Orchestration docs](https://docs.stripe.com/payments/orchestration)).
+
+## Payment orchestration vs payment gateway
+
+A gateway is the pipe from your checkout to one processor. It formats the authorization request, sends it and returns the answer. An orchestrator sits one level higher and chooses between several gateways and processors. You can have a gateway without an orchestrator, but not an orchestrator without at least two downstream connections worth choosing between.
+
+The processor still does the regulated work. Stripe is explicit about this: with Orchestration, "your third-party processor continues to act as the processor for payments routed to it", and processing fees and liability for losses stay under your contract with that processor ([Stripe Orchestration docs](https://docs.stripe.com/payments/orchestration)). An orchestrator never replaces your processor contracts. You still negotiate them, and you pay the orchestrator on top of them.
+
+## When a business needs one, and when it does not
+
+Three conditions decide it, and they come from your own payments.
+
+**Concentration.** If a single processor carries all of your revenue, a frozen account or an outage stops all of it. For a subscription business, a processor's risk team holding funds or a regional outage on renewal day hurts more than a one-off checkout failure. A second processor with automatic failover protects against that, and orchestration is the way to make the second processor useful without writing a second integration.
+
+**Markets.** Approval rates vary by country, and a local acquirer can approve domestic cards that a global processor declines. If a large share of your revenue comes from markets such as Brazil, India or parts of Southeast Asia, local acquiring and local methods can move approval rates enough to pay for orchestration. If your customers are mostly in one or two card markets your processor already serves well, routing has little to choose between.
+
+**Volume.** Orchestration costs fixed money: a platform fee, a second processor contract, engineering time, more reconciliation. The gain is a percentage of volume. At low volume the percentage gain is smaller than the fixed cost. None of the quote-based vendors publish entry prices aimed at early-stage companies.
+
+For most SaaS and AI companies, one processor is enough until either a market expansion or a frozen-account scare makes the single point of failure concrete. When that happens, solve vault portability first and routing second.
+
+## What a payment orchestration platform costs
+
+Pricing pages in this market are thin. Here is what each vendor publishes on its own site, read on 3 November 2026.
+
+| Vendor | Model | Published price | Notes |
+|---|---|---|---|
+| Spreedly | Hosted, vault-first | Vault plan "starting at" $750 per month ([pricing](https://www.spreedly.com/pricing)) | Routing, smart retries and network tokens sit in a Performance Optimization tier priced through sales |
+| Primer | Hosted | None on the site ([primer.io](https://primer.io/)) | Calls to action are demos and sales contact |
+| Gr4vy | Dedicated cloud instance per merchant | None on the site ([gr4vy.com](https://gr4vy.com/)) | Describes itself as "Infrastructure as a Service (IaaS) built in the cloud" |
+| Hyperswitch (Juspay) | Open source or hosted | No figures; self-hosted Community Edition is free to start, Enterprise and Cloud through sales ([pricing](https://hyperswitch.io/pricing)) | Apache 2.0 licence, written in Rust ([GitHub](https://github.com/juspay/hyperswitch)) |
+| Stripe Orchestration | Inside your Stripe account | No orchestration fee on the UK pricing page ([Stripe UK pricing](https://stripe.com/gb/pricing)) | In private preview; access on request ([docs](https://docs.stripe.com/payments/orchestration)) |
+
+Processing fees sit outside this table. On Stripe's UK page, standard UK cards cost 1.5% + 20p per transaction and international cards 3.15% + 20p ([Stripe UK pricing](https://stripe.com/gb/pricing)). An orchestrator leaves these fees in place and lets you shift volume to cheaper or better-approving contracts. You may also lose processor features. Stripe bundles network tokens, card account updater and adaptive acceptance into Authorization Boost, free on standard UK pricing and 0.2% per successful online card transaction on custom pricing ([Stripe UK pricing](https://stripe.com/gb/pricing)). Route a payment away from Stripe and those features no longer apply to it, so your orchestrator must replace them.
+
+If you are already on Stripe, its Orchestration product lets you keep the PaymentIntents API and route to other processors, with retries on a second processor ([Stripe Orchestration docs](https://docs.stripe.com/payments/orchestration)). The docs exclude non-card payments, Link, Connect and Terminal, among others. It also keeps Stripe at the centre, so it does not remove the risk of that one account being frozen.
+
+## Build vs buy
+
+Building a basic router over two processors is a few weeks of work: an internal payment interface, two adapters, a rules table and a retry policy. Teams underestimate three things.
+
+**The vault.** Storing card numbers puts your systems in scope for PCI DSS at its heaviest level ([PCI Security Standards Council](https://www.pcisecuritystandards.org/)). Almost no SaaS company should hold raw card data. If you build your own routing, rent the vault: Spreedly sells the vault on its own, and Stripe's Vault and Forward API forwards card data from Stripe's vault to a list of supported endpoints, including Adyen, Braintree, Checkout.com and Worldpay ([Stripe Vault and Forward docs](https://docs.stripe.com/payments/forwarding)). Note that Vault and Forward needs Stripe support to enable each destination and returns HTTP 200 even when the destination returned an error, so your code must read the forwarded status.
+
+**The retry policy.** Retrying the wrong declines raises fraud flags and annoys issuers; retrying too few loses renewals you could have recovered. Every decline code from every processor has to be mapped to "retry elsewhere", "retry later" or "stop", and the mapping drifts as processors change their codes.
+
+**Idempotency across processors.** A timeout on processor A followed by a retry on processor B can charge the customer twice if A actually succeeded. Stripe's forwarding docs warn that the Vault and Forward API does not confirm or capture PaymentIntents, so "you might unintentionally use them to capture a payment on Stripe that was already captured on another processor" ([Stripe Vault and Forward docs](https://docs.stripe.com/payments/forwarding)). Your router needs a single record of each payment attempt with a state that only moves forward.
+
+The open-source route sits between the two. Hyperswitch gives you routing, retries and a vault under Apache 2.0, deployable with Docker or Helm charts on Kubernetes ([Hyperswitch docs](https://docs.hyperswitch.io/)). You avoid licence fees and gain an operational system to run, patch and keep compliant yourself; the vault in particular brings PCI scope back to your infrastructure.
+
+Buy the vault and let volume decide routing. Below the point where approval-rate gains cover a platform fee, keep a second processor integrated behind your own simple failover. Above it, buy or self-host a full orchestrator.
+
+## Orchestration is a different layer from billing
+
+A billing system and a payment orchestration platform are often confused because both sit between your product and the processors. Billing decides what a customer owes and when: plans, renewals, usage, credits, entitlements. Orchestration decides which processor collects a given payment.
+
+INITE Billing is an example of the billing side. It puts its payment rails (Stripe, crypto, Apple IAP, Google Play and others) behind one adapter interface and runs every payment through one state machine, from created to paid or to failed, refunded or expired, so fulfilment fires exactly once ([docs](/docs/entitlements)). It does not do smart routing between processors, automatic failover between them, or network tokenization and card vaulting. Several rails behind one interface make a later orchestrator easier to add, and that is all they do here. If you need cross-processor routing on cards, put an orchestrator under your billing system rather than expecting the billing layer to do it.
+
+## A checklist before you sign
+
+- List your top five card-issuing countries by revenue and ask each vendor which acquirer it would route each one to.
+- Ask who owns the vault data and how you export it, in writing, including network tokens.
+- Get the retry rules: which decline codes cascade, and what happens after a failed 3DS challenge.
+- Check which processor features (account updater, adaptive retries, fraud scoring) stop applying when a payment is routed away from that processor.
+- Confirm where refunds and disputes are handled for routed payments; on Stripe Orchestration, third-party processors administer refunds and disputes stay in their dashboards ([Stripe Orchestration docs](https://docs.stripe.com/payments/orchestration)).
+- Price the full stack: platform fee plus every processor contract, compared against the approval-rate gain you can measure in a test on a slice of real traffic.
