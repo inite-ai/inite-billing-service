@@ -407,6 +407,10 @@ describe('INITE wallet agents E2E', () => {
       '::1',
       'fd00::1',
       '::ffff:10.0.0.1',
+      // As `new URL` spells them: the dotted tail becomes hex.
+      '::ffff:7f00:1',
+      '::ffff:a9fe:a9fe',
+      '64:ff9b::a9fe:a9fe',
     ]) {
       expect(isPublicAddress(ip)).toBe(false);
     }

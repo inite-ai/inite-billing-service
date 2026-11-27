@@ -45,6 +45,32 @@ describe('SSRF guard', () => {
     it.each(['2606:4700:4700::1111', '2001:4860:4860::8888'])('allows public %s', (ip) =>
       expect(isPrivateAddress(ip)).toBe(false),
     );
+
+    // `new URL('http://[::ffff:127.0.0.1]/').hostname` is `[::ffff:7f00:1]`:
+    // the URL parser rewrites the dotted tail into hex, so the guard sees the
+    // hex spelling. It used to recognise only the dotted one.
+    it.each([
+      ['::ffff:7f00:1', 'loopback, IPv4-mapped in hex'],
+      ['::ffff:a9fe:a9fe', 'metadata service, IPv4-mapped in hex'],
+      ['0:0:0:0:0:ffff:0a00:0001', '10.0.0.1, mapped, fully written'],
+      ['::ffff:ac11:2', '172.17.0.2, the docker bridge'],
+      ['::7f00:1', 'loopback, IPv4-compatible'],
+      ['::127.0.0.1', 'loopback, IPv4-compatible dotted'],
+      ['::ffff:0:7f00:1', 'loopback, IPv4-translated'],
+      ['64:ff9b::a9fe:a9fe', 'metadata service through NAT64'],
+      ['64:ff9b::169.254.169.254', 'metadata service through NAT64, dotted'],
+      ['64:ff9b:1::1', 'local-use NAT64'],
+      ['2002:7f00:1::1', 'loopback through 6to4'],
+      ['2001:0:4136:e378:8000:63bf:3fff:fdd2', 'Teredo'],
+      ['fec0::1', 'site-local'],
+      ['2001:db8::1', 'documentation'],
+      ['fe80::1%eth0', 'link-local with a zone'],
+    ])('flags %s (%s) as private', (ip) => expect(isPrivateAddress(ip)).toBe(true));
+
+    it.each(['::ffff:808:808', '64:ff9b::808:808', '2002:808:808::1'])(
+      'judges an embedded public IPv4 as public: %s',
+      (ip) => expect(isPrivateAddress(ip)).toBe(false),
+    );
   });
 
   describe('assertPublicUrl', () => {
@@ -53,6 +79,26 @@ describe('SSRF guard', () => {
       expect(r.ok).toBe(false);
       expect(r.reason).toBe('private_ip');
       expect(mockLookup).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      'http://[::ffff:127.0.0.1]:3000/internal',
+      'http://[::ffff:169.254.169.254]/latest/meta-data/',
+      'http://[::ffff:a9fe:a9fe]/latest/meta-data/',
+      'http://[0:0:0:0:0:ffff:7f00:1]/',
+      'http://[::127.0.0.1]/',
+    ])('rejects the IPv4-mapped literal %s without any DNS', async (url) => {
+      const r = await assertPublicUrl(url);
+      expect(r.ok).toBe(false);
+      expect(r.reason).toBe('private_ip');
+      expect(mockLookup).not.toHaveBeenCalled();
+    });
+
+    it('rejects a hostname that resolves to an IPv4-mapped private address', async () => {
+      mockLookup.mockResolvedValue([{ address: '::ffff:a9fe:a9fe', family: 6 }]);
+      const r = await assertPublicUrl('https://rebind.example.com/mcp');
+      expect(r.ok).toBe(false);
+      expect(r.reason).toBe('resolves_to_private');
     });
 
     it('rejects non-http(s) protocols', async () => {
