@@ -13,6 +13,7 @@ import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import type { Price, Product } from '@/lib/types'
 import { ActiveBadge } from '@/components/ui/StatusBadge'
+import { UnpayablePrices } from '@/components/admin/UnpayablePrices'
 import { IconButton } from '@/components/ui/IconButton'
 
 export default function AdminPricesPage() {
@@ -83,6 +84,8 @@ export default function AdminPricesPage() {
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('prices.title')}</h1>
         <Button size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setShowModal(true)}>{t('prices.addPrice')}</Button>
       </div>
+
+      <UnpayablePrices />
 
       <Card>
         {loading ? <div className="text-slate-500 py-4">{tc('loading')}</div> : (
