@@ -253,6 +253,7 @@ describe('credit buckets (integration)', () => {
         user_id: userId,
         company_id: 'co-1',
         source: 'pack',
+        bucket: 'purchased',
         amount: 500,
         period_start: null,
         period_end: null,

@@ -4,6 +4,12 @@ import { CreditBalance, CreditUsage, Prisma } from '@prisma/client';
 import { MeteringService } from './metering.service';
 import { OutboxService } from '../outbox/outbox.service';
 import type { CreditGrantSource } from './credit-company';
+import {
+  CREDITS_GRANTED,
+  CREDITS_REVOKED,
+  creditGrantedPayload,
+  creditRevokedPayload,
+} from './credit-events';
 
 import { resolveOrderBy, SortWhitelist } from '../common/helpers/sort';
 
@@ -112,21 +118,10 @@ export class CreditsService {
         },
       },
     });
-    if (!source) return;
-    await this.outbox.emit(
-      'billing.credits.granted',
-      {
-        grant_id: row.id,
-        order_id: grant.orderId ?? null,
-        user_id: balance.userId,
-        company_id: companyId,
-        source: source.source,
-        amount: grant.amount,
-        period_start: periodStart,
-        period_end: periodEnd,
-      },
-      { serviceId: balance.serviceId, tx: db },
-    );
+    // Built from the row as stored, as GET /v1/service-credits/grants builds it.
+    const payload = creditGrantedPayload(row);
+    if (!payload) return;
+    await this.outbox.emit(CREDITS_GRANTED, payload, { serviceId: balance.serviceId, tx: db });
   }
 
   /**
@@ -655,15 +650,12 @@ export class CreditsService {
 
       if (grant) {
         await this.outbox.emit(
-          'billing.credits.revoked',
-          {
-            grant_id: grant.id,
-            order_id: data.orderId,
-            user_id: data.userId,
-            company_id: typeof meta.companyId === 'string' ? meta.companyId : null,
-            // The whole grant: a service with its own ledger expires on its own.
-            amount: data.amount,
-          },
+          CREDITS_REVOKED,
+          creditRevokedPayload({
+            grant: { id: grant.id, amount: data.amount, metadata: grant.metadata },
+            userId: data.userId,
+            orderId: data.orderId,
+          }),
           { serviceId: balance.serviceId, tx: db },
         );
       }
