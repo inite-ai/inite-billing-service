@@ -191,6 +191,8 @@ Where to add things:
   `frontend/lib/api.ts`. An admin page (`frontend/app/admin/<route>/`) also
   needs its entry in `frontend/components/layout/Sidebar.tsx`.
 
+Decisions that bind subscription work: `docs/adr/`.
+
 Deeper: `docs/architecture.md`, `docs/api.md`, `docs/ai-features.md`,
 `docs/operations.md`, `docs/x402.md`, `docs/wallet.md`, `SECURITY.md`.
 
