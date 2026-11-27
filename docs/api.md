@@ -85,6 +85,7 @@ Admin endpoints additionally require the `admin` role in the JWT.
 | `GET /v1/subscriptions/portal?service=<code>&return_to=<url>` | JWT |
 | `POST /v1/service-checkout/sessions` with `mode: "SUBSCRIPTION"` | service token (`billing:checkout`) |
 | `POST /v1/service-subscriptions/trial`, `GET /v1/service-subscriptions?userId=`, `POST /v1/service-subscriptions/:id/change` | service token (`billing:checkout`) |
+| `GET /v1/service-credits/grants?since=&cursor=&limit=` | service token (`billing:checkout`) — this service's `billing.credits.granted` / `.revoked`, oldest first, `{ items: [{ type, ledgerId, timestamp, data }], nextCursor }`; `data` is the event payload, for reconciling a ledger |
 
 **Who holds a plan.** A subscriber is a person (their DID, or a legacy UUID)
 or an organisation at INITE Auth, `org:<org_id>`: a company's plan in the
