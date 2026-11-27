@@ -300,7 +300,9 @@
     "creditsUsed": "{used} de {total} usados",
     "resets": "Se reinicia el {date}",
     "entitlementsHint": "Lo que tus planes desbloquean en los productos de INITE.",
-    "noEntitlements": "Todavía no tienes accesos"
+    "noEntitlements": "Todavía no tienes accesos",
+    "usageTitle": "Créditos gastados en los últimos 30 días",
+    "usageUnits": "{units} unidades"
   },
   "orders": {
     "title": "Historial de pedidos",
@@ -1723,5 +1725,18 @@
     "cardButton": "Pagar ${amount} con tarjeta",
     "cardNote": "Tras el pago, {amount} USDC llegan a esta billetera en un par de minutos.",
     "cardFailed": "No se pudo iniciar el pago con tarjeta"
+  },
+  "demo": {
+    "button": "Probar la demo",
+    "banner": "Esto es una demo: la empresa y los datos son ficticios, y no se puede cambiar nada.",
+    "left": "Quedan {time}.",
+    "exit": "Salir de la demo",
+    "ended": "La demo ha terminado.",
+    "again": "Abrirla de nuevo",
+    "hours": "h",
+    "minutes": "min",
+    "note": "Los pagos, reembolsos y cambios de plan están desactivados en la demo.",
+    "hint": "Sin iniciar sesión: mira las suscripciones, facturas y créditos de una empresa ficticia.",
+    "unavailable": "La demo no está disponible ahora. Inténtalo más tarde."
   }
 }

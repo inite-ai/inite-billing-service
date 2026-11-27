@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { NOT_DEMO } from '../../common/demo';
 import { PrismaService } from '../../common/services/prisma.service';
 import { paginate } from '../../common/helpers/paginate';
 import { resolveOrderBy, SortWhitelist } from '../../common/helpers/sort';
@@ -91,7 +92,10 @@ export class AdminUsersService {
    * describes so the export and the table can never disagree on the total.
    */
   async countCustomers(params: { search?: string }): Promise<number> {
-    const where = params.search ? { userId: { contains: params.search } } : {};
+    // The demo tenant is not a customer: never listed, never counted.
+    const where = params.search
+      ? { userId: { contains: params.search, ...NOT_DEMO } }
+      : { userId: NOT_DEMO };
     const groups = await this.prisma.order.groupBy({ by: ['userId'], where });
     return groups.length;
   }
@@ -105,7 +109,9 @@ export class AdminUsersService {
   }) {
     const { page = 1, limit = 20, search, sortBy, sortOrder } = params;
 
-    const whereClause: any = search ? { userId: { contains: search } } : {};
+    const whereClause: any = search
+      ? { userId: { contains: search, ...NOT_DEMO } }
+      : { userId: NOT_DEMO };
 
     // Only the resolved key, without the `id` tiebreaker `resolveOrderBy`
     // appends: `groupBy` may only order by columns it grouped on, and `id` is

@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import { isDemoSubscriber } from '../common/demo';
 import { PrismaService } from '../common/services/prisma.service';
 import { NotificationsService, NotificationCategory } from '../notifications/notifications.service';
 import { UserContactService } from '../notifications/user-contact.service';
@@ -53,6 +54,8 @@ export class OutreachService {
     orderId?: string;
     subscriptionId?: string;
   }): Promise<boolean> {
+    // Nothing is ever sent to the demo tenant (src/common/demo.ts).
+    if (isDemoSubscriber(input.userId)) return false;
     let outreachId: string;
     try {
       const row = await this.prisma.outreachMessage.create({

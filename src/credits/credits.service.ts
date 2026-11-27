@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, Logger, Optional } from '@nestjs/common';
 import { PrismaService } from '../common/services/prisma.service';
+import { assertNotDemoSubscriber } from '../common/demo';
 import { CreditBalance, CreditUsage, Prisma } from '@prisma/client';
 import { MeteringService } from './metering.service';
 import { OutboxService } from '../outbox/outbox.service';
@@ -168,6 +169,8 @@ export class CreditsService {
     },
     tx?: Prisma.TransactionClient,
   ): Promise<CreditBalance> {
+    // The demo tenant's balances are fixtures: no grant, charge or top-up moves them.
+    assertNotDemoSubscriber(data.userId);
     const run = async (db: Prisma.TransactionClient) => {
       const balance = await this.lockBalance(db, data.userId, data.serviceId);
       if (await this.alreadyGranted(db, balance.id, data.orderId)) return balance;
@@ -233,6 +236,8 @@ export class CreditsService {
     /** True when an idempotency key matched an earlier charge and nothing moved. */
     replayed?: boolean;
   }> {
+    // The demo tenant's balances are fixtures: no grant, charge or top-up moves them.
+    assertNotDemoSubscriber(data.userId);
     const isMetered = !!data.featureCode;
     if (isMetered) {
       if (!this.meteringService) {
@@ -413,6 +418,8 @@ export class CreditsService {
     },
     tx?: Prisma.TransactionClient,
   ): Promise<CreditBalance> {
+    // The demo tenant's balances are fixtures: no grant, charge or top-up moves them.
+    assertNotDemoSubscriber(data.userId);
     const run = async (db: Prisma.TransactionClient) => {
       const balance = await this.lockBalance(db, data.userId, data.serviceId);
       if (await this.alreadyGranted(db, balance.id, data.orderId)) return balance;
@@ -482,6 +489,8 @@ export class CreditsService {
     amount: number;
     description: string;
   }): Promise<CreditBalance> {
+    // The demo tenant's balances are fixtures: no grant, charge or top-up moves them.
+    assertNotDemoSubscriber(data.userId);
     return this.prisma.$transaction(async (tx) => {
       const balance = await this.lockBalance(tx, data.userId, data.serviceId);
 
@@ -599,6 +608,8 @@ export class CreditsService {
     },
     tx?: Prisma.TransactionClient,
   ): Promise<CreditBalance> {
+    // The demo tenant's balances are fixtures: no grant, charge or top-up moves them.
+    assertNotDemoSubscriber(data.userId);
     const run = async (db: Prisma.TransactionClient) => {
       const balance = await this.lockBalance(db, data.userId, data.serviceId);
       const { grant } = data;

@@ -75,6 +75,26 @@ redeploys (env change + restart).
 - **Provider credentials** live in `payment_providers.config` — rotate via
   the admin UI, not env.
 
+## The family demo
+
+INITE Auth issues read-only demo tokens for «Atlântica Group (demo)»
+(`demo: true`, `org_id` `a7a71c00-de00-4000-8000-000000000001`). Billing reads
+such a token as the demo tenant, `org:<that id>` (`src/common/demo-tenant.ts`, guards in
+`src/common/demo.ts`): it
+sees that subscriber's plans, orders, entitlements and credits, has no
+platform roles, and every write is refused with 403 `demo_read_only` by the
+global `DemoReadOnlyInterceptor`, before any handler. Checkout, plan changes
+and credit movements also refuse the demo tenant themselves, whoever calls
+(a service key included). No outbox event, notification, outreach or funnel
+event is ever created for it; the expirer and renewals skip it; admin totals
+and the customer list leave it out.
+
+The UI's door is `frontend` `/api/auth/demo` (`DEMO_ENABLED=1`). The fixtures
+come from `prisma/demo-tenant/` (inactive `demo-atlantica-*` catalogue rows and
+the tenant's rows under fixed ids): `npm run db:seed:demo-tenant` is a dry run;
+`DEMO_TENANT_SEED=1 npm run db:seed:demo-tenant -- --apply` writes, and a
+re-run only moves the dates forward.
+
 ## Adding a payment rail
 
 1. Implement the `PaymentRailAdapter` interface (`src/adapters/`):
