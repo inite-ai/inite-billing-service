@@ -1,5 +1,43 @@
 # Changelog
 
+## [1.5.0](https://github.com/inite-ai/inite-billing-service/compare/inite-billing-service-v1.4.0...inite-billing-service-v1.5.0) (2026-11-27)
+
+
+### Features
+
+* **catalog:** MCP Security Check team plan for inite.ai, $29/R$145 a month ([#290](https://github.com/inite-ai/inite-billing-service/issues/290)) ([f4a510c](https://github.com/inite-ai/inite-billing-service/commit/f4a510ccdbd993d76bf9ce21ca8c32d2c017d4ca))
+* **credits:** a service can list the credit grants billing announced to it, to reconcile its ledger ([#308](https://github.com/inite-ai/inite-billing-service/issues/308)) ([0b83036](https://github.com/inite-ai/inite-billing-service/commit/0b83036d56b48f0cd309dfd10399c6844fd14065))
+* **credits:** packs grant their size, purchased credits outlive a period, services hear of grants ([#305](https://github.com/inite-ai/inite-billing-service/issues/305)) ([0d371af](https://github.com/inite-ai/inite-billing-service/commit/0d371af928fde5200a5bb9f3bd23ab5ed8c026d4))
+* **invoices:** open-sale invoices, paid by the link or marked paid by hand ([#289](https://github.com/inite-ai/inite-billing-service/issues/289)) ([063d88f](https://github.com/inite-ai/inite-billing-service/commit/063d88fabdc73117393a6d0d549c4870a200ebce))
+* **seo:** one company in the graph — the product is a node of INITE, not an Organization ([c1f6bc3](https://github.com/inite-ai/inite-billing-service/commit/c1f6bc336296a98ecb716a0a402104555514ec22))
+* **seo:** one company in the graph — the product is a node of INITE, not an Organization ([f8cd6f2](https://github.com/inite-ai/inite-billing-service/commit/f8cd6f2c76190794514c630ad6109ffcff4cb27f))
+* **seo:** the Brand carries the product's own logo and profiles ([7f1303f](https://github.com/inite-ai/inite-billing-service/commit/7f1303fc8a33821275ece1c3feedcb507a942b80))
+* **service-api:** a service sells a cart of its own prices, signed in with an INITE Auth token ([1ecbc08](https://github.com/inite-ai/inite-billing-service/commit/1ecbc08cba2fab62bd219f0d54a4a6773d4864a9))
+* **service-api:** a service sells a cart of its own prices, signed in with an INITE Auth token ([67c53a9](https://github.com/inite-ai/inite-billing-service/commit/67c53a9a8bf5c541b8d2ef95e6d85da6d0686d6c))
+* **service-api:** an open product, sold at the amount and title its service names ([bd5dad1](https://github.com/inite-ai/inite-billing-service/commit/bd5dad109a82052d385ccbb12f040aeb4f747988))
+* **service-api:** an open product, sold at the amount and title its service names ([99c4354](https://github.com/inite-ai/inite-billing-service/commit/99c4354bdf4e103bb18158494da7d06494575f8f))
+* **subscriptions:** a trial names the company it is for, and its renewals keep it ([#306](https://github.com/inite-ai/inite-billing-service/issues/306)) ([9412ed7](https://github.com/inite-ai/inite-billing-service/commit/9412ed7ac2ee80e7b374e7c408728adc36661822))
+* **subscriptions:** family plans sold through billing — token lane, renewal by link and wallet, plan change, service portal ([#270](https://github.com/inite-ai/inite-billing-service/issues/270)) ([f346e1b](https://github.com/inite-ai/inite-billing-service/commit/f346e1b55f609d03a6faf67b1e7d549ed43411d7))
+
+
+### Bug Fixes
+
+* **deploy:** remove only this repo's own images, never host-wide ([7b297b8](https://github.com/inite-ai/inite-billing-service/commit/7b297b87bc59c5d4c14c64280779de6ff655b981))
+* **deploy:** remove only this repo's own images, never host-wide ([fcb6511](https://github.com/inite-ai/inite-billing-service/commit/fcb65113dd1bd947ac01f500d8be8e670945f08e))
+* **frontend:** move Next.js to 16.4.5, past seven published advisories ([#307](https://github.com/inite-ai/inite-billing-service/issues/307)) ([68b7467](https://github.com/inite-ai/inite-billing-service/commit/68b7467da16c2e1cf57eb854ebe7d3e540ea74ff))
+* **mcp-gateway:** forward the client's mcp-* headers to the upstream ([cbf4f16](https://github.com/inite-ai/inite-billing-service/commit/cbf4f16dabc1213e9a339393de07421702748427))
+* **mcp-gateway:** forward the client's mcp-* headers to the upstream ([77ad182](https://github.com/inite-ai/inite-billing-service/commit/77ad182209c1eba0e5c7711c66656eedeebe1e7c))
+* **mcp-gateway:** relay JSON-RPC, never the upstream's bytes as a page ([8affe3a](https://github.com/inite-ai/inite-billing-service/commit/8affe3a701c0837e3eb32823f770a3ac75222438))
+* **mcp-gateway:** serve upstream answers as JSON or SSE only ([8fea671](https://github.com/inite-ai/inite-billing-service/commit/8fea6715d52ae646f5a84e079651f050d07585a9))
+* **mcp-gateway:** set the response type with literal headers ([f468d8d](https://github.com/inite-ai/inite-billing-service/commit/f468d8db0ea8f9fb94f23f562fbcd4ffef1afbdc))
+* **mcp:** exact audience and billing:account on every token; JWT_AUDIENCE fails closed ([74859cf](https://github.com/inite-ai/inite-billing-service/commit/74859cf624bbef9ba687c686e0dc81d185d9880e))
+* **mcp:** exact audience and billing:account on every token; JWT_AUDIENCE fails closed ([c5cd53d](https://github.com/inite-ai/inite-billing-service/commit/c5cd53ddfdee0aa9064495a991db8e5ef1f8f220))
+* **mcp:** the billed gateway accepts only tokens issued for it (S5) ([#252](https://github.com/inite-ai/inite-billing-service/issues/252)) ([6f924ae](https://github.com/inite-ai/inite-billing-service/commit/6f924ae0dcc92874d075b41c751235b5713260d5))
+* **queues:** BullMQ reads the password, user, db and TLS from REDIS_URL ([#240](https://github.com/inite-ai/inite-billing-service/issues/240)) ([f73f0e6](https://github.com/inite-ai/inite-billing-service/commit/f73f0e647d141b3969223676bca08ff1e3572fab))
+* **schema:** sameAs lists only this site's own profiles ([#274](https://github.com/inite-ai/inite-billing-service/issues/274)) ([976b235](https://github.com/inite-ai/inite-billing-service/commit/976b235928079d37677e287b74350a7bf8daf88c))
+* **security:** rail credentials sealed at rest; an ambiguous lava.top refund is left for review ([#246](https://github.com/inite-ai/inite-billing-service/issues/246)) ([3ec3c45](https://github.com/inite-ai/inite-billing-service/commit/3ec3c4559330e260d6843ec182f6a99f7a571ca0))
+* **service-api:** read the bearer token without a regex (CodeQL js/polynomial-redos) ([319e8af](https://github.com/inite-ai/inite-billing-service/commit/319e8afd398044c535ff07c198933fe9a720a33c))
+
 ## [1.4.0](https://github.com/inite-ai/inite-billing-service/compare/inite-billing-service-v1.3.0...inite-billing-service-v1.4.0) (2026-10-16)
 
 
